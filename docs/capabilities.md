@@ -22,7 +22,7 @@
 | DAG Agent | 显式 DAG、自动规划 DAG、异步 DAG、可选 critique/replan | `agent-service` |
 | Agent 工具 | 可选 code execution、MCP client、browser actions | `agent-service` |
 | 异步任务 | 通用任务状态、租户隔离、取消、SSE、worker lease、webhook outbox、delivered retention | `async-task-service` |
-| 渠道接入 | 渠道 capability、webhook/Feishu/voice 出站、入站事件、HMAC 签名校验 | `channel-service` |
+| 渠道接入 | 渠道 capability、webhook/Feishu/voice 出站、入站事件、HMAC 签名校验、可选 Kafka event | `channel-service` |
 | 互操作 | A2A agent-card、MCP-style tools、代理 agent run/async/DAG | `interop-service` |
 | 回归评测 | HTTP case 执行、baseline suite、contains/JSON-path/semantic/oracle 断言、JSON report | `eval-service` |
 | 审计与计量 | 审计日志、LLM audit listener、token budget、cost attribution | `platform-audit`, `platform-metering` |
@@ -118,7 +118,7 @@
 
 ### 7. 渠道与互操作
 
-`channel-service` 当前提供 webhook 出站、Feishu webhook 机器人文本消息出站、voice HTTP provider 出站、入站事件接收和签名能力。
+`channel-service` 当前提供 webhook 出站、Feishu webhook 机器人文本消息出站、voice HTTP provider 出站、入站事件接收、签名能力和可选 Kafka channel event 发布。
 
 `interop-service` 提供 A2A/MCP-style 互操作入口，可把平台能力暴露给外部 Agent 或工具调用方。agent-card 会基于当前 MCP tool registry 生成 capabilities，并支持单个 tool descriptor 查询。
 
@@ -136,4 +136,4 @@
 ## 当前限制
 
 - GraphRAG 抽取是确定性三元组格式，不是开放信息抽取。
-- channel-service 仍可继续补 async-task/workflow callback 集成和 Kafka channel events。
+- channel-service 仍可继续补 async-task/workflow callback 集成。

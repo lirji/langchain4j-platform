@@ -32,7 +32,7 @@ Phase 1 has started:
 - `knowledge-service`: RAG foundation and document lifecycle/query migrated, including chunk splitters, source injection context, document registry, Tika text extraction, `/rag/documents/**`, `/rag/query`, keyword/vector hybrid retrieval, optional Qdrant vector storage, and a first deterministic GraphRAG slice.
 - `agent-service`: first deep-agent microservice slice, with ReAct loop, `rag_search`, `analytics_sql`, `current_time`, and `/agent/run` behind `edge-gateway`.
 - `async-task-service`: first generic async-task backbone with task status, tenant-scoped listing/get/update/cancel, resumable SSE status stream, worker lease ownership, and terminal webhook delivery.
-- `channel-service`: channel bounded context with `/channel/capabilities`, outbound message provider boundary, webhook dry-run/HTTP POST delivery, Feishu webhook robot text delivery, voice HTTP provider delivery, outbound webhook signing, inbound event acceptance, optional HMAC signature verification, protocol DTOs, edge route, and docker-compose service.
+- `channel-service`: channel bounded context with `/channel/capabilities`, outbound message provider boundary, webhook dry-run/HTTP POST delivery, Feishu webhook robot text delivery, voice HTTP provider delivery, outbound webhook signing, inbound event acceptance, optional HMAC signature verification, optional Kafka channel events, protocol DTOs, edge route, and docker-compose service.
 - `interop-service`: interop bounded context with A2A agent-card, MCP-style tool-list/call surface, and service-net tool proxies into `agent-service` run/async/DAG APIs.
 - `eval-service`: external regression client surface with HTTP target execution, baseline suite loading, response contains-assertion, JSON-path assertions, frozen monolith oracle contains-assertion, status/error capture, duration/snippet reporting, optional JSON report output, and edge-gateway API-key wiring.
 
@@ -183,13 +183,13 @@ The remaining planned service modules have been introduced so the monorepo topol
 
 Implemented first slice:
 
-- `channel-service`: channel capability endpoint, outbound message acceptance endpoint, provider-based outbound dispatch, webhook dry-run/HTTP POST delivery, Feishu webhook robot delivery, voice HTTP provider delivery, optional outbound webhook signing, inbound event acceptance endpoint, optional HMAC signature verification, audit events, protocol DTOs, tests, Dockerfile, edge route, and compose wiring.
+- `channel-service`: channel capability endpoint, outbound message acceptance endpoint, provider-based outbound dispatch, webhook dry-run/HTTP POST delivery, Feishu webhook robot delivery, voice HTTP provider delivery, optional outbound webhook signing, inbound event acceptance endpoint, optional HMAC signature verification, audit events, optional Kafka channel events, protocol DTOs, tests, Dockerfile, edge route, and compose wiring.
 - `interop-service`: A2A-style agent-card endpoint, registry-derived capabilities, MCP-style tool listing and single-tool schema lookup, deterministic `platform.ping`, real `platform.agent.run`, `platform.agent.run_async`, `platform.agent.dag.plan_run`, and `platform.agent.dag.plan_run_async` proxies into `agent-service`, protocol DTOs, tests, Dockerfile, edge route, and compose wiring.
 - `eval-service`: external regression client API surface with request/result DTOs, real HTTP target execution in `/eval/run`, named baseline suite loading via `/eval/suites/{suiteName}/run`, expected-response contains, JSON-path assertions, lightweight semantic-tolerance assertions, and frozen monolith oracle contains assertions, status/error/snippet/duration result reporting, tests, Dockerfile, edge route, and compose wiring.
 
 Deferred scaffold items:
 
-- `channel-service`: async-task/workflow callback integration and Kafka channel events.
+- `channel-service`: async-task/workflow callback integration.
 - `interop-service`: port monolith A2A and MCP server implementation, live downstream capability discovery beyond the current static proxy registry, and broader internal protocol reuse.
 - `eval-service`: richer oracle comparison modes beyond deterministic token similarity, such as embedding-based or LLM-judge checks.
 

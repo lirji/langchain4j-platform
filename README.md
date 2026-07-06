@@ -36,7 +36,7 @@ client ──X-Api-Key──▶ edge-gateway (Spring Cloud Gateway)
 | `knowledge-service` | 服务 | `/rag/documents/**` 文档上传/列表/删除 + `/rag/query` 向量 + keyword hybrid 检索；可选 `/rag/graph/**` GraphRAG 图谱查询 |
 | `agent-service` | 服务 | `/agent/run` 同步深度 Agent 编排；`/agent/run/async` + `/agent/tasks/**` 异步任务/SSE；`/agent/dag/run` 显式多 Agent DAG 编排；`/agent/dag/plan-run` 自动规划 DAG；动作通过跨服务协议调用 knowledge / analytics |
 | `async-task-service` | 服务 | `/async/tasks/**` 通用任务状态、SSE 断点续订、取消与 webhook 通知中心；后续 agent/workflow 会逐步切到该服务 |
-| `channel-service` | 服务 | `/channel/**` 渠道 ACL：webhook/Feishu/voice 出站、出入站签名校验 |
+| `channel-service` | 服务 | `/channel/**` 渠道 ACL：webhook/Feishu/voice 出站、出入站签名校验、可选 Kafka event |
 | `interop-service` | 服务 | `/interop/**` A2A agent-card、MCP tool surface，并可代理 agent run/async/DAG 能力 |
 | `eval-service` | 服务 | `/eval/**` 外部回归测试客户端，可执行 HTTP target case、加载 baseline suite、做响应/oracle 断言并输出 JSON report |
 | `edge-gateway` | 服务 | 边缘 API 网关 |

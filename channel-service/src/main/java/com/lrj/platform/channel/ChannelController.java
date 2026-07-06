@@ -2,6 +2,7 @@ package com.lrj.platform.channel;
 
 import com.lrj.platform.audit.AuditEventType;
 import com.lrj.platform.audit.AuditLogger;
+import com.lrj.platform.protocol.channel.ChannelEvent;
 import com.lrj.platform.protocol.channel.ChannelInboundEvent;
 import com.lrj.platform.protocol.channel.ChannelMessageReply;
 import com.lrj.platform.protocol.channel.ChannelMessageRequest;
@@ -24,13 +25,16 @@ public class ChannelController {
     private final AuditLogger audit;
     private final ChannelMessageDispatcher dispatcher;
     private final ChannelSignatureVerifier signatureVerifier;
+    private final ChannelEventPublisher eventPublisher;
 
     public ChannelController(AuditLogger audit,
                              ChannelMessageDispatcher dispatcher,
-                             ChannelSignatureVerifier signatureVerifier) {
+                             ChannelSignatureVerifier signatureVerifier,
+                             ChannelEventPublisher eventPublisher) {
         this.audit = audit;
         this.dispatcher = dispatcher;
         this.signatureVerifier = signatureVerifier;
+        this.eventPublisher = eventPublisher;
     }
 
     @GetMapping("/channel/capabilities")
@@ -51,6 +55,16 @@ public class ChannelController {
         ChannelDeliveryResult delivery = dispatcher.dispatch(messageId, request);
         audit.record(AuditEventType.CHANNEL_MESSAGE_ACCEPTED,
                 Map.of("messageId", messageId, "channel", request.channel(), "target", request.target(), "status", delivery.status()));
+        eventPublisher.publish(new ChannelEvent(
+                messageId,
+                "channel.message.accepted",
+                TenantContext.current().tenantId(),
+                request.channel().trim(),
+                request.target().trim(),
+                delivery.status(),
+                delivery.detail(),
+                request.metadata(),
+                Instant.now()));
         return ResponseEntity.accepted().body(new ChannelMessageReply(
                 messageId,
                 request.channel().trim(),
@@ -71,6 +85,16 @@ public class ChannelController {
         String eventId = value(event.eventId());
         audit.record(AuditEventType.CHANNEL_EVENT_RECEIVED,
                 Map.of("eventId", eventId, "channel", event.channel(), "eventType", event.eventType()));
+        eventPublisher.publish(new ChannelEvent(
+                eventId,
+                event.eventType(),
+                TenantContext.current().tenantId(),
+                event.channel(),
+                event.source(),
+                "ACCEPTED",
+                "inbound event accepted",
+                event.payload(),
+                Instant.now()));
         return ResponseEntity.accepted().body(Map.of(
                 "eventId", eventId,
                 "status", "ACCEPTED",

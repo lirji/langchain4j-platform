@@ -13,6 +13,8 @@ public class ChannelProperties {
     private boolean inboundSignatureEnabled = false;
     private String inboundSignatureSecret = "";
     private String voiceProviderUrl = "";
+    private boolean eventsEnabled = false;
+    private String eventsTopic = "platform.channel.events";
     private Duration connectTimeout = Duration.ofSeconds(1);
     private Duration readTimeout = Duration.ofSeconds(10);
 
@@ -62,6 +64,22 @@ public class ChannelProperties {
 
     public void setVoiceProviderUrl(String voiceProviderUrl) {
         this.voiceProviderUrl = voiceProviderUrl;
+    }
+
+    public boolean isEventsEnabled() {
+        return eventsEnabled;
+    }
+
+    public void setEventsEnabled(boolean eventsEnabled) {
+        this.eventsEnabled = eventsEnabled;
+    }
+
+    public String getEventsTopic() {
+        return eventsTopic;
+    }
+
+    public void setEventsTopic(String eventsTopic) {
+        this.eventsTopic = eventsTopic;
     }
 
     public Duration getConnectTimeout() {
