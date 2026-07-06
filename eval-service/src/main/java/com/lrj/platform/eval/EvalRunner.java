@@ -17,6 +17,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -74,6 +75,17 @@ public class EvalRunner {
             EvalCaseResult jsonPathResult = evaluateJsonPaths(evalCase, status, responseBody, startedAt);
             if (jsonPathResult != null) {
                 return jsonPathResult;
+            }
+        }
+        String semanticExpected = evalCase.semanticExpected();
+        if (semanticExpected != null && !semanticExpected.isBlank()) {
+            double score = semanticSimilarity(responseBody, semanticExpected);
+            double minScore = evalCase.semanticMinScore() == null ? 0.75D : evalCase.semanticMinScore();
+            if (score < minScore) {
+                return failure(evalCase.id(), status,
+                        "semantic similarity below threshold: " + round(score) + " < " + round(minScore),
+                        responseBody,
+                        startedAt);
             }
         }
         String oracle = evalCase.oracleContains();
@@ -231,6 +243,73 @@ public class EvalRunner {
             return number.doubleValue();
         }
         return value;
+    }
+
+    static double semanticSimilarity(String actual, String expected) {
+        Map<String, Integer> actualTokens = tokenCounts(actual);
+        Map<String, Integer> expectedTokens = tokenCounts(expected);
+        if (actualTokens.isEmpty() || expectedTokens.isEmpty()) {
+            return 0D;
+        }
+        double dot = 0D;
+        for (Map.Entry<String, Integer> entry : expectedTokens.entrySet()) {
+            dot += entry.getValue() * actualTokens.getOrDefault(entry.getKey(), 0);
+        }
+        double actualNorm = norm(actualTokens);
+        double expectedNorm = norm(expectedTokens);
+        if (actualNorm == 0D || expectedNorm == 0D) {
+            return 0D;
+        }
+        return dot / (actualNorm * expectedNorm);
+    }
+
+    private static Map<String, Integer> tokenCounts(String value) {
+        Map<String, Integer> counts = new HashMap<>();
+        if (value == null || value.isBlank()) {
+            return counts;
+        }
+        StringBuilder token = new StringBuilder();
+        value.codePoints().forEach(codePoint -> {
+            if (Character.isLetterOrDigit(codePoint)) {
+                if (isCjk(codePoint)) {
+                    flushToken(counts, token);
+                    counts.merge(new String(Character.toChars(codePoint)), 1, Integer::sum);
+                } else {
+                    token.appendCodePoint(Character.toLowerCase(codePoint));
+                }
+            } else {
+                flushToken(counts, token);
+            }
+        });
+        flushToken(counts, token);
+        return counts;
+    }
+
+    private static boolean isCjk(int codePoint) {
+        Character.UnicodeScript script = Character.UnicodeScript.of(codePoint);
+        return script == Character.UnicodeScript.HAN
+                || script == Character.UnicodeScript.HIRAGANA
+                || script == Character.UnicodeScript.KATAKANA
+                || script == Character.UnicodeScript.HANGUL;
+    }
+
+    private static void flushToken(Map<String, Integer> counts, StringBuilder token) {
+        if (!token.isEmpty()) {
+            counts.merge(token.toString(), 1, Integer::sum);
+            token.setLength(0);
+        }
+    }
+
+    private static double norm(Map<String, Integer> counts) {
+        double sum = 0D;
+        for (int count : counts.values()) {
+            sum += count * count;
+        }
+        return Math.sqrt(sum);
+    }
+
+    private static double round(double value) {
+        return Math.round(value * 1000D) / 1000D;
     }
 
     private record PathResult(boolean found, Object value) {

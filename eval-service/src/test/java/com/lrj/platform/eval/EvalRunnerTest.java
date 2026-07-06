@@ -184,6 +184,60 @@ class EvalRunnerTest {
     }
 
     @Test
+    void passesWhenSemanticSimilarityIsAboveThreshold() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        EvalRunner runner = new EvalRunner(restTemplate, new EvalProperties());
+
+        server.expect(once(), requestTo("http://edge.local/chat"))
+                .andRespond(withSuccess("refund policy allows manual approval for high risk refunds", MediaType.TEXT_PLAIN));
+
+        var result = runner.execute("http://edge.local", new EvalCase(
+                "semantic",
+                "/chat",
+                "GET",
+                Map.of(),
+                null,
+                null,
+                Map.of(),
+                "high risk refunds require manual approval",
+                0.35D));
+
+        assertThat(result.passed()).isTrue();
+        server.verify();
+    }
+
+    @Test
+    void failsWhenSemanticSimilarityIsBelowThreshold() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        EvalRunner runner = new EvalRunner(restTemplate, new EvalProperties());
+
+        server.expect(once(), requestTo("http://edge.local/chat"))
+                .andRespond(withSuccess("weather is sunny", MediaType.TEXT_PLAIN));
+
+        var result = runner.execute("http://edge.local", new EvalCase(
+                "semantic",
+                "/chat",
+                "GET",
+                Map.of(),
+                null,
+                null,
+                Map.of(),
+                "high risk refunds require manual approval",
+                0.5D));
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.error()).contains("semantic similarity below threshold");
+        server.verify();
+    }
+
+    @Test
+    void semanticSimilarityTokenizesCjkCharacters() {
+        assertThat(EvalRunner.semanticSimilarity("高风险退款需要人工审批", "退款人工审批")).isGreaterThan(0.5D);
+    }
+
+    @Test
     void keepsLegacyResultConstructorOracleNeutral() {
         var result = new com.lrj.platform.protocol.eval.EvalCaseResult("case-1", true, 200, null, "ok", 1);
 

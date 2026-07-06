@@ -24,7 +24,7 @@
 | 异步任务 | 通用任务状态、租户隔离、取消、SSE、worker lease、webhook outbox、delivered retention | `async-task-service` |
 | 渠道接入 | 渠道 capability、webhook/Feishu 出站、入站事件、HMAC 签名校验 | `channel-service` |
 | 互操作 | A2A agent-card、MCP-style tools、代理 agent run/async/DAG | `interop-service` |
-| 回归评测 | HTTP case 执行、baseline suite、contains/JSON-path/oracle 断言、JSON report | `eval-service` |
+| 回归评测 | HTTP case 执行、baseline suite、contains/JSON-path/semantic/oracle 断言、JSON report | `eval-service` |
 | 审计与计量 | 审计日志、LLM audit listener、token budget、cost attribution | `platform-audit`, `platform-metering` |
 | 可观测性 | trace id 生成和跨服务透传 | `platform-observability` |
 
@@ -130,6 +130,7 @@
 - response contains。
 - oracle contains。
 - JSON path 等值断言，例如 `$.answer`、`$.items[0].name`。
+- 轻量 semantic-tolerance 断言：`semanticExpected` + `semanticMinScore`。
 - JSON report 输出。
 
 ## 当前限制

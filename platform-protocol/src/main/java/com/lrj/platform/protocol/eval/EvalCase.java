@@ -8,7 +8,9 @@ public record EvalCase(String id,
                        Map<String, Object> body,
                        String expectedContains,
                        String oracleContains,
-                       Map<String, Object> expectedJsonPaths) {
+                       Map<String, Object> expectedJsonPaths,
+                       String semanticExpected,
+                       Double semanticMinScore) {
 
     public EvalCase(String id,
                     String endpoint,
@@ -16,7 +18,17 @@ public record EvalCase(String id,
                     Map<String, Object> body,
                     String expectedContains,
                     String oracleContains) {
-        this(id, endpoint, method, body, expectedContains, oracleContains, null);
+        this(id, endpoint, method, body, expectedContains, oracleContains, null, null, null);
+    }
+
+    public EvalCase(String id,
+                    String endpoint,
+                    String method,
+                    Map<String, Object> body,
+                    String expectedContains,
+                    String oracleContains,
+                    Map<String, Object> expectedJsonPaths) {
+        this(id, endpoint, method, body, expectedContains, oracleContains, expectedJsonPaths, null, null);
     }
 
     public EvalCase(String id,

@@ -447,7 +447,9 @@ curl -N 'http://localhost:8080/agent/tasks/{taskId}/stream' \
       "expectedContains": "reply",
       "expectedJsonPaths": {
         "$.answer": "reply"
-      }
+      },
+      "semanticExpected": "退款审批需要人工确认",
+      "semanticMinScore": 0.6
     }
   ]
 }
