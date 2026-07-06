@@ -1,0 +1,45 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: analytics-service
+
+platform:
+  gateway:
+    base-url: ${GATEWAY_BASE_URL:http://localhost:4000/v1}
+    api-key: ${GATEWAY_API_KEY:sk-litellm-master}
+    model-name: ${GATEWAY_MODEL:chat-default}
+  security:
+    jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
+    allow-api-key-fallback: true
+    api-keys:
+      dev-key-tenantA-admin:
+        tenant: tenantA
+        user: analyst-a
+        scopes: [chat, analytics]
+
+app:
+  nl2sql:
+    enabled: ${NL2SQL_ENABLED:false}
+    datasource:
+      url: ${NL2SQL_DB_URL:jdbc:mysql://localhost:3306/nl2sql_demo?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useInformationSchema=true}
+      readonly-url: ${NL2SQL_DB_READONLY_URL:jdbc:mysql://localhost:3306/nl2sql_demo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useInformationSchema=true}
+      admin-username: ${NL2SQL_DB_ADMIN_USER:root}
+      admin-password: ${NL2SQL_DB_ADMIN_PASSWORD:root}
+      readonly-username: ${NL2SQL_DB_READONLY_USER:nl2sql_ro}
+      readonly-password: ${NL2SQL_DB_READONLY_PASSWORD:nl2sql_ro}
+      seed-script: ${NL2SQL_SEED_SCRIPT:db/nl2sql-demo.sql}
+    enum-columns:
+      orders: [status]
+      refunds: [status]
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
