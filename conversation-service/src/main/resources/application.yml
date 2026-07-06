@@ -1,0 +1,50 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: conversation-service
+
+# 外部 AI 网关（LiteLLM）。provider/model 选择与 failover 在 LiteLLM config.yaml 里。
+platform:
+  gateway:
+    base-url: ${GATEWAY_BASE_URL:http://localhost:4000/v1}
+    api-key: ${GATEWAY_API_KEY:sk-litellm-master}
+    model-name: ${GATEWAY_MODEL:chat-default}
+  security:
+    jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
+    # 本地直连调试用的 api key → 租户映射（生产下游只信 JWT，可关 allow-api-key-fallback）
+    allow-api-key-fallback: true
+    api-keys:
+      dev-key-acme:
+        tenant: acme
+        user: alice
+        scopes: [chat, approve]
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,tokenbudget,cost
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+app:
+  conversation:
+    rag:
+      enabled: ${CONVERSATION_RAG_ENABLED:false}
+      knowledge-base-url: ${KNOWLEDGE_BASE_URL:http://localhost:8084}
+      top-k: ${CONVERSATION_RAG_TOP_K:5}
+      min-score: ${CONVERSATION_RAG_MIN_SCORE:0.0}
+      category: ${CONVERSATION_RAG_CATEGORY:}
+      max-context-chars: ${CONVERSATION_RAG_MAX_CONTEXT_CHARS:4000}
+      connect-timeout: ${CONVERSATION_RAG_CONNECT_TIMEOUT:1s}
+      read-timeout: ${CONVERSATION_RAG_READ_TIMEOUT:3s}
+  token-budget:
+    enabled: true
+    store: in-memory
+    timezone: Asia/Shanghai
+  cost:
+    enabled: false
