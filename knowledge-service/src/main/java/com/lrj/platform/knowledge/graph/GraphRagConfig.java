@@ -1,11 +1,15 @@
 package com.lrj.platform.knowledge.graph;
 
 import com.lrj.platform.knowledge.hybrid.KeywordTokenizer;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import javax.sql.DataSource;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
@@ -17,8 +21,35 @@ import java.util.stream.Collectors;
 public class GraphRagConfig {
 
     @Bean
+    @ConditionalOnProperty(name = "app.rag.graph.store", havingValue = "in-memory", matchIfMissing = true)
     GraphStore graphStore() {
         return new InMemoryGraphStore();
+    }
+
+    @Bean
+    @ConfigurationProperties(prefix = "app.rag.graph.datasource")
+    @ConditionalOnProperty(name = "app.rag.graph.store", havingValue = "jdbc")
+    GraphDatasourceProperties graphDatasourceProperties() {
+        return new GraphDatasourceProperties();
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "app.rag.graph.store", havingValue = "jdbc")
+    DataSource graphDataSource(GraphDatasourceProperties properties) {
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl(properties.getUrl());
+        config.setDriverClassName(properties.getDriverClassName());
+        config.setUsername(properties.getUsername());
+        config.setPassword(properties.getPassword());
+        config.setMaximumPoolSize(properties.getMaximumPoolSize());
+        config.setPoolName("knowledge-graph");
+        return new HikariDataSource(config);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "app.rag.graph.store", havingValue = "jdbc")
+    GraphStore jdbcGraphStore(DataSource graphDataSource) {
+        return new JdbcGraphStore(graphDataSource);
     }
 
     @Bean

@@ -120,6 +120,15 @@ RAG_GRAPH_RELATION_WHITELIST=隶属于,使用
 RAG_GRAPH_ALIASES=张三经理=张三
 ```
 
+默认图谱存储是内存；需要持久化到 MySQL 时设置：
+
+```bash
+RAG_GRAPH_STORE=jdbc
+RAG_GRAPH_DB_URL='jdbc:mysql://mysql:3306/knowledge_graph?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true'
+RAG_GRAPH_DB_USER=root
+RAG_GRAPH_DB_PASSWORD=root
+```
+
 当前图谱抽取支持受控文本三元组格式：`subject|relation|object`，多条可用换行或分号分隔。上传文档后可查实体邻居：
 
 ```bash

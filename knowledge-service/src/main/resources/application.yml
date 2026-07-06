@@ -46,6 +46,7 @@ app:
       keyword-top-k: ${RAG_HYBRID_KEYWORD_TOP_K:${RAG_QUERY_TOP_K:5}}
     graph:
       enabled: ${RAG_GRAPH_ENABLED:false}
+      store: ${RAG_GRAPH_STORE:in-memory}
       include-in-query: ${RAG_GRAPH_INCLUDE_IN_QUERY:${RAG_GRAPH_ENABLED:false}}
       query-top-k: ${RAG_GRAPH_QUERY_TOP_K:${RAG_GRAPH_MAX_TRIPLES:20}}
       max-hops: ${RAG_GRAPH_MAX_HOPS:2}
@@ -54,6 +55,12 @@ app:
       relation-whitelist: ${RAG_GRAPH_RELATION_WHITELIST:}
       aliases: ${RAG_GRAPH_ALIASES:}
       async: ${RAG_GRAPH_ASYNC:false}
+      datasource:
+        url: ${RAG_GRAPH_DB_URL:jdbc:mysql://localhost:3306/knowledge_graph?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}
+        username: ${RAG_GRAPH_DB_USER:root}
+        password: ${RAG_GRAPH_DB_PASSWORD:}
+        driver-class-name: ${RAG_GRAPH_DB_DRIVER:com.mysql.cj.jdbc.Driver}
+        maximum-pool-size: ${RAG_GRAPH_DB_MAX_POOL_SIZE:8}
 
 management:
   endpoints:

@@ -124,12 +124,17 @@ services:
       RAG_REGISTRY_STORE: ${RAG_REGISTRY_STORE:-in-memory}
       RAG_HYBRID_ENABLED: ${RAG_HYBRID_ENABLED:-true}
       RAG_GRAPH_ENABLED: ${RAG_GRAPH_ENABLED:-false}
+      RAG_GRAPH_STORE: ${RAG_GRAPH_STORE:-in-memory}
       RAG_GRAPH_INCLUDE_IN_QUERY: ${RAG_GRAPH_INCLUDE_IN_QUERY:-${RAG_GRAPH_ENABLED:-false}}
       RAG_GRAPH_QUERY_TOP_K: ${RAG_GRAPH_QUERY_TOP_K:-20}
       RAG_GRAPH_RELATION_WHITELIST: ${RAG_GRAPH_RELATION_WHITELIST:-}
       RAG_GRAPH_ALIASES: ${RAG_GRAPH_ALIASES:-}
+      RAG_GRAPH_DB_URL: jdbc:mysql://mysql:3306/knowledge_graph?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
+      RAG_GRAPH_DB_USER: root
+      RAG_GRAPH_DB_PASSWORD: root
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
     depends_on:
+      - mysql
       - redis
       - qdrant
     ports:

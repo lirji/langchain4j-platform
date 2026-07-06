@@ -61,7 +61,7 @@ Implemented first slice:
 - `DocumentService` and `DocumentController` upload/list/get/delete endpoints.
 - `KnowledgeQueryService` and `KnowledgeQueryController` with tenant/category filtering.
 - `KeywordSearchService` hybrid retrieval with a lightweight tokenizer, result de-duplication, and hit `source` attribution.
-- `knowledge.graph`: deterministic `subject|relation|object` extraction, in-memory graph store, token entity linker, document lifecycle synchronization, `/rag/graph/query` + `/rag/graph/entities`, and optional graph-hit fusion into `/rag/query` behind `RAG_GRAPH_ENABLED=true` / `RAG_GRAPH_INCLUDE_IN_QUERY=true`.
+- `knowledge.graph`: deterministic `subject|relation|object` extraction, in-memory or JDBC graph store behind `RAG_GRAPH_STORE`, token entity linker, document lifecycle synchronization, `/rag/graph/query` + `/rag/graph/entities`, and optional graph-hit fusion into `/rag/query` behind `RAG_GRAPH_ENABLED=true` / `RAG_GRAPH_INCLUDE_IN_QUERY=true`.
 - `platform-protocol.knowledge`: `KnowledgeQueryRequest`, `KnowledgeQueryReply`, and `KnowledgeHit` as shared cross-service RAG DTOs.
 - `conversation-service`: `KnowledgeClient`, HTTP implementation with tenant/trace forwarders, and `RagPromptAugmenter` behind `CONVERSATION_RAG_ENABLED=true`.
 - `deploy/smoke-qdrant-rag.sh` for a minimal Qdrant-backed upload/query smoke.
@@ -69,7 +69,7 @@ Implemented first slice:
 
 Deferred to the next slice:
 
-- Improve graph/vector/keyword ranking weights, add graph persistence, multimodal image ingestion, and vector-store production hardening.
+- Improve graph/vector/keyword ranking weights, multimodal image ingestion, and vector-store production hardening.
 - Optional Ollama/native embedding provider if LiteLLM is not used for embeddings.
 
 ## Current Code Step: Agent Service
