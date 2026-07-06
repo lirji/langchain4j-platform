@@ -1,0 +1,90 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: edge-gateway
+  cloud:
+    gateway:
+      routes:
+        - id: analytics
+          uri: ${ANALYTICS_URI:http://localhost:8083}
+          predicates:
+            - Path=/chat/sql,/analytics,/analytics/**
+        - id: conversation
+          uri: ${CONVERSATION_URI:http://localhost:8081}
+          predicates:
+            - Path=/chat,/chat/**
+        - id: workflow
+          uri: ${WORKFLOW_URI:http://localhost:8082}
+          predicates:
+            - Path=/workflow,/workflow/**
+        - id: knowledge
+          uri: ${KNOWLEDGE_URI:http://localhost:8084}
+          predicates:
+            - Path=/rag,/rag/**,/knowledge,/knowledge/**
+        - id: agent
+          uri: ${AGENT_URI:http://localhost:8085}
+          predicates:
+            - Path=/agent,/agent/**
+        - id: async-task
+          uri: ${ASYNC_TASK_URI:http://localhost:8086}
+          predicates:
+            - Path=/async,/async/**
+        - id: channel
+          uri: ${CHANNEL_URI:http://localhost:8087}
+          predicates:
+            - Path=/channel,/channel/**
+        - id: interop
+          uri: ${INTEROP_URI:http://localhost:8088}
+          predicates:
+            - Path=/interop,/interop/**
+        - id: eval
+          uri: ${EVAL_URI:http://localhost:8089}
+          predicates:
+            - Path=/eval,/eval/**
+
+# 边缘持有 api-key → 租户映射；换发内部 JWT 后下游只认 JWT。
+platform:
+  security:
+    jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
+    api-keys:
+      dev-key-acme:
+        tenant: acme
+        user: alice
+        scopes: [chat, approve, agent, channel, eval]
+      dev-key-globex:
+        tenant: globex
+        user: bob
+        scopes: [chat]
+      dev-key-tenantA-admin:
+        tenant: tenantA
+        user: analyst-a
+        scopes: [chat, analytics]
+      dev-key-acme-ingest:
+        tenant: acme
+        user: alice
+        scopes: [chat, ingest]
+
+app:
+  rate-limit:
+    enabled: true
+    store: in-memory
+    defaults:
+      chat: 60
+      agent: 20
+      stream: 20
+      ingest: 5
+      eval: 5
+      default: 120
+    anonymous-multiplier: 0.2
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+  endpoint:
+    health:
+      probes:
+        enabled: true
