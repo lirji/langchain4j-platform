@@ -382,6 +382,42 @@ curl -N 'http://localhost:8080/agent/tasks/{taskId}/stream' \
 }
 ```
 
+### POST `/channel/callbacks`
+
+用途：把外部终态回调转换为渠道消息并复用 channel dispatcher。
+
+```json
+{
+  "source": "workflow",
+  "sourceId": "pi-1",
+  "status": "COMPLETED",
+  "channel": "feishu",
+  "target": "chat-1",
+  "message": "审批已完成",
+  "metadata": {}
+}
+```
+
+### POST `/channel/callbacks/async-task`
+
+用途：接收 async-task-service 终态 webhook payload。`channel` / `target` / `message` 可放在顶层、`result` 或 `metadata` 中。
+
+```json
+{
+  "taskId": "task-1",
+  "status": "SUCCEEDED",
+  "result": {
+    "channel": "feishu",
+    "target": "chat-1",
+    "message": "任务已完成"
+  }
+}
+```
+
+### POST `/channel/callbacks/workflow`
+
+用途：接收 workflow 终态 webhook payload，映射规则同 async-task callback。
+
 ### POST `/channel/inbound`
 
 用途：接收入站渠道事件。

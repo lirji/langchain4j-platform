@@ -2,6 +2,7 @@ package com.lrj.platform.channel;
 
 import com.lrj.platform.audit.AuditEventType;
 import com.lrj.platform.audit.AuditLogger;
+import com.lrj.platform.protocol.channel.ChannelCallbackRequest;
 import com.lrj.platform.protocol.channel.ChannelEvent;
 import com.lrj.platform.protocol.channel.ChannelInboundEvent;
 import com.lrj.platform.protocol.channel.ChannelMessageReply;
@@ -48,6 +49,36 @@ public class ChannelController {
 
     @PostMapping("/channel/messages")
     public ResponseEntity<?> send(@RequestBody ChannelMessageRequest request) {
+        return acceptMessage(request);
+    }
+
+    @PostMapping("/channel/callbacks")
+    public ResponseEntity<?> callback(@RequestBody ChannelCallbackRequest request) {
+        if (request == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "callback request is required"));
+        }
+        return acceptMessage(new ChannelMessageRequest(
+                request.channel(),
+                request.target(),
+                callbackMessage(request),
+                callbackMetadata(request)));
+    }
+
+    @PostMapping("/channel/callbacks/async-task")
+    public ResponseEntity<?> asyncTaskCallback(@RequestBody Map<String, Object> payload,
+                                               @RequestHeader(value = "X-Async-Task-Id", required = false) String taskId,
+                                               @RequestHeader(value = "X-Async-Task-Status", required = false) String status) {
+        return callback(ChannelCallbackMapper.fromPayload("async-task", payload, taskId, status));
+    }
+
+    @PostMapping("/channel/callbacks/workflow")
+    public ResponseEntity<?> workflowCallback(@RequestBody Map<String, Object> payload,
+                                              @RequestHeader(value = "X-Workflow-Instance-Id", required = false) String instanceId,
+                                              @RequestHeader(value = "X-Workflow-Status", required = false) String status) {
+        return callback(ChannelCallbackMapper.fromPayload("workflow", payload, instanceId, status));
+    }
+
+    private ResponseEntity<?> acceptMessage(ChannelMessageRequest request) {
         if (request == null || blank(request.channel()) || blank(request.target()) || blank(request.message())) {
             return ResponseEntity.badRequest().body(Map.of("error", "channel, target and message are required"));
         }
@@ -103,6 +134,31 @@ public class ChannelController {
 
     private static boolean blank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private static String callbackMessage(ChannelCallbackRequest request) {
+        if (!blank(request.message())) {
+            return request.message();
+        }
+        return "%s %s %s".formatted(text(request.source()), text(request.sourceId()), text(request.status())).trim();
+    }
+
+    private static Map<String, Object> callbackMetadata(ChannelCallbackRequest request) {
+        Map<String, Object> metadata = new java.util.LinkedHashMap<>(request.metadata());
+        putIfPresent(metadata, "callbackSource", request.source());
+        putIfPresent(metadata, "callbackSourceId", request.sourceId());
+        putIfPresent(metadata, "callbackStatus", request.status());
+        return metadata;
+    }
+
+    private static void putIfPresent(Map<String, Object> metadata, String key, String value) {
+        if (!blank(value)) {
+            metadata.put(key, value);
+        }
+    }
+
+    private static String text(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private static String value(String value) {

@@ -75,7 +75,7 @@ LiteLLM :4000
 | `knowledge-service` | 8084 | RAG 文档、向量、GraphRAG | vector store、document registry、graph store |
 | `agent-service` | 8085 | Agent/DAG 编排 | 本地 async task store，可镜像到 async-task-service |
 | `async-task-service` | 8086 | 通用异步任务中心 | in-memory 或 JDBC task/outbox，delivered outbox retention |
-| `channel-service` | 8087 | 渠道 ACL、webhook/Feishu/voice 出站、入站事件和可选 Kafka event | 当前主要无状态 |
+| `channel-service` | 8087 | 渠道 ACL、webhook/Feishu/voice 出站、async-task/workflow callback、入站事件和可选 Kafka event | 当前主要无状态 |
 | `interop-service` | 8088 | A2A/MCP-style 对外互操作 | 当前主要无状态 |
 | `eval-service` | 8089 | 回归评测执行 | baseline 文件、可选 report 输出 |
 | `edge-gateway` | 8080 | 边缘路由、安全和限流 | API key 配置、限流计数 |

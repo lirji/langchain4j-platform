@@ -1,6 +1,7 @@
 package com.lrj.platform.channel;
 
 import com.lrj.platform.audit.AuditLogger;
+import com.lrj.platform.protocol.channel.ChannelCallbackRequest;
 import com.lrj.platform.protocol.channel.ChannelEvent;
 import com.lrj.platform.protocol.channel.ChannelInboundEvent;
 import com.lrj.platform.protocol.channel.ChannelMessageReply;
@@ -87,6 +88,41 @@ class ChannelControllerTest {
                 });
     }
 
+    @Test
+    void mapsAsyncTaskCallbackToChannelMessage() {
+        CapturingDispatcher dispatcher = new CapturingDispatcher(ChannelDeliveryResult.sent("sent"));
+        CapturingEventPublisher eventPublisher = new CapturingEventPublisher();
+        ChannelController controller = controller(dispatcher, true, eventPublisher);
+
+        var response = controller.asyncTaskCallback(Map.of(
+                "result", Map.of(
+                        "channel", "feishu",
+                        "target", "chat-1",
+                        "message", "workflow done")),
+                "task-1",
+                "SUCCEEDED");
+
+        assertThat(response.getStatusCode().value()).isEqualTo(202);
+        assertThat(dispatcher.lastRequest().channel()).isEqualTo("feishu");
+        assertThat(dispatcher.lastRequest().target()).isEqualTo("chat-1");
+        assertThat(dispatcher.lastRequest().message()).isEqualTo("workflow done");
+        assertThat(dispatcher.lastRequest().metadata()).containsEntry("callbackSource", "async-task");
+        assertThat(dispatcher.lastRequest().metadata()).containsEntry("callbackSourceId", "task-1");
+        assertThat(dispatcher.lastRequest().metadata()).containsEntry("callbackStatus", "SUCCEEDED");
+        assertThat(eventPublisher.events()).singleElement()
+                .satisfies(event -> assertThat(event.eventType()).isEqualTo("channel.message.accepted"));
+    }
+
+    @Test
+    void rejectsCallbackWithoutChannelTargetOrMessage() {
+        ChannelController controller = controller(ChannelDeliveryResult.accepted("test"), true);
+
+        var response = controller.callback(new ChannelCallbackRequest(
+                "workflow", "pi-1", "COMPLETED", "", "", "", Map.of()));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(400);
+    }
+
     private ChannelController controller(ChannelDeliveryResult result, boolean signatureValid) {
         return controller(result, signatureValid, event -> {
         });
@@ -95,9 +131,15 @@ class ChannelControllerTest {
     private ChannelController controller(ChannelDeliveryResult result,
                                          boolean signatureValid,
                                          ChannelEventPublisher eventPublisher) {
+        return controller((messageId, request) -> result, signatureValid, eventPublisher);
+    }
+
+    private ChannelController controller(ChannelMessageDispatcher dispatcher,
+                                         boolean signatureValid,
+                                         ChannelEventPublisher eventPublisher) {
         return new ChannelController(
                 mock(AuditLogger.class),
-                (messageId, request) -> result,
+                dispatcher,
                 new TestSignatureVerifier(signatureValid),
                 eventPublisher);
     }
@@ -128,6 +170,26 @@ class ChannelControllerTest {
 
         List<ChannelEvent> events() {
             return events;
+        }
+    }
+
+    private static class CapturingDispatcher implements ChannelMessageDispatcher {
+
+        private final ChannelDeliveryResult result;
+        private ChannelMessageRequest lastRequest;
+
+        CapturingDispatcher(ChannelDeliveryResult result) {
+            this.result = result;
+        }
+
+        @Override
+        public ChannelDeliveryResult dispatch(String messageId, ChannelMessageRequest request) {
+            this.lastRequest = request;
+            return result;
+        }
+
+        ChannelMessageRequest lastRequest() {
+            return lastRequest;
         }
     }
 }
