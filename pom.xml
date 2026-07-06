@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      langchain4j-platform —— DDD 全微服务拆分（新项目，原单体 LangChain4j_project 冻结为参考实现）。
+      详见 ~/.claude/plans/ai-sprightly-feigenbaum.md
+      父 POM = 聚合器 + 统一依赖版本管理。各服务/共享库为子 module。
+    -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.3.5</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.lrj.platform</groupId>
+    <artifactId>langchain4j-platform</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>langchain4j-platform (aggregator)</name>
+
+    <modules>
+        <!-- 共享库（Maven 内部制品，不是服务） -->
+        <module>platform-security</module>
+        <module>platform-observability</module>
+        <module>platform-gateway-client</module>
+        <module>platform-protocol</module>
+        <module>platform-audit</module>
+        <module>platform-metering</module>
+        <!-- 服务 -->
+        <module>conversation-service</module>
+        <module>workflow-service</module>
+        <module>analytics-service</module>
+        <module>knowledge-service</module>
+        <module>agent-service</module>
+        <module>async-task-service</module>
+        <module>channel-service</module>
+        <module>interop-service</module>
+        <module>eval-service</module>
+        <module>edge-gateway</module>
+    </modules>
+
+    <properties>
+        <java.version>21</java.version>
+        <maven.compiler.release>21</maven.compiler.release>
+        <langchain4j.version>1.13.1</langchain4j.version>
+        <langchain4j-mcp.version>1.13.1-beta23</langchain4j-mcp.version>
+        <playwright.version>1.47.0</playwright.version>
+        <spring-cloud.version>2023.0.3</spring-cloud.version>
+        <jjwt.version>0.12.6</jjwt.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j-bom</artifactId>
+                <version>${langchain4j.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j-mcp</artifactId>
+                <version>${langchain4j-mcp.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.microsoft.playwright</groupId>
+                <artifactId>playwright</artifactId>
+                <version>${playwright.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- 内部 JWT（边缘签发 / 下游校验的租户传播令牌） -->
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-api</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-impl</artifactId>
+                <version>${jjwt.version}</version>
+                <scope>runtime</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-jackson</artifactId>
+                <version>${jjwt.version}</version>
+                <scope>runtime</scope>
+            </dependency>
+            <!-- 共享库自引用 -->
+            <dependency>
+                <groupId>com.lrj.platform</groupId>
+                <artifactId>platform-security</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.lrj.platform</groupId>
+                <artifactId>platform-observability</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.lrj.platform</groupId>
+                <artifactId>platform-gateway-client</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.lrj.platform</groupId>
+                <artifactId>platform-protocol</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.lrj.platform</groupId>
+                <artifactId>platform-audit</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.lrj.platform</groupId>
+                <artifactId>platform-metering</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>

@@ -1,0 +1,2 @@
+com.lrj.platform.security.PlatformSecurityAutoConfiguration
+com.lrj.platform.security.ratelimit.PlatformRateLimitAutoConfiguration
