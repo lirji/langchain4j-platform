@@ -434,10 +434,12 @@ curl -N 'http://localhost:8080/agent/tasks/{taskId}/stream' \
     {
       "id": "chat-smoke",
       "method": "POST",
-      "path": "/chat?chatId=eval",
-      "body": "{\"message\":\"hello\"}",
-      "expectedStatus": 200,
-      "expectedContains": "reply"
+      "endpoint": "/chat?chatId=eval",
+      "body": {"message": "hello"},
+      "expectedContains": "reply",
+      "expectedJsonPaths": {
+        "$.answer": "reply"
+      }
     }
   ]
 }

@@ -116,6 +116,74 @@ class EvalRunnerTest {
     }
 
     @Test
+    void passesWhenJsonPathAssertionsMatch() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        EvalRunner runner = new EvalRunner(restTemplate, new EvalProperties());
+
+        server.expect(once(), requestTo("http://edge.local/chat"))
+                .andRespond(withSuccess("{\"answer\":\"ok\",\"items\":[{\"name\":\"refund\"}]}", MediaType.APPLICATION_JSON));
+
+        var result = runner.execute("http://edge.local", new EvalCase(
+                "json-path",
+                "/chat",
+                "GET",
+                Map.of(),
+                null,
+                null,
+                Map.of("$.answer", "ok", "$.items[0].name", "refund")));
+
+        assertThat(result.passed()).isTrue();
+        server.verify();
+    }
+
+    @Test
+    void failsWhenJsonPathAssertionDoesNotMatch() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        EvalRunner runner = new EvalRunner(restTemplate, new EvalProperties());
+
+        server.expect(once(), requestTo("http://edge.local/chat"))
+                .andRespond(withSuccess("{\"answer\":\"other\"}", MediaType.APPLICATION_JSON));
+
+        var result = runner.execute("http://edge.local", new EvalCase(
+                "json-path",
+                "/chat",
+                "GET",
+                Map.of(),
+                null,
+                null,
+                Map.of("$.answer", "ok")));
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.error()).isEqualTo("json path assertion failed: $.answer");
+        server.verify();
+    }
+
+    @Test
+    void failsJsonPathAssertionsWhenResponseIsNotJson() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        EvalRunner runner = new EvalRunner(restTemplate, new EvalProperties());
+
+        server.expect(once(), requestTo("http://edge.local/chat"))
+                .andRespond(withSuccess("plain text", MediaType.TEXT_PLAIN));
+
+        var result = runner.execute("http://edge.local", new EvalCase(
+                "json-path",
+                "/chat",
+                "GET",
+                Map.of(),
+                null,
+                null,
+                Map.of("$.answer", "ok")));
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.error()).isEqualTo("response was not valid JSON");
+        server.verify();
+    }
+
+    @Test
     void keepsLegacyResultConstructorOracleNeutral() {
         var result = new com.lrj.platform.protocol.eval.EvalCaseResult("case-1", true, 200, null, "ok", 1);
 

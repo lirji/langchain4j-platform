@@ -34,7 +34,7 @@ Phase 1 has started:
 - `async-task-service`: first generic async-task backbone with task status, tenant-scoped listing/get/update/cancel, resumable SSE status stream, worker lease ownership, and terminal webhook delivery.
 - `channel-service`: channel bounded context with `/channel/capabilities`, outbound message provider boundary, webhook dry-run/HTTP POST delivery, Feishu webhook robot text delivery, outbound webhook signing, inbound event acceptance, optional HMAC signature verification, protocol DTOs, edge route, and docker-compose service.
 - `interop-service`: interop bounded context with A2A agent-card, MCP-style tool-list/call surface, and service-net tool proxies into `agent-service` run/async/DAG APIs.
-- `eval-service`: external regression client surface with HTTP target execution, baseline suite loading, response contains-assertion, frozen monolith oracle contains-assertion, status/error capture, duration/snippet reporting, optional JSON report output, and edge-gateway API-key wiring.
+- `eval-service`: external regression client surface with HTTP target execution, baseline suite loading, response contains-assertion, JSON-path assertions, frozen monolith oracle contains-assertion, status/error capture, duration/snippet reporting, optional JSON report output, and edge-gateway API-key wiring.
 
 ## Validation
 
@@ -175,7 +175,7 @@ Remaining workflow hardening:
 5. `async-task-service`: port async task/SSE/webhook backbone. In progress.
 6. `agent-service`: port multi-agent/deep-agent/reflexion/cascade/voting/chaining after knowledge and analytics contracts exist. In progress.
 7. `interop-service`: port A2A and MCP server. Agent tool proxy in progress.
-8. `eval-service`: external regression client, never a runtime dependency of business services. HTTP runner and oracle contains checks done.
+8. `eval-service`: external regression client, never a runtime dependency of business services. HTTP runner, JSON-path assertions, and oracle contains checks done.
 
 ## Current Code Step: Missing Service Scaffolds
 
@@ -185,13 +185,13 @@ Implemented first slice:
 
 - `channel-service`: channel capability endpoint, outbound message acceptance endpoint, provider-based outbound dispatch, webhook dry-run/HTTP POST delivery, Feishu webhook robot delivery, optional outbound webhook signing, inbound event acceptance endpoint, optional HMAC signature verification, audit events, protocol DTOs, tests, Dockerfile, edge route, and compose wiring.
 - `interop-service`: A2A-style agent-card endpoint, MCP-style tool listing, deterministic `platform.ping`, real `platform.agent.run`, `platform.agent.run_async`, `platform.agent.dag.plan_run`, and `platform.agent.dag.plan_run_async` proxies into `agent-service`, protocol DTOs, tests, Dockerfile, edge route, and compose wiring.
-- `eval-service`: external regression client API surface with request/result DTOs, real HTTP target execution in `/eval/run`, named baseline suite loading via `/eval/suites/{suiteName}/run`, expected-response and frozen monolith oracle contains assertions, status/error/snippet/duration result reporting, tests, Dockerfile, edge route, and compose wiring.
+- `eval-service`: external regression client API surface with request/result DTOs, real HTTP target execution in `/eval/run`, named baseline suite loading via `/eval/suites/{suiteName}/run`, expected-response contains, JSON-path assertions, and frozen monolith oracle contains assertions, status/error/snippet/duration result reporting, tests, Dockerfile, edge route, and compose wiring.
 
 Deferred scaffold items:
 
 - `channel-service`: voice adapter, async-task/workflow callback integration, and Kafka channel events.
 - `interop-service`: port monolith A2A and MCP server implementation, agent-card publication from live agent capabilities beyond the current agent proxies, and broader internal protocol reuse.
-- `eval-service`: richer oracle comparison modes beyond `oracleContains`, such as JSON-path and semantic-tolerance checks.
+- `eval-service`: richer oracle comparison modes beyond `oracleContains` and JSON-path, such as semantic-tolerance checks.
 
 ## Current Code Step: Eval Service HTTP Runner
 
@@ -207,14 +207,15 @@ Implemented slice:
 - Each run now includes `runId`, `suiteName`, `targetBaseUrl`, `startedAt`, `finishedAt`, and total duration metadata.
 - `EvalReportWriter` can write the machine-readable JSON report when `app.eval.report-directory` / `EVAL_REPORT_DIRECTORY` is configured.
 - `expectedContains` checks the response body when provided.
+- `expectedJsonPaths` checks simple JSON paths such as `$.answer` and `$.items[0].name` when exact text fragments are too brittle.
 - `oracleContains` lets a baseline case store a frozen monolith response fragment; mismatches fail with `oracleMatched=false` and `oracleExpected` in the case result.
 - Docker Compose sets `EVAL_API_KEY=dev-key-acme` so the default target can be `edge-gateway`.
 - The built-in `platform-smoke` suite provides a first reusable baseline file.
-- Focused tests cover suite loading, report writing, successful assertions, oracle drift detection, missing expected text, HTTP 500 capture, and validation failures.
+- Focused tests cover suite loading, report writing, successful assertions, JSON-path assertions, oracle drift detection, missing expected text, HTTP 500 capture, and validation failures.
 
 Deferred eval items:
 
-- Add JSON-path and semantic-tolerance oracle comparison modes for responses where exact text fragments are too brittle.
+- Add semantic-tolerance oracle comparison modes for responses where exact text fragments are too brittle.
 
 ## Rule Of Thumb
 

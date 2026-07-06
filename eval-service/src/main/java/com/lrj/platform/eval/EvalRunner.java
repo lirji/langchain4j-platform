@@ -1,5 +1,6 @@
 package com.lrj.platform.eval;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lrj.platform.protocol.eval.EvalCase;
 import com.lrj.platform.protocol.eval.EvalCaseResult;
 import org.springframework.http.HttpEntity;
@@ -17,12 +18,15 @@ import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 @Service
 public class EvalRunner {
 
     private final RestTemplate restTemplate;
     private final EvalProperties properties;
+    private final ObjectMapper mapper = new ObjectMapper();
 
     public EvalRunner(RestTemplate restTemplate, EvalProperties properties) {
         this.restTemplate = restTemplate;
@@ -66,11 +70,33 @@ public class EvalRunner {
         if (expected != null && !expected.isBlank() && !responseBody.contains(expected)) {
             return failure(evalCase.id(), status, "response did not contain expected text", responseBody, startedAt);
         }
+        if (!evalCase.expectedJsonPaths().isEmpty()) {
+            EvalCaseResult jsonPathResult = evaluateJsonPaths(evalCase, status, responseBody, startedAt);
+            if (jsonPathResult != null) {
+                return jsonPathResult;
+            }
+        }
         String oracle = evalCase.oracleContains();
         if (oracle != null && !oracle.isBlank() && !responseBody.contains(oracle)) {
             return oracleFailure(evalCase.id(), status, oracle, responseBody, startedAt);
         }
         return new EvalCaseResult(evalCase.id(), true, status, null, snippet(responseBody), elapsedMs(startedAt));
+    }
+
+    private EvalCaseResult evaluateJsonPaths(EvalCase evalCase, int status, String responseBody, Instant startedAt) {
+        Object document;
+        try {
+            document = mapper.readValue(responseBody, Object.class);
+        } catch (Exception ex) {
+            return failure(evalCase.id(), status, "response was not valid JSON", responseBody, startedAt);
+        }
+        for (Map.Entry<String, Object> assertion : evalCase.expectedJsonPaths().entrySet()) {
+            PathResult actual = readPath(document, assertion.getKey());
+            if (!actual.found() || !Objects.equals(normalize(assertion.getValue()), normalize(actual.value()))) {
+                return failure(evalCase.id(), status, "json path assertion failed: " + assertion.getKey(), responseBody, startedAt);
+            }
+        }
+        return null;
     }
 
     private URI resolveUri(String targetBaseUrl, String endpoint) {
@@ -144,5 +170,69 @@ public class EvalRunner {
 
     private long elapsedMs(Instant startedAt) {
         return Math.max(0L, Duration.between(startedAt, Instant.now()).toMillis());
+    }
+
+    @SuppressWarnings("unchecked")
+    private static PathResult readPath(Object document, String path) {
+        if (path == null || path.isBlank() || !path.startsWith("$")) {
+            return new PathResult(false, null);
+        }
+        Object current = document;
+        int index = 1;
+        while (index < path.length()) {
+            char marker = path.charAt(index);
+            if (marker == '.') {
+                int next = nextTokenEnd(path, index + 1);
+                if (next == index + 1 || !(current instanceof Map<?, ?> map)) {
+                    return new PathResult(false, null);
+                }
+                current = map.get(path.substring(index + 1, next));
+                if (current == null) {
+                    return new PathResult(false, null);
+                }
+                index = next;
+            } else if (marker == '[') {
+                int close = path.indexOf(']', index);
+                if (close < 0 || !(current instanceof List<?> list)) {
+                    return new PathResult(false, null);
+                }
+                int itemIndex;
+                try {
+                    itemIndex = Integer.parseInt(path.substring(index + 1, close));
+                } catch (NumberFormatException ex) {
+                    return new PathResult(false, null);
+                }
+                if (itemIndex < 0 || itemIndex >= list.size()) {
+                    return new PathResult(false, null);
+                }
+                current = list.get(itemIndex);
+                index = close + 1;
+            } else {
+                return new PathResult(false, null);
+            }
+        }
+        return new PathResult(true, current);
+    }
+
+    private static int nextTokenEnd(String path, int start) {
+        int dot = path.indexOf('.', start);
+        int bracket = path.indexOf('[', start);
+        if (dot < 0) {
+            return bracket < 0 ? path.length() : bracket;
+        }
+        if (bracket < 0) {
+            return dot;
+        }
+        return Math.min(dot, bracket);
+    }
+
+    private static Object normalize(Object value) {
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        return value;
+    }
+
+    private record PathResult(boolean found, Object value) {
     }
 }

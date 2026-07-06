@@ -7,7 +7,17 @@ public record EvalCase(String id,
                        String method,
                        Map<String, Object> body,
                        String expectedContains,
-                       String oracleContains) {
+                       String oracleContains,
+                       Map<String, Object> expectedJsonPaths) {
+
+    public EvalCase(String id,
+                    String endpoint,
+                    String method,
+                    Map<String, Object> body,
+                    String expectedContains,
+                    String oracleContains) {
+        this(id, endpoint, method, body, expectedContains, oracleContains, null);
+    }
 
     public EvalCase(String id,
                     String endpoint,
@@ -19,5 +29,6 @@ public record EvalCase(String id,
 
     public EvalCase {
         body = body == null ? Map.of() : Map.copyOf(body);
+        expectedJsonPaths = expectedJsonPaths == null ? Map.of() : Map.copyOf(expectedJsonPaths);
     }
 }
