@@ -68,6 +68,7 @@
 - `/agent/dag/run`：调用方显式传 DAG。
 - `/agent/dag/plan-run`：模型自动规划 DAG 后执行。
 - `/agent/tasks/{taskId}/stream`：SSE 订阅任务状态。
+- async-task-service authoritative 模式下，取消会同步到中心任务服务，并通过 worker cancellation token 阻止 queued/running work 继续写成功态。
 
 当前内置动作包括：
 

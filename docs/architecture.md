@@ -125,6 +125,7 @@ Client
      -> async-task-service /async/tasks             (mirror or authoritative)
      -> async-task-service /async/tasks/{id}/lease  (authoritative mode)
      -> async-task-service /async/tasks/{id}/status
+     -> async-task-service /async/tasks/{id} DELETE (authoritative cancellation)
 Client
   -> /agent/tasks/{id}/stream or /async/tasks/{id}/stream
 ```

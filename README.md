@@ -217,6 +217,7 @@ ASYNC_TASK_BASE_URL=http://async-task-service:8086
 ```
 
 authoritative 模式下，agent worker 执行前会调用 `/async/tasks/{taskId}/lease` 认领任务，之后状态更新会携带同一个 `workerId`；如果任务已经被其他活跃 worker 租约持有，本实例会跳过执行。默认 `AGENT_ASYNC_EXTERNAL_MIRROR_WEBHOOK=false`，终态 webhook 仍由 agent-service 本地投递。若同时设置 `AGENT_ASYNC_EXTERNAL_MIRROR_WEBHOOK=true`，webhookUrl 会传给 async-task-service，由中心服务 outbox 投递；agent 本地 notifier 会跳过，避免重复回调。
+取消 authoritative 任务时，agent-service 会先调用 async-task-service 的 `DELETE /async/tasks/{taskId}`，再通过本地 cancellation token 阻止 queued/running worker 继续写入成功态。
 
 需要显式多 Agent DAG 编排时，可传入子任务和依赖关系；服务会按拓扑分层执行，同层并行、下游看到上游结果，最后再综合回答：
 

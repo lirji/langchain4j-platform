@@ -11,9 +11,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -98,11 +103,42 @@ class AgentAsyncTaskServiceTest {
         assertThat(events).extracting(event -> event.task().status()).containsExactly(AgentTaskStatus.PENDING);
     }
 
+    @Test
+    void cancelBeforeExecutorRunsSkipsWorkAndKeepsCancelledState() {
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("agent")));
+        List<AgentTaskEvent> events = new ArrayList<>();
+        Queue<Runnable> queued = new ArrayDeque<>();
+        AgentAsyncTaskService service = service(events, null, queued::add);
+        AtomicBoolean workCalled = new AtomicBoolean(false);
+
+        AgentAsyncTask submitted = service.submitWithProgress(
+                "TEST",
+                Map.of("goal", "goal"),
+                progress -> {
+                    workCalled.set(true);
+                    return "done";
+                });
+
+        assertThat(service.cancel(submitted.taskId())).isTrue();
+        queued.remove().run();
+
+        AgentAsyncTask task = service.get(submitted.taskId()).orElseThrow();
+        assertThat(task.status()).isEqualTo(AgentTaskStatus.CANCELLED);
+        assertThat(task.result()).isNull();
+        assertThat(workCalled).isFalse();
+    }
+
     private static AgentAsyncTaskService service(List<AgentTaskEvent> events) {
         return service(events, null);
     }
 
     private static AgentAsyncTaskService service(List<AgentTaskEvent> events, ExternalAsyncTaskClient external) {
+        return service(events, external, Runnable::run);
+    }
+
+    private static AgentAsyncTaskService service(List<AgentTaskEvent> events,
+                                                ExternalAsyncTaskClient external,
+                                                Executor executor) {
         DeepAgentService agent = new DeepAgentService(
                 (goal, actions, scratchpad, history) -> new AgentDecision("", "finish", "", "", "done"),
                 List.of(),
@@ -110,7 +146,7 @@ class AgentAsyncTaskServiceTest {
         if (external == null) {
             return new AgentAsyncTaskService(
                     new AgentTaskStore(Duration.ofHours(1)),
-                    Runnable::run,
+                    executor,
                     agent,
                     mock(AuditLogger.class),
                     event -> events.add((AgentTaskEvent) event));
@@ -122,7 +158,7 @@ class AgentAsyncTaskServiceTest {
         when(provider.getIfAvailable()).thenReturn(external);
         return new AgentAsyncTaskService(
                 new AgentTaskStore(Duration.ofHours(1)),
-                Runnable::run,
+                executor,
                 agent,
                 mock(AuditLogger.class),
                 event -> events.add((AgentTaskEvent) event),

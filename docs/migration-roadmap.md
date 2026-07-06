@@ -95,12 +95,12 @@ Implemented first slice:
 - Optional `mcp_call` action behind `AGENT_MCP_ENABLED=false` by default, with HTTP/stdio MCP client transports and JSON tool dispatch.
 - Optional browser-use actions behind `AGENT_BROWSER_ENABLED=false` by default: open, click by link text, click by coordinates, type, and screenshot via Playwright.
 - Optional async-task-service mirror behind `AGENT_ASYNC_EXTERNAL_ENABLED=false`: local `/agent/tasks/**` remains compatible, while task create/status transitions can be mirrored to `/async/tasks/{sameTaskId}` for staged migration.
-- Optional async-task-service authoritative mode behind `AGENT_ASYNC_EXTERNAL_AUTHORITATIVE=true`: agent keeps executing work, but `/agent/tasks/**` reads/list/cancel/status updates are backed by async-task-service. Agent workers now claim `/async/tasks/{taskId}/lease` before execution and send `workerId` with status updates. When `AGENT_ASYNC_EXTERNAL_MIRROR_WEBHOOK=true`, webhook delivery ownership moves to async-task-service outbox and the local agent notifier skips delivery.
+- Optional async-task-service authoritative mode behind `AGENT_ASYNC_EXTERNAL_AUTHORITATIVE=true`: agent keeps executing work, but `/agent/tasks/**` reads/list/cancel/status updates are backed by async-task-service. Agent workers now claim `/async/tasks/{taskId}/lease` before execution and send `workerId` with status updates. Cancellation is propagated through the central task delete API plus an in-worker cancellation token so queued/running work stops before writing success. When `AGENT_ASYNC_EXTERNAL_MIRROR_WEBHOOK=true`, webhook delivery ownership moves to async-task-service outbox and the local agent notifier skips delivery.
 - Edge gateway route and docker-compose service wiring.
 
 Deferred agent items:
 
-- Browser visual understanding (`browser_see`) after a multimodal/vision protocol exists, stronger external sandbox for code execution, cancellation propagation for async-task-service-backed agent execution, and A2A/interop exposure.
+- Browser visual understanding (`browser_see`) after a multimodal/vision protocol exists, stronger external sandbox for code execution, and A2A/interop exposure.
 
 ## Current Code Step: Async Task Service
 
@@ -125,7 +125,7 @@ Deferred async-task items:
 
 - Production hardening for the persistent task store/outbox: row claiming semantics for multi-replica dispatch.
 - Workflow terminal notification migration from direct webhook/outbox bridge to the shared async backbone.
-- Hardening lease execution for multi-replica JDBC atomic row claiming and cancellation propagation.
+- Hardening lease execution for multi-replica JDBC atomic row claiming.
 
 ## Previous Code Step: Analytics Service
 
