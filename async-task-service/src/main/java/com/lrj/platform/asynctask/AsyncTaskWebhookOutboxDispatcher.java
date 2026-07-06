@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Component
 @ConditionalOnProperty(name = "app.async-task.store", havingValue = "jdbc")
@@ -30,6 +31,7 @@ public class AsyncTaskWebhookOutboxDispatcher {
     private final AsyncTaskWebhookProperties properties;
     private final RestTemplate restTemplate;
     private final AuditLogger audit;
+    private final String ownerId = "async-task-webhook-" + UUID.randomUUID();
 
     public AsyncTaskWebhookOutboxDispatcher(AsyncTaskWebhookOutbox outbox,
                                             AsyncTaskWebhookProperties properties,
@@ -48,10 +50,22 @@ public class AsyncTaskWebhookOutboxDispatcher {
         }
         long now = Instant.now().toEpochMilli();
         purgeDelivered(now);
-        List<AsyncTaskWebhookOutbox.Row> due = outbox.claimDue(now, Math.max(1, properties.getBatchSize()));
+        List<AsyncTaskWebhookOutbox.Row> due = outbox.claimDue(
+                now,
+                Math.max(1, properties.getBatchSize()),
+                ownerId,
+                claimTtlMillis());
         for (AsyncTaskWebhookOutbox.Row row : due) {
             deliver(row, now);
         }
+    }
+
+    private long claimTtlMillis() {
+        Duration ttl = properties.getClaimTtl();
+        if (ttl == null || ttl.isZero() || ttl.isNegative()) {
+            return 120_000L;
+        }
+        return Math.max(1_000L, ttl.toMillis());
     }
 
     private void purgeDelivered(long now) {

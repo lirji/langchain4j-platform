@@ -41,7 +41,7 @@ client ──X-Api-Key──▶ edge-gateway (Spring Cloud Gateway)
 | `eval-service` | 服务 | `/eval/**` 外部回归测试客户端，可执行 HTTP target case、加载 baseline suite、做响应/oracle 断言并输出 JSON report |
 | `edge-gateway` | 服务 | 边缘 API 网关 |
 
-> 后续继续加固 `channel`/`interop`/`eval` 的真实适配逻辑，并继续加固 `knowledge`/`agent`/`async-task` 的持久化和跨服务协议。
+> 后续继续加固 `channel`/`interop`/`eval` 的真实适配逻辑，并继续加固 `knowledge`/`async-task` 的持久化和跨服务协议。
 
 ## 文档
 

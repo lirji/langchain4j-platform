@@ -12,6 +12,7 @@ public class AsyncTaskWebhookProperties {
     private long pollIntervalMs = 30_000;
     private int batchSize = 50;
     private Duration deliveredRetention = Duration.ofDays(7);
+    private Duration claimTtl = Duration.ofMinutes(2);
 
     public boolean isEnabled() {
         return enabled;
@@ -75,5 +76,13 @@ public class AsyncTaskWebhookProperties {
 
     public void setDeliveredRetention(Duration deliveredRetention) {
         this.deliveredRetention = deliveredRetention;
+    }
+
+    public Duration getClaimTtl() {
+        return claimTtl;
+    }
+
+    public void setClaimTtl(Duration claimTtl) {
+        this.claimTtl = claimTtl;
     }
 }

@@ -54,6 +54,50 @@ class AsyncTaskWebhookOutboxTest {
         assertThat(ids(jdbc)).containsExactlyInAnyOrder("new-delivered", "pending", "dead");
     }
 
+    @Test
+    void claimDueMarksRowsInProgressAndPreventsDuplicateClaims() {
+        AsyncTaskWebhookOutbox outbox = outbox("async_outbox_claim");
+        long now = 10_000L;
+        outbox.enqueue(task("task-1"), "http://callback.local/1", now);
+        outbox.enqueue(task("task-2"), "http://callback.local/2", now);
+
+        var firstClaim = outbox.claimDue(now, 10, "worker-1", 30_000L);
+        var duplicateClaim = outbox.claimDue(now, 10, "worker-2", 30_000L);
+
+        assertThat(firstClaim).extracting(AsyncTaskWebhookOutbox.Row::outboxId)
+                .containsExactlyInAnyOrder("task-1", "task-2");
+        assertThat(duplicateClaim).isEmpty();
+    }
+
+    @Test
+    void expiredClaimCanBeReclaimedByAnotherWorker() {
+        AsyncTaskWebhookOutbox outbox = outbox("async_outbox_reclaim");
+        long now = 10_000L;
+        outbox.enqueue(task("task-1"), "http://callback.local/1", now);
+        outbox.claimDue(now, 10, "worker-1", 1_000L);
+
+        var tooEarly = outbox.claimDue(now + 500L, 10, "worker-2", 1_000L);
+        var reclaimed = outbox.claimDue(now + 1_500L, 10, "worker-2", 1_000L);
+
+        assertThat(tooEarly).isEmpty();
+        assertThat(reclaimed).extracting(AsyncTaskWebhookOutbox.Row::outboxId).containsExactly("task-1");
+    }
+
+    @Test
+    void markRetryReleasesClaimForFutureDispatch() {
+        AsyncTaskWebhookOutbox outbox = outbox("async_outbox_retry_claim");
+        long now = 10_000L;
+        outbox.enqueue(task("task-1"), "http://callback.local/1", now);
+        AsyncTaskWebhookOutbox.Row row = outbox.claimDue(now, 10, "worker-1", 30_000L).getFirst();
+
+        outbox.markRetry(row.outboxId(), 1, now + 500L, "SERVER_ERROR", now + 100L);
+        var beforeDue = outbox.claimDue(now + 400L, 10, "worker-2", 30_000L);
+        var afterDue = outbox.claimDue(now + 500L, 10, "worker-2", 30_000L);
+
+        assertThat(beforeDue).isEmpty();
+        assertThat(afterDue).extracting(AsyncTaskWebhookOutbox.Row::outboxId).containsExactly("task-1");
+    }
+
     private static AsyncTask task(String taskId) {
         Instant now = Instant.ofEpochMilli(1_000L);
         return new AsyncTask(
@@ -69,6 +113,14 @@ class AsyncTaskWebhookOutboxTest {
                 now,
                 now,
                 now);
+    }
+
+    private static AsyncTaskWebhookOutbox outbox(String dbName) {
+        DriverManagerDataSource dataSource = new DriverManagerDataSource(
+                "jdbc:h2:mem:" + dbName + ";MODE=MySQL;DB_CLOSE_DELAY=-1",
+                "sa",
+                "");
+        return new AsyncTaskWebhookOutbox(dataSource, new ObjectMapper());
     }
 
     private static java.util.List<String> ids(JdbcTemplate jdbc) {
