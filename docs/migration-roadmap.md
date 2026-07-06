@@ -117,14 +117,13 @@ Implemented first slice:
 - `/async/tasks/{taskId}/lease`: worker lease claim/renew endpoint with `workerId`, bounded TTL, owner-only status updates while the lease is active, and expired-lease re-claim.
 - `/async/tasks/{taskId}` `DELETE`: cancellation API for pending/running tasks.
 - Terminal webhook delivery with retry, audit logging, and headers `X-Async-Task-Id`, `X-Async-Task-Status`, `X-Tenant-Id`.
-- Optional JDBC task store behind `ASYNC_TASK_STORE=jdbc`, with auto-created `ASYNC_TASK` table.
+- Optional JDBC task store behind `ASYNC_TASK_STORE=jdbc`, with auto-created `ASYNC_TASK` table and atomic conditional lease updates for multi-replica workers.
 - Optional JDBC webhook outbox in JDBC mode, with auto-created `ASYNC_TASK_WEBHOOK_OUTBOX`, restart-safe retry state, DLQ status, exponential backoff, delivered-row retention, tenant-scoped DLQ inspection via `/async/webhook-outbox/dead`, and multi-replica row claiming through `IN_PROGRESS` claim owner/TTL columns.
 - Edge gateway route, docker-compose service wiring, and focused controller/webhook tests.
 
 Deferred async-task items:
 
 - Workflow terminal notification migration from direct webhook/outbox bridge to the shared async backbone.
-- Hardening lease execution for multi-replica JDBC atomic row claiming.
 
 ## Previous Code Step: Analytics Service
 

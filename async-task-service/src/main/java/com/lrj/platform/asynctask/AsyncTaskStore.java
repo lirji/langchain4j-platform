@@ -44,6 +44,16 @@ public class AsyncTaskStore {
         return Optional.ofNullable(tasks.computeIfPresent(taskId, (ignored, task) -> updater.apply(task)));
     }
 
+    public Optional<AsyncTask> lease(String taskId, String workerId, Instant leaseExpiresAt) {
+        Instant now = Instant.now();
+        return Optional.ofNullable(tasks.computeIfPresent(taskId, (ignored, task) -> {
+            if (task.status().isTerminal() || !leaseAvailableFor(task, workerId, now)) {
+                return task;
+            }
+            return withLease(task, workerId, leaseExpiresAt);
+        }));
+    }
+
     public List<AsyncTask> listByTenant(String tenantId) {
         return tasks.values().stream()
                 .filter(task -> tenantId.equals(task.tenantId()))
@@ -104,5 +114,15 @@ public class AsyncTaskStore {
                 task.finishedAt(),
                 workerId,
                 leaseExpiresAt);
+    }
+
+    static boolean leaseAvailableFor(AsyncTask task, String workerId, Instant now) {
+        if (task.leaseOwnerId() == null || task.leaseOwnerId().isBlank()) {
+            return true;
+        }
+        if (task.leaseOwnerId().equals(workerId)) {
+            return true;
+        }
+        return task.leaseExpiresAt() != null && task.leaseExpiresAt().isBefore(now);
     }
 }

@@ -165,16 +165,11 @@ public class AsyncTaskController {
             return ResponseEntity.status(409).body(leaseConflict(taskId, current));
         }
         Instant leaseExpiresAt = Instant.now().plus(Duration.ofSeconds(leaseSeconds(request)));
-        Optional<AsyncTask> updated = store.update(taskId, task -> {
-            if (!TenantContext.current().tenantId().equals(task.tenantId()) || task.status().isTerminal()) {
-                return task;
-            }
-            if (!leaseAvailableFor(task, workerId)) {
-                return task;
-            }
-            return AsyncTaskStore.withLease(task, workerId, leaseExpiresAt);
-        });
+        Optional<AsyncTask> updated = store.lease(taskId, workerId, leaseExpiresAt);
         AsyncTask leased = updated.orElse(current);
+        if (leased.status().isTerminal()) {
+            return ResponseEntity.status(409).body(Map.of("error", "terminal task cannot be leased", "taskId", taskId));
+        }
         if (!workerId.equals(leased.leaseOwnerId())) {
             return ResponseEntity.status(409).body(leaseConflict(taskId, leased));
         }

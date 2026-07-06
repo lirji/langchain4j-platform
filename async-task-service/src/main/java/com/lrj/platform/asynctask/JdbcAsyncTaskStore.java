@@ -129,6 +129,28 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
     }
 
     @Override
+    public Optional<AsyncTask> lease(String taskId, String workerId, Instant leaseExpiresAt) {
+        long now = Instant.now().toEpochMilli();
+        jdbc.update("""
+                UPDATE ASYNC_TASK
+                SET STATUS=?, UPDATED_AT=?, FINISHED_AT=NULL, LEASE_OWNER_ID=?, LEASE_EXPIRES_AT=?
+                WHERE TASK_ID=?
+                  AND STATUS NOT IN (?, ?, ?)
+                  AND (LEASE_OWNER_ID IS NULL OR LEASE_OWNER_ID='' OR LEASE_OWNER_ID=? OR LEASE_EXPIRES_AT < ?)""",
+                AsyncTaskStatus.RUNNING.name(),
+                now,
+                workerId,
+                millis(leaseExpiresAt),
+                taskId,
+                AsyncTaskStatus.SUCCEEDED.name(),
+                AsyncTaskStatus.FAILED.name(),
+                AsyncTaskStatus.CANCELLED.name(),
+                workerId,
+                now);
+        return get(taskId);
+    }
+
+    @Override
     public List<AsyncTask> listByTenant(String tenantId) {
         return jdbc.query("""
                 SELECT * FROM ASYNC_TASK

@@ -136,4 +136,3 @@
 - 图片 ingestion 目前不调用视觉模型/OCR provider，只索引请求方提供的 caption/OCR 文本。
 - GraphRAG 抽取是确定性三元组格式，不是开放信息抽取。
 - channel-service 真实 Feishu/voice adapter 还未完成。
-- async-task JDBC task lease 的多副本原子领取仍需进一步加固。
