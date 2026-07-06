@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Component
 public class InteropToolRegistry {
@@ -44,5 +45,20 @@ public class InteropToolRegistry {
                         "properties", Map.of(
                                 "goal", Map.of("type", "string"),
                                 "webhookUrl", Map.of("type", "string")))));
+    }
+
+    public Optional<McpToolDescriptor> find(String name) {
+        if (name == null || name.isBlank()) {
+            return Optional.empty();
+        }
+        return tools().stream()
+                .filter(tool -> tool.name().equals(name))
+                .findFirst();
+    }
+
+    public List<String> capabilityNames() {
+        return tools().stream()
+                .map(McpToolDescriptor::name)
+                .toList();
     }
 }

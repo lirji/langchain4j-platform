@@ -7,6 +7,7 @@ import com.lrj.platform.protocol.interop.McpToolDescriptor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -27,27 +28,41 @@ public class InteropController {
 
     @GetMapping("/interop/agent-card")
     public AgentCard agentCard() {
+        return buildAgentCard();
+    }
+
+    @GetMapping("/interop/a2a/agent-card")
+    public AgentCard a2aAgentCard() {
+        return buildAgentCard();
+    }
+
+    private AgentCard buildAgentCard() {
         return new AgentCard(
                 "langchain4j-platform",
                 "Platform agent interoperability surface backed by service-net tools.",
                 "0.1.0",
-                List.of(
+                concat(
                         "a2a.agent-card",
                         "mcp.tools.list",
-                        "mcp.tools.call",
-                        "platform.agent.run",
-                        "platform.agent.run_async",
-                        "platform.agent.dag.plan_run",
-                        "platform.agent.dag.plan_run_async"),
+                        "mcp.tools.call"),
                 Map.of(
                         "agentCard", "/interop/agent-card",
+                        "a2aAgentCard", "/interop/a2a/agent-card",
                         "mcpTools", "/interop/mcp/tools",
+                        "mcpTool", "/interop/mcp/tools/{toolName}",
                         "mcpCall", "/interop/mcp/call"));
     }
 
     @GetMapping("/interop/mcp/tools")
     public List<McpToolDescriptor> tools() {
         return registry.tools();
+    }
+
+    @GetMapping("/interop/mcp/tools/{toolName}")
+    public ResponseEntity<?> tool(@PathVariable String toolName) {
+        return registry.find(toolName)
+                .<ResponseEntity<?>>map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "unknown tool")));
     }
 
     @PostMapping("/interop/mcp/call")
@@ -64,5 +79,11 @@ public class InteropController {
             status = HttpStatus.BAD_REQUEST;
         }
         return ResponseEntity.status(status).body(reply);
+    }
+
+    private List<String> concat(String... builtIns) {
+        java.util.ArrayList<String> capabilities = new java.util.ArrayList<>(List.of(builtIns));
+        capabilities.addAll(registry.capabilityNames());
+        return List.copyOf(capabilities);
     }
 }

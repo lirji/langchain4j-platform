@@ -184,13 +184,13 @@ The remaining planned service modules have been introduced so the monorepo topol
 Implemented first slice:
 
 - `channel-service`: channel capability endpoint, outbound message acceptance endpoint, provider-based outbound dispatch, webhook dry-run/HTTP POST delivery, Feishu webhook robot delivery, optional outbound webhook signing, inbound event acceptance endpoint, optional HMAC signature verification, audit events, protocol DTOs, tests, Dockerfile, edge route, and compose wiring.
-- `interop-service`: A2A-style agent-card endpoint, MCP-style tool listing, deterministic `platform.ping`, real `platform.agent.run`, `platform.agent.run_async`, `platform.agent.dag.plan_run`, and `platform.agent.dag.plan_run_async` proxies into `agent-service`, protocol DTOs, tests, Dockerfile, edge route, and compose wiring.
+- `interop-service`: A2A-style agent-card endpoint, registry-derived capabilities, MCP-style tool listing and single-tool schema lookup, deterministic `platform.ping`, real `platform.agent.run`, `platform.agent.run_async`, `platform.agent.dag.plan_run`, and `platform.agent.dag.plan_run_async` proxies into `agent-service`, protocol DTOs, tests, Dockerfile, edge route, and compose wiring.
 - `eval-service`: external regression client API surface with request/result DTOs, real HTTP target execution in `/eval/run`, named baseline suite loading via `/eval/suites/{suiteName}/run`, expected-response contains, JSON-path assertions, and frozen monolith oracle contains assertions, status/error/snippet/duration result reporting, tests, Dockerfile, edge route, and compose wiring.
 
 Deferred scaffold items:
 
 - `channel-service`: voice adapter, async-task/workflow callback integration, and Kafka channel events.
-- `interop-service`: port monolith A2A and MCP server implementation, agent-card publication from live agent capabilities beyond the current agent proxies, and broader internal protocol reuse.
+- `interop-service`: port monolith A2A and MCP server implementation, live downstream capability discovery beyond the current static proxy registry, and broader internal protocol reuse.
 - `eval-service`: richer oracle comparison modes beyond `oracleContains` and JSON-path, such as semantic-tolerance checks.
 
 ## Current Code Step: Eval Service HTTP Runner

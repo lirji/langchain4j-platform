@@ -120,7 +120,7 @@
 
 `channel-service` 当前提供 webhook 出站、Feishu webhook 机器人文本消息出站、入站事件接收和签名能力，voice 真实适配仍是后续项。
 
-`interop-service` 提供 A2A/MCP-style 互操作入口，可把平台能力暴露给外部 Agent 或工具调用方。
+`interop-service` 提供 A2A/MCP-style 互操作入口，可把平台能力暴露给外部 Agent 或工具调用方。agent-card 会基于当前 MCP tool registry 生成 capabilities，并支持单个 tool descriptor 查询。
 
 ### 8. 回归评测
 

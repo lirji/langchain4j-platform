@@ -18,6 +18,8 @@ class InteropControllerTest {
 
         assertThat(controller.agentCard().capabilities()).contains("mcp.tools.list");
         assertThat(controller.agentCard().capabilities()).contains("platform.agent.run");
+        assertThat(controller.agentCard().endpoints()).containsEntry("a2aAgentCard", "/interop/a2a/agent-card");
+        assertThat(controller.a2aAgentCard()).isEqualTo(controller.agentCard());
     }
 
     @Test
@@ -43,6 +45,25 @@ class InteropControllerTest {
                         "platform.agent.run_async",
                         "platform.agent.dag.plan_run",
                         "platform.agent.dag.plan_run_async");
+    }
+
+    @Test
+    void getsSingleToolDescriptor() {
+        InteropController controller = controller();
+
+        var response = controller.tool("platform.agent.run");
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        assertThat(response.getBody()).extracting("name").isEqualTo("platform.agent.run");
+    }
+
+    @Test
+    void returnsNotFoundForUnknownToolDescriptor() {
+        InteropController controller = controller();
+
+        var response = controller.tool("missing.tool");
+
+        assertThat(response.getStatusCode().value()).isEqualTo(404);
     }
 
     @Test

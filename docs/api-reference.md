@@ -398,11 +398,19 @@ curl -N 'http://localhost:8080/agent/tasks/{taskId}/stream' \
 
 ### GET `/interop/agent-card`
 
-用途：A2A-style agent card。
+用途：A2A-style agent card，capabilities 从当前 MCP tool registry 生成。
+
+### GET `/interop/a2a/agent-card`
+
+用途：A2A-style agent card 兼容别名。
 
 ### GET `/interop/mcp/tools`
 
 用途：列出 MCP-style tool surface。
+
+### GET `/interop/mcp/tools/{toolName}`
+
+用途：查询单个 MCP-style tool descriptor 和输入 schema。
 
 ### POST `/interop/mcp/call`
 
