@@ -1,0 +1,66 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: knowledge-service
+
+platform:
+  gateway:
+    base-url: ${GATEWAY_BASE_URL:http://localhost:4000/v1}
+    api-key: ${GATEWAY_API_KEY:sk-litellm-master}
+  security:
+    jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
+    allow-api-key-fallback: true
+    api-keys:
+      dev-key-acme:
+        tenant: acme
+        user: alice
+        scopes: [chat, ingest]
+
+app:
+  rag:
+    vector-store:
+      provider: ${RAG_VECTOR_STORE_PROVIDER:in-memory}
+      qdrant:
+        host: ${QDRANT_HOST:localhost}
+        port: ${QDRANT_PORT:6334}
+        collection-name: ${QDRANT_COLLECTION_NAME:knowledge_segments}
+        use-tls: ${QDRANT_USE_TLS:false}
+        api-key: ${QDRANT_API_KEY:}
+        payload-text-key: ${QDRANT_PAYLOAD_TEXT_KEY:text}
+    embedding:
+      provider: ${RAG_EMBEDDING_PROVIDER:hash}
+      model-name: ${RAG_EMBEDDING_MODEL:embedding-default}
+      dimensions: ${RAG_EMBEDDING_DIMENSIONS:0}
+      timeout: ${RAG_EMBEDDING_TIMEOUT:60s}
+      max-retries: ${RAG_EMBEDDING_MAX_RETRIES:3}
+      max-segments-per-batch: ${RAG_EMBEDDING_MAX_SEGMENTS_PER_BATCH:0}
+    registry:
+      store: ${RAG_REGISTRY_STORE:in-memory}
+    query:
+      top-k: ${RAG_QUERY_TOP_K:5}
+      min-score: ${RAG_QUERY_MIN_SCORE:0.0}
+    hybrid:
+      enabled: ${RAG_HYBRID_ENABLED:true}
+      keyword-top-k: ${RAG_HYBRID_KEYWORD_TOP_K:${RAG_QUERY_TOP_K:5}}
+    graph:
+      enabled: ${RAG_GRAPH_ENABLED:false}
+      include-in-query: ${RAG_GRAPH_INCLUDE_IN_QUERY:${RAG_GRAPH_ENABLED:false}}
+      query-top-k: ${RAG_GRAPH_QUERY_TOP_K:${RAG_GRAPH_MAX_TRIPLES:20}}
+      max-hops: ${RAG_GRAPH_MAX_HOPS:2}
+      max-triples: ${RAG_GRAPH_MAX_TRIPLES:20}
+      max-triples-per-chunk: ${RAG_GRAPH_MAX_TRIPLES_PER_CHUNK:12}
+      relation-whitelist: ${RAG_GRAPH_RELATION_WHITELIST:}
+      aliases: ${RAG_GRAPH_ALIASES:}
+      async: ${RAG_GRAPH_ASYNC:false}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
