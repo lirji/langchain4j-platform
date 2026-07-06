@@ -124,6 +124,8 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 |---|---|---|
 | `WORKFLOW_ENABLED` | `false` | workflow 服务开关，compose 中通常开启 |
 | `WORKFLOW_DB_URL` | MySQL URL | Flowable datasource |
+| `WORKFLOW_TERMINAL_NOTIFICATION_MODE` | `local` | `local` 使用 WF_OUTBOX，`async-task` 使用 async-task-service webhook outbox |
+| `ASYNC_TASK_BASE_URL` | `http://localhost:8086` | workflow/agent 调用 async-task-service 的服务地址 |
 | `NL2SQL_ENABLED` | `false` | analytics NL2SQL 开关，compose 中通常开启 |
 | `NL2SQL_DB_URL` | MySQL URL | NL2SQL admin datasource |
 | `CHANNEL_OUTBOUND_ENABLED` | `false` | 是否真实 POST webhook |

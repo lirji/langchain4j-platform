@@ -319,7 +319,7 @@ AGENT_BROWSER_ENABLED=true
 
 开启后会暴露 `browser_open`、`browser_click`、`browser_click_xy`、`browser_type`、`browser_screenshot`。它依赖 Playwright Chromium，首次使用前需要安装浏览器二进制，例如在可联网环境运行 `mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install chromium"`。当前微服务先迁入非视觉动作，`browser_see` 会等视觉/多模态服务协议稳定后再接。
 
-通用异步任务中心提供 `/async/tasks/**`，用于把 agent/workflow 的本地任务状态、SSE 和 webhook outbox 逐步抽到独立服务：
+通用异步任务中心提供 `/async/tasks/**`，用于把 agent/workflow 的本地任务状态、SSE 和 webhook outbox 逐步抽到独立服务。`workflow-service` 可通过 `WORKFLOW_TERMINAL_NOTIFICATION_MODE=async-task` 把终态 webhook 投递交给中心 outbox；失败时默认回退本地 `WF_OUTBOX`。
 
 ```bash
 curl -s -X POST 'http://localhost:8080/async/tasks' \
@@ -357,7 +357,7 @@ curl -s 'http://localhost:8080/async/webhook-outbox/dead?limit=50' \
 SSE 事件包含可恢复的 event id；客户端断线后可通过标准 `Last-Event-ID` header 或 `lastEventId` query 参数恢复最近事件窗口。
 分布式 worker 可先调用 `/lease` 把任务从 `PENDING` claim 到 `RUNNING`；未过期 lease 只允许 owner worker 更新状态，过期后其他 worker 可重新 claim。
 
-任务进入 `SUCCEEDED` / `FAILED` / `CANCELLED` 后，`async-task-service` 会投递任务快照到 `webhookUrl`，请求头包含 `X-Async-Task-Id`、`X-Async-Task-Status`、`X-Tenant-Id`。JDBC outbox 中投递耗尽的记录会进入 `DEAD` 状态，可通过 `/async/webhook-outbox/dead` 按当前租户查询。当前默认是内存任务表，并已支持 agent-service 可选 mirror。
+任务进入 `SUCCEEDED` / `FAILED` / `CANCELLED` 后，`async-task-service` 会投递任务快照到 `webhookUrl`，请求头包含 `X-Async-Task-Id`、`X-Async-Task-Status`、`X-Tenant-Id`。JDBC outbox 中投递耗尽的记录会进入 `DEAD` 状态，可通过 `/async/webhook-outbox/dead` 按当前租户查询。当前默认是内存任务表，并已支持 agent-service 可选 mirror/authoritative，以及 workflow-service 终态通知迁移。
 
 需要让任务表和 webhook outbox 持久化到 MySQL 时，开启 JDBC store：
 

@@ -50,6 +50,8 @@ public class WorkflowProperties {
     /** 历史清理扫描间隔（毫秒），默认 1h 一次（远低频于超时扫描）。 */
     private long historyCleanupIntervalMs = 3_600_000;
 
+    private TerminalNotification terminalNotification = new TerminalNotification();
+
     private Outbox outbox = new Outbox();
 
     public boolean isEnabled() { return enabled; }
@@ -76,8 +78,31 @@ public class WorkflowProperties {
     public long getHistoryCleanupIntervalMs() { return historyCleanupIntervalMs; }
     public void setHistoryCleanupIntervalMs(long historyCleanupIntervalMs) { this.historyCleanupIntervalMs = historyCleanupIntervalMs; }
 
+    public TerminalNotification getTerminalNotification() { return terminalNotification; }
+    public void setTerminalNotification(TerminalNotification terminalNotification) { this.terminalNotification = terminalNotification; }
+
     public Outbox getOutbox() { return outbox; }
     public void setOutbox(Outbox outbox) { this.outbox = outbox; }
+
+    /**
+     * 终态通知发送模式。默认 {@code local} 保持兼容，仍使用 workflow 自己的 {@code WF_OUTBOX}；
+     * 设置为 {@code async-task} 时，终态会写入 async-task-service，由共享任务中心负责 webhook outbox。
+     */
+    public static class TerminalNotification {
+        private String mode = "local";
+        private String asyncTaskBaseUrl = "http://localhost:8086";
+        private String asyncTaskKind = "workflow.terminal";
+        private boolean fallbackToLocalOutbox = true;
+
+        public String getMode() { return mode; }
+        public void setMode(String mode) { this.mode = mode; }
+        public String getAsyncTaskBaseUrl() { return asyncTaskBaseUrl; }
+        public void setAsyncTaskBaseUrl(String asyncTaskBaseUrl) { this.asyncTaskBaseUrl = asyncTaskBaseUrl; }
+        public String getAsyncTaskKind() { return asyncTaskKind; }
+        public void setAsyncTaskKind(String asyncTaskKind) { this.asyncTaskKind = asyncTaskKind; }
+        public boolean isFallbackToLocalOutbox() { return fallbackToLocalOutbox; }
+        public void setFallbackToLocalOutbox(boolean fallbackToLocalOutbox) { this.fallbackToLocalOutbox = fallbackToLocalOutbox; }
+    }
 
     /**
      * 终态回推可靠投递（#8 outbox）。流程到终态时若发起方传了 {@code webhookUrl}，把"待投递"持久化到

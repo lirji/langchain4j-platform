@@ -105,7 +105,7 @@
 - 审批完成。
 - 查询流程实例。
 - 按 chatId 清理数据。
-- 终态 outbox 回调。
+- 终态 outbox 回调；也可通过 `WORKFLOW_TERMINAL_NOTIFICATION_MODE=async-task` 迁移到 async-task-service 的共享 webhook outbox。
 
 ### 6. 数据分析
 

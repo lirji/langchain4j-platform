@@ -70,7 +70,7 @@ LiteLLM :4000
 | 服务 | 端口 | 边界职责 | 主要状态 |
 |---|---:|---|---|
 | `conversation-service` | 8081 | Chat API 和 RAG prompt augmentation | 对话请求本身暂无独立持久化 |
-| `workflow-service` | 8082 | Flowable 审批流程 | Flowable MySQL、reply store、workflow outbox |
+| `workflow-service` | 8082 | Flowable 审批流程 | Flowable MySQL、reply store、workflow outbox；终态通知可切到 async-task-service |
 | `analytics-service` | 8083 | NL2SQL / ChatBI | demo SQL DB、只读查询连接 |
 | `knowledge-service` | 8084 | RAG 文档、向量、GraphRAG | vector store、document registry、graph store |
 | `agent-service` | 8085 | Agent/DAG 编排 | 本地 async task store，可镜像到 async-task-service |
@@ -188,8 +188,6 @@ Client
 
 ## 当前架构风险与后续演进
 
-- async-task 的 JDBC outbox 多副本 claim 需要继续加强。
-- workflow terminal notification 仍未迁移到统一 async backbone。
 - channel 的 Feishu/voice 真实 adapter 尚未落地。
 - GraphRAG 当前是确定性三元组，后续可接入 LLM/IE 抽取和图数据库。
 - 图片 ingestion 当前由调用方提供 caption/OCR，后续可接 vision/OCR provider。

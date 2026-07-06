@@ -158,12 +158,13 @@ Implemented rewrite points:
 - Flowable datasource is local to `workflow-service`.
 - Tenant propagation uses internal JWT and `TenantContext`.
 - Approval endpoints check the `approve` scope explicitly.
+- Terminal workflow notifications can be delegated to async-task-service via `WORKFLOW_TERMINAL_NOTIFICATION_MODE=async-task`, with fallback to the local `WF_OUTBOX`.
 - Deterministic workflow tests were ported.
 
 Remaining workflow hardening:
 
 - Replace the first-pass `WorkflowAiClient` fallback with a real cross-service conversation contract when conversation workflows stabilize.
-- Move terminal workflow notifications from HTTP/webhook bridge to Kafka when the async backbone exists.
+- Replace the local terminal notification fallback with the shared async backbone everywhere once production rollout is complete.
 
 ## Service Migration Order
 

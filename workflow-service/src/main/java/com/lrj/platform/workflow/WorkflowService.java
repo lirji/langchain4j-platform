@@ -60,6 +60,7 @@ public class WorkflowService {
     private final WorkflowReplyStore replyStore;
     private final WorkflowMetrics metrics;
     private final WorkflowOutbox outbox;
+    private final WorkflowAsyncTaskNotifier asyncTaskNotifier;
     private final org.springframework.context.ApplicationEventPublisher events;
 
     public WorkflowService(RuntimeService workflowRuntimeService,
@@ -70,6 +71,7 @@ public class WorkflowService {
                            WorkflowReplyStore replyStore,
                            WorkflowMetrics metrics,
                            WorkflowOutbox outbox,
+                           WorkflowAsyncTaskNotifier asyncTaskNotifier,
                            org.springframework.context.ApplicationEventPublisher events) {
         this.runtimeService = workflowRuntimeService;
         this.taskService = workflowTaskService;
@@ -79,6 +81,7 @@ public class WorkflowService {
         this.replyStore = replyStore;
         this.metrics = metrics;
         this.outbox = outbox;
+        this.asyncTaskNotifier = asyncTaskNotifier;
         this.events = events;
     }
 
@@ -168,11 +171,26 @@ public class WorkflowService {
         if (url == null || url.isBlank()) {
             return;
         }
+        if (useAsyncTaskNotification()) {
+            boolean published = asyncTaskNotifier.publishTerminal(instanceId, tenantId, url, replyStore.find(instanceId));
+            if (published) {
+                return;
+            }
+            if (!props.getTerminalNotification().isFallbackToLocalOutbox()) {
+                return;
+            }
+            log.warn("workflow terminal async-task notification failed; falling back to local outbox instanceId={}", instanceId);
+        }
         try {
             outbox.enqueue(instanceId, tenantId, url, System.currentTimeMillis());
         } catch (Exception e) {
             log.warn("outbox enqueue 失败 instanceId={}：{}", instanceId, e.toString());
         }
+    }
+
+    private boolean useAsyncTaskNotification() {
+        String mode = props.getTerminalNotification().getMode();
+        return "async-task".equalsIgnoreCase(mode) || "async_task".equalsIgnoreCase(mode);
     }
 
     /**

@@ -26,6 +26,11 @@ app:
       url: ${WORKFLOW_DB_URL:jdbc:mysql://localhost:3306/flowable?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}
       username: ${WORKFLOW_DB_USER:root}
       password: ${WORKFLOW_DB_PASSWORD:root}
+    terminal-notification:
+      mode: ${WORKFLOW_TERMINAL_NOTIFICATION_MODE:local}
+      async-task-base-url: ${ASYNC_TASK_BASE_URL:http://localhost:8086}
+      async-task-kind: ${WORKFLOW_TERMINAL_ASYNC_TASK_KIND:workflow.terminal}
+      fallback-to-local-outbox: ${WORKFLOW_TERMINAL_FALLBACK_LOCAL:true}
 
 management:
   endpoints:

@@ -14,11 +14,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.beans.factory.annotation.Qualifier;
+import com.lrj.platform.observability.OutboundTraceForwarder;
+import com.lrj.platform.security.OutboundTenantForwarder;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.web.client.RestTemplate;
 
 import javax.sql.DataSource;
 import java.util.List;
@@ -74,6 +79,20 @@ public class WorkflowConfig {
     @Bean
     public PlatformTransactionManager workflowTransactionManager(DataSource workflowDataSource) {
         return new DataSourceTransactionManager(workflowDataSource);
+    }
+
+    @Bean
+    @Qualifier("workflowAsyncTaskRestTemplate")
+    public RestTemplate workflowAsyncTaskRestTemplate(RestTemplateBuilder builder,
+                                                      WorkflowProperties props,
+                                                      OutboundTenantForwarder tenantForwarder,
+                                                      OutboundTraceForwarder traceForwarder) {
+        return builder
+                .rootUri(props.getTerminalNotification().getAsyncTaskBaseUrl())
+                .additionalInterceptors(tenantForwarder, traceForwarder)
+                .setConnectTimeout(props.getOutbox().getTimeout())
+                .setReadTimeout(props.getOutbox().getTimeout())
+                .build();
     }
 
     @Bean
