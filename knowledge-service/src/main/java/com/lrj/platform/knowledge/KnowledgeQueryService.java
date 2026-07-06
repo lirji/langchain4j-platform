@@ -41,6 +41,9 @@ public class KnowledgeQueryService {
     private final double defaultMinScore;
     private final int keywordTopK;
     private final int graphTopK;
+    private final double vectorWeight;
+    private final double keywordWeight;
+    private final double graphWeight;
 
     @Autowired
     public KnowledgeQueryService(EmbeddingStore<TextSegment> embeddingStore,
@@ -52,7 +55,10 @@ public class KnowledgeQueryService {
                                  @Value("${app.rag.hybrid.keyword-top-k:${app.rag.query.top-k:5}}") int keywordTopK,
                                  ObjectProvider<GraphSearchService> graphSearchServiceProvider,
                                  @Value("${app.rag.graph.include-in-query:${app.rag.graph.enabled:false}}") boolean graphIncludedInQuery,
-                                 @Value("${app.rag.graph.query-top-k:${app.rag.graph.max-triples:20}}") int graphTopK) {
+                                 @Value("${app.rag.graph.query-top-k:${app.rag.graph.max-triples:20}}") int graphTopK,
+                                 @Value("${app.rag.ranking.vector-weight:1.0}") double vectorWeight,
+                                 @Value("${app.rag.ranking.keyword-weight:1.0}") double keywordWeight,
+                                 @Value("${app.rag.ranking.graph-weight:1.0}") double graphWeight) {
         this(embeddingStore,
                 embeddingModel,
                 keywordSearchService,
@@ -62,7 +68,10 @@ public class KnowledgeQueryService {
                 keywordTopK,
                 graphSearchServiceProvider == null ? null : graphSearchServiceProvider.getIfAvailable(),
                 graphIncludedInQuery,
-                graphTopK);
+                graphTopK,
+                vectorWeight,
+                keywordWeight,
+                graphWeight);
     }
 
     public KnowledgeQueryService(EmbeddingStore<TextSegment> embeddingStore,
@@ -81,7 +90,10 @@ public class KnowledgeQueryService {
                 keywordTopK,
                 (GraphSearchService) null,
                 false,
-                0);
+                0,
+                1.0,
+                1.0,
+                1.0);
     }
 
     public KnowledgeQueryService(EmbeddingStore<TextSegment> embeddingStore,
@@ -94,6 +106,34 @@ public class KnowledgeQueryService {
                                  GraphSearchService graphSearchService,
                                  boolean graphIncludedInQuery,
                                  int graphTopK) {
+        this(embeddingStore,
+                embeddingModel,
+                keywordSearchService,
+                defaultTopK,
+                defaultMinScore,
+                hybridEnabled,
+                keywordTopK,
+                graphSearchService,
+                graphIncludedInQuery,
+                graphTopK,
+                1.0,
+                1.0,
+                1.0);
+    }
+
+    public KnowledgeQueryService(EmbeddingStore<TextSegment> embeddingStore,
+                                 EmbeddingModel embeddingModel,
+                                 KeywordSearchService keywordSearchService,
+                                 int defaultTopK,
+                                 double defaultMinScore,
+                                 boolean hybridEnabled,
+                                 int keywordTopK,
+                                 GraphSearchService graphSearchService,
+                                 boolean graphIncludedInQuery,
+                                 int graphTopK,
+                                 double vectorWeight,
+                                 double keywordWeight,
+                                 double graphWeight) {
         this.embeddingStore = embeddingStore;
         this.embeddingModel = embeddingModel;
         this.keywordSearchService = keywordSearchService;
@@ -104,6 +144,9 @@ public class KnowledgeQueryService {
         this.graphIncludedInQuery = graphIncludedInQuery;
         this.keywordTopK = keywordTopK;
         this.graphTopK = Math.max(1, graphTopK);
+        this.vectorWeight = normalizeWeight(vectorWeight);
+        this.keywordWeight = normalizeWeight(keywordWeight);
+        this.graphWeight = normalizeWeight(graphWeight);
     }
 
     public QueryResult query(String query, Integer topK, Double minScore, String category) {
@@ -158,13 +201,14 @@ public class KnowledgeQueryService {
         return new QueryResult(query, tenantId, hits);
     }
 
-    private static Hit toVectorHit(EmbeddingMatch<TextSegment> match, TextSegment segment) {
+    private Hit toVectorHit(EmbeddingMatch<TextSegment> match, TextSegment segment) {
+        double score = weighted(match.score(), vectorWeight);
         if (segment == null || segment.metadata() == null) {
-            return new Hit(match.embeddingId(), match.score(), null, null, null, null, null, "vector");
+            return new Hit(match.embeddingId(), score, null, null, null, null, null, "vector");
         }
         return new Hit(
                 match.embeddingId(),
-                match.score(),
+                score,
                 segment.metadata().getString("docId"),
                 segment.metadata().getString("displayName"),
                 segment.metadata().getString("category"),
@@ -173,15 +217,16 @@ public class KnowledgeQueryService {
                 "vector");
     }
 
-    private static Hit toKeywordHit(KeywordSearchService.KeywordHit keywordHit) {
+    private Hit toKeywordHit(KeywordSearchService.KeywordHit keywordHit) {
         TextSegment segment = keywordHit.segment();
         String key = segmentKey(segment, "keyword");
+        double score = weighted(keywordHit.score(), keywordWeight);
         if (segment == null || segment.metadata() == null) {
-            return new Hit("keyword:" + key, keywordHit.score(), null, null, null, null, null, "keyword");
+            return new Hit("keyword:" + key, score, null, null, null, null, null, "keyword");
         }
         return new Hit(
                 "keyword:" + key,
-                keywordHit.score(),
+                score,
                 segment.metadata().getString("docId"),
                 segment.metadata().getString("displayName"),
                 segment.metadata().getString("category"),
@@ -190,11 +235,11 @@ public class KnowledgeQueryService {
                 "keyword");
     }
 
-    private static Hit toGraphHit(GraphSearchService.GraphHit graphHit) {
+    private Hit toGraphHit(GraphSearchService.GraphHit graphHit) {
         SourceParts source = SourceParts.from(graphHit.sourceId());
         return new Hit(
                 "graph:" + graphHit.sourceId() + ":" + graphHit.subject() + ":" + graphHit.relation() + ":" + graphHit.object(),
-                0.75,
+                weighted(0.75, graphWeight),
                 null,
                 source.displayName(),
                 graphHit.category(),
@@ -229,6 +274,17 @@ public class KnowledgeQueryService {
 
     private static double scoreOrZero(Hit hit) {
         return hit.score() == null ? 0.0 : hit.score();
+    }
+
+    private static double weighted(double score, double weight) {
+        return score * weight;
+    }
+
+    private static double normalizeWeight(double weight) {
+        if (!Double.isFinite(weight) || weight < 0.0) {
+            return 1.0;
+        }
+        return weight;
     }
 
     private static String firstNonNull(String left, String right) {

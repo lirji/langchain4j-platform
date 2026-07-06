@@ -41,6 +41,10 @@ app:
     query:
       top-k: ${RAG_QUERY_TOP_K:5}
       min-score: ${RAG_QUERY_MIN_SCORE:0.0}
+    ranking:
+      vector-weight: ${RAG_RANKING_VECTOR_WEIGHT:1.0}
+      keyword-weight: ${RAG_RANKING_KEYWORD_WEIGHT:1.0}
+      graph-weight: ${RAG_RANKING_GRAPH_WEIGHT:1.0}
     hybrid:
       enabled: ${RAG_HYBRID_ENABLED:true}
       keyword-top-k: ${RAG_HYBRID_KEYWORD_TOP_K:${RAG_QUERY_TOP_K:5}}

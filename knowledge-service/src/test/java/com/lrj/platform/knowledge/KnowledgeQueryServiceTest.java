@@ -108,6 +108,34 @@ class KnowledgeQueryServiceTest {
     }
 
     @Test
+    void hybrid_appliesConfiguredKeywordRankingWeight() {
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("ingest")));
+        documents.upload("manual.md", "text/markdown", "hybrid keyword phoenix marker", "manual");
+        KnowledgeQueryService weightedQueries = new KnowledgeQueryService(
+                store,
+                model,
+                keywordSearch,
+                5,
+                0.0,
+                true,
+                5,
+                (GraphSearchService) null,
+                false,
+                0,
+                1.0,
+                0.25,
+                1.0);
+
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
+        var result = weightedQueries.query("phoenix", 5, 1.0, "manual");
+
+        assertThat(result.hits()).singleElement().satisfies(hit -> {
+            assertThat(hit.source()).isEqualTo("keyword");
+            assertThat(hit.score()).isEqualTo(0.25);
+        });
+    }
+
+    @Test
     void query_canIncludeGraphHitsWhenEnabled() {
         InMemoryGraphStore graphStore = new InMemoryGraphStore();
         GraphIngestor graphIngestor = new GraphIngestor(
