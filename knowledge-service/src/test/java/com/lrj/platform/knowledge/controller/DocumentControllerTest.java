@@ -3,6 +3,9 @@ package com.lrj.platform.knowledge.controller;
 import com.lrj.platform.knowledge.lifecycle.DocumentInfo;
 import com.lrj.platform.knowledge.lifecycle.DocumentService;
 import com.lrj.platform.knowledge.lifecycle.DocumentTextExtractor;
+import com.lrj.platform.knowledge.lifecycle.ImageTextExtraction;
+import com.lrj.platform.knowledge.lifecycle.ImageTextProvider;
+import com.lrj.platform.knowledge.lifecycle.NoopImageTextProvider;
 import com.lrj.platform.security.TenantContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -29,7 +32,10 @@ class DocumentControllerTest {
     @Test
     void uploadJson_withoutIngestScope_isForbidden() {
         TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
-        DocumentController controller = new DocumentController(mock(DocumentService.class), mock(DocumentTextExtractor.class));
+        DocumentController controller = new DocumentController(
+                mock(DocumentService.class),
+                mock(DocumentTextExtractor.class),
+                new NoopImageTextProvider());
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
                 () -> controller.uploadJson(Map.of("title", "a.md", "text", "hello")));
@@ -44,7 +50,7 @@ class DocumentControllerTest {
         DocumentInfo info = new DocumentInfo("d1", "acme", "a.md", "text/markdown",
                 5, 1, 1, Instant.now(), "manual");
         when(service.upload("a.md", "text/markdown", "hello", "manual")).thenReturn(info);
-        DocumentController controller = new DocumentController(service, mock(DocumentTextExtractor.class));
+        DocumentController controller = new DocumentController(service, mock(DocumentTextExtractor.class), new NoopImageTextProvider());
 
         var response = controller.uploadJson(Map.of(
                 "title", "a.md",
@@ -66,7 +72,7 @@ class DocumentControllerTest {
                 "Image caption:\n退款趋势图\n\nImage OCR:\nMay refund 99",
                 "report",
                 3)).thenReturn(info);
-        DocumentController controller = new DocumentController(service, mock(DocumentTextExtractor.class));
+        DocumentController controller = new DocumentController(service, mock(DocumentTextExtractor.class), new NoopImageTextProvider());
 
         var response = controller.uploadJson(Map.of(
                 "title", "chart.png",
@@ -86,7 +92,10 @@ class DocumentControllerTest {
     @Test
     void uploadJsonImage_requiresCaptionOrOcrText() {
         TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat", "ingest")));
-        DocumentController controller = new DocumentController(mock(DocumentService.class), mock(DocumentTextExtractor.class));
+        DocumentController controller = new DocumentController(
+                mock(DocumentService.class),
+                mock(DocumentTextExtractor.class),
+                new NoopImageTextProvider());
 
         var response = controller.uploadJson(Map.of(
                 "title", "chart.png",
@@ -94,5 +103,32 @@ class DocumentControllerTest {
 
         assertThat(response.getStatusCode().value()).isEqualTo(400);
         assertThat(response.getHeaders().getFirst("X-Error")).contains("caption or ocrText");
+    }
+
+    @Test
+    void uploadJsonImage_usesProviderCaptionAndOcrText() {
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat", "ingest")));
+        DocumentService service = mock(DocumentService.class);
+        ImageTextProvider provider = (filename, contentType, bytes) ->
+                new ImageTextExtraction("provider caption", "provider OCR");
+        DocumentInfo info = new DocumentInfo("img1", "acme", "chart.png", "image/png",
+                3, 1, 1, Instant.now(), "report");
+        when(service.upload("chart.png", "image/png",
+                "Image caption:\nprovider caption\n\nImage OCR:\nprovider OCR",
+                "report",
+                3)).thenReturn(info);
+        DocumentController controller = new DocumentController(service, mock(DocumentTextExtractor.class), provider);
+
+        var response = controller.uploadJson(Map.of(
+                "title", "chart.png",
+                "imageBase64", Base64.getEncoder().encodeToString(new byte[]{1, 2, 3}),
+                "contentType", "image/png",
+                "category", "report"));
+
+        assertThat(response.getBody()).isEqualTo(info);
+        verify(service).upload("chart.png", "image/png",
+                "Image caption:\nprovider caption\n\nImage OCR:\nprovider OCR",
+                "report",
+                3);
     }
 }

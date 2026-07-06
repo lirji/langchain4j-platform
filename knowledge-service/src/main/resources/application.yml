@@ -38,6 +38,11 @@ app:
       max-segments-per-batch: ${RAG_EMBEDDING_MAX_SEGMENTS_PER_BATCH:0}
     registry:
       store: ${RAG_REGISTRY_STORE:in-memory}
+    image-text:
+      provider: ${RAG_IMAGE_TEXT_PROVIDER:none}
+      endpoint-url: ${RAG_IMAGE_TEXT_ENDPOINT_URL:http://localhost:8090/image-text}
+      connect-timeout: ${RAG_IMAGE_TEXT_CONNECT_TIMEOUT:2s}
+      read-timeout: ${RAG_IMAGE_TEXT_READ_TIMEOUT:30s}
     query:
       top-k: ${RAG_QUERY_TOP_K:5}
       min-score: ${RAG_QUERY_MIN_SCORE:0.0}

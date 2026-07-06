@@ -3,6 +3,8 @@ package com.lrj.platform.knowledge.controller;
 import com.lrj.platform.knowledge.lifecycle.DocumentInfo;
 import com.lrj.platform.knowledge.lifecycle.DocumentService;
 import com.lrj.platform.knowledge.lifecycle.DocumentTextExtractor;
+import com.lrj.platform.knowledge.lifecycle.ImageTextExtraction;
+import com.lrj.platform.knowledge.lifecycle.ImageTextProvider;
 import com.lrj.platform.knowledge.lifecycle.MultimodalIngestionText;
 import com.lrj.platform.security.TenantContext;
 import org.springframework.http.HttpStatus;
@@ -31,10 +33,14 @@ public class DocumentController {
 
     private final DocumentService documents;
     private final DocumentTextExtractor extractor;
+    private final ImageTextProvider imageTextProvider;
 
-    public DocumentController(DocumentService documents, DocumentTextExtractor extractor) {
+    public DocumentController(DocumentService documents,
+                              DocumentTextExtractor extractor,
+                              ImageTextProvider imageTextProvider) {
         this.documents = documents;
         this.extractor = extractor;
+        this.imageTextProvider = imageTextProvider;
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -51,7 +57,10 @@ public class DocumentController {
         String text;
         try {
             if (MultimodalIngestionText.isImageContentType(contentType)) {
-                text = MultimodalIngestionText.build(null, caption, ocrText);
+                byte[] imageBytes = file.getBytes();
+                ImageTextExtraction extracted = imageTextProvider.extract(displayName, contentType, imageBytes);
+                text = multimodalText(null, caption, ocrText, extracted);
+                return ResponseEntity.ok(documents.upload(displayName, contentType, text, category, imageBytes.length));
             } else {
                 text = extractor.extract(file.getInputStream(), displayName);
             }
@@ -75,7 +84,8 @@ public class DocumentController {
         if (imageBase64 != null && !imageBase64.isBlank()) {
             try {
                 byte[] imageBytes = MultimodalIngestionText.decodeBase64Image(imageBase64);
-                String indexText = MultimodalIngestionText.build(text, body.get("caption"), body.get("ocrText"));
+                ImageTextExtraction extracted = imageTextProvider.extract(title, contentType, imageBytes);
+                String indexText = multimodalText(text, body.get("caption"), body.get("ocrText"), extracted);
                 return ResponseEntity.ok(documents.upload(title, contentType, indexText, category, imageBytes.length));
             } catch (IllegalArgumentException e) {
                 return ResponseEntity.badRequest().header("X-Error", e.getMessage()).build();
@@ -112,5 +122,23 @@ public class DocumentController {
         if (!TenantContext.current().hasScope("ingest")) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ingest scope required");
         }
+    }
+
+    private static String multimodalText(String text, String caption, String ocrText, ImageTextExtraction extracted) {
+        String mergedCaption = join(caption, extracted == null ? null : extracted.caption());
+        String mergedOcrText = join(ocrText, extracted == null ? null : extracted.ocrText());
+        return MultimodalIngestionText.build(text, mergedCaption, mergedOcrText);
+    }
+
+    private static String join(String first, String second) {
+        boolean hasFirst = first != null && !first.isBlank();
+        boolean hasSecond = second != null && !second.isBlank();
+        if (hasFirst && hasSecond) {
+            return first.trim() + "\n" + second.trim();
+        }
+        if (hasFirst) {
+            return first.trim();
+        }
+        return hasSecond ? second.trim() : null;
     }
 }

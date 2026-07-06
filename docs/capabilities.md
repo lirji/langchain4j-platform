@@ -12,7 +12,7 @@
 | LLM 网关 | 所有模型调用走 OpenAI-compatible/LiteLLM，支持 provider 路由和失败转移 | `platform-gateway-client`, LiteLLM |
 | 对话服务 | `/chat` 对话入口，可选 RAG 上下文增强 | `conversation-service` |
 | 知识库 RAG | 文档上传、Tika 文本抽取、分块、向量检索、keyword hybrid、可配置排序权重 | `knowledge-service` |
-| 多模态 ingestion | 图片作为文档上传，索引调用方提供的 caption/OCR 文本 | `knowledge-service` |
+| 多模态 ingestion | 图片作为文档上传，索引调用方或可选 HTTP provider 提供的 caption/OCR 文本 | `knowledge-service` |
 | 向量存储 | in-memory 默认实现；Qdrant 可选持久化向量库 | `knowledge-service` |
 | GraphRAG | 确定性三元组抽取、实体链接、邻居查询、可选图谱融合到 `/rag/query` | `knowledge-service` |
 | 图谱持久化 | in-memory 或 JDBC/MySQL 图谱存储 | `knowledge-service` |
@@ -46,7 +46,7 @@
 
 - JSON 文本上传和 multipart 文件上传。
 - Apache Tika 文本抽取，覆盖 PDF、Office、HTML、纯文本等格式。
-- 图片 ingestion 第一阶段能力：上传图片时传入 caption/OCR，系统索引这些文本，不保存图片字节。
+- 图片 ingestion：上传图片时可传入 caption/OCR；也可通过 `RAG_IMAGE_TEXT_PROVIDER=http` 接外部视觉/OCR provider 补充文本，系统只索引文本，不保存图片字节。
 - Markdown header、parent-child、semantic chunking 等分块策略。
 - in-memory 或 Qdrant 向量存储。
 - in-memory 或 JDBC/MySQL 图谱存储。
@@ -134,6 +134,5 @@
 
 ## 当前限制
 
-- 图片 ingestion 目前不调用视觉模型/OCR provider，只索引请求方提供的 caption/OCR 文本。
 - GraphRAG 抽取是确定性三元组格式，不是开放信息抽取。
 - channel-service voice adapter 还未完成。

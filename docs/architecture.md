@@ -136,7 +136,7 @@ Client
 Client
   -> edge-gateway /rag/documents
   -> knowledge-service
-     -> Tika text extraction or caption/OCR text assembly
+     -> Tika text extraction, caller caption/OCR text assembly, or optional HTTP image-text provider
      -> splitter
      -> embedding model
      -> embedding store
@@ -190,4 +190,4 @@ Client
 
 - channel 的 voice 真实 adapter 尚未落地。
 - GraphRAG 当前是确定性三元组，后续可接入 LLM/IE 抽取和图数据库。
-- 图片 ingestion 当前由调用方提供 caption/OCR，后续可接 vision/OCR provider。
+- 图片 ingestion 已支持可选 HTTP image-text provider；更完整托管视觉/OCR provider 仍可继续扩展。

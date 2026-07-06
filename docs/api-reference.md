@@ -63,7 +63,7 @@ JSON 文本：
 }
 ```
 
-JSON 图片第一阶段 ingestion：
+JSON 图片 ingestion。`caption` / `ocrText` 可由调用方传入；如果配置了 `RAG_IMAGE_TEXT_PROVIDER=http`，服务也会调用外部 provider 补充 caption/OCR：
 
 ```json
 {

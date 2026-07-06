@@ -93,6 +93,8 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 | `RAG_GRAPH_INCLUDE_IN_QUERY` | `false` | graph hit 是否融合进 `/rag/query` |
 | `RAG_GRAPH_STORE` | `in-memory` | `in-memory` 或 `jdbc` |
 | `RAG_GRAPH_DB_URL` | MySQL URL | JDBC graph store URL |
+| `RAG_IMAGE_TEXT_PROVIDER` | `none` | `none` 或 `http`，图片 ingestion 的外部 caption/OCR provider |
+| `RAG_IMAGE_TEXT_ENDPOINT_URL` | `http://localhost:8090/image-text` | HTTP provider endpoint，入参含 `filename`、`contentType`、`imageBase64` |
 
 ### Agent
 
