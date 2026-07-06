@@ -118,12 +118,12 @@ Implemented first slice:
 - `/async/tasks/{taskId}` `DELETE`: cancellation API for pending/running tasks.
 - Terminal webhook delivery with retry, audit logging, and headers `X-Async-Task-Id`, `X-Async-Task-Status`, `X-Tenant-Id`.
 - Optional JDBC task store behind `ASYNC_TASK_STORE=jdbc`, with auto-created `ASYNC_TASK` table.
-- Optional JDBC webhook outbox in JDBC mode, with auto-created `ASYNC_TASK_WEBHOOK_OUTBOX`, restart-safe retry state, DLQ status, exponential backoff, and tenant-scoped DLQ inspection via `/async/webhook-outbox/dead`.
+- Optional JDBC webhook outbox in JDBC mode, with auto-created `ASYNC_TASK_WEBHOOK_OUTBOX`, restart-safe retry state, DLQ status, exponential backoff, delivered-row retention, and tenant-scoped DLQ inspection via `/async/webhook-outbox/dead`.
 - Edge gateway route, docker-compose service wiring, and focused controller/webhook tests.
 
 Deferred async-task items:
 
-- Production hardening for the persistent task store/outbox: row claiming semantics for multi-replica dispatch and retention policy for delivered outbox rows.
+- Production hardening for the persistent task store/outbox: row claiming semantics for multi-replica dispatch.
 - Workflow terminal notification migration from direct webhook/outbox bridge to the shared async backbone.
 - Hardening lease execution for multi-replica JDBC atomic row claiming and cancellation propagation.
 

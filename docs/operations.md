@@ -116,6 +116,7 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 | `ASYNC_TASK_WEBHOOK_ENABLED` | `true` | 终态 webhook |
 | `ASYNC_TASK_WEBHOOK_MAX_ATTEMPTS` | `3` | 最大投递次数 |
 | `ASYNC_TASK_WEBHOOK_BATCH_SIZE` | `50` | outbox batch |
+| `ASYNC_TASK_WEBHOOK_DELIVERED_RETENTION` | `P7D` | delivered outbox 保留期，0 或负值关闭清理 |
 
 ### Workflow / Analytics / Channel / Eval
 

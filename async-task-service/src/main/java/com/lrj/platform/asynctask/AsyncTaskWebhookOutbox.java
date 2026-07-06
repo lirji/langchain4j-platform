@@ -87,6 +87,16 @@ public class AsyncTaskWebhookOutbox {
                 now, outboxId);
     }
 
+    public int purgeDeliveredBefore(long cutoffUpdatedAt) {
+        int deleted = jdbc.update("""
+                DELETE FROM ASYNC_TASK_WEBHOOK_OUTBOX
+                WHERE STATUS='DELIVERED' AND UPDATED_AT < ?""", cutoffUpdatedAt);
+        if (deleted > 0) {
+            log.info("purged delivered async task webhook outbox rows count={} cutoff={}", deleted, cutoffUpdatedAt);
+        }
+        return deleted;
+    }
+
     public void markRetry(String outboxId, int attempts, long nextAttemptAt, String error, long now) {
         jdbc.update("""
                 UPDATE ASYNC_TASK_WEBHOOK_OUTBOX

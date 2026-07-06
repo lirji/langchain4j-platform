@@ -16,6 +16,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -46,10 +47,19 @@ public class AsyncTaskWebhookOutboxDispatcher {
             return;
         }
         long now = Instant.now().toEpochMilli();
+        purgeDelivered(now);
         List<AsyncTaskWebhookOutbox.Row> due = outbox.claimDue(now, Math.max(1, properties.getBatchSize()));
         for (AsyncTaskWebhookOutbox.Row row : due) {
             deliver(row, now);
         }
+    }
+
+    private void purgeDelivered(long now) {
+        Duration retention = properties.getDeliveredRetention();
+        if (retention == null || retention.isZero() || retention.isNegative()) {
+            return;
+        }
+        outbox.purgeDeliveredBefore(now - retention.toMillis());
     }
 
     private void deliver(AsyncTaskWebhookOutbox.Row row, long now) {

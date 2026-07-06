@@ -367,7 +367,7 @@ ASYNC_TASK_DB_USER=root
 ASYNC_TASK_DB_PASSWORD=root
 ```
 
-JDBC 模式下会自动创建 `ASYNC_TASK` 和 `ASYNC_TASK_WEBHOOK_OUTBOX` 表；终态 webhook 先入 outbox，再由调度器按 `ASYNC_TASK_WEBHOOK_MAX_ATTEMPTS` / `ASYNC_TASK_WEBHOOK_BACKOFF` 重投。
+JDBC 模式下会自动创建 `ASYNC_TASK` 和 `ASYNC_TASK_WEBHOOK_OUTBOX` 表；终态 webhook 先入 outbox，再由调度器按 `ASYNC_TASK_WEBHOOK_MAX_ATTEMPTS` / `ASYNC_TASK_WEBHOOK_BACKOFF` 重投。已投递成功的 outbox 记录默认保留 7 天，可通过 `ASYNC_TASK_WEBHOOK_DELIVERED_RETENTION` 调整，设为 0 或负值可关闭清理。
 
 不用 Docker 也可本地分别跑（需本机有 LiteLLM 或把 `platform.gateway.base-url` 指向可用的 OpenAI-compat 端点）：
 

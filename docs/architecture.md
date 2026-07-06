@@ -74,7 +74,7 @@ LiteLLM :4000
 | `analytics-service` | 8083 | NL2SQL / ChatBI | demo SQL DB、只读查询连接 |
 | `knowledge-service` | 8084 | RAG 文档、向量、GraphRAG | vector store、document registry、graph store |
 | `agent-service` | 8085 | Agent/DAG 编排 | 本地 async task store，可镜像到 async-task-service |
-| `async-task-service` | 8086 | 通用异步任务中心 | in-memory 或 JDBC task/outbox |
+| `async-task-service` | 8086 | 通用异步任务中心 | in-memory 或 JDBC task/outbox，delivered outbox retention |
 | `channel-service` | 8087 | 渠道 ACL 和 webhook provider 边界 | 当前主要无状态 |
 | `interop-service` | 8088 | A2A/MCP-style 对外互操作 | 当前主要无状态 |
 | `eval-service` | 8089 | 回归评测执行 | baseline 文件、可选 report 输出 |
@@ -187,7 +187,7 @@ Client
 
 ## 当前架构风险与后续演进
 
-- async-task 的 JDBC outbox 多副本 claim 和 retention 需要继续加强。
+- async-task 的 JDBC outbox 多副本 claim 需要继续加强。
 - workflow terminal notification 仍未迁移到统一 async backbone。
 - channel 的 Feishu/voice 真实 adapter 尚未落地。
 - GraphRAG 当前是确定性三元组，后续可接入 LLM/IE 抽取和图数据库。

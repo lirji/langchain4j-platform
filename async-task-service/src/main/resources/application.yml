@@ -35,6 +35,7 @@ app:
       read-timeout: ${ASYNC_TASK_WEBHOOK_READ_TIMEOUT:3s}
       poll-interval-ms: ${ASYNC_TASK_WEBHOOK_POLL_INTERVAL_MS:30000}
       batch-size: ${ASYNC_TASK_WEBHOOK_BATCH_SIZE:50}
+      delivered-retention: ${ASYNC_TASK_WEBHOOK_DELIVERED_RETENTION:P7D}
 
 management:
   endpoints:

@@ -21,7 +21,7 @@
 | 深度 Agent | ReAct loop、RAG/SQL/time/delegate 动作、同步执行 | `agent-service` |
 | DAG Agent | 显式 DAG、自动规划 DAG、异步 DAG、可选 critique/replan | `agent-service` |
 | Agent 工具 | 可选 code execution、MCP client、browser actions | `agent-service` |
-| 异步任务 | 通用任务状态、租户隔离、取消、SSE、worker lease、webhook outbox | `async-task-service` |
+| 异步任务 | 通用任务状态、租户隔离、取消、SSE、worker lease、webhook outbox、delivered retention | `async-task-service` |
 | 渠道接入 | 渠道 capability、webhook 出站、入站事件、HMAC 签名校验 | `channel-service` |
 | 互操作 | A2A agent-card、MCP-style tools、代理 agent run/async/DAG | `interop-service` |
 | 回归评测 | HTTP case 执行、baseline suite、oracle contains、JSON report | `eval-service` |
@@ -90,7 +90,7 @@
 - SSE 断点续订。
 - worker lease 认领和 owner-only 状态更新。
 - 终态 webhook 投递。
-- JDBC 存储和 JDBC webhook outbox。
+- JDBC 存储和 JDBC webhook outbox，包含 delivered outbox 保留期清理。
 
 `agent-service` 可以用 mirror 或 authoritative 模式逐步迁移到该任务中心。
 
@@ -135,5 +135,5 @@
 - 图片 ingestion 目前不调用视觉模型/OCR provider，只索引请求方提供的 caption/OCR 文本。
 - GraphRAG 抽取是确定性三元组格式，不是开放信息抽取。
 - channel-service 真实 Feishu/voice adapter 还未完成。
-- async-task JDBC outbox 的多副本 row claiming 和 delivered retention 仍需进一步加固。
+- async-task JDBC outbox 的多副本 row claiming 仍需进一步加固。
 - agent-service 在 async-task authoritative 模式下的取消传播仍需继续完善。
