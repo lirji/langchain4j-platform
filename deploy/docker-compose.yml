@@ -1,0 +1,253 @@
+# 本地整网：LiteLLM(AI 网关) + Redis + MySQL + Kafka + edge-gateway + conversation-service + workflow-service
+# 用法见 deploy/README.md。基础设施(litellm/redis/mysql/kafka)先起，应用服务需先 `mvn -DskipTests package`。
+name: langchain4j-platform
+
+services:
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
+    volumes:
+      - ./litellm/config.yaml:/app/config.yaml:ro
+    ports:
+      - "4000:4000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # 让容器内 LiteLLM 能回连宿主机 Ollama
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: platform
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  kafka:
+    image: apache/kafka:3.8.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    ports:
+      - "9092:9092"
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+
+  conversation-service:
+    build:
+      context: ../conversation-service
+    environment:
+      GATEWAY_BASE_URL: http://litellm:4000/v1
+      GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
+      GATEWAY_MODEL: chat-default
+      CONVERSATION_RAG_ENABLED: ${CONVERSATION_RAG_ENABLED:-false}
+      KNOWLEDGE_BASE_URL: http://knowledge-service:8084
+      CONVERSATION_RAG_TOP_K: ${CONVERSATION_RAG_TOP_K:-5}
+      CONVERSATION_RAG_CATEGORY: ${CONVERSATION_RAG_CATEGORY:-}
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+    depends_on:
+      - litellm
+      - knowledge-service
+    ports:
+      - "8081:8081"
+
+  workflow-service:
+    build:
+      context: ../workflow-service
+    environment:
+      WORKFLOW_ENABLED: "true"
+      WORKFLOW_DB_URL: jdbc:mysql://mysql:3306/flowable?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      WORKFLOW_DB_USER: root
+      WORKFLOW_DB_PASSWORD: root
+      GATEWAY_BASE_URL: http://litellm:4000/v1
+      GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
+      GATEWAY_MODEL: chat-default
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      WORKFLOW_OUTBOX_HMAC_SECRET: ${WORKFLOW_OUTBOX_HMAC_SECRET:-dev-secret-change-me}
+    depends_on:
+      - mysql
+      - litellm
+    ports:
+      - "8082:8082"
+
+  analytics-service:
+    build:
+      context: ../analytics-service
+    environment:
+      NL2SQL_ENABLED: "true"
+      NL2SQL_DB_URL: jdbc:mysql://mysql:3306/nl2sql_demo?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useInformationSchema=true
+      NL2SQL_DB_READONLY_URL: jdbc:mysql://mysql:3306/nl2sql_demo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useInformationSchema=true
+      NL2SQL_DB_ADMIN_USER: root
+      NL2SQL_DB_ADMIN_PASSWORD: root
+      GATEWAY_BASE_URL: http://litellm:4000/v1
+      GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
+      GATEWAY_MODEL: chat-default
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+    depends_on:
+      - mysql
+      - litellm
+    ports:
+      - "8083:8083"
+
+  knowledge-service:
+    build:
+      context: ../knowledge-service
+    environment:
+      GATEWAY_BASE_URL: http://litellm:4000/v1
+      GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
+      RAG_EMBEDDING_PROVIDER: ${RAG_EMBEDDING_PROVIDER:-hash}
+      RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-embedding-default}
+      RAG_VECTOR_STORE_PROVIDER: ${RAG_VECTOR_STORE_PROVIDER:-in-memory}
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6334
+      QDRANT_COLLECTION_NAME: knowledge_segments
+      RAG_REGISTRY_STORE: ${RAG_REGISTRY_STORE:-in-memory}
+      RAG_HYBRID_ENABLED: ${RAG_HYBRID_ENABLED:-true}
+      RAG_GRAPH_ENABLED: ${RAG_GRAPH_ENABLED:-false}
+      RAG_GRAPH_INCLUDE_IN_QUERY: ${RAG_GRAPH_INCLUDE_IN_QUERY:-${RAG_GRAPH_ENABLED:-false}}
+      RAG_GRAPH_QUERY_TOP_K: ${RAG_GRAPH_QUERY_TOP_K:-20}
+      RAG_GRAPH_RELATION_WHITELIST: ${RAG_GRAPH_RELATION_WHITELIST:-}
+      RAG_GRAPH_ALIASES: ${RAG_GRAPH_ALIASES:-}
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+    depends_on:
+      - redis
+      - qdrant
+    ports:
+      - "8084:8084"
+
+  agent-service:
+    build:
+      context: ../agent-service
+    environment:
+      GATEWAY_BASE_URL: http://litellm:4000/v1
+      GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
+      GATEWAY_MODEL: chat-default
+      KNOWLEDGE_BASE_URL: http://knowledge-service:8084
+      ANALYTICS_BASE_URL: http://analytics-service:8083
+      AGENT_ENABLED: ${AGENT_ENABLED:-true}
+      AGENT_MAX_STEPS: ${AGENT_MAX_STEPS:-8}
+      AGENT_RAG_TOP_K: ${AGENT_RAG_TOP_K:-5}
+      AGENT_RAG_CATEGORY: ${AGENT_RAG_CATEGORY:-}
+      AGENT_ANALYTICS_ENABLED: ${AGENT_ANALYTICS_ENABLED:-true}
+      AGENT_CODE_EXEC_ENABLED: ${AGENT_CODE_EXEC_ENABLED:-false}
+      AGENT_BROWSER_ENABLED: ${AGENT_BROWSER_ENABLED:-false}
+      AGENT_MCP_ENABLED: ${AGENT_MCP_ENABLED:-false}
+      AGENT_MCP_TRANSPORT: ${AGENT_MCP_TRANSPORT:-http}
+      AGENT_MCP_HTTP_URL: ${AGENT_MCP_HTTP_URL:-http://host.docker.internal:3001/mcp}
+      AGENT_TASK_WEBHOOK_ENABLED: ${AGENT_TASK_WEBHOOK_ENABLED:-true}
+      AGENT_TASK_WEBHOOK_MAX_ATTEMPTS: ${AGENT_TASK_WEBHOOK_MAX_ATTEMPTS:-3}
+      AGENT_TASK_WEBHOOK_BACKOFF: ${AGENT_TASK_WEBHOOK_BACKOFF:-250ms}
+      AGENT_ASYNC_EXTERNAL_ENABLED: ${AGENT_ASYNC_EXTERNAL_ENABLED:-false}
+      AGENT_ASYNC_EXTERNAL_AUTHORITATIVE: ${AGENT_ASYNC_EXTERNAL_AUTHORITATIVE:-false}
+      AGENT_ASYNC_EXTERNAL_MIRROR_WEBHOOK: ${AGENT_ASYNC_EXTERNAL_MIRROR_WEBHOOK:-false}
+      AGENT_ASYNC_WORKER_ID: ${AGENT_ASYNC_WORKER_ID:-agent-service}
+      AGENT_ASYNC_LEASE_SECONDS: ${AGENT_ASYNC_LEASE_SECONDS:-300}
+      ASYNC_TASK_BASE_URL: http://async-task-service:8086
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+    depends_on:
+      - litellm
+      - knowledge-service
+      - analytics-service
+      - async-task-service
+    ports:
+      - "8085:8085"
+
+  async-task-service:
+    build:
+      context: ../async-task-service
+    environment:
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      ASYNC_TASK_STORE: ${ASYNC_TASK_STORE:-in-memory}
+      ASYNC_TASK_DB_URL: jdbc:mysql://mysql:3306/async_task?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
+      ASYNC_TASK_DB_USER: root
+      ASYNC_TASK_DB_PASSWORD: root
+      ASYNC_TASK_WEBHOOK_ENABLED: ${ASYNC_TASK_WEBHOOK_ENABLED:-true}
+      ASYNC_TASK_WEBHOOK_MAX_ATTEMPTS: ${ASYNC_TASK_WEBHOOK_MAX_ATTEMPTS:-3}
+      ASYNC_TASK_WEBHOOK_BACKOFF: ${ASYNC_TASK_WEBHOOK_BACKOFF:-250ms}
+    depends_on:
+      - mysql
+    ports:
+      - "8086:8086"
+
+  channel-service:
+    build:
+      context: ../channel-service
+    environment:
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      CHANNEL_OUTBOUND_ENABLED: ${CHANNEL_OUTBOUND_ENABLED:-false}
+      CHANNEL_OUTBOUND_SIGNATURE_ENABLED: ${CHANNEL_OUTBOUND_SIGNATURE_ENABLED:-false}
+      CHANNEL_OUTBOUND_SIGNATURE_SECRET: ${CHANNEL_OUTBOUND_SIGNATURE_SECRET:-}
+    ports:
+      - "8087:8087"
+
+  interop-service:
+    build:
+      context: ../interop-service
+    environment:
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      AGENT_BASE_URL: http://agent-service:8085
+    depends_on:
+      - agent-service
+    ports:
+      - "8088:8088"
+
+  eval-service:
+    build:
+      context: ../eval-service
+    environment:
+      EVAL_TARGET_BASE_URL: http://edge-gateway:8080
+      EVAL_API_KEY: dev-key-acme
+    depends_on:
+      - edge-gateway
+    ports:
+      - "8089:8089"
+
+  edge-gateway:
+    build:
+      context: ../edge-gateway
+    environment:
+      CONVERSATION_URI: http://conversation-service:8081
+      WORKFLOW_URI: http://workflow-service:8082
+      ANALYTICS_URI: http://analytics-service:8083
+      KNOWLEDGE_URI: http://knowledge-service:8084
+      AGENT_URI: http://agent-service:8085
+      ASYNC_TASK_URI: http://async-task-service:8086
+      CHANNEL_URI: http://channel-service:8087
+      INTEROP_URI: http://interop-service:8088
+      EVAL_URI: http://eval-service:8089
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+    depends_on:
+      - conversation-service
+      - workflow-service
+      - analytics-service
+      - knowledge-service
+      - agent-service
+      - async-task-service
+      - channel-service
+      - interop-service
+    ports:
+      - "8080:8080"
+
+volumes:
+  mysql-data:
+  qdrant-data:

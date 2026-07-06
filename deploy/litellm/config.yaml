@@ -1,0 +1,23 @@
+# LiteLLM Proxy 配置（AI 网关）。逻辑模型名 chat-default 供所有服务的 platform.gateway.model-name 引用。
+# provider 路由 + 跨 provider failover 在这里集中管理（应用侧不再有 provider switch）。
+model_list:
+  # 本地默认走 Ollama（零成本）。生产改成 openai/anthropic/vllm 等，应用侧无需改动。
+  - model_name: chat-default
+    litellm_params:
+      model: ollama/llama3.1
+      api_base: http://host.docker.internal:11434
+  # failover 目标示例（取消注释并配 key 即启用跨 provider 兜底）
+  # - model_name: chat-default
+  #   litellm_params:
+  #     model: openai/gpt-4o-mini
+  #     api_key: os.environ/OPENAI_API_KEY
+
+litellm_settings:
+  # chat-default 主目标不可用时按顺序回退（演示跨 provider failover 的验证点）
+  num_retries: 2
+  request_timeout: 60
+  # fallbacks:
+  #   - chat-default: ["chat-default"]
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
