@@ -1,0 +1,99 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: agent-service
+
+platform:
+  gateway:
+    base-url: ${GATEWAY_BASE_URL:http://localhost:4000/v1}
+    api-key: ${GATEWAY_API_KEY:sk-litellm-master}
+    model-name: ${GATEWAY_MODEL:chat-default}
+  security:
+    jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
+    allow-api-key-fallback: true
+    api-keys:
+      dev-key-acme:
+        tenant: acme
+        user: alice
+        scopes: [chat, agent]
+
+app:
+  agent:
+    enabled: ${AGENT_ENABLED:true}
+    max-steps: ${AGENT_MAX_STEPS:8}
+    max-wall-clock-ms: ${AGENT_MAX_WALL_CLOCK_MS:0}
+    max-tokens: ${AGENT_MAX_TOKENS:0}
+    brain-max-retries: ${AGENT_BRAIN_MAX_RETRIES:1}
+    brain-retry-backoff-ms: ${AGENT_BRAIN_RETRY_BACKOFF_MS:0}
+    max-repeats: ${AGENT_MAX_REPEATS:3}
+    loop-window: ${AGENT_LOOP_WINDOW:6}
+    max-scratchpad-chars: ${AGENT_MAX_SCRATCHPAD_CHARS:4000}
+    history-window: ${AGENT_HISTORY_WINDOW:6}
+    allow-delegation: ${AGENT_ALLOW_DELEGATION:true}
+    max-depth: ${AGENT_MAX_DEPTH:1}
+    code-exec:
+      enabled: ${AGENT_CODE_EXEC_ENABLED:false}
+      timeout-ms: ${AGENT_CODE_EXEC_TIMEOUT_MS:3000}
+      max-output-chars: ${AGENT_CODE_EXEC_MAX_OUTPUT_CHARS:2000}
+      max-source-chars: ${AGENT_CODE_EXEC_MAX_SOURCE_CHARS:4000}
+      block-unsafe-apis: ${AGENT_CODE_EXEC_BLOCK_UNSAFE_APIS:true}
+    mcp:
+      enabled: ${AGENT_MCP_ENABLED:false}
+      transport: ${AGENT_MCP_TRANSPORT:stdio}
+      log-events: ${AGENT_MCP_LOG_EVENTS:false}
+      stdio:
+        command: ${AGENT_MCP_STDIO_COMMAND:}
+      http:
+        url: ${AGENT_MCP_HTTP_URL:http://localhost:3001/mcp}
+    browser:
+      enabled: ${AGENT_BROWSER_ENABLED:false}
+    knowledge:
+      base-url: ${KNOWLEDGE_BASE_URL:http://localhost:8084}
+      top-k: ${AGENT_RAG_TOP_K:5}
+      min-score: ${AGENT_RAG_MIN_SCORE:0.0}
+      category: ${AGENT_RAG_CATEGORY:}
+    analytics:
+      base-url: ${ANALYTICS_BASE_URL:http://localhost:8083}
+      enabled: ${AGENT_ANALYTICS_ENABLED:true}
+    http:
+      connect-timeout: ${AGENT_HTTP_CONNECT_TIMEOUT:1s}
+      read-timeout: ${AGENT_HTTP_READ_TIMEOUT:5s}
+    async:
+      task-ttl: ${AGENT_TASK_TTL:PT24H}
+      cleanup-delay-ms: ${AGENT_TASK_CLEANUP_DELAY_MS:60000}
+      cleanup-initial-delay-ms: ${AGENT_TASK_CLEANUP_INITIAL_DELAY_MS:60000}
+      external:
+        enabled: ${AGENT_ASYNC_EXTERNAL_ENABLED:false}
+        base-url: ${ASYNC_TASK_BASE_URL:http://localhost:8086}
+        mirror-webhook: ${AGENT_ASYNC_EXTERNAL_MIRROR_WEBHOOK:false}
+        authoritative: ${AGENT_ASYNC_EXTERNAL_AUTHORITATIVE:false}
+        worker-id: ${AGENT_ASYNC_WORKER_ID:agent-service}
+        lease-seconds: ${AGENT_ASYNC_LEASE_SECONDS:300}
+      webhook:
+        enabled: ${AGENT_TASK_WEBHOOK_ENABLED:true}
+        max-attempts: ${AGENT_TASK_WEBHOOK_MAX_ATTEMPTS:3}
+        backoff: ${AGENT_TASK_WEBHOOK_BACKOFF:250ms}
+        connect-timeout: ${AGENT_TASK_WEBHOOK_CONNECT_TIMEOUT:1s}
+        read-timeout: ${AGENT_TASK_WEBHOOK_READ_TIMEOUT:3s}
+    dag:
+      max-tasks: ${AGENT_DAG_MAX_TASKS:6}
+      replan:
+        enabled: ${AGENT_DAG_REPLAN_ENABLED:false}
+        max-replans: ${AGENT_DAG_REPLAN_MAX_REPLANS:1}
+        threshold: ${AGENT_DAG_REPLAN_THRESHOLD:0.75}
+        weights:
+          correctness: ${AGENT_DAG_REPLAN_WEIGHT_CORRECTNESS:0.5}
+          completeness: ${AGENT_DAG_REPLAN_WEIGHT_COMPLETENESS:0.35}
+          clarity: ${AGENT_DAG_REPLAN_WEIGHT_CLARITY:0.15}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,tokenbudget,cost
+  endpoint:
+    health:
+      probes:
+        enabled: true

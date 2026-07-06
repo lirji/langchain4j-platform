@@ -1,0 +1,33 @@
+package com.lrj.platform.agent.browser;
+
+import com.lrj.platform.agent.AgentAction;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
+
+@Component
+@ConditionalOnBean(BrowserSession.class)
+@ConditionalOnProperty(name = {"app.agent.enabled", "app.agent.browser.enabled"}, havingValue = "true")
+public class BrowserClickAction implements AgentAction {
+
+    private final BrowserSession session;
+
+    public BrowserClickAction(BrowserSession session) {
+        this.session = session;
+    }
+
+    @Override
+    public String name() {
+        return "browser_click";
+    }
+
+    @Override
+    public String description() {
+        return "点击当前页面上文本包含给定串的第一个链接；actionInput 填链接文本（用 browser_open 返回的链接列表里的文本）";
+    }
+
+    @Override
+    public String run(String input) {
+        return session.click(input);
+    }
+}
