@@ -56,15 +56,56 @@ class HttpChannelMessageDispatcherTest {
     }
 
     @Test
-    void marksNonWebhookAdaptersPendingWhenOutboundEnabled() {
+    void marksVoiceAdapterPendingWhenOutboundEnabled() {
+        ChannelProperties properties = new ChannelProperties();
+        properties.setOutboundEnabled(true);
+        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(new RestTemplate(), properties);
+
+        var result = dispatcher.dispatch("message-1", new ChannelMessageRequest("voice", "user-1", "hello", Map.of()));
+
+        assertThat(result.status()).isEqualTo("ACCEPTED");
+        assertThat(result.detail()).contains("adapter pending");
+    }
+
+    @Test
+    void postsFeishuTextMessageWhenOutboundEnabled() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        ChannelProperties properties = new ChannelProperties();
+        properties.setOutboundEnabled(true);
+        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(restTemplate, properties);
+
+        server.expect(once(), requestTo("http://feishu.local/webhook"))
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(content().json("""
+                        {
+                          "msg_type": "text",
+                          "content": {"text": "hello"}
+                        }
+                        """))
+                .andRespond(withSuccess());
+
+        var result = dispatcher.dispatch("message-1", new ChannelMessageRequest(
+                "feishu",
+                "chat-1",
+                "hello",
+                Map.of("webhookUrl", "http://feishu.local/webhook")));
+
+        assertThat(result.status()).isEqualTo("SENT");
+        assertThat(result.detail()).isEqualTo("feishu delivered");
+        server.verify();
+    }
+
+    @Test
+    void failsFeishuWhenWebhookUrlMissing() {
         ChannelProperties properties = new ChannelProperties();
         properties.setOutboundEnabled(true);
         HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(new RestTemplate(), properties);
 
         var result = dispatcher.dispatch("message-1", new ChannelMessageRequest("feishu", "chat-1", "hello", Map.of()));
 
-        assertThat(result.status()).isEqualTo("ACCEPTED");
-        assertThat(result.detail()).contains("adapter pending");
+        assertThat(result.status()).isEqualTo("FAILED");
+        assertThat(result.detail()).isEqualTo("feishu webhook URL is required");
     }
 
     @Test

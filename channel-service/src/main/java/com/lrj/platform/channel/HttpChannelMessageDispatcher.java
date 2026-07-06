@@ -30,10 +30,17 @@ public class HttpChannelMessageDispatcher implements ChannelMessageDispatcher {
         if (!properties.isOutboundEnabled()) {
             return ChannelDeliveryResult.accepted("outbound disabled");
         }
-        if (!"webhook".equalsIgnoreCase(request.channel())) {
-            return ChannelDeliveryResult.accepted("adapter pending: " + request.channel());
+        if ("webhook".equalsIgnoreCase(request.channel())) {
+            return dispatchWebhook(messageId, request);
         }
-        String url = deliveryUrl(request);
+        if ("feishu".equalsIgnoreCase(request.channel())) {
+            return dispatchFeishu(messageId, request);
+        }
+        return ChannelDeliveryResult.accepted("adapter pending: " + request.channel());
+    }
+
+    private ChannelDeliveryResult dispatchWebhook(String messageId, ChannelMessageRequest request) {
+        String url = deliveryUrl(request, "deliveryUrl");
         if (url == null || url.isBlank()) {
             return ChannelDeliveryResult.failed("webhook target URL is required");
         }
@@ -49,8 +56,21 @@ public class HttpChannelMessageDispatcher implements ChannelMessageDispatcher {
         }
     }
 
-    private String deliveryUrl(ChannelMessageRequest request) {
-        Object value = request.metadata().get("deliveryUrl");
+    private ChannelDeliveryResult dispatchFeishu(String messageId, ChannelMessageRequest request) {
+        String url = deliveryUrl(request, "webhookUrl");
+        if (!httpUrl(url)) {
+            return ChannelDeliveryResult.failed("feishu webhook URL is required");
+        }
+        try {
+            channelRestTemplate.postForEntity(url, new HttpEntity<>(feishuPayload(request), feishuHeaders()), Void.class);
+            return ChannelDeliveryResult.sent("feishu delivered");
+        } catch (RestClientException ex) {
+            return ChannelDeliveryResult.failed(ex.getMessage());
+        }
+    }
+
+    private String deliveryUrl(ChannelMessageRequest request, String metadataKey) {
+        Object value = request.metadata().get(metadataKey);
         if (value instanceof String deliveryUrl && !deliveryUrl.isBlank()) {
             return deliveryUrl;
         }
@@ -66,12 +86,24 @@ public class HttpChannelMessageDispatcher implements ChannelMessageDispatcher {
                 "metadata", request.metadata());
     }
 
+    private Map<String, Object> feishuPayload(ChannelMessageRequest request) {
+        return Map.of(
+                "msg_type", "text",
+                "content", Map.of("text", request.message()));
+    }
+
     private HttpHeaders headers(String messageId, ChannelMessageRequest request) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         if (properties.isOutboundSignatureEnabled()) {
             headers.set("X-Channel-Signature", sign(messageId, request));
         }
+        return headers;
+    }
+
+    private HttpHeaders feishuHeaders() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
         return headers;
     }
 
@@ -85,6 +117,10 @@ public class HttpChannelMessageDispatcher implements ChannelMessageDispatcher {
 
     private static String value(String value) {
         return value == null ? "" : value;
+    }
+
+    private static boolean httpUrl(String value) {
+        return value != null && (value.startsWith("http://") || value.startsWith("https://"));
     }
 
     private static String hmacSha256(String value, String secret) {

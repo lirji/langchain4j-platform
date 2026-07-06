@@ -39,7 +39,7 @@ public class ChannelController {
                 "service", "channel-service",
                 "tenantId", TenantContext.current().tenantId(),
                 "channels", List.of("feishu", "voice", "webhook"),
-                "status", "provider-boundary");
+                "status", "webhook-and-feishu-ready");
     }
 
     @PostMapping("/channel/messages")

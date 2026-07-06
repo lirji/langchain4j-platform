@@ -32,7 +32,7 @@ Phase 1 has started:
 - `knowledge-service`: RAG foundation and document lifecycle/query migrated, including chunk splitters, source injection context, document registry, Tika text extraction, `/rag/documents/**`, `/rag/query`, keyword/vector hybrid retrieval, optional Qdrant vector storage, and a first deterministic GraphRAG slice.
 - `agent-service`: first deep-agent microservice slice, with ReAct loop, `rag_search`, `analytics_sql`, `current_time`, and `/agent/run` behind `edge-gateway`.
 - `async-task-service`: first generic async-task backbone with task status, tenant-scoped listing/get/update/cancel, resumable SSE status stream, worker lease ownership, and terminal webhook delivery.
-- `channel-service`: channel bounded context with `/channel/capabilities`, outbound message provider boundary, webhook dry-run/HTTP POST delivery, outbound webhook signing, inbound event acceptance, optional HMAC signature verification, protocol DTOs, edge route, and docker-compose service.
+- `channel-service`: channel bounded context with `/channel/capabilities`, outbound message provider boundary, webhook dry-run/HTTP POST delivery, Feishu webhook robot text delivery, outbound webhook signing, inbound event acceptance, optional HMAC signature verification, protocol DTOs, edge route, and docker-compose service.
 - `interop-service`: interop bounded context with A2A agent-card, MCP-style tool-list/call surface, and service-net tool proxies into `agent-service` run/async/DAG APIs.
 - `eval-service`: external regression client surface with HTTP target execution, baseline suite loading, response contains-assertion, frozen monolith oracle contains-assertion, status/error capture, duration/snippet reporting, optional JSON report output, and edge-gateway API-key wiring.
 
@@ -171,7 +171,7 @@ Remaining workflow hardening:
 1. `workflow-service`: cleanest state boundary, owns Flowable and workflow MySQL. Done.
 2. `analytics-service`: port `nl2sql/*` and `Nl2SqlController`. Done.
 3. `knowledge-service`: port RAG, vector stores, graph, lifecycle, and isolate vector-client/grpc dependencies. In progress.
-4. `channel-service`: port Feishu and voice after workflow/conversation protocols exist. Provider boundary done; real adapters deferred.
+4. `channel-service`: webhook and Feishu robot delivery done; voice adapter deferred.
 5. `async-task-service`: port async task/SSE/webhook backbone. In progress.
 6. `agent-service`: port multi-agent/deep-agent/reflexion/cascade/voting/chaining after knowledge and analytics contracts exist. In progress.
 7. `interop-service`: port A2A and MCP server. Agent tool proxy in progress.
@@ -183,13 +183,13 @@ The remaining planned service modules have been introduced so the monorepo topol
 
 Implemented first slice:
 
-- `channel-service`: channel capability endpoint, outbound message acceptance endpoint, provider-based outbound dispatch, webhook dry-run/HTTP POST delivery, optional outbound webhook signing, inbound event acceptance endpoint, optional HMAC signature verification, audit events, protocol DTOs, tests, Dockerfile, edge route, and compose wiring.
+- `channel-service`: channel capability endpoint, outbound message acceptance endpoint, provider-based outbound dispatch, webhook dry-run/HTTP POST delivery, Feishu webhook robot delivery, optional outbound webhook signing, inbound event acceptance endpoint, optional HMAC signature verification, audit events, protocol DTOs, tests, Dockerfile, edge route, and compose wiring.
 - `interop-service`: A2A-style agent-card endpoint, MCP-style tool listing, deterministic `platform.ping`, real `platform.agent.run`, `platform.agent.run_async`, `platform.agent.dag.plan_run`, and `platform.agent.dag.plan_run_async` proxies into `agent-service`, protocol DTOs, tests, Dockerfile, edge route, and compose wiring.
 - `eval-service`: external regression client API surface with request/result DTOs, real HTTP target execution in `/eval/run`, named baseline suite loading via `/eval/suites/{suiteName}/run`, expected-response and frozen monolith oracle contains assertions, status/error/snippet/duration result reporting, tests, Dockerfile, edge route, and compose wiring.
 
 Deferred scaffold items:
 
-- `channel-service`: real Feishu adapter, voice adapter, async-task/workflow callback integration, and Kafka channel events.
+- `channel-service`: voice adapter, async-task/workflow callback integration, and Kafka channel events.
 - `interop-service`: port monolith A2A and MCP server implementation, agent-card publication from live agent capabilities beyond the current agent proxies, and broader internal protocol reuse.
 - `eval-service`: richer oracle comparison modes beyond `oracleContains`, such as JSON-path and semantic-tolerance checks.
 

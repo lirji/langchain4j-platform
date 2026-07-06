@@ -22,7 +22,7 @@
 | DAG Agent | 显式 DAG、自动规划 DAG、异步 DAG、可选 critique/replan | `agent-service` |
 | Agent 工具 | 可选 code execution、MCP client、browser actions | `agent-service` |
 | 异步任务 | 通用任务状态、租户隔离、取消、SSE、worker lease、webhook outbox、delivered retention | `async-task-service` |
-| 渠道接入 | 渠道 capability、webhook 出站、入站事件、HMAC 签名校验 | `channel-service` |
+| 渠道接入 | 渠道 capability、webhook/Feishu 出站、入站事件、HMAC 签名校验 | `channel-service` |
 | 互操作 | A2A agent-card、MCP-style tools、代理 agent run/async/DAG | `interop-service` |
 | 回归评测 | HTTP case 执行、baseline suite、oracle contains、JSON report | `eval-service` |
 | 审计与计量 | 审计日志、LLM audit listener、token budget、cost attribution | `platform-audit`, `platform-metering` |
@@ -118,7 +118,7 @@
 
 ### 7. 渠道与互操作
 
-`channel-service` 当前提供 webhook 级别的渠道边界和签名能力，Feishu/voice 真实适配仍是后续项。
+`channel-service` 当前提供 webhook 出站、Feishu webhook 机器人文本消息出站、入站事件接收和签名能力，voice 真实适配仍是后续项。
 
 `interop-service` 提供 A2A/MCP-style 互操作入口，可把平台能力暴露给外部 Agent 或工具调用方。
 
@@ -135,4 +135,4 @@
 
 - 图片 ingestion 目前不调用视觉模型/OCR provider，只索引请求方提供的 caption/OCR 文本。
 - GraphRAG 抽取是确定性三元组格式，不是开放信息抽取。
-- channel-service 真实 Feishu/voice adapter 还未完成。
+- channel-service voice adapter 还未完成。
