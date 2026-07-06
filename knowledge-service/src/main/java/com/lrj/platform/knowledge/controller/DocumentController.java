@@ -3,6 +3,7 @@ package com.lrj.platform.knowledge.controller;
 import com.lrj.platform.knowledge.lifecycle.DocumentInfo;
 import com.lrj.platform.knowledge.lifecycle.DocumentService;
 import com.lrj.platform.knowledge.lifecycle.DocumentTextExtractor;
+import com.lrj.platform.knowledge.lifecycle.MultimodalIngestionText;
 import com.lrj.platform.security.TenantContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -38,7 +39,9 @@ public class DocumentController {
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<DocumentInfo> uploadFile(@RequestPart("file") MultipartFile file,
-                                                   @RequestParam(required = false) String category) throws IOException {
+                                                   @RequestParam(required = false) String category,
+                                                   @RequestParam(required = false) String caption,
+                                                   @RequestParam(required = false) String ocrText) throws IOException {
         requireIngest();
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().header("X-Error", "empty file").build();
@@ -47,11 +50,15 @@ public class DocumentController {
         String contentType = file.getContentType();
         String text;
         try {
-            text = extractor.extract(file.getInputStream(), displayName);
+            if (MultimodalIngestionText.isImageContentType(contentType)) {
+                text = MultimodalIngestionText.build(null, caption, ocrText);
+            } else {
+                text = extractor.extract(file.getInputStream(), displayName);
+            }
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().header("X-Error", e.getMessage()).build();
         }
-        return ResponseEntity.ok(documents.upload(displayName, contentType, text, category));
+        return ResponseEntity.ok(documents.upload(displayName, contentType, text, category, file.getSize()));
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -59,10 +66,23 @@ public class DocumentController {
         requireIngest();
         String title = body.get("title");
         String text = body.get("text");
-        String contentType = body.getOrDefault("contentType", "text/plain");
+        String imageBase64 = body.get("imageBase64");
+        String contentType = body.getOrDefault("contentType", imageBase64 == null ? "text/plain" : "image/png");
         String category = body.get("category");
-        if (title == null || text == null) {
-            return ResponseEntity.badRequest().header("X-Error", "title and text are required").build();
+        if (title == null || title.isBlank()) {
+            return ResponseEntity.badRequest().header("X-Error", "title is required").build();
+        }
+        if (imageBase64 != null && !imageBase64.isBlank()) {
+            try {
+                byte[] imageBytes = MultimodalIngestionText.decodeBase64Image(imageBase64);
+                String indexText = MultimodalIngestionText.build(text, body.get("caption"), body.get("ocrText"));
+                return ResponseEntity.ok(documents.upload(title, contentType, indexText, category, imageBytes.length));
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest().header("X-Error", e.getMessage()).build();
+            }
+        }
+        if (text == null) {
+            return ResponseEntity.badRequest().header("X-Error", "text is required").build();
         }
         return ResponseEntity.ok(documents.upload(title, contentType, text, category));
     }

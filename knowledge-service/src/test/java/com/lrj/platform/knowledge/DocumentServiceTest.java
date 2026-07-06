@@ -74,6 +74,23 @@ class DocumentServiceTest {
     }
 
     @Test
+    void upload_canUseOriginalSourceSizeForMultimodalPayloads() {
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("ingest")));
+
+        DocumentInfo info = service.upload(
+                "chart.png",
+                "image/png",
+                "Image caption:\n退款趋势图",
+                "report",
+                12_345);
+
+        assertThat(info.contentType()).isEqualTo("image/png");
+        assertThat(info.sizeBytes()).isEqualTo(12_345);
+        assertThat(mirror.all()).singleElement()
+                .satisfies(segment -> assertThat(segment.text()).contains("退款趋势图"));
+    }
+
+    @Test
     void uploadAndDeleteSynchronizeGraphTriplesWhenGraphEnabled() {
         TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("ingest")));
         InMemoryGraphStore graphStore = new InMemoryGraphStore();

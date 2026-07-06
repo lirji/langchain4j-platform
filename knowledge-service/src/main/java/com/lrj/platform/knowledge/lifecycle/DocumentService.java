@@ -87,6 +87,10 @@ public class DocumentService {
     }
 
     public DocumentInfo upload(String displayName, String contentType, String text, String category) {
+        return upload(displayName, contentType, text, category, -1);
+    }
+
+    public DocumentInfo upload(String displayName, String contentType, String text, String category, long sourceSizeBytes) {
         if (displayName == null || displayName.isBlank()) {
             throw new IllegalArgumentException("displayName is required");
         }
@@ -128,7 +132,7 @@ public class DocumentService {
                 tenantId,
                 displayName,
                 contentType == null ? "text/plain" : contentType,
-                text.getBytes(StandardCharsets.UTF_8).length,
+                sourceSizeBytes > 0 ? sourceSizeBytes : text.getBytes(StandardCharsets.UTF_8).length,
                 segments.size(),
                 nextVersion,
                 Instant.now(),

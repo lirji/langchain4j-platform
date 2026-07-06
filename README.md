@@ -87,6 +87,7 @@ curl -s -X POST 'http://localhost:8080/rag/query' \
 
 `knowledge-service` 默认使用 `RAG_VECTOR_STORE_PROVIDER=in-memory` 和本地 deterministic hash embedding，适合开发和单测。
 `/rag/query` 会融合 vector、keyword 和可选 GraphRAG 命中，可通过 `RAG_RANKING_VECTOR_WEIGHT`、`RAG_RANKING_KEYWORD_WEIGHT`、`RAG_RANKING_GRAPH_WEIGHT` 调整排序权重。
+图片可以作为多模态文档上传：JSON 使用 `imageBase64` + `caption`/`ocrText`，multipart 图片使用同名表单字段；当前阶段索引 caption/OCR 文本，不保存图片字节。
 需要走 LiteLLM/OpenAI-compatible embedding 时，可设置：
 
 ```bash

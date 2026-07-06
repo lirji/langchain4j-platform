@@ -58,7 +58,7 @@ Implemented first slice:
 - `DocumentInfo`, `DocumentRegistry`, in-memory and Redis registry implementations.
 - `DocumentTextExtractor` based on Apache Tika.
 - `DocumentSplitterFactory`, configurable vector-store provider boundary, in-memory/Qdrant `EmbeddingStore`, deterministic hash `EmbeddingModel`, and configurable OpenAI-compatible embedding provider.
-- `DocumentService` and `DocumentController` upload/list/get/delete endpoints.
+- `DocumentService` and `DocumentController` upload/list/get/delete endpoints, including first-stage image ingestion via `imageBase64` or multipart image plus caller-provided caption/OCR index text.
 - `KnowledgeQueryService` and `KnowledgeQueryController` with tenant/category filtering.
 - `KeywordSearchService` hybrid retrieval with a lightweight tokenizer, result de-duplication, hit `source` attribution, and configurable vector/keyword/graph ranking weights.
 - `knowledge.graph`: deterministic `subject|relation|object` extraction, in-memory or JDBC graph store behind `RAG_GRAPH_STORE`, token entity linker, document lifecycle synchronization, `/rag/graph/query` + `/rag/graph/entities`, and optional graph-hit fusion into `/rag/query` behind `RAG_GRAPH_ENABLED=true` / `RAG_GRAPH_INCLUDE_IN_QUERY=true`.
@@ -69,7 +69,7 @@ Implemented first slice:
 
 Deferred to the next slice:
 
-- Add multimodal image ingestion and vector-store production hardening.
+- Add vector-store production hardening and optional vision/OCR provider integration for image ingestion.
 - Optional Ollama/native embedding provider if LiteLLM is not used for embeddings.
 
 ## Current Code Step: Agent Service
