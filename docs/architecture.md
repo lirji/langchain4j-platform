@@ -75,7 +75,7 @@ LiteLLM :4000
 | `knowledge-service` | 8084 | RAG 文档、向量、GraphRAG | vector store、document registry、graph store |
 | `agent-service` | 8085 | Agent/DAG 编排 | 本地 async task store，可镜像到 async-task-service |
 | `async-task-service` | 8086 | 通用异步任务中心 | in-memory 或 JDBC task/outbox，delivered outbox retention |
-| `channel-service` | 8087 | 渠道 ACL、webhook/Feishu 出站和入站事件 | 当前主要无状态 |
+| `channel-service` | 8087 | 渠道 ACL、webhook/Feishu/voice 出站和入站事件 | 当前主要无状态 |
 | `interop-service` | 8088 | A2A/MCP-style 对外互操作 | 当前主要无状态 |
 | `eval-service` | 8089 | 回归评测执行 | baseline 文件、可选 report 输出 |
 | `edge-gateway` | 8080 | 边缘路由、安全和限流 | API key 配置、限流计数 |
@@ -188,6 +188,6 @@ Client
 
 ## 当前架构风险与后续演进
 
-- channel 的 voice 真实 adapter 尚未落地。
+- channel 的 voice 已支持通用 HTTP provider，后续仍可接具体厂商 SDK。
 - GraphRAG 当前是确定性三元组，后续可接入 LLM/IE 抽取和图数据库。
 - 图片 ingestion 已支持可选 HTTP image-text provider；更完整托管视觉/OCR provider 仍可继续扩展。

@@ -130,8 +130,9 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 | `ASYNC_TASK_BASE_URL` | `http://localhost:8086` | workflow/agent 调用 async-task-service 的服务地址 |
 | `NL2SQL_ENABLED` | `false` | analytics NL2SQL 开关，compose 中通常开启 |
 | `NL2SQL_DB_URL` | MySQL URL | NL2SQL admin datasource |
-| `CHANNEL_OUTBOUND_ENABLED` | `false` | 是否真实 POST webhook |
+| `CHANNEL_OUTBOUND_ENABLED` | `false` | 是否真实 POST 出站渠道消息 |
 | `CHANNEL_INBOUND_SIGNATURE_ENABLED` | `false` | 是否校验入站签名 |
+| `CHANNEL_VOICE_PROVIDER_URL` | 空 | voice 渠道默认 HTTP provider URL，也可由 `metadata.providerUrl` 覆盖 |
 | `EVAL_TARGET_BASE_URL` | `http://edge-gateway:8080` | eval 默认目标 |
 | `EVAL_API_KEY` | 空 | eval 调用目标时带的 API key |
 

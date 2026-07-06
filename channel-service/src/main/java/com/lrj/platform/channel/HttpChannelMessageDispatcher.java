@@ -36,6 +36,9 @@ public class HttpChannelMessageDispatcher implements ChannelMessageDispatcher {
         if ("feishu".equalsIgnoreCase(request.channel())) {
             return dispatchFeishu(messageId, request);
         }
+        if ("voice".equalsIgnoreCase(request.channel())) {
+            return dispatchVoice(messageId, request);
+        }
         return ChannelDeliveryResult.accepted("adapter pending: " + request.channel());
     }
 
@@ -69,6 +72,19 @@ public class HttpChannelMessageDispatcher implements ChannelMessageDispatcher {
         }
     }
 
+    private ChannelDeliveryResult dispatchVoice(String messageId, ChannelMessageRequest request) {
+        String url = voiceProviderUrl(request);
+        if (!httpUrl(url)) {
+            return ChannelDeliveryResult.failed("voice provider URL is required");
+        }
+        try {
+            channelRestTemplate.postForEntity(url, new HttpEntity<>(voicePayload(messageId, request), jsonHeaders()), Void.class);
+            return ChannelDeliveryResult.sent("voice delivered");
+        } catch (RestClientException ex) {
+            return ChannelDeliveryResult.failed(ex.getMessage());
+        }
+    }
+
     private String deliveryUrl(ChannelMessageRequest request, String metadataKey) {
         Object value = request.metadata().get(metadataKey);
         if (value instanceof String deliveryUrl && !deliveryUrl.isBlank()) {
@@ -92,6 +108,14 @@ public class HttpChannelMessageDispatcher implements ChannelMessageDispatcher {
                 "content", Map.of("text", request.message()));
     }
 
+    private Map<String, Object> voicePayload(String messageId, ChannelMessageRequest request) {
+        return Map.of(
+                "messageId", messageId,
+                "target", request.target(),
+                "text", request.message(),
+                "metadata", request.metadata());
+    }
+
     private HttpHeaders headers(String messageId, ChannelMessageRequest request) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -102,9 +126,21 @@ public class HttpChannelMessageDispatcher implements ChannelMessageDispatcher {
     }
 
     private HttpHeaders feishuHeaders() {
+        return jsonHeaders();
+    }
+
+    private HttpHeaders jsonHeaders() {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         return headers;
+    }
+
+    private String voiceProviderUrl(ChannelMessageRequest request) {
+        Object value = request.metadata().get("providerUrl");
+        if (value instanceof String providerUrl && !providerUrl.isBlank()) {
+            return providerUrl;
+        }
+        return properties.getVoiceProviderUrl();
     }
 
     private String sign(String messageId, ChannelMessageRequest request) {

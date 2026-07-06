@@ -12,6 +12,7 @@ public class ChannelProperties {
     private String outboundSignatureSecret = "";
     private boolean inboundSignatureEnabled = false;
     private String inboundSignatureSecret = "";
+    private String voiceProviderUrl = "";
     private Duration connectTimeout = Duration.ofSeconds(1);
     private Duration readTimeout = Duration.ofSeconds(10);
 
@@ -53,6 +54,14 @@ public class ChannelProperties {
 
     public void setInboundSignatureSecret(String inboundSignatureSecret) {
         this.inboundSignatureSecret = inboundSignatureSecret;
+    }
+
+    public String getVoiceProviderUrl() {
+        return voiceProviderUrl;
+    }
+
+    public void setVoiceProviderUrl(String voiceProviderUrl) {
+        this.voiceProviderUrl = voiceProviderUrl;
     }
 
     public Duration getConnectTimeout() {

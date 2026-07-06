@@ -56,15 +56,64 @@ class HttpChannelMessageDispatcherTest {
     }
 
     @Test
-    void marksVoiceAdapterPendingWhenOutboundEnabled() {
+    void failsVoiceWhenProviderUrlMissing() {
         ChannelProperties properties = new ChannelProperties();
         properties.setOutboundEnabled(true);
         HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(new RestTemplate(), properties);
 
         var result = dispatcher.dispatch("message-1", new ChannelMessageRequest("voice", "user-1", "hello", Map.of()));
 
-        assertThat(result.status()).isEqualTo("ACCEPTED");
-        assertThat(result.detail()).contains("adapter pending");
+        assertThat(result.status()).isEqualTo("FAILED");
+        assertThat(result.detail()).isEqualTo("voice provider URL is required");
+    }
+
+    @Test
+    void postsVoiceTextMessageWhenOutboundEnabled() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        ChannelProperties properties = new ChannelProperties();
+        properties.setOutboundEnabled(true);
+        properties.setVoiceProviderUrl("http://voice.local/calls");
+        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(restTemplate, properties);
+
+        server.expect(once(), requestTo("http://voice.local/calls"))
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(content().json("""
+                        {
+                          "messageId": "message-1",
+                          "target": "user-1",
+                          "text": "hello"
+                        }
+                        """))
+                .andRespond(withSuccess());
+
+        var result = dispatcher.dispatch("message-1", new ChannelMessageRequest("voice", "user-1", "hello", Map.of()));
+
+        assertThat(result.status()).isEqualTo("SENT");
+        assertThat(result.detail()).isEqualTo("voice delivered");
+        server.verify();
+    }
+
+    @Test
+    void letsVoiceMetadataOverrideProviderUrl() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        ChannelProperties properties = new ChannelProperties();
+        properties.setOutboundEnabled(true);
+        properties.setVoiceProviderUrl("http://voice.local/default");
+        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(restTemplate, properties);
+
+        server.expect(once(), requestTo("http://voice.local/override"))
+                .andRespond(withSuccess());
+
+        var result = dispatcher.dispatch("message-1", new ChannelMessageRequest(
+                "voice",
+                "user-1",
+                "hello",
+                Map.of("providerUrl", "http://voice.local/override")));
+
+        assertThat(result.status()).isEqualTo("SENT");
+        server.verify();
     }
 
     @Test

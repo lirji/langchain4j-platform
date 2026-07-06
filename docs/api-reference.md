@@ -373,10 +373,12 @@ curl -N 'http://localhost:8080/agent/tasks/{taskId}/stream' \
 
 ```json
 {
-  "channel": "webhook",
-  "target": "http://callback.local/channel",
+  "channel": "voice",
+  "target": "user-1",
   "message": "hello",
-  "metadata": {}
+  "metadata": {
+    "providerUrl": "http://voice-provider.local/calls"
+  }
 }
 ```
 

@@ -22,6 +22,7 @@ app:
     outbound-signature-secret: ${CHANNEL_OUTBOUND_SIGNATURE_SECRET:}
     inbound-signature-enabled: ${CHANNEL_INBOUND_SIGNATURE_ENABLED:false}
     inbound-signature-secret: ${CHANNEL_INBOUND_SIGNATURE_SECRET:}
+    voice-provider-url: ${CHANNEL_VOICE_PROVIDER_URL:}
     connect-timeout: ${CHANNEL_CONNECT_TIMEOUT:1s}
     read-timeout: ${CHANNEL_READ_TIMEOUT:10s}
 
