@@ -1,0 +1,32 @@
+server:
+  port: 8088
+
+spring:
+  application:
+    name: interop-service
+
+app:
+  interop:
+    agent-base-url: ${AGENT_BASE_URL:http://localhost:8085}
+    connect-timeout: ${INTEROP_CONNECT_TIMEOUT:1s}
+    read-timeout: ${INTEROP_READ_TIMEOUT:30s}
+
+platform:
+  security:
+    jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
+    allow-api-key-fallback: true
+    api-keys:
+      dev-key-acme:
+        tenant: acme
+        user: alice
+        scopes: [agent]
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
