@@ -1,0 +1,13 @@
+{
+  "name": "platform-smoke",
+  "cases": [
+    {
+      "id": "eval-capabilities",
+      "endpoint": "/eval/capabilities",
+      "method": "GET",
+      "body": {},
+      "expectedContains": "eval-service",
+      "oracleContains": "eval-service"
+    }
+  ]
+}

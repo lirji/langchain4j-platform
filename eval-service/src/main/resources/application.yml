@@ -1,0 +1,25 @@
+server:
+  port: 8089
+
+spring:
+  application:
+    name: eval-service
+
+app:
+  eval:
+    default-target-base-url: ${EVAL_TARGET_BASE_URL:http://edge-gateway:8080}
+    api-key: ${EVAL_API_KEY:}
+    api-key-header: ${EVAL_API_KEY_HEADER:X-API-Key}
+    response-snippet-limit: ${EVAL_RESPONSE_SNIPPET_LIMIT:512}
+    baseline-directory: ${EVAL_BASELINE_DIRECTORY:}
+    report-directory: ${EVAL_REPORT_DIRECTORY:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
