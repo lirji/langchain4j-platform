@@ -43,6 +43,15 @@ client ──X-Api-Key──▶ edge-gateway (Spring Cloud Gateway)
 
 > 后续继续加固 `channel`/`interop`/`eval` 的真实适配逻辑，并继续加固 `knowledge`/`agent`/`async-task` 的持久化和跨服务协议。
 
+## 文档
+
+- [文档入口](docs/README.md)
+- [能力文档](docs/capabilities.md)
+- [架构文档](docs/architecture.md)
+- [运行与配置手册](docs/operations.md)
+- [接口与集成速查](docs/api-reference.md)
+- [开发者指南](docs/developer-guide.md)
+
 ## 本地跑（Phase 0）
 
 前置：本机 Ollama（`ollama pull llama3.1`）、Docker、JDK 21、Maven。
