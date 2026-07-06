@@ -1,0 +1,47 @@
+server:
+  port: 8086
+
+spring:
+  application:
+    name: async-task-service
+
+platform:
+  security:
+    jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
+    allow-api-key-fallback: true
+    api-keys:
+      dev-key-acme:
+        tenant: acme
+        user: alice
+        scopes: [agent]
+
+app:
+  async-task:
+    store: ${ASYNC_TASK_STORE:in-memory}
+    task-ttl: ${ASYNC_TASK_TTL:PT24H}
+    cleanup-delay-ms: ${ASYNC_TASK_CLEANUP_DELAY_MS:60000}
+    cleanup-initial-delay-ms: ${ASYNC_TASK_CLEANUP_INITIAL_DELAY_MS:60000}
+    datasource:
+      url: ${ASYNC_TASK_DB_URL:jdbc:mysql://localhost:3306/async_task?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}
+      username: ${ASYNC_TASK_DB_USER:root}
+      password: ${ASYNC_TASK_DB_PASSWORD:}
+      driver-class-name: ${ASYNC_TASK_DB_DRIVER:com.mysql.cj.jdbc.Driver}
+      maximum-pool-size: ${ASYNC_TASK_DB_MAX_POOL_SIZE:8}
+    webhook:
+      enabled: ${ASYNC_TASK_WEBHOOK_ENABLED:true}
+      max-attempts: ${ASYNC_TASK_WEBHOOK_MAX_ATTEMPTS:3}
+      backoff: ${ASYNC_TASK_WEBHOOK_BACKOFF:250ms}
+      connect-timeout: ${ASYNC_TASK_WEBHOOK_CONNECT_TIMEOUT:1s}
+      read-timeout: ${ASYNC_TASK_WEBHOOK_READ_TIMEOUT:3s}
+      poll-interval-ms: ${ASYNC_TASK_WEBHOOK_POLL_INTERVAL_MS:30000}
+      batch-size: ${ASYNC_TASK_WEBHOOK_BATCH_SIZE:50}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
