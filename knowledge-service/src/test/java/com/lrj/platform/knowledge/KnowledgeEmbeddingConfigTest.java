@@ -1,6 +1,10 @@
 package com.lrj.platform.knowledge;
 
+import com.lrj.platform.knowledge.store.EmbeddingStoreRouter;
+import com.lrj.platform.knowledge.store.InMemoryEmbeddingStoreRouter;
+import com.lrj.platform.knowledge.store.SingleEmbeddingStoreRouter;
 import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.model.ollama.OllamaEmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.qdrant.QdrantEmbeddingStore;
@@ -40,6 +44,36 @@ class KnowledgeEmbeddingConfigTest {
                     OpenAiEmbeddingModel model = context.getBean(OpenAiEmbeddingModel.class);
                     assertThat(model.modelName()).isEqualTo("embedding-default");
                 });
+    }
+
+    @Test
+    void ollamaEmbeddingProvider_isSelectableWithoutStrongDependency() {
+        contextRunner
+                .withPropertyValues(
+                        "app.rag.embedding.provider=ollama",
+                        "app.rag.embedding.ollama.base-url=http://localhost:11434",
+                        "app.rag.embedding.ollama.model-name=nomic-embed-text")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(EmbeddingModel.class);
+                    assertThat(context.getBean(EmbeddingModel.class)).isInstanceOf(OllamaEmbeddingModel.class);
+                });
+    }
+
+    @Test
+    void defaultRouter_isCollectionPerTenantInMemory() {
+        contextRunner.run(context -> {
+            assertThat(context).hasSingleBean(EmbeddingStoreRouter.class);
+            assertThat(context.getBean(EmbeddingStoreRouter.class))
+                    .isInstanceOf(InMemoryEmbeddingStoreRouter.class);
+        });
+    }
+
+    @Test
+    void sharedIsolation_fallsBackToSingleStoreRouter() {
+        contextRunner
+                .withPropertyValues("app.rag.vector-store.isolation=shared")
+                .run(context -> assertThat(context.getBean(EmbeddingStoreRouter.class))
+                        .isInstanceOf(SingleEmbeddingStoreRouter.class));
     }
 
     @Test

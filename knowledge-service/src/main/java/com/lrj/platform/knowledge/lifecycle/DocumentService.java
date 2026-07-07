@@ -5,6 +5,8 @@ import com.lrj.platform.audit.AuditLogger;
 import com.lrj.platform.knowledge.DocumentMirror;
 import com.lrj.platform.knowledge.DocumentSplitterFactory;
 import com.lrj.platform.knowledge.graph.GraphIngestor;
+import com.lrj.platform.knowledge.store.EmbeddingStoreRouter;
+import com.lrj.platform.knowledge.store.SingleEmbeddingStoreRouter;
 import com.lrj.platform.security.TenantContext;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.DocumentSplitter;
@@ -36,7 +38,7 @@ public class DocumentService {
 
     private static final Logger log = LoggerFactory.getLogger(DocumentService.class);
 
-    private final EmbeddingStore<TextSegment> embeddingStore;
+    private final EmbeddingStoreRouter storeRouter;
     private final EmbeddingModel embeddingModel;
     private final DocumentMirror documentMirror;
     private final DocumentSplitterFactory splitterFactory;
@@ -45,14 +47,14 @@ public class DocumentService {
     private final GraphIngestor graphIngestor;
 
     @Autowired
-    public DocumentService(EmbeddingStore<TextSegment> embeddingStore,
+    public DocumentService(EmbeddingStoreRouter storeRouter,
                            EmbeddingModel embeddingModel,
                            DocumentMirror documentMirror,
                            DocumentSplitterFactory splitterFactory,
                            DocumentRegistry registry,
                            AuditLogger audit,
                            ObjectProvider<GraphIngestor> graphIngestorProvider) {
-        this(embeddingStore,
+        this(storeRouter,
                 embeddingModel,
                 documentMirror,
                 splitterFactory,
@@ -61,13 +63,32 @@ public class DocumentService {
                 graphIngestorProvider == null ? null : graphIngestorProvider.getIfAvailable());
     }
 
+    public DocumentService(EmbeddingStoreRouter storeRouter,
+                           EmbeddingModel embeddingModel,
+                           DocumentMirror documentMirror,
+                           DocumentSplitterFactory splitterFactory,
+                           DocumentRegistry registry,
+                           AuditLogger audit,
+                           GraphIngestor graphIngestor) {
+        this.storeRouter = storeRouter;
+        this.embeddingModel = embeddingModel;
+        this.documentMirror = documentMirror;
+        this.splitterFactory = splitterFactory;
+        this.registry = registry;
+        this.audit = audit;
+        this.graphIngestor = graphIngestor;
+    }
+
+    // ---- backward-compatible constructors: wrap a single store (metadata-filter isolation) ----
+
     public DocumentService(EmbeddingStore<TextSegment> embeddingStore,
                            EmbeddingModel embeddingModel,
                            DocumentMirror documentMirror,
                            DocumentSplitterFactory splitterFactory,
                            DocumentRegistry registry,
                            AuditLogger audit) {
-        this(embeddingStore, embeddingModel, documentMirror, splitterFactory, registry, audit, (GraphIngestor) null);
+        this(new SingleEmbeddingStoreRouter(embeddingStore, embeddingModel.dimension()),
+                embeddingModel, documentMirror, splitterFactory, registry, audit, (GraphIngestor) null);
     }
 
     public DocumentService(EmbeddingStore<TextSegment> embeddingStore,
@@ -77,13 +98,8 @@ public class DocumentService {
                            DocumentRegistry registry,
                            AuditLogger audit,
                            GraphIngestor graphIngestor) {
-        this.embeddingStore = embeddingStore;
-        this.embeddingModel = embeddingModel;
-        this.documentMirror = documentMirror;
-        this.splitterFactory = splitterFactory;
-        this.registry = registry;
-        this.audit = audit;
-        this.graphIngestor = graphIngestor;
+        this(new SingleEmbeddingStoreRouter(embeddingStore, embeddingModel.dimension()),
+                embeddingModel, documentMirror, splitterFactory, registry, audit, graphIngestor);
     }
 
     public DocumentInfo upload(String displayName, String contentType, String text, String category) {
@@ -121,7 +137,7 @@ public class DocumentService {
         DocumentSplitter splitter = splitterFactory.create();
         List<TextSegment> segments = splitter.split(doc);
         List<Embedding> embeddings = embeddingModel.embedAll(segments).content();
-        embeddingStore.addAll(embeddings, segments);
+        storeRouter.forTenant(tenantId, embeddingModel.dimension()).addAll(embeddings, segments);
         documentMirror.add(segments);
         if (graphIngestor != null) {
             graphIngestor.ingest(segments);
@@ -179,7 +195,7 @@ public class DocumentService {
             Filter filter = Filter.and(
                     metadataKey("tenantId").isEqualTo(info.tenantId()),
                     metadataKey("docId").isEqualTo(info.docId()));
-            embeddingStore.removeAll(filter);
+            storeRouter.forTenant(info.tenantId(), embeddingModel.dimension()).removeAll(filter);
         } catch (UnsupportedOperationException ex) {
             log.warn("EmbeddingStore does not support removeAll(Filter); skipping vector delete for docId={}",
                     info.docId(), ex);

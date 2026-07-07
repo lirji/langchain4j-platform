@@ -25,6 +25,8 @@ app:
   rag:
     vector-store:
       provider: ${RAG_VECTOR_STORE_PROVIDER:in-memory}
+      # collection-per-tenant（默认，强隔离，每租户独立 collection/namespace）| shared（退回单 store + metadata filter）
+      isolation: ${RAG_VECTOR_STORE_ISOLATION:collection-per-tenant}
       qdrant:
         host: ${QDRANT_HOST:localhost}
         port: ${QDRANT_PORT:6334}
@@ -32,6 +34,9 @@ app:
         use-tls: ${QDRANT_USE_TLS:false}
         api-key: ${QDRANT_API_KEY:}
         payload-text-key: ${QDRANT_PAYLOAD_TEXT_KEY:text}
+        timeout: ${QDRANT_TIMEOUT:10s}
+        health-timeout: ${QDRANT_HEALTH_TIMEOUT:3s}
+        auto-create-payload-index: ${QDRANT_AUTO_CREATE_PAYLOAD_INDEX:true}
     embedding:
       provider: ${RAG_EMBEDDING_PROVIDER:hash}
       model-name: ${RAG_EMBEDDING_MODEL:embedding-default}
@@ -39,6 +44,9 @@ app:
       timeout: ${RAG_EMBEDDING_TIMEOUT:60s}
       max-retries: ${RAG_EMBEDDING_MAX_RETRIES:3}
       max-segments-per-batch: ${RAG_EMBEDDING_MAX_SEGMENTS_PER_BATCH:0}
+      ollama:
+        base-url: ${RAG_EMBEDDING_OLLAMA_BASE_URL:http://localhost:11434}
+        model-name: ${RAG_EMBEDDING_OLLAMA_MODEL:nomic-embed-text}
     registry:
       store: ${RAG_REGISTRY_STORE:in-memory}
     image-text:
@@ -46,6 +54,7 @@ app:
       endpoint-url: ${RAG_IMAGE_TEXT_ENDPOINT_URL:http://localhost:8090/image-text}
       connect-timeout: ${RAG_IMAGE_TEXT_CONNECT_TIMEOUT:2s}
       read-timeout: ${RAG_IMAGE_TEXT_READ_TIMEOUT:30s}
+      max-image-bytes: ${RAG_IMAGE_TEXT_MAX_IMAGE_BYTES:10485760}
     query:
       top-k: ${RAG_QUERY_TOP_K:5}
       min-score: ${RAG_QUERY_MIN_SCORE:0.0}

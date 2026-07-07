@@ -27,8 +27,8 @@ public class KeywordSearchService {
             return List.of();
         }
         String tenantId = TenantContext.current().tenantId();
-        return documentMirror.all().stream()
-                .filter(segment -> belongsToTenant(segment, tenantId))
+        // Strong isolation: read only the current tenant's partition, never the global list.
+        return documentMirror.all(tenantId).stream()
                 .filter(segment -> matchesCategory(segment, category))
                 .map(segment -> toHit(segment, queryTokens))
                 .filter(hit -> hit.score() > 0.0)
@@ -42,12 +42,6 @@ public class KeywordSearchService {
         long overlap = queryTokens.stream().filter(segmentTokens::contains).count();
         double score = (double) overlap / queryTokens.size();
         return new KeywordHit(score, segment);
-    }
-
-    private static boolean belongsToTenant(TextSegment segment, String tenantId) {
-        return segment != null
-                && segment.metadata() != null
-                && Objects.equals(tenantId, segment.metadata().getString("tenantId"));
     }
 
     private static boolean matchesCategory(TextSegment segment, String category) {

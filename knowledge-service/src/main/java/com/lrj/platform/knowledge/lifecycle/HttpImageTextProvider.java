@@ -32,6 +32,15 @@ public class HttpImageTextProvider implements ImageTextProvider {
         if (properties.getEndpointUrl() == null || properties.getEndpointUrl().isBlank()) {
             return ImageTextExtraction.empty();
         }
+        if (imageBytes == null || imageBytes.length == 0) {
+            return ImageTextExtraction.empty();
+        }
+        long maxBytes = properties.getMaxImageBytes();
+        if (maxBytes > 0 && imageBytes.length > maxBytes) {
+            log.warn("image text provider skipped filename={} size={} exceeds maxImageBytes={}",
+                    filename, imageBytes.length, maxBytes);
+            return ImageTextExtraction.empty();
+        }
         try {
             Map<String, Object> response = restTemplate.postForObject(
                     properties.getEndpointUrl(),
@@ -43,6 +52,10 @@ public class HttpImageTextProvider implements ImageTextProvider {
             return new ImageTextExtraction(string(response.get("caption")), string(response.get("ocrText")));
         } catch (RestClientException ex) {
             log.warn("image text provider failed filename={}: {}", filename, ex.toString());
+            return ImageTextExtraction.empty();
+        } catch (RuntimeException ex) {
+            // 反序列化/编解码等意外错误不得中断上传流程（多模态降级为纯文本）。
+            log.warn("image text provider unexpected error filename={}: {}", filename, ex.toString());
             return ImageTextExtraction.empty();
         }
     }

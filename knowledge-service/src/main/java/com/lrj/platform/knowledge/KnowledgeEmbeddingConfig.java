@@ -1,15 +1,25 @@
 package com.lrj.platform.knowledge;
 
+import com.lrj.platform.knowledge.store.EmbeddingStoreRouter;
+import com.lrj.platform.knowledge.store.InMemoryEmbeddingStoreRouter;
+import com.lrj.platform.knowledge.store.QdrantClientCollectionManager;
+import com.lrj.platform.knowledge.store.QdrantEmbeddingStoreRouter;
+import com.lrj.platform.knowledge.store.QdrantHealthIndicator;
+import com.lrj.platform.knowledge.store.SingleEmbeddingStoreRouter;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.model.ollama.OllamaEmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import dev.langchain4j.model.output.Response;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
 import dev.langchain4j.store.embedding.qdrant.QdrantEmbeddingStore;
+import io.qdrant.client.QdrantClient;
+import io.qdrant.client.QdrantGrpcClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.convert.DurationStyle;
@@ -27,6 +37,10 @@ public class KnowledgeEmbeddingConfig {
 
     private static final Logger log = LoggerFactory.getLogger(KnowledgeEmbeddingConfig.class);
 
+    // ---------------------------------------------------------------------
+    // 向量 store（单例 —— 供 shared 隔离模式与 collection 探测复用；per-tenant 走 router）
+    // ---------------------------------------------------------------------
+
     @Bean
     @ConditionalOnProperty(name = "app.rag.vector-store.provider", havingValue = "in-memory", matchIfMissing = true)
     public EmbeddingStore<TextSegment> embeddingStore() {
@@ -36,26 +50,76 @@ public class KnowledgeEmbeddingConfig {
 
     @Bean
     @ConditionalOnProperty(name = "app.rag.vector-store.provider", havingValue = "qdrant")
-    public EmbeddingStore<TextSegment> qdrantEmbeddingStore(
+    public QdrantClient knowledgeQdrantClient(
             @Value("${app.rag.vector-store.qdrant.host:localhost}") String host,
             @Value("${app.rag.vector-store.qdrant.port:6334}") int port,
-            @Value("${app.rag.vector-store.qdrant.collection-name:knowledge_segments}") String collectionName,
             @Value("${app.rag.vector-store.qdrant.use-tls:false}") boolean useTls,
             @Value("${app.rag.vector-store.qdrant.api-key:}") String apiKey,
-            @Value("${app.rag.vector-store.qdrant.payload-text-key:text}") String payloadTextKey) {
-        QdrantEmbeddingStore.Builder builder = QdrantEmbeddingStore.builder()
-                .host(host)
-                .port(port)
-                .collectionName(collectionName)
-                .useTls(useTls)
-                .payloadTextKey(payloadTextKey);
+            @Value("${app.rag.vector-store.qdrant.timeout:10s}") String timeout) {
+        QdrantGrpcClient.Builder builder = QdrantGrpcClient.newBuilder(host, port, useTls)
+                .withTimeout(parseDuration(timeout));
         if (apiKey != null && !apiKey.isBlank()) {
-            builder.apiKey(apiKey);
+            builder.withApiKey(apiKey);
         }
-        log.info("Knowledge vector store provider: qdrant host={} port={} collection={} tls={}",
-                host, port, collectionName, useTls);
-        return builder.build();
+        log.info("Knowledge Qdrant client host={} port={} tls={} timeout={}", host, port, useTls, timeout);
+        return new QdrantClient(builder.build());
     }
+
+    @Bean
+    @ConditionalOnProperty(name = "app.rag.vector-store.provider", havingValue = "qdrant")
+    public EmbeddingStore<TextSegment> qdrantEmbeddingStore(
+            QdrantClient knowledgeQdrantClient,
+            @Value("${app.rag.vector-store.qdrant.collection-name:knowledge_segments}") String collectionName,
+            @Value("${app.rag.vector-store.qdrant.payload-text-key:text}") String payloadTextKey) {
+        log.info("Knowledge vector store provider: qdrant collection={} (shared-mode base)", collectionName);
+        return QdrantEmbeddingStore.builder()
+                .client(knowledgeQdrantClient)
+                .collectionName(collectionName)
+                .payloadTextKey(payloadTextKey)
+                .build();
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "app.rag.vector-store.provider", havingValue = "qdrant")
+    public QdrantHealthIndicator qdrantHealthIndicator(
+            QdrantClient knowledgeQdrantClient,
+            @Value("${app.rag.vector-store.qdrant.health-timeout:3s}") String healthTimeout) {
+        return new QdrantHealthIndicator(knowledgeQdrantClient, parseDuration(healthTimeout));
+    }
+
+    // ---------------------------------------------------------------------
+    // 按租户路由器（collection-per-tenant 强隔离，默认开启）
+    // ---------------------------------------------------------------------
+
+    @Bean
+    public EmbeddingStoreRouter embeddingStoreRouter(
+            EmbeddingModel embeddingModel,
+            ObjectProvider<EmbeddingStore<TextSegment>> baseStoreProvider,
+            ObjectProvider<QdrantClient> qdrantClientProvider,
+            @Value("${app.rag.vector-store.provider:in-memory}") String provider,
+            @Value("${app.rag.vector-store.isolation:collection-per-tenant}") String isolation,
+            @Value("${app.rag.vector-store.qdrant.collection-name:knowledge_segments}") String baseCollection,
+            @Value("${app.rag.vector-store.qdrant.payload-text-key:text}") String payloadTextKey,
+            @Value("${app.rag.vector-store.qdrant.auto-create-payload-index:true}") boolean autoCreatePayloadIndex,
+            @Value("${app.rag.vector-store.qdrant.timeout:10s}") String timeout) {
+        boolean shared = "shared".equalsIgnoreCase(isolation);
+        if (shared) {
+            log.info("Knowledge tenant isolation: shared (single store + metadata filter)");
+            return new SingleEmbeddingStoreRouter(baseStoreProvider.getObject(), embeddingModel.dimension());
+        }
+        if ("qdrant".equalsIgnoreCase(provider)) {
+            log.info("Knowledge tenant isolation: collection-per-tenant (qdrant base collection={})", baseCollection);
+            QdrantClientCollectionManager manager = new QdrantClientCollectionManager(
+                    qdrantClientProvider.getObject(), payloadTextKey, parseDuration(timeout), autoCreatePayloadIndex);
+            return new QdrantEmbeddingStoreRouter(manager, baseCollection);
+        }
+        log.info("Knowledge tenant isolation: collection-per-tenant (in-memory, one store per tenant)");
+        return new InMemoryEmbeddingStoreRouter();
+    }
+
+    // ---------------------------------------------------------------------
+    // Embedding provider（默认 hash，零外部依赖）
+    // ---------------------------------------------------------------------
 
     @Bean
     @ConditionalOnProperty(name = "app.rag.embedding.provider", havingValue = "hash", matchIfMissing = true)
@@ -95,11 +159,31 @@ public class KnowledgeEmbeddingConfig {
         return builder.build();
     }
 
+    @Bean
+    @ConditionalOnProperty(name = "app.rag.embedding.provider", havingValue = "ollama")
+    public EmbeddingModel ollamaEmbeddingModel(
+            @Value("${app.rag.embedding.ollama.base-url:${RAG_EMBEDDING_OLLAMA_BASE_URL:http://localhost:11434}}") String baseUrl,
+            @Value("${app.rag.embedding.ollama.model-name:${RAG_EMBEDDING_MODEL:nomic-embed-text}}") String modelName,
+            @Value("${app.rag.embedding.timeout:60s}") String timeout,
+            @Value("${app.rag.embedding.max-retries:3}") int maxRetries,
+            @Value("${app.rag.embedding.log-requests:false}") boolean logRequests,
+            @Value("${app.rag.embedding.log-responses:false}") boolean logResponses) {
+        log.info("Knowledge embedding provider: ollama model={} baseUrl={}", modelName, baseUrl);
+        return OllamaEmbeddingModel.builder()
+                .baseUrl(baseUrl)
+                .modelName(modelName)
+                .timeout(parseDuration(timeout))
+                .maxRetries(maxRetries)
+                .logRequests(logRequests)
+                .logResponses(logResponses)
+                .build();
+    }
+
     private static Duration parseDuration(String value) {
         return DurationStyle.detectAndParse(value);
     }
 
-    static class HashEmbeddingModel implements EmbeddingModel {
+    public static class HashEmbeddingModel implements EmbeddingModel {
         static final int DIMENSION = 64;
 
         @Override

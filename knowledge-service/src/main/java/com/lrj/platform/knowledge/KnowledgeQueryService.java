@@ -2,6 +2,8 @@ package com.lrj.platform.knowledge;
 
 import com.lrj.platform.knowledge.hybrid.KeywordSearchService;
 import com.lrj.platform.knowledge.graph.GraphSearchService;
+import com.lrj.platform.knowledge.store.EmbeddingStoreRouter;
+import com.lrj.platform.knowledge.store.SingleEmbeddingStoreRouter;
 import com.lrj.platform.security.TenantContext;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
@@ -31,7 +33,7 @@ public class KnowledgeQueryService {
 
     private static final Logger log = LoggerFactory.getLogger(KnowledgeQueryService.class);
 
-    private final EmbeddingStore<TextSegment> embeddingStore;
+    private final EmbeddingStoreRouter storeRouter;
     private final EmbeddingModel embeddingModel;
     private final KeywordSearchService keywordSearchService;
     private final GraphSearchService graphSearchService;
@@ -46,7 +48,7 @@ public class KnowledgeQueryService {
     private final double graphWeight;
 
     @Autowired
-    public KnowledgeQueryService(EmbeddingStore<TextSegment> embeddingStore,
+    public KnowledgeQueryService(EmbeddingStoreRouter storeRouter,
                                  EmbeddingModel embeddingModel,
                                  KeywordSearchService keywordSearchService,
                                  @Value("${app.rag.query.top-k:5}") int defaultTopK,
@@ -59,7 +61,7 @@ public class KnowledgeQueryService {
                                  @Value("${app.rag.ranking.vector-weight:1.0}") double vectorWeight,
                                  @Value("${app.rag.ranking.keyword-weight:1.0}") double keywordWeight,
                                  @Value("${app.rag.ranking.graph-weight:1.0}") double graphWeight) {
-        this(embeddingStore,
+        this(storeRouter,
                 embeddingModel,
                 keywordSearchService,
                 defaultTopK,
@@ -77,11 +79,11 @@ public class KnowledgeQueryService {
     public KnowledgeQueryService(EmbeddingStore<TextSegment> embeddingStore,
                                  EmbeddingModel embeddingModel,
                                  KeywordSearchService keywordSearchService,
-                                 @Value("${app.rag.query.top-k:5}") int defaultTopK,
-                                 @Value("${app.rag.query.min-score:0.0}") double defaultMinScore,
-                                 @Value("${app.rag.hybrid.enabled:true}") boolean hybridEnabled,
-                                 @Value("${app.rag.hybrid.keyword-top-k:${app.rag.query.top-k:5}}") int keywordTopK) {
-        this(embeddingStore,
+                                 int defaultTopK,
+                                 double defaultMinScore,
+                                 boolean hybridEnabled,
+                                 int keywordTopK) {
+        this(new SingleEmbeddingStoreRouter(embeddingStore, embeddingModel.dimension()),
                 embeddingModel,
                 keywordSearchService,
                 defaultTopK,
@@ -106,7 +108,7 @@ public class KnowledgeQueryService {
                                  GraphSearchService graphSearchService,
                                  boolean graphIncludedInQuery,
                                  int graphTopK) {
-        this(embeddingStore,
+        this(new SingleEmbeddingStoreRouter(embeddingStore, embeddingModel.dimension()),
                 embeddingModel,
                 keywordSearchService,
                 defaultTopK,
@@ -134,7 +136,35 @@ public class KnowledgeQueryService {
                                  double vectorWeight,
                                  double keywordWeight,
                                  double graphWeight) {
-        this.embeddingStore = embeddingStore;
+        this(new SingleEmbeddingStoreRouter(embeddingStore, embeddingModel.dimension()),
+                embeddingModel,
+                keywordSearchService,
+                defaultTopK,
+                defaultMinScore,
+                hybridEnabled,
+                keywordTopK,
+                graphSearchService,
+                graphIncludedInQuery,
+                graphTopK,
+                vectorWeight,
+                keywordWeight,
+                graphWeight);
+    }
+
+    public KnowledgeQueryService(EmbeddingStoreRouter storeRouter,
+                                 EmbeddingModel embeddingModel,
+                                 KeywordSearchService keywordSearchService,
+                                 int defaultTopK,
+                                 double defaultMinScore,
+                                 boolean hybridEnabled,
+                                 int keywordTopK,
+                                 GraphSearchService graphSearchService,
+                                 boolean graphIncludedInQuery,
+                                 int graphTopK,
+                                 double vectorWeight,
+                                 double keywordWeight,
+                                 double graphWeight) {
+        this.storeRouter = storeRouter;
         this.embeddingModel = embeddingModel;
         this.keywordSearchService = keywordSearchService;
         this.graphSearchService = graphSearchService;
@@ -170,7 +200,10 @@ public class KnowledgeQueryService {
                 .filter(filter)
                 .build();
 
-        List<EmbeddingMatch<TextSegment>> matches = embeddingStore.search(request).matches();
+        List<EmbeddingMatch<TextSegment>> matches = storeRouter
+                .forTenant(tenantId, embeddingModel.dimension())
+                .search(request)
+                .matches();
         Map<String, Hit> merged = new LinkedHashMap<>();
         for (EmbeddingMatch<TextSegment> match : matches) {
             TextSegment segment = match.embedded();

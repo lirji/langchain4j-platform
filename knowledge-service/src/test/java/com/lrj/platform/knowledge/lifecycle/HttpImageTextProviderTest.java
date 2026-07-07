@@ -40,6 +40,20 @@ class HttpImageTextProviderTest {
     }
 
     @Test
+    void skipsRemoteCallWhenImageExceedsMaxBytes() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        ImageTextProviderProperties properties = new ImageTextProviderProperties();
+        properties.setEndpointUrl("http://vision.local/image-text");
+        properties.setMaxImageBytes(2);
+        HttpImageTextProvider provider = new HttpImageTextProvider(restTemplate, properties);
+
+        // No server expectation registered: a remote call would fail verify().
+        assertThat(provider.extract("big.png", "image/png", new byte[]{1, 2, 3, 4}).isEmpty()).isTrue();
+        server.verify();
+    }
+
+    @Test
     void returnsEmptyWhenProviderFails() {
         RestTemplate restTemplate = new RestTemplate();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
