@@ -129,6 +129,9 @@
 
 决策已全部敲定，按下列相位推进。相位内多为可并行项，相位间有依赖。
 
+> **进度（2026-07-07，分支 `feat/migration-remaining`）**：Phase A ✅、Phase B ✅ 已实现并提交，全量 `mvn test` 19 模块全绿。
+> **B1b 残留风险（待后续加固）**：Kafka 模式下终态通知是 Flowable 事务提交**之后**的两段式（Flowable 先提交 → 链式 TM 提交 outbox+Kafka）。若两段之间进程崩溃，会「终态已提交但通知事务未跑」，且此时 HTTP outbox 行未写、无法兜底。彻底消除需把发布逻辑挪进 Flowable ServiceTask 事务边界内（改动面大，本轮未做）。默认 `mode=local` 不受影响。
+
 ### Phase A — 地基层（低耦合、解锁后续，先做）
 - **A1. agent→analytics 契约 DTO 提升**（S）：新增 `platform-protocol.analytics.{AnalyticsSqlRequest,AnalyticsSqlReply}`，analytics-service 与 agent-service `AnalyticsSqlAction` 改用 typed DTO。→ 解锁 B5 契约测试。
 - **A2. 内部 JWT RS256 支持**（M）：`platform-security` `InternalToken` 加 RS256 签发/验签，`platform.security.jwt.algorithm` 可配（默认 HS256 保零配置 dev/test，prod 切 RS256 keypair）。→ 地基，独立。
