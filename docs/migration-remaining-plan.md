@@ -129,8 +129,13 @@
 
 决策已全部敲定，按下列相位推进。相位内多为可并行项，相位间有依赖。
 
-> **进度（2026-07-07，分支 `feat/migration-remaining`）**：Phase A ✅、Phase B ✅ 已实现并提交，全量 `mvn test` 19 模块全绿。
-> **B1b 残留风险（待后续加固）**：Kafka 模式下终态通知是 Flowable 事务提交**之后**的两段式（Flowable 先提交 → 链式 TM 提交 outbox+Kafka）。若两段之间进程崩溃，会「终态已提交但通知事务未跑」，且此时 HTTP outbox 行未写、无法兜底。彻底消除需把发布逻辑挪进 Flowable ServiceTask 事务边界内（改动面大，本轮未做）。默认 `mode=local` 不受影响。
+> **进度（2026-07-07，分支 `feat/migration-remaining`）**：Phase A ✅、Phase B ✅、B1b 残留风险收口 ✅ 已实现并提交，全量 `mvn test` 19 模块全绿。
+> **B1b 残留风险 —— 已收口（方案 A：事务性 outbox + 幂等 relay）**：
+> - 新增 BPMN `end` 事件 ExecutionListener（`WorkflowTerminalOutboxListener`），kafka 档下在 **Flowable 引擎命令的同一事务内**把终态事件写入独立表 `WF_TERMINAL_EVENT_OUTBOX`（`WorkflowTerminalEventOutbox`，同一 `workflowDataSource` → JdbcTemplate 经 DataSourceUtils 并入同事务）。「终态提交 ⇔ 事件行已写」原子成立，消除丢失窗口。
+> - `outcome` 经进程变量 `terminalOutcome` 精确传递（start=auto / complete=granted|rejected / expire=timeout）。
+> - `WorkflowTerminalEventRelay`（`@Scheduled`，仅 kafka 档）从该表 relay 到 Kafka（至少一次 + 消费侧 `workflow:<instanceId>` eventId 去重 = 端到端等价 exactly-once）。
+> - 移除了 B1b 原有的 `ChainedTransactionManager`（`WorkflowEventbusTransactionConfig`）与提交后直发的 `WorkflowTerminalEventPublisher`。默认 `mode=local` 零影响。
+> - **验证边界**：workflow-service 无引擎/H2 测试基建，原子性由「监听器跑在引擎事务内 + 同 DataSource JdbcTemplate 并入同事务」的 Flowable-Spring 语义保证 + 逻辑单测覆盖路由/重试/DLQ/消息重建；端到端原子性建议在 docker 集成环境（或后续 B4 双跑门禁）实测。
 
 ### Phase A — 地基层（低耦合、解锁后续，先做）
 - **A1. agent→analytics 契约 DTO 提升**（S）：新增 `platform-protocol.analytics.{AnalyticsSqlRequest,AnalyticsSqlReply}`，analytics-service 与 agent-service `AnalyticsSqlAction` 改用 typed DTO。→ 解锁 B5 契约测试。

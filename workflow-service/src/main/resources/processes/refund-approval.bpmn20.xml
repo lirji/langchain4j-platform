@@ -52,6 +52,12 @@
                      flowable:expression="${serviceTaskDelegates.reject(execution)}"/>
         <sequenceFlow id="flowRejectEnd" sourceRef="reject" targetRef="end"/>
 
-        <endEvent id="end"/>
+        <!-- 终态收口（B1b）：end 事件在 Flowable 引擎事务内触发 workflowTerminalOutboxListener，
+             kafka 档下把终态事件 outbox 行与 ACT_*/WF_REPLY 原子写入，消除提交后崩溃丢通知的窗口。 -->
+        <endEvent id="end">
+            <extensionElements>
+                <flowable:executionListener event="end" delegateExpression="${workflowTerminalOutboxListener}"/>
+            </extensionElements>
+        </endEvent>
     </process>
 </definitions>

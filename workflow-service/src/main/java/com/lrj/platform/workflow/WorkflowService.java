@@ -61,7 +61,7 @@ public class WorkflowService {
     private final WorkflowMetrics metrics;
     private final WorkflowOutbox outbox;
     private final WorkflowAsyncTaskNotifier asyncTaskNotifier;
-    private final WorkflowTerminalEventPublisher terminalEventPublisher;
+    private final WorkflowTerminalEventOutbox terminalEventOutbox;
     private final org.springframework.context.ApplicationEventPublisher events;
 
     public WorkflowService(RuntimeService workflowRuntimeService,
@@ -73,7 +73,7 @@ public class WorkflowService {
                            WorkflowMetrics metrics,
                            WorkflowOutbox outbox,
                            WorkflowAsyncTaskNotifier asyncTaskNotifier,
-                           WorkflowTerminalEventPublisher terminalEventPublisher,
+                           WorkflowTerminalEventOutbox terminalEventOutbox,
                            org.springframework.context.ApplicationEventPublisher events) {
         this.runtimeService = workflowRuntimeService;
         this.taskService = workflowTaskService;
@@ -84,7 +84,7 @@ public class WorkflowService {
         this.metrics = metrics;
         this.outbox = outbox;
         this.asyncTaskNotifier = asyncTaskNotifier;
-        this.terminalEventPublisher = terminalEventPublisher;
+        this.terminalEventOutbox = terminalEventOutbox;
         this.events = events;
     }
 
@@ -95,14 +95,12 @@ public class WorkflowService {
     private void onTerminal(String instanceId, String tenantId, String chatId, String outcome) {
         String cid = chatId != null ? chatId : str(readVariable(instanceId, "chatId"));
         String reply = replyStore.find(instanceId);
-        if (useKafkaNotification()) {
-            // kafka 档：终态 outbox 权威写 + Kafka 事件发布同事务（见 WorkflowTerminalEventPublisher）。
-            // 不再走 HTTP outbox/async-task 通道，避免双投；渠道回推由 channel-service 的 KafkaListener 完成。
-            String url = str(readVariable(instanceId, "webhookUrl"));
-            terminalEventPublisher.publishTerminal(instanceId, tenantId, cid, outcome, reply, url);
-        } else {
+        if (!useKafkaNotification()) {
             enqueuePush(instanceId, tenantId);
         }
+        // kafka 档：终态事件 outbox 行已由 WorkflowTerminalOutboxListener 在 Flowable 终态事务内原子写入，
+        // 由 WorkflowTerminalEventRelay relay 到 Kafka；此处不再做提交后直发（那会在崩溃时丢事件、无兜底记录）。
+        // 渠道回推由 channel-service 的 WorkflowTerminalKafkaListener 消费完成。
         events.publishEvent(new WorkflowTerminalEvent(instanceId, tenantId, cid, outcome, reply));
     }
 
@@ -140,6 +138,9 @@ public class WorkflowService {
         vars.put("userId", t.userId());
         vars.put("chatId", cid);
         vars.put("message", message == null ? "" : message);
+        // 终态结果默认 auto（自动受理时的取值）；人工 complete / 超时驳回会在 complete 时覆盖。
+        // 供 WorkflowTerminalOutboxListener 在 end 事件读取，写进终态事件 outbox（kafka 档）。
+        vars.put("terminalOutcome", "auto");
         // #8：发起方传了回推地址就存成流程变量，终态时入 outbox 可靠投递
         if (webhookUrl != null && !webhookUrl.isBlank()) {
             vars.put("webhookUrl", webhookUrl.trim());
@@ -316,6 +317,8 @@ public class WorkflowService {
         Map<String, Object> vars = new HashMap<>();
         vars.put("approved", approved);
         vars.put("comment", comment == null ? "" : comment);
+        // 覆盖 start 时的默认 auto：人工审批 → granted/rejected。终态事务内可见于 end 监听器。
+        vars.put("terminalOutcome", approved ? "granted" : "rejected");
         try {
             taskService.complete(taskId, vars);
         } catch (FlowableObjectNotFoundException e) {
@@ -382,6 +385,8 @@ public class WorkflowService {
             Map<String, Object> vars = new HashMap<>();
             vars.put("approved", false);
             vars.put("comment", "审批超时自动驳回（超过 " + props.getApprovalTimeout() + " 无人处理）");
+            // 覆盖默认：超时驳回 → timeout（reply 由 reject 服务任务生成，终态事务内可见于 end 监听器）。
+            vars.put("terminalOutcome", "timeout");
             try {
                 taskService.complete(taskId, vars); // → reject ServiceTask 同步跑，写超时驳回 reply
             } catch (FlowableObjectNotFoundException e) {
@@ -462,6 +467,7 @@ public class WorkflowService {
         for (String id : ids) {
             replyStore.delete(id);
             outbox.delete(id);
+            terminalEventOutbox.delete(id);
         }
         audit.record(AuditEventType.WORKFLOW_DATA_PURGED, Map.of(
                 "chatId", nz(chatId), "instances", ids.size()));
