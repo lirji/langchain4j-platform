@@ -29,6 +29,17 @@ app:
       url: ${WORKFLOW_DB_URL:jdbc:mysql://localhost:3306/flowable?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}
       username: ${WORKFLOW_DB_USER:root}
       password: ${WORKFLOW_DB_PASSWORD:root}
+    # ServiceTask 内 AI 能力来源（C2 / B9）。
+    # mode=http（默认，推荐 prod）：经 tenant/trace 传播的 RestTemplate 调 conversation-service，
+    #   workflow 断开对本地 ChatModel 的依赖；HTTP 失败抛异常，交 ServiceTaskDelegates 的 withRetry+降级兜底接管。
+    # mode=local：保留 DefaultWorkflowAiClient 本地兜底（零依赖 dev/test 或 conversation 不可达时）。
+    ai-client:
+      mode: ${WORKFLOW_AI_CLIENT_MODE:http}
+      conversation-base-url: ${CONVERSATION_BASE_URL:http://localhost:8081}
+      connect-timeout: ${WORKFLOW_AI_CLIENT_CONNECT_TIMEOUT:1s}
+      read-timeout: ${WORKFLOW_AI_CLIENT_READ_TIMEOUT:3s}
+    # 终态通知发送模式。默认 local 以维持零依赖 dev/test（async-task 需 async-task-service 在跑）；
+    # async-task 为一等支持路径、推荐 prod 默认，但为不破坏现有测试此处默认值保持 local。
     terminal-notification:
       mode: ${WORKFLOW_TERMINAL_NOTIFICATION_MODE:local}
       async-task-base-url: ${ASYNC_TASK_BASE_URL:http://localhost:8086}

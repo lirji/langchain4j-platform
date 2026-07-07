@@ -7,6 +7,8 @@ import com.lrj.platform.agent.dag.AgentDagCritic;
 import com.lrj.platform.agent.dag.AgentDagProperties;
 import com.lrj.platform.agent.dag.AgentDagPlanner;
 import com.lrj.platform.agent.dag.AgentDagReplanner;
+import com.lrj.platform.agent.reflexion.ReflexionAnswerer;
+import com.lrj.platform.agent.reflexion.ReflexionProperties;
 import com.lrj.platform.agent.voting.VoteAggregator;
 import com.lrj.platform.agent.voting.Voter;
 import com.lrj.platform.agent.voting.VotingProperties;
@@ -75,6 +77,17 @@ public class AgentConfig {
         return AiServices.builder(VoteAggregator.class)
                 .chatModel(chatModelFactory.buildDeterministic())
                 .build();
+    }
+
+    @Bean
+    @ConfigurationProperties(prefix = "app.agent.reflexion")
+    ReflexionProperties reflexionProperties() {
+        return new ReflexionProperties();
+    }
+
+    @Bean
+    ReflexionAnswerer reflexionAnswerer(ChatModel chatModel) {
+        return AiServices.builder(ReflexionAnswerer.class).chatModel(chatModel).build();
     }
 
     @Bean

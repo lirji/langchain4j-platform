@@ -56,6 +56,16 @@ app:
         model-name: ${CONVERSATION_SEMANTIC_CACHE_EMBEDDING_MODEL:embedding-default}
       redis:
         ttl: ${CONVERSATION_SEMANTIC_CACHE_REDIS_TTL:0s}
+  # Model Cascade（便宜模型先答 → 低置信才升级强模型）。默认关闭，对现有 /chat 行为零影响。
+  # cheap-model / strong-model 为 LiteLLM model_list 里的逻辑模型名；留空退化为网关默认模型。
+  chat:
+    cascade:
+      enabled: ${CHAT_CASCADE_ENABLED:false}
+      cheap-model: ${CHAT_CASCADE_CHEAP_MODEL:}
+      strong-model: ${CHAT_CASCADE_STRONG_MODEL:}
+      confidence-threshold: ${CHAT_CASCADE_CONFIDENCE_THRESHOLD:0.6}
+      min-answer-chars: ${CHAT_CASCADE_MIN_ANSWER_CHARS:8}
+      self-rating: ${CHAT_CASCADE_SELF_RATING:false}
   token-budget:
     enabled: true
     store: in-memory

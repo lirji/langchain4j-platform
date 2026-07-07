@@ -21,8 +21,6 @@ import java.util.stream.Collectors;
 
 final class JShellRunner {
 
-    record Outcome(String output, String error, boolean timedOut, boolean truncated) {}
-
     private static final ExecutorService POOL = Executors.newCachedThreadPool(r -> {
         Thread thread = new Thread(r, "code-exec-jshell");
         thread.setDaemon(true);
@@ -32,7 +30,7 @@ final class JShellRunner {
     private JShellRunner() {
     }
 
-    static Outcome run(String source, long timeoutMs, int maxOutputChars) {
+    static CodeSandbox.Outcome run(String source, long timeoutMs, int maxOutputChars) {
         ByteArrayOutputStream captured = new ByteArrayOutputStream();
         PrintStream sink = new PrintStream(captured, true, StandardCharsets.UTF_8);
         JShell jshell = JShell.builder()
@@ -136,14 +134,14 @@ final class JShellRunner {
         return message == null || message.isBlank() ? throwable.getClass().getSimpleName() : message;
     }
 
-    private static Outcome finish(String output, String error, boolean timedOut, int maxOutputChars) {
+    private static CodeSandbox.Outcome finish(String output, String error, boolean timedOut, int maxOutputChars) {
         String text = output == null ? "" : output;
         boolean truncated = false;
         if (maxOutputChars > 0 && text.length() > maxOutputChars) {
             text = text.substring(0, maxOutputChars);
             truncated = true;
         }
-        return new Outcome(text, error, timedOut, truncated);
+        return new CodeSandbox.Outcome(text, error, timedOut, truncated);
     }
 
     static final class SnippetException extends RuntimeException {

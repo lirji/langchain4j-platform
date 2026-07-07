@@ -1,5 +1,6 @@
 package com.lrj.platform.agent.dag;
 
+import com.lrj.platform.agent.critique.CritiqueWeights;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "app.agent.dag")
@@ -28,7 +29,7 @@ public class AgentDagProperties {
         private boolean enabled = false;
         private int maxReplans = 1;
         private double threshold = 0.75;
-        private Weights weights = new Weights();
+        private CritiqueWeights weights = new CritiqueWeights();
 
         public boolean isEnabled() {
             return enabled;
@@ -54,42 +55,12 @@ public class AgentDagProperties {
             this.threshold = threshold;
         }
 
-        public Weights getWeights() {
+        public CritiqueWeights getWeights() {
             return weights;
         }
 
-        public void setWeights(Weights weights) {
+        public void setWeights(CritiqueWeights weights) {
             this.weights = weights;
-        }
-    }
-
-    public static class Weights {
-        private double correctness = 0.5;
-        private double completeness = 0.35;
-        private double clarity = 0.15;
-
-        public double getCorrectness() {
-            return correctness;
-        }
-
-        public void setCorrectness(double correctness) {
-            this.correctness = correctness;
-        }
-
-        public double getCompleteness() {
-            return completeness;
-        }
-
-        public void setCompleteness(double completeness) {
-            this.completeness = completeness;
-        }
-
-        public double getClarity() {
-            return clarity;
-        }
-
-        public void setClarity(double clarity) {
-            this.clarity = clarity;
         }
     }
 }

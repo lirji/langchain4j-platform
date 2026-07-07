@@ -38,10 +38,13 @@ app:
     max-depth: ${AGENT_MAX_DEPTH:1}
     code-exec:
       enabled: ${AGENT_CODE_EXEC_ENABLED:false}
+      sandbox: ${AGENT_CODE_EXEC_SANDBOX:subprocess}
       timeout-ms: ${AGENT_CODE_EXEC_TIMEOUT_MS:3000}
       max-output-chars: ${AGENT_CODE_EXEC_MAX_OUTPUT_CHARS:2000}
       max-source-chars: ${AGENT_CODE_EXEC_MAX_SOURCE_CHARS:4000}
       block-unsafe-apis: ${AGENT_CODE_EXEC_BLOCK_UNSAFE_APIS:true}
+      max-heap-mb: ${AGENT_CODE_EXEC_MAX_HEAP_MB:64}
+      java-executable: ${AGENT_CODE_EXEC_JAVA_EXECUTABLE:}
     mcp:
       enabled: ${AGENT_MCP_ENABLED:false}
       transport: ${AGENT_MCP_TRANSPORT:stdio}
@@ -110,6 +113,15 @@ app:
       n: ${AGENT_VOTING_N:3}
       strategy: ${AGENT_VOTING_STRATEGY:majority}
       min-agreement: ${AGENT_VOTING_MIN_AGREEMENT:0.5}
+    # Reflexion 自省环（单答案 answer→critique→improve，加权聚合达阈值即停）。POST /agent/reflexive[/stream]。
+    # 评分复用 DAG 的 AgentDagCritic；权重与聚合算法与 DAG 共吃 CritiqueAggregation。
+    reflexion:
+      threshold: ${AGENT_REFLEXION_THRESHOLD:0.75}
+      max-attempts: ${AGENT_REFLEXION_MAX_ATTEMPTS:2}
+      weights:
+        correctness: ${AGENT_REFLEXION_WEIGHT_CORRECTNESS:0.4}
+        completeness: ${AGENT_REFLEXION_WEIGHT_COMPLETENESS:0.4}
+        clarity: ${AGENT_REFLEXION_WEIGHT_CLARITY:0.2}
 
 management:
   endpoints:

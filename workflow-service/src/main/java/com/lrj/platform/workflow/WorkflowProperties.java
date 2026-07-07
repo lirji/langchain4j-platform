@@ -54,6 +54,8 @@ public class WorkflowProperties {
 
     private Outbox outbox = new Outbox();
 
+    private AiClient aiClient = new AiClient();
+
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
 
@@ -83,6 +85,38 @@ public class WorkflowProperties {
 
     public Outbox getOutbox() { return outbox; }
     public void setOutbox(Outbox outbox) { this.outbox = outbox; }
+
+    public AiClient getAiClient() { return aiClient; }
+    public void setAiClient(AiClient aiClient) { this.aiClient = aiClient; }
+
+    /**
+     * ServiceTask 内 AI 能力（assess 抽工单 / resolve 生成答复）的来源（C2 / B9）。
+     *
+     * <p>{@code mode=http}（默认，推荐 prod）：经 {@code OutboundTenant/Trace} 传播的 RestTemplate
+     * 调 conversation-service 的 {@code /conversation/workflow/**} 端点，workflow 彻底断开对本地
+     * ChatModel/gateway-client 的直接依赖。<b>HTTP 失败时抛异常</b>，交由 {@code ServiceTaskDelegates}
+     * 既有的 withRetry + 降级兜底接管（抽取失败降级为 HIGH 转人工，绝不误判 LOW 放过高风险退款）。
+     *
+     * <p>{@code mode=local}：保留 {@code DefaultWorkflowAiClient} 本地兜底（直连网关 ChatModel，
+     * 无 ChatModel 时用确定性兜底），用于零依赖 dev/test 或 conversation-service 不可达的场景。
+     *
+     * <p>ServiceTask 在 Flowable 同步事务内调用，故 {@code connect/read timeout} 均设紧超时。
+     */
+    public static class AiClient {
+        private String mode = "http";
+        private String conversationBaseUrl = "http://localhost:8081";
+        private Duration connectTimeout = Duration.ofSeconds(1);
+        private Duration readTimeout = Duration.ofSeconds(3);
+
+        public String getMode() { return mode; }
+        public void setMode(String mode) { this.mode = mode; }
+        public String getConversationBaseUrl() { return conversationBaseUrl; }
+        public void setConversationBaseUrl(String conversationBaseUrl) { this.conversationBaseUrl = conversationBaseUrl; }
+        public Duration getConnectTimeout() { return connectTimeout; }
+        public void setConnectTimeout(Duration connectTimeout) { this.connectTimeout = connectTimeout; }
+        public Duration getReadTimeout() { return readTimeout; }
+        public void setReadTimeout(Duration readTimeout) { this.readTimeout = readTimeout; }
+    }
 
     /**
      * 终态通知发送模式。默认 {@code local} 保持兼容，仍使用 workflow 自己的 {@code WF_OUTBOX}；

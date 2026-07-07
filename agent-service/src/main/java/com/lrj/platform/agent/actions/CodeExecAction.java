@@ -25,9 +25,20 @@ public class CodeExecAction implements AgentAction {
             "system.load", "loadlibrary", "unsafe");
 
     private final CodeExecProperties properties;
+    private final CodeSandbox sandbox;
 
-    public CodeExecAction(CodeExecProperties properties) {
+    @org.springframework.beans.factory.annotation.Autowired
+    public CodeExecAction(CodeExecProperties properties, CodeSandbox sandbox) {
         this.properties = properties;
+        this.sandbox = sandbox;
+    }
+
+    /**
+     * 便捷构造：默认用同 JVM 的 {@link JShellCodeSandbox}。仅供单测/嵌入式使用；
+     * Spring 运行时按 {@code app.agent.code-exec.sandbox} 注入选定的沙箱实现。
+     */
+    public CodeExecAction(CodeExecProperties properties) {
+        this(properties, new JShellCodeSandbox());
     }
 
     @Override
@@ -63,9 +74,9 @@ public class CodeExecAction implements AgentAction {
             }
         }
 
-        JShellRunner.Outcome outcome;
+        CodeSandbox.Outcome outcome;
         try {
-            outcome = JShellRunner.run(source, properties.getTimeoutMs(), properties.getMaxOutputChars());
+            outcome = sandbox.run(source, properties.getTimeoutMs(), properties.getMaxOutputChars());
         } catch (Throwable ex) {
             return "执行失败：" + ex.getClass().getSimpleName()
                     + (ex.getMessage() == null ? "" : "（" + ex.getMessage() + "）") + "，请检查代码后重试。";

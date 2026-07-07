@@ -95,6 +95,45 @@ public class WorkflowConfig {
                 .build();
     }
 
+    /**
+     * 调 conversation-service 的 RestTemplate（C2）。带 tenant/trace 出站传播，紧超时——
+     * ServiceTask 在 Flowable 同步事务内调用，不能长时间占用事务。仅 {@code mode=http} 时被 {@link HttpWorkflowAiClient} 使用。
+     */
+    @Bean
+    @Qualifier("conversationRestTemplate")
+    public RestTemplate conversationRestTemplate(RestTemplateBuilder builder,
+                                                 WorkflowProperties props,
+                                                 OutboundTenantForwarder tenantForwarder,
+                                                 OutboundTraceForwarder traceForwarder) {
+        WorkflowProperties.AiClient ai = props.getAiClient();
+        return builder
+                .rootUri(ai.getConversationBaseUrl())
+                .additionalInterceptors(tenantForwarder, traceForwarder)
+                .setConnectTimeout(ai.getConnectTimeout())
+                .setReadTimeout(ai.getReadTimeout())
+                .build();
+    }
+
+    /**
+     * 默认（推荐 prod）：{@link WorkflowAiClient} 经 HTTP 调 conversation-service。
+     * {@code app.workflow.ai-client.mode} 未设或为 {@code http} 时装配。
+     */
+    @Bean
+    @ConditionalOnProperty(name = "app.workflow.ai-client.mode", havingValue = "http", matchIfMissing = true)
+    public WorkflowAiClient httpWorkflowAiClient(@Qualifier("conversationRestTemplate") RestTemplate conversationRestTemplate) {
+        return new HttpWorkflowAiClient(conversationRestTemplate);
+    }
+
+    /**
+     * 本地兜底：{@code app.workflow.ai-client.mode=local} 时装配，直连网关 ChatModel（无则确定性兜底），
+     * 保证零依赖 dev/test 与 conversation-service 不可达时可用。
+     */
+    @Bean
+    @ConditionalOnProperty(name = "app.workflow.ai-client.mode", havingValue = "local")
+    public WorkflowAiClient localWorkflowAiClient(org.springframework.beans.factory.ObjectProvider<dev.langchain4j.model.chat.ChatModel> chatModelProvider) {
+        return new DefaultWorkflowAiClient(chatModelProvider);
+    }
+
     @Bean
     public ProcessEngine workflowProcessEngine(DataSource workflowDataSource,
                                                PlatformTransactionManager workflowTransactionManager,

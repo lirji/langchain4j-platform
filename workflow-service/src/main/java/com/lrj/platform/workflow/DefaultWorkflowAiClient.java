@@ -2,12 +2,16 @@ package com.lrj.platform.workflow;
 
 import dev.langchain4j.model.chat.ChatModel;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Locale;
 
-@Component
+/**
+ * 本地兜底的 {@link WorkflowAiClient}（{@code app.workflow.ai-client.mode=local}）：直连网关唯一
+ * ChatModel 生成答复、用确定性关键词逻辑抽工单。默认关闭——默认走 {@link HttpWorkflowAiClient}
+ * 调 conversation-service。保留本实现用于零依赖 dev/test 或 conversation-service 不可达时的本地回退。
+ * 由 {@link WorkflowConfig} 按 mode 条件装配（不再 {@code @Component} 自动注册）。
+ */
 public class DefaultWorkflowAiClient implements WorkflowAiClient {
 
     private final ObjectProvider<ChatModel> chatModelProvider;

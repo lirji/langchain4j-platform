@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lrj.platform.agent.AgentRunMapper;
 import com.lrj.platform.agent.DeepAgentService;
+import com.lrj.platform.agent.critique.CritiqueAggregation;
 import com.lrj.platform.agent.async.AgentTaskProgressSink;
 import com.lrj.platform.protocol.agent.AgentDagAttempt;
 import com.lrj.platform.protocol.agent.AgentDagCritique;
@@ -212,17 +213,11 @@ public class AgentDagService {
     }
 
     private double aggregate(AgentDagCritique critique) {
-        AgentDagProperties.Weights weights = properties.getReplan().getWeights();
-        double correctness = weights.getCorrectness();
-        double completeness = weights.getCompleteness();
-        double clarity = weights.getClarity();
-        double sum = correctness + completeness + clarity;
-        if (sum <= 0) {
-            return (critique.correctness() + critique.completeness() + critique.clarity()) / 3.0;
-        }
-        return (correctness * critique.correctness()
-                + completeness * critique.completeness()
-                + clarity * critique.clarity()) / sum;
+        return CritiqueAggregation.aggregate(
+                properties.getReplan().getWeights(),
+                critique.correctness(),
+                critique.completeness(),
+                critique.clarity());
     }
 
     private String previousPlanJson(List<AgentDagTask> tasks) {
