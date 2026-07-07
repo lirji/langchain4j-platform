@@ -70,7 +70,11 @@ class InternalTokenRs256Test {
         InternalToken t = rs256(privateKeyBase64, publicKeyBase64);
         String jwt = t.mint(new TenantContext.Tenant("acme", "alice", Set.of()));
 
-        String tampered = jwt.substring(0, jwt.length() - 1) + (jwt.endsWith("A") ? "B" : "A");
+        // 篡改 payload 段首字符：base64url 段内非末位字符 6 bit 全部有效，
+        // 必然改变被签名内容 → 签名确定性失配（改末位字符会因末位冗余 bit 偶发无效化，导致 flaky）
+        int i = jwt.indexOf('.') + 1;
+        char repl = jwt.charAt(i) == 'A' ? 'B' : 'A';
+        String tampered = jwt.substring(0, i) + repl + jwt.substring(i + 1);
 
         assertNull(t.verify(tampered));
     }
