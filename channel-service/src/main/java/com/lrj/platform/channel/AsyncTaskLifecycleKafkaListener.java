@@ -47,13 +47,17 @@ public class AsyncTaskLifecycleKafkaListener {
         handle(message);
     }
 
-    /** 去重 + 回推（抽出便于纯 POJO 单测，不经 Kafka）。 */
+    /**
+     * 去重 + 回推（抽出便于纯 POJO 单测，不经 Kafka）。顺序：先查 → 回推 → 成功后标记。
+     * 回推抛异常时未标记 → 重投再处理（不丢）；已完成事件重投被 isProcessed 跳过（去重）。
+     */
     void handle(AsyncTaskLifecycleMessage message) {
-        if (!processedEvents.markProcessed(message.eventId())) {
+        if (processedEvents.isProcessed(message.eventId())) {
             log.debug("async task lifecycle event deduplicated eventId={}", message.eventId());
             return;
         }
         callbackService.handleCallback(toCallback(message), message.tenantId());
+        processedEvents.markProcessed(message.eventId());
     }
 
     /** 映射为回调请求；沿用 async-task HTTP 回调结构（result 里带 channel/target/reply）。 */

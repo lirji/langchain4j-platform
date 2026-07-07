@@ -135,7 +135,7 @@
 >
 > ### 遗留 / 需真实集成环境验证（均非代码缺口，已在各 commit/报告记录）
 > - **B1b**：Flowable 事务内原子写的端到端原子性需真实 MySQL+引擎实测（单测覆盖逻辑层）。
-> - **B1/Kafka**：`platform.eventbus.enabled=true` 的真实 Kafka 端到端 exactly-once 需 EmbeddedKafka/集成环境。
+> - **B1/Kafka exactly-once ✅ 已做（分支 `feat/kafka-eos`）**：明确为 **effective exactly-once**（写侧事务性 outbox + 投侧 at-least-once + 收侧 eventId 幂等去重）——DB→Kafka→HTTP 跨系统链路的正确形态，非纯 Kafka 原生事务。落地：① 消费侧改「先查 → 处理 → **成功后**标记」（修复原「先标记」在瞬时失败时丢事件的 bug）；② `ProcessedEventStore` 加 `isProcessed`，channel-service 接线 JDBC 去重（跨重启，默认仍 memory 零依赖）；③ relay 同步等 broker ack 再 markDelivered，consumer `read_committed`；④ **EmbeddedKafka 集成测试**（`@Tag("kafka-it")`，`mvn -Pkafka-it -pl platform-eventbus test`，默认套件不加载）端到端证明「重复投递去重 + 瞬时失败不丢不重复」。
 > - **D2 interop**：A2A `message/stream` 用轮询代替真 SSE（B6 决策的 buffered 降级）；push 中继待接总线。
 > - **D3 契约测试**：仅覆盖 knowledge/agent 两个 P0 provider（analytics/async-task 待补）；网关 failover 为独立 smoke 脚本、不进默认 CI。
 > - **D4 双跑门禁**：真实"冻结单体 vs 网关"端到端双跑与真实快照抓取需 `deploy/docker-compose.oracle.yml` 起单体后跑。

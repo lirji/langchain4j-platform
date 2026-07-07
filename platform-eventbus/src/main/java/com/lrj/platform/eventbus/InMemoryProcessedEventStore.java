@@ -10,6 +10,11 @@ public class InMemoryProcessedEventStore implements ProcessedEventStore {
     private final ConcurrentHashMap<String, Boolean> seen = new ConcurrentHashMap<>();
 
     @Override
+    public boolean isProcessed(String eventId) {
+        return seen.containsKey(eventId);
+    }
+
+    @Override
     public boolean markProcessed(String eventId) {
         // putIfAbsent 返回 null 表示此前不存在（首次）
         return seen.putIfAbsent(eventId, Boolean.TRUE) == null;

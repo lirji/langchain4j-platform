@@ -22,6 +22,10 @@ platform:
         tenant: acme
         user: alice
         scopes: [channel]
+  eventbus:
+    # 消费终态/生命周期事件时的幂等去重存储。默认 memory（重启失忆，dev/test 零依赖）；
+    # Kafka 生产部署设 jdbc 以跨重启去重（需 channel.dedup.datasource.* 指向 MySQL，见 ChannelDedupConfig）。
+    processed-event-store: ${CHANNEL_DEDUP_STORE:memory}
 
 app:
   channel:

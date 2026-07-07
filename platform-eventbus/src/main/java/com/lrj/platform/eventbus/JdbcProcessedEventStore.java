@@ -32,6 +32,13 @@ public class JdbcProcessedEventStore implements ProcessedEventStore {
     }
 
     @Override
+    public boolean isProcessed(String eventId) {
+        Integer n = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM PROCESSED_EVENT WHERE EVENT_ID = ?", Integer.class, eventId);
+        return n != null && n > 0;
+    }
+
+    @Override
     public boolean markProcessed(String eventId) {
         try {
             jdbc.update("INSERT INTO PROCESSED_EVENT (EVENT_ID, PROCESSED_AT) VALUES (?, ?)",

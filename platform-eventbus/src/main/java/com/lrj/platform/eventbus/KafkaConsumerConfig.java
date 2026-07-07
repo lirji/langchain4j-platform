@@ -1,5 +1,6 @@
 package com.lrj.platform.eventbus;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
@@ -28,6 +29,8 @@ class KafkaConsumerConfig {
     @ConditionalOnMissingBean
     ConsumerFactory<String, String> eventbusConsumerFactory(KafkaProperties kafkaProperties) {
         Map<String, Object> props = new HashMap<>(kafkaProperties.buildConsumerProperties(null));
+        // 只读已提交消息：与事务性生产者配合时过滤未提交/已中止事务的消息；对非事务生产者无副作用（普通消息恒视为已提交）。
+        props.putIfAbsent(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
         return new DefaultKafkaConsumerFactory<>(props, new StringDeserializer(), new StringDeserializer());
     }
 

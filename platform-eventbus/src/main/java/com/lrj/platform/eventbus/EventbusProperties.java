@@ -52,6 +52,13 @@ public class EventbusProperties {
         private int maxInFlight = 5;
 
         /**
+         * 同步发布等待 broker ack 的超时。publish() 阻塞至 broker 确认（acks=all）后才返回——
+         * 供 outbox relay「确认落 broker 再 markDelivered」，避免异步 fire-and-forget 下把未确认的发送误标已投。
+         * 超时/失败抛异常，由 relay 按退避重投。
+         */
+        private java.time.Duration sendTimeout = java.time.Duration.ofSeconds(10);
+
+        /**
          * 事务性生产者的 transactional-id 前缀。
          * 空（默认）= 不开事务，仅幂等；B1b 端到端 exactly-once 时配非空前缀启用事务。
          */
@@ -71,6 +78,14 @@ public class EventbusProperties {
 
         public void setMaxInFlight(int maxInFlight) {
             this.maxInFlight = maxInFlight;
+        }
+
+        public java.time.Duration getSendTimeout() {
+            return sendTimeout;
+        }
+
+        public void setSendTimeout(java.time.Duration sendTimeout) {
+            this.sendTimeout = sendTimeout;
         }
 
         public String getTransactionalIdPrefix() {

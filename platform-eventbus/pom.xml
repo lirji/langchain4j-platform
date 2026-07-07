@@ -57,5 +57,41 @@
             <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- EmbeddedKafka 端到端集成测试用（@Tag("kafka-it")，默认套件不加载，见下 surefire 配置） -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <properties>
+        <!-- 铁律：默认 mvn test 不起 EmbeddedKafka broker（排除 @Tag("kafka-it")）。
+             -Pkafka-it 时下面 profile 用属性覆盖：清空排除、只跑 kafka-it。 -->
+        <surefire.groups></surefire.groups>
+        <surefire.excludedGroups>kafka-it</surefire.excludedGroups>
+    </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <groups>${surefire.groups}</groups>
+                    <excludedGroups>${surefire.excludedGroups}</excludedGroups>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>kafka-it</id>
+            <properties>
+                <surefire.groups>kafka-it</surefire.groups>
+                <surefire.excludedGroups></surefire.excludedGroups>
+            </properties>
+        </profile>
+    </profiles>
 </project>

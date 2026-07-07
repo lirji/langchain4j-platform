@@ -48,13 +48,18 @@ public class WorkflowTerminalKafkaListener {
         handle(message);
     }
 
-    /** 去重 + 回推（抽出便于纯 POJO 单测，不经 Kafka）。 */
+    /**
+     * 去重 + 回推（抽出便于纯 POJO 单测，不经 Kafka）。顺序：先查 → 回推 → 成功后标记。
+     * 回推抛异常时未标记 → 消息重投会再次处理（不丢）；已完成事件重投时被 isProcessed 跳过（去重）。
+     * 同一 eventId 恒落同一分区、单分区消费串行，故此「查后标记」无并发竞态。
+     */
     void handle(WorkflowTerminalMessage message) {
-        if (!processedEvents.markProcessed(message.eventId())) {
+        if (processedEvents.isProcessed(message.eventId())) {
             log.debug("workflow terminal event deduplicated eventId={}", message.eventId());
             return;
         }
         callbackService.handleCallback(toCallback(message), message.tenantId());
+        processedEvents.markProcessed(message.eventId());
     }
 
     /** 映射为回调请求；channel/target 从 chatId 前缀（如 {@code feishu:<open_id>}）解析，message = reply。 */

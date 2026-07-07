@@ -49,6 +49,19 @@
             <artifactId>platform-observability</artifactId>
         </dependency>
 
+        <!-- 消费侧跨重启去重（platform.eventbus.processed-event-store=jdbc）用；
+             DataSourceAutoConfiguration 已在 ChannelServiceApplication 排除，仅当 dedup=jdbc 时手动建 DataSource，
+             默认 memory 下不连库、零依赖 dev/test。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
