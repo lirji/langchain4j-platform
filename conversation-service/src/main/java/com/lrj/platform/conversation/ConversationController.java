@@ -1,5 +1,6 @@
 package com.lrj.platform.conversation;
 
+import com.lrj.platform.conversation.cache.SemanticCache;
 import com.lrj.platform.security.TenantContext;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -17,10 +18,14 @@ public class ConversationController {
 
     private final Assistant assistant;
     private final RagPromptAugmenter ragPromptAugmenter;
+    private final SemanticCache semanticCache;
 
-    public ConversationController(Assistant assistant, RagPromptAugmenter ragPromptAugmenter) {
+    public ConversationController(Assistant assistant,
+                                  RagPromptAugmenter ragPromptAugmenter,
+                                  SemanticCache semanticCache) {
         this.assistant = assistant;
         this.ragPromptAugmenter = ragPromptAugmenter;
+        this.semanticCache = semanticCache;
     }
 
     @PostMapping("/chat")
@@ -28,7 +33,9 @@ public class ConversationController {
                                     @RequestBody Map<String, String> body) {
         TenantContext.Tenant tenant = TenantContext.current();
         String message = body.getOrDefault("message", "");
-        String reply = assistant.chat(ragPromptAugmenter.augment(message));
+        // L1 语义缓存在 RAG+LLM 之前：命中直接返回缓存回复，未命中走原流程并回填。默认关闭时等价于直接调用。
+        String reply = semanticCache.getOrCompute(message,
+                () -> assistant.chat(ragPromptAugmenter.augment(message)));
         return Map.of(
                 "reply", reply,
                 "chatId", chatId,

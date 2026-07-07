@@ -246,6 +246,124 @@ class EvalRunnerTest {
     }
 
     @Test
+    void passesWhenLlmJudgeScoreIsAboveThreshold() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        EvalRunner runner = new EvalRunner(restTemplate, new EvalProperties(),
+                new StubJudge(true, 0.9D), new StubEmbedding(false, 0D));
+
+        server.expect(once(), requestTo("http://edge.local/chat"))
+                .andRespond(withSuccess("退款审批需要人工确认", MediaType.TEXT_PLAIN));
+
+        var result = runner.execute("http://edge.local", judgeCase("退款流程说明", 0.7D));
+
+        assertThat(result.passed()).isTrue();
+        server.verify();
+    }
+
+    @Test
+    void failsWhenLlmJudgeScoreIsBelowThreshold() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        EvalRunner runner = new EvalRunner(restTemplate, new EvalProperties(),
+                new StubJudge(true, 0.4D), new StubEmbedding(false, 0D));
+
+        server.expect(once(), requestTo("http://edge.local/chat"))
+                .andRespond(withSuccess("今天天气不错", MediaType.TEXT_PLAIN));
+
+        var result = runner.execute("http://edge.local", judgeCase("退款流程说明", 0.7D));
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.error()).contains("llm judge score below threshold");
+        server.verify();
+    }
+
+    @Test
+    void skipsLlmJudgeWhenNotConfigured() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        // judge 关闭：即便 case 带 judgeExpected 也不应触发断言。
+        EvalRunner runner = new EvalRunner(restTemplate, new EvalProperties(),
+                new StubJudge(false, 0.0D), new StubEmbedding(false, 0D));
+
+        server.expect(once(), requestTo("http://edge.local/chat"))
+                .andRespond(withSuccess("任意内容", MediaType.TEXT_PLAIN));
+
+        var result = runner.execute("http://edge.local", judgeCase("退款流程说明", 0.7D));
+
+        assertThat(result.passed()).isTrue();
+        server.verify();
+    }
+
+    @Test
+    void usesConfiguredDefaultJudgeThresholdWhenCaseOmitsIt() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        EvalProperties properties = new EvalProperties();
+        properties.setJudgeMinScore(0.8D);
+        EvalRunner runner = new EvalRunner(restTemplate, properties,
+                new StubJudge(true, 0.6D), new StubEmbedding(false, 0D));
+
+        server.expect(once(), requestTo("http://edge.local/chat"))
+                .andRespond(withSuccess("部分相关", MediaType.TEXT_PLAIN));
+
+        var result = runner.execute("http://edge.local", judgeCase("退款流程说明", null));
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.error()).contains("0.8");
+        server.verify();
+    }
+
+    @Test
+    void passesWhenEmbeddingSimilarityIsAboveThreshold() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        EvalRunner runner = new EvalRunner(restTemplate, new EvalProperties(),
+                new StubJudge(false, 0D), new StubEmbedding(true, 0.92D));
+
+        server.expect(once(), requestTo("http://edge.local/chat"))
+                .andRespond(withSuccess("高风险退款需要人工审批", MediaType.TEXT_PLAIN));
+
+        var result = runner.execute("http://edge.local", embeddingCase("退款需要人工审批", 0.75D));
+
+        assertThat(result.passed()).isTrue();
+        server.verify();
+    }
+
+    @Test
+    void failsWhenEmbeddingSimilarityIsBelowThreshold() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        EvalRunner runner = new EvalRunner(restTemplate, new EvalProperties(),
+                new StubJudge(false, 0D), new StubEmbedding(true, 0.3D));
+
+        server.expect(once(), requestTo("http://edge.local/chat"))
+                .andRespond(withSuccess("完全不相关的内容", MediaType.TEXT_PLAIN));
+
+        var result = runner.execute("http://edge.local", embeddingCase("退款需要人工审批", 0.75D));
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.error()).contains("embedding similarity below threshold");
+        server.verify();
+    }
+
+    @Test
+    void skipsEmbeddingWhenNotConfigured() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        EvalRunner runner = new EvalRunner(restTemplate, new EvalProperties(),
+                new StubJudge(false, 0D), new StubEmbedding(false, 0.0D));
+
+        server.expect(once(), requestTo("http://edge.local/chat"))
+                .andRespond(withSuccess("任意内容", MediaType.TEXT_PLAIN));
+
+        var result = runner.execute("http://edge.local", embeddingCase("退款需要人工审批", 0.75D));
+
+        assertThat(result.passed()).isTrue();
+        server.verify();
+    }
+
+    @Test
     void capturesHttpErrorResponse() {
         RestTemplate restTemplate = new RestTemplate();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
@@ -282,5 +400,53 @@ class EvalRunnerTest {
         assertThat(result.passed()).isFalse();
         assertThat(result.status()).isZero();
         assertThat(result.error()).isEqualTo("id is required");
+    }
+
+    private static EvalCase judgeCase(String judgeExpected, Double judgeMinScore) {
+        return new EvalCase(
+                "judge",
+                "/chat",
+                "GET",
+                Map.of(),
+                null,
+                null,
+                Map.of(),
+                null,
+                null,
+                judgeExpected,
+                judgeMinScore,
+                null,
+                null);
+    }
+
+    private static EvalCase embeddingCase(String embeddingExpected, Double embeddingMinScore) {
+        return new EvalCase(
+                "embedding",
+                "/chat",
+                "GET",
+                Map.of(),
+                null,
+                null,
+                Map.of(),
+                null,
+                null,
+                null,
+                null,
+                embeddingExpected,
+                embeddingMinScore);
+    }
+
+    private record StubJudge(boolean enabled, double score) implements EvalJudge {
+        @Override
+        public double score(String criteria, String actualResponse) {
+            return score;
+        }
+    }
+
+    private record StubEmbedding(boolean enabled, double similarity) implements EvalEmbeddingComparator {
+        @Override
+        public double similarity(String expected, String actual) {
+            return similarity;
+        }
     }
 }

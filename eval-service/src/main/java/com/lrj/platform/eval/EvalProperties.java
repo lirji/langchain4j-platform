@@ -11,6 +11,8 @@ public class EvalProperties {
     private int responseSnippetLimit = 512;
     private String baselineDirectory = "";
     private String reportDirectory = "";
+    private double judgeMinScore = 0.7D;
+    private double embeddingMinScore = 0.75D;
 
     public String getDefaultTargetBaseUrl() {
         return defaultTargetBaseUrl;
@@ -58,5 +60,21 @@ public class EvalProperties {
 
     public void setReportDirectory(String reportDirectory) {
         this.reportDirectory = reportDirectory;
+    }
+
+    public double getJudgeMinScore() {
+        return judgeMinScore;
+    }
+
+    public void setJudgeMinScore(double judgeMinScore) {
+        this.judgeMinScore = judgeMinScore;
+    }
+
+    public double getEmbeddingMinScore() {
+        return embeddingMinScore;
+    }
+
+    public void setEmbeddingMinScore(double embeddingMinScore) {
+        this.embeddingMinScore = embeddingMinScore;
     }
 }

@@ -13,6 +13,18 @@ app:
     response-snippet-limit: ${EVAL_RESPONSE_SNIPPET_LIMIT:512}
     baseline-directory: ${EVAL_BASELINE_DIRECTORY:}
     report-directory: ${EVAL_REPORT_DIRECTORY:}
+    judge-min-score: ${EVAL_JUDGE_MIN_SCORE:0.7}
+    embedding-min-score: ${EVAL_EMBEDDING_MIN_SCORE:0.75}
+    judge:
+      enabled: ${EVAL_JUDGE_ENABLED:false}
+    embedding:
+      enabled: ${EVAL_EMBEDDING_ENABLED:false}
+      model-name: ${EVAL_EMBEDDING_MODEL:embedding-default}
+
+platform:
+  gateway:
+    base-url: ${GATEWAY_BASE_URL:http://localhost:4000/v1}
+    api-key: ${GATEWAY_API_KEY:sk-litellm-master}
 
 management:
   endpoints:

@@ -23,7 +23,8 @@ class EvalControllerTest {
         var capabilities = controller.capabilities();
 
         assertThat(capabilities).containsEntry("status", "http-runner-with-oracle");
-        assertThat(capabilities.get("assertions")).isEqualTo(List.of("expectedContains", "oracleContains"));
+        assertThat(capabilities.get("assertions")).isEqualTo(List.of("expectedContains", "oracleContains",
+                "expectedJsonPaths", "semanticExpected", "judgeExpected", "embeddingExpected"));
     }
 
     @Test

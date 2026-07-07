@@ -24,6 +24,9 @@ docker compose -f deploy/docker-compose.yml config
 
 # 跑 Qdrant RAG smoke
 bash deploy/smoke-qdrant-rag.sh
+
+# 跑 NL2SQL / ChatBI smoke（栈已起，走 edge-gateway 打 /chat/sql 与 /analytics/sql）
+bash deploy/smoke-nl2sql.sh
 ```
 
 ## 服务端口

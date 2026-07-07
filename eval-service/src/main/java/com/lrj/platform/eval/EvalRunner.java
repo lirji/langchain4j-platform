@@ -27,11 +27,25 @@ public class EvalRunner {
 
     private final RestTemplate restTemplate;
     private final EvalProperties properties;
+    private final EvalJudge judge;
+    private final EvalEmbeddingComparator embeddingComparator;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public EvalRunner(RestTemplate restTemplate, EvalProperties properties) {
+    public EvalRunner(RestTemplate restTemplate,
+                      EvalProperties properties,
+                      EvalJudge judge,
+                      EvalEmbeddingComparator embeddingComparator) {
         this.restTemplate = restTemplate;
         this.properties = properties;
+        this.judge = judge == null ? new DisabledEvalJudge() : judge;
+        this.embeddingComparator = embeddingComparator == null
+                ? new DisabledEvalEmbeddingComparator()
+                : embeddingComparator;
+    }
+
+    /** 便捷构造：judge / embedding 默认关闭，供纯 POJO 单测复用既有断言路径。 */
+    public EvalRunner(RestTemplate restTemplate, EvalProperties properties) {
+        this(restTemplate, properties, new DisabledEvalJudge(), new DisabledEvalEmbeddingComparator());
     }
 
     public EvalCaseResult execute(String targetBaseUrl, EvalCase evalCase) {
@@ -88,11 +102,61 @@ public class EvalRunner {
                         startedAt);
             }
         }
+        EvalCaseResult judgeResult = evaluateJudge(evalCase, status, responseBody, startedAt);
+        if (judgeResult != null) {
+            return judgeResult;
+        }
+        EvalCaseResult embeddingResult = evaluateEmbedding(evalCase, status, responseBody, startedAt);
+        if (embeddingResult != null) {
+            return embeddingResult;
+        }
         String oracle = evalCase.oracleContains();
         if (oracle != null && !oracle.isBlank() && !responseBody.contains(oracle)) {
             return oracleFailure(evalCase.id(), status, oracle, responseBody, startedAt);
         }
         return new EvalCaseResult(evalCase.id(), true, status, null, snippet(responseBody), elapsedMs(startedAt));
+    }
+
+    /**
+     * 可选 LLM-judge 断言。用例未带 {@code judgeExpected} 或 judge 未配置时跳过（不影响现有确定性断言）。
+     */
+    private EvalCaseResult evaluateJudge(EvalCase evalCase, int status, String responseBody, Instant startedAt) {
+        String judgeExpected = evalCase.judgeExpected();
+        if (judgeExpected == null || judgeExpected.isBlank() || !judge.enabled()) {
+            return null;
+        }
+        double score = judge.score(judgeExpected, responseBody);
+        double minScore = evalCase.judgeMinScore() == null
+                ? properties.getJudgeMinScore()
+                : evalCase.judgeMinScore();
+        if (score < minScore) {
+            return failure(evalCase.id(), status,
+                    "llm judge score below threshold: " + round(score) + " < " + round(minScore),
+                    responseBody,
+                    startedAt);
+        }
+        return null;
+    }
+
+    /**
+     * 可选 embedding 相似度断言。用例未带 {@code embeddingExpected} 或 comparator 未配置时跳过。
+     */
+    private EvalCaseResult evaluateEmbedding(EvalCase evalCase, int status, String responseBody, Instant startedAt) {
+        String embeddingExpected = evalCase.embeddingExpected();
+        if (embeddingExpected == null || embeddingExpected.isBlank() || !embeddingComparator.enabled()) {
+            return null;
+        }
+        double score = embeddingComparator.similarity(embeddingExpected, responseBody);
+        double minScore = evalCase.embeddingMinScore() == null
+                ? properties.getEmbeddingMinScore()
+                : evalCase.embeddingMinScore();
+        if (score < minScore) {
+            return failure(evalCase.id(), status,
+                    "embedding similarity below threshold: " + round(score) + " < " + round(minScore),
+                    responseBody,
+                    startedAt);
+        }
+        return null;
     }
 
     private EvalCaseResult evaluateJsonPaths(EvalCase evalCase, int status, String responseBody, Instant startedAt) {

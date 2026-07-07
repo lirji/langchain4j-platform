@@ -41,7 +41,8 @@ public class EvalController {
                 "service", "eval-service",
                 "mode", "external-regression-client",
                 "status", "http-runner-with-oracle",
-                "assertions", List.of("expectedContains", "oracleContains"),
+                "assertions", List.of("expectedContains", "oracleContains", "expectedJsonPaths",
+                        "semanticExpected", "judgeExpected", "embeddingExpected"),
                 "baselineSuites", "classpath:eval/baselines/*.json or app.eval.baseline-directory");
     }
 

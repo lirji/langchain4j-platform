@@ -42,6 +42,17 @@ app:
       max-context-chars: ${CONVERSATION_RAG_MAX_CONTEXT_CHARS:4000}
       connect-timeout: ${CONVERSATION_RAG_CONNECT_TIMEOUT:1s}
       read-timeout: ${CONVERSATION_RAG_READ_TIMEOUT:3s}
+    # L1 语义缓存（应用侧 / 问题级 / 租户桶 / pre-RAG）。默认关闭，对现有 /chat 行为零影响。
+    semantic-cache:
+      enabled: ${CONVERSATION_SEMANTIC_CACHE_ENABLED:false}
+      threshold: ${CONVERSATION_SEMANTIC_CACHE_THRESHOLD:0.95}
+      max-entries-per-tenant: ${CONVERSATION_SEMANTIC_CACHE_MAX_ENTRIES:1000}
+      store: ${CONVERSATION_SEMANTIC_CACHE_STORE:in-memory}
+      embedding:
+        provider: ${CONVERSATION_SEMANTIC_CACHE_EMBEDDING_PROVIDER:hash}
+        model-name: ${CONVERSATION_SEMANTIC_CACHE_EMBEDDING_MODEL:embedding-default}
+      redis:
+        ttl: ${CONVERSATION_SEMANTIC_CACHE_REDIS_TTL:0s}
   token-budget:
     enabled: true
     store: in-memory
