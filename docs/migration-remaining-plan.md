@@ -129,7 +129,17 @@
 
 决策已全部敲定，按下列相位推进。相位内多为可并行项，相位间有依赖。
 
-> **进度（2026-07-07，分支 `feat/migration-remaining`）**：Phase A ✅、Phase B ✅、B1b 收口 ✅、Phase C 全部(C1 reflexion+cascade / C2 workflow 契约 / C3 code_exec 子进程沙箱 / C4 knowledge collection-per-tenant + Ollama embedding) ✅ 已实现并提交，全量 `mvn test` 19 模块全绿。Phase D 全部(D1 vision 服务 / D2 interop 真 A2A / D3 契约测试(独立 profile) / D4 双跑门禁) ✅ 已实现并提交，默认 `mvn test` 20 模块全绿且 SCC 不泄漏。**待办**：Phase E(Helm 伞状 chart + External Secrets + Service DNS)。
+> **进度（2026-07-07，分支 `feat/migration-remaining`）**：Phase A ✅、Phase B ✅、B1b 收口 ✅、Phase C 全部(C1 reflexion+cascade / C2 workflow 契约 / C3 code_exec 子进程沙箱 / C4 knowledge collection-per-tenant + Ollama embedding) ✅ 已实现并提交，全量 `mvn test` 19 模块全绿。Phase D 全部(D1 vision 服务 / D2 interop 真 A2A / D3 契约测试(独立 profile) / D4 双跑门禁) ✅、Phase E(Helm 伞状 chart + External Secrets + Service DNS) ✅ 已实现并提交。
+>
+> **✅ 全部相位落地完成（A→E + B1b 收口）**。默认 `mvn test` 20 模块全绿；`helm lint` 通过。剩余为集成环境实测项（非代码缺口），见下"遗留/需集成验证"。
+>
+> ### 遗留 / 需真实集成环境验证（均非代码缺口，已在各 commit/报告记录）
+> - **B1b**：Flowable 事务内原子写的端到端原子性需真实 MySQL+引擎实测（单测覆盖逻辑层）。
+> - **B1/Kafka**：`platform.eventbus.enabled=true` 的真实 Kafka 端到端 exactly-once 需 EmbeddedKafka/集成环境。
+> - **D2 interop**：A2A `message/stream` 用轮询代替真 SSE（B6 决策的 buffered 降级）；push 中继待接总线。
+> - **D3 契约测试**：仅覆盖 knowledge/agent 两个 P0 provider（analytics/async-task 待补）；网关 failover 为独立 smoke 脚本、不进默认 CI。
+> - **D4 双跑门禁**：真实"冻结单体 vs 网关"端到端双跑与真实快照抓取需 `deploy/docker-compose.oracle.yml` 起单体后跑。
+> - **D1 vision / cascade / RS256 / config-server / Helm**：均默认关闭或需外部配置（vision 模型、RS256 keypair、config git 后端、外部 MySQL/Kafka FQDN、External Secrets 真实后端）——生产启用需填真实值。
 > **B1b 残留风险 —— 已收口（方案 A：事务性 outbox + 幂等 relay）**：
 > - 新增 BPMN `end` 事件 ExecutionListener（`WorkflowTerminalOutboxListener`），kafka 档下在 **Flowable 引擎命令的同一事务内**把终态事件写入独立表 `WF_TERMINAL_EVENT_OUTBOX`（`WorkflowTerminalEventOutbox`，同一 `workflowDataSource` → JdbcTemplate 经 DataSourceUtils 并入同事务）。「终态提交 ⇔ 事件行已写」原子成立，消除丢失窗口。
 > - `outcome` 经进程变量 `terminalOutcome` 精确传递（start=auto / complete=granted|rejected / expire=timeout）。
