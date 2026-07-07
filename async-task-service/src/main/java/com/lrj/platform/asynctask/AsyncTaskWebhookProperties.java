@@ -5,6 +5,12 @@ import java.time.Duration;
 public class AsyncTaskWebhookProperties {
 
     private boolean enabled = true;
+    /**
+     * 终态投递传输方式（B1b）：{@code http}（默认，现有 webhook outbox/notifier 直投）
+     * | {@code kafka}（改为发布 {@code platform.asynctask.lifecycle} 事件，由 channel-service 消费回推）。
+     * 设为 {@code kafka} 时既有 HTTP 通道自动让位（见 AsyncTaskWebhookNotifier / OutboxEnqueuer 的传输守卫）。
+     */
+    private String transport = "http";
     private int maxAttempts = 3;
     private Duration backoff = Duration.ofMillis(250);
     private Duration connectTimeout = Duration.ofSeconds(1);
@@ -20,6 +26,19 @@ public class AsyncTaskWebhookProperties {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public String getTransport() {
+        return transport;
+    }
+
+    public void setTransport(String transport) {
+        this.transport = transport;
+    }
+
+    /** true = 终态走 Kafka 事件（B1b），HTTP 通道让位。 */
+    public boolean isKafkaTransport() {
+        return "kafka".equalsIgnoreCase(transport);
     }
 
     public int getMaxAttempts() {

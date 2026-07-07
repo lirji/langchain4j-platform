@@ -4,6 +4,9 @@ server:
 spring:
   application:
     name: channel-service
+  # 集中配置（可选）：Config Server 不可达时不阻断启动，各 ${ENV:default} 兜底继续生效。
+  config:
+    import: "optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}"
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
     producer:

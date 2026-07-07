@@ -86,7 +86,10 @@ public class WorkflowProperties {
 
     /**
      * 终态通知发送模式。默认 {@code local} 保持兼容，仍使用 workflow 自己的 {@code WF_OUTBOX}；
-     * 设置为 {@code async-task} 时，终态会写入 async-task-service，由共享任务中心负责 webhook outbox。
+     * 设置为 {@code async-task} 时，终态会写入 async-task-service，由共享任务中心负责 webhook outbox；
+     * 设置为 {@code kafka}（B1b）时，终态 outbox 权威写与 Kafka 事件发布进同一事务（需
+     * {@code platform.eventbus.enabled=true} + {@code platform.eventbus.producer.transactional-id-prefix}），
+     * 由 channel-service 的 {@code WorkflowTerminalKafkaListener} 消费回推。
      */
     public static class TerminalNotification {
         private String mode = "local";

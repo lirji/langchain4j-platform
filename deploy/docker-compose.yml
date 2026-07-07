@@ -53,6 +53,19 @@ services:
     volumes:
       - qdrant-data:/qdrant/storage
 
+  # 集中配置分发（可选）。默认 native 后端（读打包进 jar 的 config/ 目录），无需 git。
+  # 刻意不作为其它服务的 depends_on 阻塞条件：各服务用 optional import，server 不在也照常启动。
+  config-server:
+    build:
+      context: ../config-server
+    environment:
+      CONFIG_SERVER_PORT: 8888
+      SPRING_PROFILES_ACTIVE: ${CONFIG_SERVER_PROFILE:-native}
+      # 切 git 后端：CONFIG_SERVER_PROFILE=git + SPRING_CLOUD_CONFIG_SERVER_GIT_URI=...
+      SPRING_CLOUD_CONFIG_SERVER_GIT_URI: ${SPRING_CLOUD_CONFIG_SERVER_GIT_URI:-}
+    ports:
+      - "8888:8888"
+
   conversation-service:
     build:
       context: ../conversation-service

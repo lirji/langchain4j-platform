@@ -38,4 +38,20 @@ class WorkflowServiceTest {
             assertNotEquals(k1, k2, "无 dedupeId 时每次都应是不同的随机 key（不去重），输入=[" + blank + "]");
         }
     }
+
+    @Test
+    void terminalMode_routing_defaultsAreExclusive() {
+        // 默认 local：既不是 kafka 也不是 async-task
+        assertFalse(WorkflowService.isKafkaMode("local"));
+        assertFalse(WorkflowService.isAsyncTaskMode("local"));
+        assertFalse(WorkflowService.isKafkaMode(null));
+
+        assertTrue(WorkflowService.isKafkaMode("kafka"));
+        assertTrue(WorkflowService.isKafkaMode("KAFKA"));
+        assertFalse(WorkflowService.isAsyncTaskMode("kafka"));
+
+        assertTrue(WorkflowService.isAsyncTaskMode("async-task"));
+        assertTrue(WorkflowService.isAsyncTaskMode("async_task"));
+        assertFalse(WorkflowService.isKafkaMode("async-task"));
+    }
 }

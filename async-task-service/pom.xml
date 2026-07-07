@@ -48,6 +48,16 @@
             <groupId>com.lrj.platform</groupId>
             <artifactId>platform-observability</artifactId>
         </dependency>
+        <!-- B1b：终态生命周期 Kafka 发布（EventPublisher SPI，默认 Noop 零依赖） -->
+        <dependency>
+            <groupId>com.lrj.platform</groupId>
+            <artifactId>platform-eventbus</artifactId>
+        </dependency>
+        <!-- platform-eventbus 的 spring-kafka 为 optional（非传递），本服务要用 KafkaTemplate/KafkaTransactionManager 须显式引入 -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

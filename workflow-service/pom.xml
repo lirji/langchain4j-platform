@@ -58,6 +58,21 @@
             <groupId>com.lrj.platform</groupId>
             <artifactId>platform-protocol</artifactId>
         </dependency>
+        <!-- B1b：终态 Kafka 发布（EventPublisher SPI，默认 Noop 零依赖）+ 事务性生产者 -->
+        <dependency>
+            <groupId>com.lrj.platform</groupId>
+            <artifactId>platform-eventbus</artifactId>
+        </dependency>
+        <!-- platform-eventbus 的 spring-kafka 为 optional（非传递），本服务要用 KafkaTemplate/KafkaTransactionManager 须显式引入 -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+        <!-- ChainedTransactionManager（Flowable/JDBC 事务 + Kafka 事务串接）；仅 kafka 终态模式用，默认路径不触及 -->
+        <dependency>
+            <groupId>org.springframework.data</groupId>
+            <artifactId>spring-data-commons</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

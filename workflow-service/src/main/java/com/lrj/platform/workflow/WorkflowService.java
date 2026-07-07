@@ -61,6 +61,7 @@ public class WorkflowService {
     private final WorkflowMetrics metrics;
     private final WorkflowOutbox outbox;
     private final WorkflowAsyncTaskNotifier asyncTaskNotifier;
+    private final WorkflowTerminalEventPublisher terminalEventPublisher;
     private final org.springframework.context.ApplicationEventPublisher events;
 
     public WorkflowService(RuntimeService workflowRuntimeService,
@@ -72,6 +73,7 @@ public class WorkflowService {
                            WorkflowMetrics metrics,
                            WorkflowOutbox outbox,
                            WorkflowAsyncTaskNotifier asyncTaskNotifier,
+                           WorkflowTerminalEventPublisher terminalEventPublisher,
                            org.springframework.context.ApplicationEventPublisher events) {
         this.runtimeService = workflowRuntimeService;
         this.taskService = workflowTaskService;
@@ -82,6 +84,7 @@ public class WorkflowService {
         this.metrics = metrics;
         this.outbox = outbox;
         this.asyncTaskNotifier = asyncTaskNotifier;
+        this.terminalEventPublisher = terminalEventPublisher;
         this.events = events;
     }
 
@@ -90,10 +93,17 @@ public class WorkflowService {
      * 各调一次。{@code chatId} 缺省从流程变量读。
      */
     private void onTerminal(String instanceId, String tenantId, String chatId, String outcome) {
-        enqueuePush(instanceId, tenantId);
         String cid = chatId != null ? chatId : str(readVariable(instanceId, "chatId"));
-        events.publishEvent(new WorkflowTerminalEvent(
-                instanceId, tenantId, cid, outcome, replyStore.find(instanceId)));
+        String reply = replyStore.find(instanceId);
+        if (useKafkaNotification()) {
+            // kafka 档：终态 outbox 权威写 + Kafka 事件发布同事务（见 WorkflowTerminalEventPublisher）。
+            // 不再走 HTTP outbox/async-task 通道，避免双投；渠道回推由 channel-service 的 KafkaListener 完成。
+            String url = str(readVariable(instanceId, "webhookUrl"));
+            terminalEventPublisher.publishTerminal(instanceId, tenantId, cid, outcome, reply, url);
+        } else {
+            enqueuePush(instanceId, tenantId);
+        }
+        events.publishEvent(new WorkflowTerminalEvent(instanceId, tenantId, cid, outcome, reply));
     }
 
     /**
@@ -189,8 +199,20 @@ public class WorkflowService {
     }
 
     private boolean useAsyncTaskNotification() {
-        String mode = props.getTerminalNotification().getMode();
+        return isAsyncTaskMode(props.getTerminalNotification().getMode());
+    }
+
+    private boolean useKafkaNotification() {
+        return isKafkaMode(props.getTerminalNotification().getMode());
+    }
+
+    /** 终态通知模式判定（纯函数，便于单测）。 */
+    static boolean isAsyncTaskMode(String mode) {
         return "async-task".equalsIgnoreCase(mode) || "async_task".equalsIgnoreCase(mode);
+    }
+
+    static boolean isKafkaMode(String mode) {
+        return "kafka".equalsIgnoreCase(mode);
     }
 
     /**

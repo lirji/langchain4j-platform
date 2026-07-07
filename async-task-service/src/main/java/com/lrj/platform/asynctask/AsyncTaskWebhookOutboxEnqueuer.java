@@ -22,7 +22,8 @@ public class AsyncTaskWebhookOutboxEnqueuer {
     @EventListener
     public void onTaskEvent(AsyncTaskEvent event) {
         AsyncTask task = event.task();
-        if (!properties.isEnabled() || !task.status().isTerminal()) {
+        // B1b：transport=kafka 时终态改由 AsyncTaskKafkaNotifier 发布事件，本地 outbox 让位。
+        if (!properties.isEnabled() || properties.isKafkaTransport() || !task.status().isTerminal()) {
             return;
         }
         AsyncTaskWebhookNotifier.webhookUri(task.webhookUrl())

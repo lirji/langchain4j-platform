@@ -1,0 +1,11 @@
+# 所有服务共享的集中默认配置（native 后端样例）。
+# Config Server 把本文件作为 application（default）配置下发给每个接入的客户端。
+# 注意：这里的键会被下游服务本地 application.yml 的同名键覆盖（本地优先），
+# 因此仅放「集中管理更方便、且各服务本地已有 ${ENV:default} 兜底」的非密文项。
+# 密钥（如 INTERNAL_JWT_SECRET）不放此处，仍走各服务 ${ENV:default} / Vault / K8s Secret。
+
+platform:
+  config:
+    # 便于客户端确认「确实从 Config Server 拿到了配置」的标记位，纯展示用途。
+    source: config-server
+    profile: native

@@ -43,7 +43,8 @@ public class AsyncTaskWebhookNotifier {
     @EventListener
     public void onTaskEvent(AsyncTaskEvent event) {
         AsyncTask task = event.task();
-        if (!properties.isEnabled() || !task.status().isTerminal()) {
+        // B1b：transport=kafka 时终态改由 AsyncTaskKafkaNotifier 发布事件，HTTP 直投让位。
+        if (!properties.isEnabled() || properties.isKafkaTransport() || !task.status().isTerminal()) {
             return;
         }
         webhookUri(task.webhookUrl()).ifPresent(uri -> executor.execute(() -> deliver(task, uri)));

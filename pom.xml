@@ -30,7 +30,9 @@
         <module>platform-protocol</module>
         <module>platform-audit</module>
         <module>platform-metering</module>
+        <module>platform-eventbus</module>
         <!-- 服务 -->
+        <module>config-server</module>
         <module>conversation-service</module>
         <module>workflow-service</module>
         <module>analytics-service</module>
@@ -126,6 +128,11 @@
             <dependency>
                 <groupId>com.lrj.platform</groupId>
                 <artifactId>platform-metering</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.lrj.platform</groupId>
+                <artifactId>platform-eventbus</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

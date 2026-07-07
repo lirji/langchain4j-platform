@@ -31,6 +31,11 @@
             <groupId>com.lrj.platform</groupId>
             <artifactId>platform-protocol</artifactId>
         </dependency>
+        <!-- B1b：消费侧 EventPublisher SPI（此处只用 ProcessedEventStore 去重 + 事件契约常量），默认 Noop/内存 -->
+        <dependency>
+            <groupId>com.lrj.platform</groupId>
+            <artifactId>platform-eventbus</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.lrj.platform</groupId>
             <artifactId>platform-security</artifactId>

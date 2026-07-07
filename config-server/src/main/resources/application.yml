@@ -1,0 +1,52 @@
+server:
+  # 端口默认 8888，可用 CONFIG_SERVER_PORT 覆盖。
+  port: ${CONFIG_SERVER_PORT:8888}
+
+spring:
+  application:
+    name: config-server
+  profiles:
+    # 默认 native 后端（读打包进 jar 的 classpath:/config/ 目录），dev/无 git 环境即开即用。
+    # 切 git 后端：SPRING_PROFILES_ACTIVE=git（见文件末尾 git profile 文档）。
+    active: ${SPRING_PROFILES_ACTIVE:native}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+---
+# ============ native 后端（默认）============
+# 从 classpath:/config/ 提供配置文件（config/application.yml = 所有服务共享默认，
+# config/<service-name>.yml = 单服务覆盖）。也可指向本地目录，如 file:./config/。
+spring:
+  config:
+    activate:
+      on-profile: native
+  cloud:
+    config:
+      server:
+        native:
+          search-locations: ${CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS:classpath:/config/}
+
+---
+# ============ git 后端（可选）============
+# 启用：SPRING_PROFILES_ACTIVE=git，并给出 SPRING_CLOUD_CONFIG_SERVER_GIT_URI。
+# GitOps 配置库承载非密文配置；密钥仍走各服务的 ${ENV:default} / Vault / K8s Secret。
+spring:
+  config:
+    activate:
+      on-profile: git
+  cloud:
+    config:
+      server:
+        git:
+          uri: ${SPRING_CLOUD_CONFIG_SERVER_GIT_URI:https://example.com/your-org/platform-config.git}
+          default-label: ${SPRING_CLOUD_CONFIG_SERVER_GIT_LABEL:main}
+          clone-on-start: ${SPRING_CLOUD_CONFIG_SERVER_GIT_CLONE_ON_START:false}
+          timeout: ${SPRING_CLOUD_CONFIG_SERVER_GIT_TIMEOUT:5}
