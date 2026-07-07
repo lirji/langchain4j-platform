@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="http://www.flowable.org/processdef">
+
+    <!--
+      A2 原子性集成测试专用最小流程（start → end），隔离验证 end 事件 ExecutionListener 的写库
+      是否与引擎终态在同一事务：
+      - atomicityHappy：end 只挂 workflowTerminalOutboxListener → 完成后事件 outbox 行应存在。
+      - atomicityRollback：end 先挂 outbox 监听器再挂一个抛异常的 boom 监听器 → 整个命令回滚，
+        事件 outbox 行与历史实例应一起没（证明原子）。
+    -->
+    <process id="atomicityHappy" isExecutable="true">
+        <startEvent id="hs"/>
+        <sequenceFlow id="hf" sourceRef="hs" targetRef="he"/>
+        <endEvent id="he">
+            <extensionElements>
+                <flowable:executionListener event="end" delegateExpression="${workflowTerminalOutboxListener}"/>
+            </extensionElements>
+        </endEvent>
+    </process>
+
+    <process id="atomicityRollback" isExecutable="true">
+        <startEvent id="rs"/>
+        <sequenceFlow id="rf" sourceRef="rs" targetRef="re"/>
+        <endEvent id="re">
+            <extensionElements>
+                <flowable:executionListener event="end" delegateExpression="${workflowTerminalOutboxListener}"/>
+                <flowable:executionListener event="end" delegateExpression="${boom}"/>
+            </extensionElements>
+        </endEvent>
+    </process>
+</definitions>

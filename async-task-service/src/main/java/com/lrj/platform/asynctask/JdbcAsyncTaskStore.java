@@ -1,16 +1,22 @@
 package com.lrj.platform.asynctask;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lrj.platform.protocol.asynctask.AsyncTask;
+import com.lrj.platform.protocol.event.AsyncTaskLifecycleMessage;
 import com.lrj.platform.protocol.asynctask.AsyncTaskStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.sql.DataSource;
 import java.sql.ResultSet;
@@ -32,14 +38,21 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
     private final Duration ttl;
+    private final TransactionTemplate txTemplate;
+    /** 可空：仅 transport=kafka 时由 {@link AsyncTaskJdbcConfig} 提供 → 终态更新同事务内写生命周期事件 outbox（A1）。 */
+    private final AsyncTaskLifecycleOutbox lifecycleOutbox;
 
     public JdbcAsyncTaskStore(DataSource asyncTaskDataSource,
                               ObjectMapper mapper,
-                              @Value("${app.async-task.task-ttl:PT24H}") Duration ttl) {
+                              @Value("${app.async-task.task-ttl:PT24H}") Duration ttl,
+                              @Qualifier("asyncTaskTransactionManager") PlatformTransactionManager txManager,
+                              ObjectProvider<AsyncTaskLifecycleOutbox> lifecycleOutbox) {
         super(ttl);
         this.jdbc = new JdbcTemplate(asyncTaskDataSource);
         this.mapper = mapper;
         this.ttl = ttl;
+        this.txTemplate = new TransactionTemplate(txManager);
+        this.lifecycleOutbox = lifecycleOutbox.getIfAvailable();
         init();
     }
 
@@ -108,24 +121,43 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
 
     @Override
     public Optional<AsyncTask> update(String taskId, UnaryOperator<AsyncTask> updater) {
-        Optional<AsyncTask> current = get(taskId);
-        if (current.isEmpty()) {
-            return Optional.empty();
+        // A1：读-改-写 + 生命周期事件 outbox 写在同一事务，使「非终态→终态」的状态提交与事件行写入原子。
+        return txTemplate.execute(status -> {
+            Optional<AsyncTask> current = get(taskId);
+            if (current.isEmpty()) {
+                return Optional.empty();
+            }
+            AsyncTask before = current.get();
+            AsyncTask updated = updater.apply(before);
+            jdbc.update("""
+                    UPDATE ASYNC_TASK
+                    SET STATUS=?, RESULT_JSON=?, ERROR_TEXT=?, UPDATED_AT=?, FINISHED_AT=?, LEASE_OWNER_ID=?, LEASE_EXPIRES_AT=?
+                    WHERE TASK_ID=?""",
+                    updated.status().name(),
+                    json(updated.result()),
+                    updated.error(),
+                    millis(updated.updatedAt()),
+                    millis(updated.finishedAt()),
+                    updated.leaseOwnerId(),
+                    millis(updated.leaseExpiresAt()),
+                    updated.taskId());
+            // 仅「本次由非终态转为终态」时入队一次（避免重复/对已终态 no-op 重写）
+            if (lifecycleOutbox != null && !before.status().isTerminal() && updated.status().isTerminal()) {
+                enqueueLifecycle(updated);
+            }
+            return Optional.of(updated);
+        });
+    }
+
+    /** 在 update 事务内写一条生命周期事件 outbox（快照 JSON），供 AsyncTaskLifecycleRelay relay 到 Kafka。 */
+    private void enqueueLifecycle(AsyncTask task) {
+        AsyncTaskLifecycleMessage msg = AsyncTaskLifecycleEventPublisher.message(task);
+        try {
+            lifecycleOutbox.enqueue(msg.eventId(), task.tenantId(),
+                    mapper.writeValueAsString(msg), System.currentTimeMillis());
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("failed to serialize async-task lifecycle event for " + task.taskId(), e);
         }
-        AsyncTask updated = updater.apply(current.get());
-        jdbc.update("""
-                UPDATE ASYNC_TASK
-                SET STATUS=?, RESULT_JSON=?, ERROR_TEXT=?, UPDATED_AT=?, FINISHED_AT=?, LEASE_OWNER_ID=?, LEASE_EXPIRES_AT=?
-                WHERE TASK_ID=?""",
-                updated.status().name(),
-                json(updated.result()),
-                updated.error(),
-                millis(updated.updatedAt()),
-                millis(updated.finishedAt()),
-                updated.leaseOwnerId(),
-                millis(updated.leaseExpiresAt()),
-                updated.taskId());
-        return Optional.of(updated);
     }
 
     @Override

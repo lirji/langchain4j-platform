@@ -79,7 +79,20 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- 嵌入式 Flowable 引擎原子性集成测试用（@Tag("flowable-it")，默认套件不加载，见下 surefire） -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <properties>
+        <!-- 铁律：默认 mvn test 不起嵌入式 Flowable 引擎（排除 @Tag("flowable-it")）。
+             -Pflowable-it 时下面 profile 用属性覆盖：清空排除、只跑 flowable-it。 -->
+        <surefire.groups></surefire.groups>
+        <surefire.excludedGroups>flowable-it</surefire.excludedGroups>
+    </properties>
 
     <build>
         <plugins>
@@ -87,6 +100,24 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <groups>${surefire.groups}</groups>
+                    <excludedGroups>${surefire.excludedGroups}</excludedGroups>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>flowable-it</id>
+            <properties>
+                <surefire.groups>flowable-it</surefire.groups>
+                <surefire.excludedGroups></surefire.excludedGroups>
+            </properties>
+        </profile>
+    </profiles>
 </project>

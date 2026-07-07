@@ -1,6 +1,5 @@
 package com.lrj.platform.workflow;
 
-import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -35,9 +34,9 @@ public class WorkflowTerminalEventOutbox {
 
     public WorkflowTerminalEventOutbox(DataSource workflowDataSource) {
         this.jdbc = new JdbcTemplate(workflowDataSource);
+        init();
     }
 
-    @PostConstruct
     void init() {
         jdbc.execute("""
                 CREATE TABLE IF NOT EXISTS WF_TERMINAL_EVENT_OUTBOX (

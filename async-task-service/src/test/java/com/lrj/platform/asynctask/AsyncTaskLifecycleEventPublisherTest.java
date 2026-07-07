@@ -63,7 +63,7 @@ class AsyncTaskLifecycleEventPublisherTest {
                 new AsyncTaskLifecycleEventPublisher(eventPublisher, (org.springframework.transaction.PlatformTransactionManager) null);
         AsyncTaskWebhookProperties props = new AsyncTaskWebhookProperties();
         props.setTransport("kafka");
-        AsyncTaskKafkaNotifier notifier = new AsyncTaskKafkaNotifier(props, publisher);
+        AsyncTaskKafkaNotifier notifier = new AsyncTaskKafkaNotifier(props, publisher, nullOutbox());
 
         notifier.onTaskEvent(new AsyncTaskEvent(task(AsyncTaskStatus.RUNNING)));
         verify(eventPublisher, org.mockito.Mockito.never()).publish(any(), any(), any());
@@ -79,7 +79,17 @@ class AsyncTaskLifecycleEventPublisherTest {
                 new AsyncTaskLifecycleEventPublisher(eventPublisher, (org.springframework.transaction.PlatformTransactionManager) null);
         AsyncTaskWebhookProperties props = new AsyncTaskWebhookProperties();
         props.setEnabled(false);
-        new AsyncTaskKafkaNotifier(props, publisher).onTaskEvent(new AsyncTaskEvent(task(AsyncTaskStatus.SUCCEEDED)));
+        new AsyncTaskKafkaNotifier(props, publisher, nullOutbox()).onTaskEvent(new AsyncTaskEvent(task(AsyncTaskStatus.SUCCEEDED)));
         verify(eventPublisher, org.mockito.Mockito.never()).publish(any(), any(), any());
+    }
+
+    /** 无事务性 outbox 的 provider（store=memory 情形）→ notifier 走提交后直发路径。 */
+    private static org.springframework.beans.factory.ObjectProvider<AsyncTaskLifecycleOutbox> nullOutbox() {
+        return new org.springframework.beans.factory.ObjectProvider<>() {
+            @Override public AsyncTaskLifecycleOutbox getObject() { return null; }
+            @Override public AsyncTaskLifecycleOutbox getObject(Object... args) { return null; }
+            @Override public AsyncTaskLifecycleOutbox getIfAvailable() { return null; }
+            @Override public AsyncTaskLifecycleOutbox getIfUnique() { return null; }
+        };
     }
 }

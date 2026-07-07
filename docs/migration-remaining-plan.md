@@ -134,7 +134,8 @@
 > **✅ 全部相位落地完成（A→E + B1b 收口）**。默认 `mvn test` 20 模块全绿；`helm lint` 通过。剩余为集成环境实测项（非代码缺口），见下"遗留/需集成验证"。
 >
 > ### 遗留 / 需真实集成环境验证（均非代码缺口，已在各 commit/报告记录）
-> - **B1b**：Flowable 事务内原子写的端到端原子性需真实 MySQL+引擎实测（单测覆盖逻辑层）。
+> - **B1b 端到端原子性 ✅ 已验证（分支 `feat/kafka-eos`，A2）**：嵌入式 Flowable(H2, `setDatabaseType("mysql")`) 集成测试 `WorkflowTerminalOutboxAtomicityTest`（`@Tag("flowable-it")`，`mvn -Pflowable-it -pl workflow-service test`）——证明 `end` 监听器写事件 outbox 与引擎终态同事务：正常结束时行存在；后置监听器抛异常时 outbox 行与历史实例一起回滚（原子）。
+> - **async-task 终态 Kafka 两段式缺口 ✅ 已收口（分支 `feat/kafka-eos`，A1）**：与 workflow B1b 对称——原先 `store.update` 提交后 `@EventListener` 直发（kafka 档无 DB 兜底）。改为在 `JdbcAsyncTaskStore.update` 的同一事务内写 `ASYNC_TASK_LIFECYCLE_OUTBOX` 行（`AsyncTaskLifecycleOutbox`），由 `AsyncTaskLifecycleRelay` relay 到 Kafka；提交后直发 `AsyncTaskKafkaNotifier` 在 jdbc 档让位避免双投。H2 原子性测试 + relay 单测覆盖。
 > - **B1/Kafka exactly-once ✅ 已做（分支 `feat/kafka-eos`）**：明确为 **effective exactly-once**（写侧事务性 outbox + 投侧 at-least-once + 收侧 eventId 幂等去重）——DB→Kafka→HTTP 跨系统链路的正确形态，非纯 Kafka 原生事务。落地：① 消费侧改「先查 → 处理 → **成功后**标记」（修复原「先标记」在瞬时失败时丢事件的 bug）；② `ProcessedEventStore` 加 `isProcessed`，channel-service 接线 JDBC 去重（跨重启，默认仍 memory 零依赖）；③ relay 同步等 broker ack 再 markDelivered，consumer `read_committed`；④ **EmbeddedKafka 集成测试**（`@Tag("kafka-it")`，`mvn -Pkafka-it -pl platform-eventbus test`，默认套件不加载）端到端证明「重复投递去重 + 瞬时失败不丢不重复」。
 > - **D2 interop**：A2A `message/stream` 用轮询代替真 SSE（B6 决策的 buffered 降级）；push 中继待接总线。
 > - **D3 契约测试**：仅覆盖 knowledge/agent 两个 P0 provider（analytics/async-task 待补）；网关 failover 为独立 smoke 脚本、不进默认 CI。
