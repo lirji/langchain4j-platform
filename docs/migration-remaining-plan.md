@@ -129,7 +129,7 @@
 
 决策已全部敲定，按下列相位推进。相位内多为可并行项，相位间有依赖。
 
-> **进度（2026-07-07，分支 `feat/migration-remaining`）**：Phase A ✅、Phase B ✅、B1b 残留风险收口 ✅ 已实现并提交，全量 `mvn test` 19 模块全绿。
+> **进度（2026-07-07，分支 `feat/migration-remaining`）**：Phase A ✅、Phase B ✅、B1b 收口 ✅、Phase C 的 C1(reflexion+cascade)/C2(workflow 契约)/C3(code_exec 子进程沙箱) ✅ 已实现并提交，全量 `mvn test` 19 模块全绿。**待办**：C4(knowledge collection-per-tenant + vision/OCR + native embedding)、Phase D、Phase E。
 > **B1b 残留风险 —— 已收口（方案 A：事务性 outbox + 幂等 relay）**：
 > - 新增 BPMN `end` 事件 ExecutionListener（`WorkflowTerminalOutboxListener`），kafka 档下在 **Flowable 引擎命令的同一事务内**把终态事件写入独立表 `WF_TERMINAL_EVENT_OUTBOX`（`WorkflowTerminalEventOutbox`，同一 `workflowDataSource` → JdbcTemplate 经 DataSourceUtils 并入同事务）。「终态提交 ⇔ 事件行已写」原子成立，消除丢失窗口。
 > - `outcome` 经进程变量 `terminalOutcome` 精确传递（start=auto / complete=granted|rejected / expire=timeout）。
