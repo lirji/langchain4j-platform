@@ -61,6 +61,8 @@ public class ApiKeyToInternalTokenFilter implements GlobalFilter, Ordered {
     private boolean isOpen(String path) {
         return path.startsWith("/actuator")
                 || path.startsWith("/.well-known")
+                // 飞书事件回调不带平台 api-key，靠飞书签名验真（见 channel-service FeishuInboundController）
+                || path.equals("/channel/feishu/events")
                 || path.equals("/health");
     }
 
