@@ -1,10 +1,16 @@
 package com.lrj.platform.agent;
 
 import com.lrj.platform.observability.OutboundTraceForwarder;
+import com.lrj.platform.agent.chaining.ChainLink;
+import com.lrj.platform.agent.chaining.ChainingProperties;
 import com.lrj.platform.agent.dag.AgentDagCritic;
 import com.lrj.platform.agent.dag.AgentDagProperties;
 import com.lrj.platform.agent.dag.AgentDagPlanner;
 import com.lrj.platform.agent.dag.AgentDagReplanner;
+import com.lrj.platform.agent.voting.VoteAggregator;
+import com.lrj.platform.agent.voting.Voter;
+import com.lrj.platform.agent.voting.VotingProperties;
+import com.lrj.platform.gateway.GatewayChatModelFactory;
 import com.lrj.platform.security.OutboundTenantForwarder;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.service.AiServices;
@@ -39,6 +45,36 @@ public class AgentConfig {
     @Bean
     AgentBrain agentBrain(ChatModel chatModel) {
         return AiServices.builder(AgentBrain.class).chatModel(chatModel).build();
+    }
+
+    @Bean
+    @ConfigurationProperties(prefix = "app.agent.chaining")
+    ChainingProperties chainingProperties() {
+        return new ChainingProperties();
+    }
+
+    @Bean
+    ChainLink chainLink(ChatModel chatModel) {
+        return AiServices.builder(ChainLink.class).chatModel(chatModel).build();
+    }
+
+    @Bean
+    @ConfigurationProperties(prefix = "app.agent.voting")
+    VotingProperties votingProperties() {
+        return new VotingProperties();
+    }
+
+    @Bean
+    Voter voter(ChatModel chatModel) {
+        return AiServices.builder(Voter.class).chatModel(chatModel).build();
+    }
+
+    @Bean
+    VoteAggregator voteAggregator(GatewayChatModelFactory chatModelFactory) {
+        // synthesis 收口是确定性收敛任务，用 temp=0 判官变体；不注册为第二个 ChatModel Bean。
+        return AiServices.builder(VoteAggregator.class)
+                .chatModel(chatModelFactory.buildDeterministic())
+                .build();
     }
 
     @Bean

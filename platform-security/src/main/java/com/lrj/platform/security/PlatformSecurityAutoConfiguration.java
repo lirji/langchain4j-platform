@@ -20,7 +20,12 @@ public class PlatformSecurityAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public InternalToken internalToken(InternalSecurityProperties props) {
-        return new InternalToken(props.getJwtSecret(), props.getJwtTtl());
+        return InternalToken.forAlgorithm(
+                props.getJwt().getAlgorithm(),
+                props.getJwtSecret(),
+                props.getJwt().getPrivateKey(),
+                props.getJwt().getPublicKey(),
+                props.getJwtTtl());
     }
 
     @Bean

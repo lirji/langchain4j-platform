@@ -2,6 +2,7 @@ package com.lrj.platform.analytics;
 
 import com.lrj.platform.audit.AuditEventType;
 import com.lrj.platform.audit.AuditLogger;
+import com.lrj.platform.protocol.analytics.AnalyticsSqlReply;
 import com.lrj.platform.security.TenantContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,11 +34,7 @@ public class NlToSqlService {
         this.numberGrounding = numberGrounding;
     }
 
-    /** {@code sql}/{@code rows} 取本轮最后一次成功执行；模型若拒答（没查库）则为 null/空。 */
-    public record Result(String question, String sql, int rowCount,
-                         List<Map<String, Object>> rows, String answer, boolean guardBlocked) {}
-
-    public Result ask(String question) {
+    public AnalyticsSqlReply ask(String question) {
         String tenantId = TenantContext.current().tenantId();
         SqlExecutionContext.begin();
         try {
@@ -60,7 +57,7 @@ public class NlToSqlService {
             }
 
             audit.record(AuditEventType.NL2SQL_QUERY, auditFields(question, sql, rows.size(), guardBlocked));
-            return new Result(question, sql, rows.size(), rows, answer, guardBlocked);
+            return new AnalyticsSqlReply(question, sql, rows.size(), rows, answer, guardBlocked);
         } finally {
             SqlExecutionContext.clear();
         }

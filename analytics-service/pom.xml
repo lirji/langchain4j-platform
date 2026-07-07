@@ -43,6 +43,10 @@
 
         <dependency>
             <groupId>com.lrj.platform</groupId>
+            <artifactId>platform-protocol</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.lrj.platform</groupId>
             <artifactId>platform-security</artifactId>
         </dependency>
         <dependency>

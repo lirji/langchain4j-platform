@@ -19,6 +19,9 @@ public class InternalSecurityProperties {
     /** 内部 JWT 的 HS256 签名密钥（≥32 字节）。生产走 Vault/K8s Secret，切勿硬编码。 */
     private String jwtSecret = "dev-only-internal-secret-change-me-please-32b";
 
+    /** 内部 JWT 算法与非对称密钥配置（前缀 {@code platform.security.jwt.*}）。默认 HS256，沿用 {@link #jwtSecret}。 */
+    private final Jwt jwt = new Jwt();
+
     /** 内部 JWT 有效期（短时，仅覆盖一次跨服务调用链）。 */
     private Duration jwtTtl = Duration.ofMinutes(5);
 
@@ -39,6 +42,7 @@ public class InternalSecurityProperties {
 
     public String getJwtSecret() { return jwtSecret; }
     public void setJwtSecret(String jwtSecret) { this.jwtSecret = jwtSecret; }
+    public Jwt getJwt() { return jwt; }
     public Duration getJwtTtl() { return jwtTtl; }
     public void setJwtTtl(Duration jwtTtl) { this.jwtTtl = jwtTtl; }
     public String getInternalHeader() { return internalHeader; }
@@ -47,6 +51,26 @@ public class InternalSecurityProperties {
     public void setApiKeyHeader(String apiKeyHeader) { this.apiKeyHeader = apiKeyHeader; }
     public Map<String, KeyBinding> getApiKeys() { return apiKeys; }
     public void setApiKeys(Map<String, KeyBinding> apiKeys) { this.apiKeys = apiKeys; }
+
+    /**
+     * 内部 JWT 算法与非对称密钥。前缀 {@code platform.security.jwt.*}。
+     *
+     * <p>{@code algorithm=HS256}（默认）沿用 {@link InternalSecurityProperties#jwtSecret} 对称密钥；
+     * {@code algorithm=RS256} 时 edge-gateway 用 {@link #privateKey} 签发、下游用 {@link #publicKey} 验签。
+     * 密钥支持 PEM（含头尾）或纯 base64：私钥 PKCS#8、公钥 X.509。
+     */
+    public static class Jwt {
+        private String algorithm = "HS256";
+        private String privateKey;
+        private String publicKey;
+
+        public String getAlgorithm() { return algorithm; }
+        public void setAlgorithm(String algorithm) { this.algorithm = algorithm; }
+        public String getPrivateKey() { return privateKey; }
+        public void setPrivateKey(String privateKey) { this.privateKey = privateKey; }
+        public String getPublicKey() { return publicKey; }
+        public void setPublicKey(String publicKey) { this.publicKey = publicKey; }
+    }
 
     public static class KeyBinding {
         private String tenant;
