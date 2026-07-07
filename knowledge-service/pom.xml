@@ -99,4 +99,57 @@
             </plugin>
         </plugins>
     </build>
+
+    <!--
+      Spring Cloud Contract（provider 侧）严格隔离在 -Pcontract profile 下：
+      默认 mvn test 既不加载 SCC 插件/依赖，也不编译 src/contractTest 源根（不引入 Spring context）。
+      运行：mvn -Pcontract -pl knowledge-service -am install（跑 provider 契约测试 + 安装 stub jar 到本地 .m2）。
+    -->
+    <profiles>
+        <profile>
+            <id>contract</id>
+            <dependencies>
+                <dependency>
+                    <groupId>org.springframework.cloud</groupId>
+                    <artifactId>spring-cloud-starter-contract-verifier</artifactId>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>build-helper-maven-plugin</artifactId>
+                        <version>3.6.0</version>
+                        <executions>
+                            <execution>
+                                <id>add-contract-test-source</id>
+                                <phase>generate-test-sources</phase>
+                                <goals>
+                                    <goal>add-test-source</goal>
+                                </goals>
+                                <configuration>
+                                    <sources>
+                                        <source>${project.basedir}/src/contractTest/java</source>
+                                    </sources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.springframework.cloud</groupId>
+                        <artifactId>spring-cloud-contract-maven-plugin</artifactId>
+                        <version>4.1.6</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <testFramework>JUNIT5</testFramework>
+                            <baseClassForTests>com.lrj.platform.knowledge.contract.KnowledgeContractBase</baseClassForTests>
+                            <basePackageForTests>com.lrj.platform.knowledge.contract.generated</basePackageForTests>
+                            <contractsDirectory>${project.basedir}/src/contractTest/resources/contracts</contractsDirectory>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

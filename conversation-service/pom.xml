@@ -73,4 +73,57 @@
             </plugin>
         </plugins>
     </build>
+
+    <!--
+      Spring Cloud Contract（consumer 侧）严格隔离在 -Pcontract profile 下：默认 mvn test 不触达
+      （不编译 src/contractTest、不加载 stub-runner/WireMock）。
+      运行前提：knowledge-service 的 stub jar 已进本地 .m2（先 mvn -Pcontract -DskipTests install）。
+      运行：mvn -Pcontract -pl conversation-service test。
+    -->
+    <profiles>
+        <profile>
+            <id>contract</id>
+            <dependencies>
+                <dependency>
+                    <groupId>org.springframework.cloud</groupId>
+                    <artifactId>spring-cloud-starter-contract-stub-runner</artifactId>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>build-helper-maven-plugin</artifactId>
+                        <version>3.6.0</version>
+                        <executions>
+                            <execution>
+                                <id>add-contract-test-source</id>
+                                <phase>generate-test-sources</phase>
+                                <goals>
+                                    <goal>add-test-source</goal>
+                                </goals>
+                                <configuration>
+                                    <sources>
+                                        <source>${project.basedir}/src/contractTest/java</source>
+                                    </sources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <!-- stub-runner 的 Aether 下载器默认查 ~/.m2/repository；把有效本地仓透传给 fork 的测试 JVM，
+                         以适配自定义 localRepository（LOCAL 模式下从本地 .m2 解析 stub jar）。 -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <systemPropertyVariables>
+                                <maven.repo.local>${settings.localRepository}</maven.repo.local>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

@@ -1,0 +1,33 @@
+# TEST-ONLY compose：网关故障转移冒烟专用（deploy/smoke-failover.sh 使用）。
+# 两个 mock OpenAI 上游 + 一个 LiteLLM（挂 config.failover.yaml）。不进默认栈、不进默认 CI。
+name: llm-failover-smoke
+
+services:
+  mock-a:
+    image: python:3.11-slim
+    environment:
+      UPSTREAM_ID: a
+    volumes:
+      - ./litellm/mock_upstream.py:/app/mock_upstream.py:ro
+    command: ["python", "/app/mock_upstream.py"]
+
+  mock-b:
+    image: python:3.11-slim
+    environment:
+      UPSTREAM_ID: b
+    volumes:
+      - ./litellm/mock_upstream.py:/app/mock_upstream.py:ro
+    command: ["python", "/app/mock_upstream.py"]
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    depends_on:
+      - mock-a
+      - mock-b
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-smoke-master}
+    volumes:
+      - ./litellm/config.failover.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    ports:
+      - "4010:4000"

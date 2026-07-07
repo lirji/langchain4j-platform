@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.lrj.platform</groupId>
+        <artifactId>langchain4j-platform</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vision-service</artifactId>
+    <name>vision-service</name>
+    <description>Vision 限界上下文：多模态看图 → 文本（caption / OCR / 视觉问答）。默认关闭。</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-spring-boot-starter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.lrj.platform</groupId>
+            <artifactId>platform-protocol</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.lrj.platform</groupId>
+            <artifactId>platform-gateway-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.lrj.platform</groupId>
+            <artifactId>platform-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.lrj.platform</groupId>
+            <artifactId>platform-observability</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.lrj.platform</groupId>
+            <artifactId>platform-audit</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.lrj.platform</groupId>
+            <artifactId>platform-metering</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

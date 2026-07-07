@@ -133,6 +133,18 @@ public class AgentConfig {
         return serviceRestTemplate(builder, tenantForwarder, traceForwarder, baseUrl, connectTimeout, readTimeout);
     }
 
+    /** vision-service 客户端（browser_see 提交截图字节）。读超时放宽——视觉调用比检索/SQL 慢。 */
+    @Bean
+    @ConditionalOnProperty(name = "app.agent.vision.enabled", havingValue = "true")
+    RestTemplate visionRestTemplate(RestTemplateBuilder builder,
+                                    OutboundTenantForwarder tenantForwarder,
+                                    OutboundTraceForwarder traceForwarder,
+                                    @Value("${app.agent.vision.base-url:http://localhost:8090}") String baseUrl,
+                                    @Value("${app.agent.http.connect-timeout:1s}") Duration connectTimeout,
+                                    @Value("${app.agent.vision.read-timeout:60s}") Duration readTimeout) {
+        return serviceRestTemplate(builder, tenantForwarder, traceForwarder, baseUrl, connectTimeout, readTimeout);
+    }
+
     private static RestTemplate serviceRestTemplate(RestTemplateBuilder builder,
                                                     OutboundTenantForwarder tenantForwarder,
                                                     OutboundTraceForwarder traceForwarder,

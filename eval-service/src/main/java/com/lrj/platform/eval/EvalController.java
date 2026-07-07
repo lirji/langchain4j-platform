@@ -2,6 +2,8 @@ package com.lrj.platform.eval;
 
 import com.lrj.platform.protocol.eval.EvalCase;
 import com.lrj.platform.protocol.eval.EvalCaseResult;
+import com.lrj.platform.protocol.eval.EvalDualRunReply;
+import com.lrj.platform.protocol.eval.EvalDualRunRequest;
 import com.lrj.platform.protocol.eval.EvalRunReply;
 import com.lrj.platform.protocol.eval.EvalRunRequest;
 import com.lrj.platform.protocol.eval.EvalSuiteRunRequest;
@@ -24,15 +26,18 @@ public class EvalController {
     private final EvalSuiteLoader suiteLoader;
     private final EvalReportWriter reportWriter;
     private final EvalProperties properties;
+    private final EvalDualRunner dualRunner;
 
     public EvalController(EvalRunner evalRunner,
                           EvalSuiteLoader suiteLoader,
                           EvalReportWriter reportWriter,
-                          EvalProperties properties) {
+                          EvalProperties properties,
+                          EvalDualRunner dualRunner) {
         this.evalRunner = evalRunner;
         this.suiteLoader = suiteLoader;
         this.reportWriter = reportWriter;
         this.properties = properties;
+        this.dualRunner = dualRunner;
     }
 
     @GetMapping("/eval/capabilities")
@@ -43,7 +48,12 @@ public class EvalController {
                 "status", "http-runner-with-oracle",
                 "assertions", List.of("expectedContains", "oracleContains", "expectedJsonPaths",
                         "semanticExpected", "judgeExpected", "embeddingExpected"),
-                "baselineSuites", "classpath:eval/baselines/*.json or app.eval.baseline-directory");
+                "dualRun", Map.of(
+                        "modes", List.of("snapshot", "live"),
+                        "metrics", List.of("passRate", "averageScore", "agreement"),
+                        "gateStatus", "200 pass / 422 regression"),
+                "baselineSuites", "classpath:eval/baselines/*.json or app.eval.baseline-directory",
+                "oracleSnapshots", "classpath:eval/snapshots/*.json or app.eval.snapshot-directory");
     }
 
     @PostMapping("/eval/run")
@@ -70,6 +80,39 @@ public class EvalController {
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
         }
+    }
+
+    /**
+     * 双跑（oracle vs candidate）。返回门禁明细，HTTP 恒 200（信息化）。CI fail 请用 {@link #gate}。
+     */
+    @PostMapping("/eval/dual-run")
+    public ResponseEntity<?> dualRun(@RequestBody EvalDualRunRequest request) {
+        try {
+            return ResponseEntity.ok(dualRunner.run(request));
+        } catch (EvalSuiteLoader.SuiteNotFoundException | EvalSnapshotLoader.SnapshotNotFoundException ex) {
+            return ResponseEntity.notFound().build();
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+        }
+    }
+
+    /**
+     * CI 门禁：跑双跑 → 有回归返回 <strong>HTTP 422</strong> 供门禁 fail，body 是 {@link EvalDualRunReply}
+     * （含 regressions 明细 + candidate/oracle 聚合 + agreement）；无回归返回 200。
+     */
+    @PostMapping("/eval/gate")
+    public ResponseEntity<?> gate(@RequestBody EvalDualRunRequest request) {
+        EvalDualRunReply reply;
+        try {
+            reply = dualRunner.run(request);
+        } catch (EvalSuiteLoader.SuiteNotFoundException | EvalSnapshotLoader.SnapshotNotFoundException ex) {
+            return ResponseEntity.notFound().build();
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+        }
+        return reply.gate().passed()
+                ? ResponseEntity.ok(reply)
+                : ResponseEntity.unprocessableEntity().body(reply);
     }
 
     private EvalRunReply runCases(String targetBaseUrl, String suiteName, List<EvalCase> cases) {

@@ -1,0 +1,23 @@
+{
+  "suiteName": "platform-smoke",
+  "oracle": {
+    "name": "oracle",
+    "baseUrl": "frozen-monolith-snapshot",
+    "totalCases": 1,
+    "runs": 1,
+    "passRate": 1.0,
+    "averageScore": 0.7071067811865475,
+    "results": [
+      {
+        "id": "eval-capabilities",
+        "passed": true,
+        "status": 200,
+        "error": null,
+        "responseSnippet": "{\"service\":\"eval-service\",\"mode\":\"external-regression-client\"}",
+        "durationMs": 1,
+        "oracleMatched": true,
+        "oracleExpected": null
+      }
+    ]
+  }
+}

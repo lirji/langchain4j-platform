@@ -13,6 +13,14 @@ app:
     agent-base-url: ${AGENT_BASE_URL:http://localhost:8085}
     connect-timeout: ${INTEROP_CONNECT_TIMEOUT:1s}
     read-timeout: ${INTEROP_READ_TIMEOUT:30s}
+    # live capability discovery：默认关（静态 registry，零下游依赖）。开启后懒加载 + TTL 拉取，
+    # 下游不可达确定性回退静态默认。
+    discovery-enabled: ${INTEROP_DISCOVERY_ENABLED:false}
+    capability-ttl: ${INTEROP_CAPABILITY_TTL:60s}
+    a2a:
+      agent-name: ${INTEROP_A2A_AGENT_NAME:langchain4j-platform}
+      base-url: ${INTEROP_A2A_BASE_URL:http://localhost:8080}
+      version: ${INTEROP_A2A_VERSION:0.1.0}
 
 platform:
   security:

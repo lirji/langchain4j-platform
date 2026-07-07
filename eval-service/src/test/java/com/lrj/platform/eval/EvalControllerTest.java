@@ -2,6 +2,9 @@ package com.lrj.platform.eval;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lrj.platform.protocol.eval.EvalCase;
+import com.lrj.platform.protocol.eval.EvalCaseResult;
+import com.lrj.platform.protocol.eval.EvalDualRunReply;
+import com.lrj.platform.protocol.eval.EvalDualRunRequest;
 import com.lrj.platform.protocol.eval.EvalRunReply;
 import com.lrj.platform.protocol.eval.EvalRunRequest;
 import com.lrj.platform.protocol.eval.EvalSuiteDefinition;
@@ -18,7 +21,7 @@ class EvalControllerTest {
 
     @Test
     void capabilitiesExposeOracleAssertions() {
-        EvalController controller = new EvalController(new PassingEvalRunner(), new FixedSuiteLoader(), disabledReportWriter(), new EvalProperties());
+        EvalController controller = controller(new PassingEvalRunner(), new FixedSuiteLoader(), new EvalProperties());
 
         var capabilities = controller.capabilities();
 
@@ -31,7 +34,7 @@ class EvalControllerTest {
     void acceptsEvalRunForValidCases() {
         EvalProperties properties = new EvalProperties();
         properties.setDefaultTargetBaseUrl("http://edge");
-        EvalController controller = new EvalController(new PassingEvalRunner(), new FixedSuiteLoader(), disabledReportWriter(), properties);
+        EvalController controller = controller(new PassingEvalRunner(), new FixedSuiteLoader(), properties);
 
         var response = controller.run(new EvalRunRequest(null, List.of(
                 new EvalCase("chat-smoke", "/chat", "POST", Map.of("message", "hi"), null))));
@@ -44,7 +47,7 @@ class EvalControllerTest {
 
     @Test
     void rejectsEmptyEvalRun() {
-        EvalController controller = new EvalController(new PassingEvalRunner(), new FixedSuiteLoader(), disabledReportWriter(), new EvalProperties());
+        EvalController controller = controller(new PassingEvalRunner(), new FixedSuiteLoader(), new EvalProperties());
 
         var response = controller.run(new EvalRunRequest("http://edge", List.of()));
 
@@ -56,7 +59,7 @@ class EvalControllerTest {
         EvalProperties properties = new EvalProperties();
         properties.setDefaultTargetBaseUrl("http://default");
         PassingEvalRunner runner = new PassingEvalRunner();
-        EvalController controller = new EvalController(runner, new FixedSuiteLoader(), disabledReportWriter(), properties);
+        EvalController controller = controller(runner, new FixedSuiteLoader(), properties);
 
         var response = controller.runSuite("platform-smoke", new EvalSuiteRunRequest("http://edge"));
 
@@ -68,6 +71,65 @@ class EvalControllerTest {
         assertThat(body.targetBaseUrl()).isEqualTo("http://edge");
         assertThat(body.runId()).isNotBlank();
         assertThat(runner.lastTargetBaseUrl).isEqualTo("http://edge");
+    }
+
+    @Test
+    void gateReturns200WhenCandidateMatchesLiveOracle() {
+        EvalProperties properties = new EvalProperties();
+        EvalController controller = controller(new PassingEvalRunner(), new FixedSuiteLoader(), properties);
+
+        var response = controller.gate(new EvalDualRunRequest(
+                "platform-smoke", "http://candidate", "http://oracle", null, null, null, null, null));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        EvalDualRunReply body = (EvalDualRunReply) response.getBody();
+        assertThat(body.mode()).isEqualTo("live");
+        assertThat(body.gate().passed()).isTrue();
+    }
+
+    @Test
+    void gateReturns422WhenCandidateRegressesAgainstOracle() {
+        EvalProperties properties = new EvalProperties();
+        // oracle 全过、candidate 全挂 → passRate 跌破容差 + agreement 低 → 回归。
+        EvalController controller = controller(
+                new DivergentRunner("http://candidate"), new FixedSuiteLoader(), properties);
+
+        var response = controller.gate(new EvalDualRunRequest(
+                "platform-smoke", "http://candidate", "http://oracle", null, null, null, null, null));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(422);
+        EvalDualRunReply body = (EvalDualRunReply) response.getBody();
+        assertThat(body.gate().passed()).isFalse();
+        assertThat(body.gate().regressions()).isNotEmpty();
+    }
+
+    @Test
+    void dualRunAlwaysReturns200WithGateDetail() {
+        EvalController controller = controller(
+                new DivergentRunner("http://candidate"), new FixedSuiteLoader(), new EvalProperties());
+
+        var response = controller.dualRun(new EvalDualRunRequest(
+                "platform-smoke", "http://candidate", "http://oracle", null, null, null, null, null));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        EvalDualRunReply body = (EvalDualRunReply) response.getBody();
+        assertThat(body.gate().passed()).isFalse();
+    }
+
+    @Test
+    void gateRejectsMissingSuiteName() {
+        EvalController controller = controller(new PassingEvalRunner(), new FixedSuiteLoader(), new EvalProperties());
+
+        var response = controller.gate(new EvalDualRunRequest(
+                null, "http://candidate", "http://oracle", null, null, null, null, null));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(400);
+    }
+
+    private static EvalController controller(EvalRunner runner, EvalSuiteLoader loader, EvalProperties properties) {
+        EvalSnapshotLoader snapshotLoader = new EvalSnapshotLoader(new ObjectMapper().findAndRegisterModules(), properties);
+        EvalDualRunner dualRunner = new EvalDualRunner(runner, loader, snapshotLoader, properties);
+        return new EvalController(runner, loader, disabledReportWriter(), properties, dualRunner);
     }
 
     private static EvalReportWriter disabledReportWriter() {
@@ -86,6 +148,25 @@ class EvalControllerTest {
         public com.lrj.platform.protocol.eval.EvalCaseResult execute(String targetBaseUrl, EvalCase evalCase) {
             this.lastTargetBaseUrl = targetBaseUrl;
             return new com.lrj.platform.protocol.eval.EvalCaseResult(evalCase.id(), true, 200, null, "ok", 1);
+        }
+    }
+
+    /** oracle 全过（snippet "ok"），candidate 全挂（snippet 语义无关）→ 用于回归判定。 */
+    private static class DivergentRunner extends EvalRunner {
+
+        private final String candidateBaseUrl;
+
+        DivergentRunner(String candidateBaseUrl) {
+            super(new RestTemplate(), new EvalProperties());
+            this.candidateBaseUrl = candidateBaseUrl;
+        }
+
+        @Override
+        public EvalCaseResult execute(String targetBaseUrl, EvalCase evalCase) {
+            if (candidateBaseUrl.equals(targetBaseUrl)) {
+                return new EvalCaseResult(evalCase.id(), false, 500, "boom", "totally unrelated body", 1);
+            }
+            return new EvalCaseResult(evalCase.id(), true, 200, null, "ok", 1);
         }
     }
 

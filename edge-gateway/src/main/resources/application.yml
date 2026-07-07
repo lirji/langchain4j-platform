@@ -41,11 +41,17 @@ spring:
         - id: interop
           uri: ${INTEROP_URI:http://localhost:8088}
           predicates:
-            - Path=/interop,/interop/**
+            # /.well-known/agent-card.json 是 A2A 发现惯例别名：已在 ApiKeyToInternalTokenFilter.isOpen 免鉴权放行，
+            # 其余 /interop/** 仍需鉴权。
+            - Path=/interop,/interop/**,/.well-known/agent-card.json
         - id: eval
           uri: ${EVAL_URI:http://localhost:8089}
           predicates:
             - Path=/eval,/eval/**
+        - id: vision
+          uri: ${VISION_URI:http://localhost:8090}
+          predicates:
+            - Path=/vision,/vision/**
 
 # 边缘持有 api-key → 租户映射；换发内部 JWT 后下游只认 JWT。
 platform:
@@ -55,7 +61,7 @@ platform:
       dev-key-acme:
         tenant: acme
         user: alice
-        scopes: [chat, approve, agent, channel, eval]
+        scopes: [chat, approve, agent, channel, eval, vision]
       dev-key-globex:
         tenant: globex
         user: bob

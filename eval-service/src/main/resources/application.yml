@@ -16,8 +16,14 @@ app:
     response-snippet-limit: ${EVAL_RESPONSE_SNIPPET_LIMIT:512}
     baseline-directory: ${EVAL_BASELINE_DIRECTORY:}
     report-directory: ${EVAL_REPORT_DIRECTORY:}
+    snapshot-directory: ${EVAL_SNAPSHOT_DIRECTORY:}
     judge-min-score: ${EVAL_JUDGE_MIN_SCORE:0.7}
     embedding-min-score: ${EVAL_EMBEDDING_MIN_SCORE:0.75}
+    # 双跑门禁容差（candidate 相对 oracle 允许的下滑）+ 一致性阈值 + 每 case 重复次数。
+    gate-pass-rate-tolerance: ${EVAL_GATE_PASS_RATE_TOLERANCE:0.05}
+    gate-average-score-tolerance: ${EVAL_GATE_AVERAGE_SCORE_TOLERANCE:0.05}
+    gate-min-agreement: ${EVAL_GATE_MIN_AGREEMENT:0.6}
+    gate-runs: ${EVAL_GATE_RUNS:1}
     judge:
       enabled: ${EVAL_JUDGE_ENABLED:false}
     embedding:

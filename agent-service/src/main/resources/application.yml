@@ -55,6 +55,12 @@ app:
         url: ${AGENT_MCP_HTTP_URL:http://localhost:3001/mcp}
     browser:
       enabled: ${AGENT_BROWSER_ENABLED:false}
+    # 视觉后端（独立 vision-service）。browser_see 动作双门控在 browser.enabled + vision.enabled 同时 true。
+    # 默认关：不配则 browser_see 不出现在工具清单，视觉 RestTemplate/客户端也不装配。
+    vision:
+      enabled: ${AGENT_VISION_ENABLED:false}
+      base-url: ${VISION_BASE_URL:http://localhost:8090}
+      read-timeout: ${AGENT_VISION_READ_TIMEOUT:60s}
     knowledge:
       base-url: ${KNOWLEDGE_BASE_URL:http://localhost:8084}
       top-k: ${AGENT_RAG_TOP_K:5}

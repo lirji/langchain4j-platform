@@ -42,6 +42,7 @@
         <module>channel-service</module>
         <module>interop-service</module>
         <module>eval-service</module>
+        <module>vision-service</module>
         <module>edge-gateway</module>
     </modules>
 

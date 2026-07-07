@@ -1,0 +1,54 @@
+server:
+  port: 8090
+
+spring:
+  application:
+    name: vision-service
+  # 集中配置（可选）：Config Server 不可达时不阻断启动，各 ${ENV:default} 兜底继续生效。
+  config:
+    import: "optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}"
+  servlet:
+    multipart:
+      max-file-size: ${VISION_MAX_UPLOAD:12MB}
+      max-request-size: ${VISION_MAX_UPLOAD:12MB}
+
+platform:
+  gateway:
+    # 多模态 ChatModel 与文本 ChatModel 共用同一 LiteLLM base-url；仅逻辑模型名不同（见 app.vision.model-name）。
+    base-url: ${GATEWAY_BASE_URL:http://localhost:4000/v1}
+    api-key: ${GATEWAY_API_KEY:sk-litellm-master}
+    model-name: ${GATEWAY_MODEL:chat-default}
+  security:
+    jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
+    allow-api-key-fallback: true
+    api-keys:
+      dev-key-acme:
+        tenant: acme
+        user: alice
+        scopes: [chat, agent, vision]
+
+app:
+  vision:
+    # 总开关。默认关 → VisionModel / VisionController 全不装配，零依赖、零网络。
+    enabled: ${VISION_ENABLED:false}
+    # 视觉逻辑模型名（对应 LiteLLM model_list 里的多模态模型，如 gpt-4o-mini / qwen2.5-vl）。
+    # 开启（enabled=true）但此项留空 → 启动 fail-fast 明确报错，绝不静默降级。
+    model-name: ${VISION_MODEL:}
+    # 看图转写/描述偏确定性，压低温度减少漂移。
+    temperature: ${VISION_TEMPERATURE:0.2}
+    # 单张图片字节上限，挡超大文件 OOM / 超 token。默认 10MB。
+    max-image-bytes: ${VISION_MAX_IMAGE_BYTES:10485760}
+    # 允许的图片 MIME（逗号分隔）。空 = 不限类型（仅按 image/ 前缀兜底）。
+    allowed-mime-types: ${VISION_ALLOWED_MIME:image/png,image/jpeg,image/webp,image/gif}
+    # caption 结果缓存条数（按图内容 SHA-256 去重，仅默认指令的入库路径）。0 = 关闭缓存。
+    caption-cache-size: ${VISION_CAPTION_CACHE_SIZE:256}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,tokenbudget,cost
+  endpoint:
+    health:
+      probes:
+        enabled: true

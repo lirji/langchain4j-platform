@@ -13,6 +13,11 @@ public class EvalProperties {
     private String reportDirectory = "";
     private double judgeMinScore = 0.7D;
     private double embeddingMinScore = 0.75D;
+    private String snapshotDirectory = "";
+    private double gatePassRateTolerance = 0.05D;
+    private double gateAverageScoreTolerance = 0.05D;
+    private double gateMinAgreement = 0.6D;
+    private int gateRuns = 1;
 
     public String getDefaultTargetBaseUrl() {
         return defaultTargetBaseUrl;
@@ -76,5 +81,45 @@ public class EvalProperties {
 
     public void setEmbeddingMinScore(double embeddingMinScore) {
         this.embeddingMinScore = embeddingMinScore;
+    }
+
+    public String getSnapshotDirectory() {
+        return snapshotDirectory;
+    }
+
+    public void setSnapshotDirectory(String snapshotDirectory) {
+        this.snapshotDirectory = snapshotDirectory;
+    }
+
+    public double getGatePassRateTolerance() {
+        return gatePassRateTolerance;
+    }
+
+    public void setGatePassRateTolerance(double gatePassRateTolerance) {
+        this.gatePassRateTolerance = gatePassRateTolerance;
+    }
+
+    public double getGateAverageScoreTolerance() {
+        return gateAverageScoreTolerance;
+    }
+
+    public void setGateAverageScoreTolerance(double gateAverageScoreTolerance) {
+        this.gateAverageScoreTolerance = gateAverageScoreTolerance;
+    }
+
+    public double getGateMinAgreement() {
+        return gateMinAgreement;
+    }
+
+    public void setGateMinAgreement(double gateMinAgreement) {
+        this.gateMinAgreement = gateMinAgreement;
+    }
+
+    public int getGateRuns() {
+        return gateRuns;
+    }
+
+    public void setGateRuns(int gateRuns) {
+        this.gateRuns = gateRuns;
     }
 }

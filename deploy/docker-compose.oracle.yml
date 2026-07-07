@@ -1,0 +1,44 @@
+# 双跑门禁 —— 冻结单体作 oracle target（nightly live 路径）。
+#
+# 只读接入冻结单体：build context 指向单体源码目录，Dockerfile 用 dockerfile_inline
+# 内联在平台侧，绝不往单体目录写任何文件（严禁改原单体）。
+#
+# 用法（nightly live）：
+#   # 1) 起 oracle（默认 context = ../../LangChain4j_project，可用 EVAL_ORACLE_CONTEXT 覆盖）
+#   docker compose -f deploy/docker-compose.oracle.yml up --build -d
+#   # 2) eval-service 以 oracle 为目标做双跑（oracle 在 host 暴露 9090）
+#   curl -X POST http://localhost:8089/eval/gate \
+#     -H 'Content-Type: application/json' \
+#     -d '{"suiteName":"platform-smoke","candidateBaseUrl":"http://localhost:8080","oracleBaseUrl":"http://localhost:9090"}'
+#
+# 外部已自行起单体时，跳过本 overlay，直接把 oracleBaseUrl 指向该地址即可
+# （或用环境变量 EVAL_ORACLE_BASE_URL 作文档化约定，见 application.yml 无需改代码）。
+#
+# 不进默认栈、不进默认 CI。PR 门禁走 classpath 冻结快照（eval/snapshots/*.json），无需本文件。
+name: eval-oracle
+
+services:
+  monolith-oracle:
+    build:
+      # 指向冻结单体源码目录（相对 deploy/），可用 EVAL_ORACLE_CONTEXT 覆盖为绝对路径。
+      context: ${EVAL_ORACLE_CONTEXT:-../../LangChain4j_project}
+      dockerfile_inline: |
+        FROM maven:3.9-eclipse-temurin-21 AS build
+        WORKDIR /src
+        COPY . .
+        RUN mvn -q -B -DskipTests package
+        FROM eclipse-temurin:21-jre
+        WORKDIR /app
+        COPY --from=build /src/target/*.jar /app/oracle.jar
+        EXPOSE 8080
+        ENTRYPOINT ["java", "-jar", "/app/oracle.jar"]
+    environment:
+      # oracle 只做只读行为基准：关鉴权以便 eval-service 直接打产品端点；用独立 api-key 时按需放开。
+      APP_SECURITY_ENABLED: ${EVAL_ORACLE_SECURITY_ENABLED:-false}
+      # 单体的 LLM 走同一 LiteLLM/OpenAI 兼容端点（独立 base-url + 独立 api-key，与 candidate 隔离）。
+      OPENAI_BASE_URL: ${EVAL_ORACLE_OPENAI_BASE_URL:-http://host.docker.internal:4000/v1}
+      OPENAI_API_KEY: ${EVAL_ORACLE_OPENAI_API_KEY:-sk-litellm-master}
+    ports:
+      - "${EVAL_ORACLE_PORT:-9090}:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
