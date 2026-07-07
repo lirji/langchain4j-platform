@@ -1,219 +1,509 @@
 # 运行与配置手册
 
-## 本地前置条件
+本手册面向本地起栈、部署与排障，覆盖前置依赖、启动命令、按能力分组的环境变量，以及常见问题。
+所有配置项均以各服务 `src/main/resources/application.yml` 和 `deploy/docker-compose.yml` 源码为准；表格里的“默认值”就是 yml 里 `${ENV:default}` 的 default，未显式给出 `${ENV}` 包装的项会标注为「属性」（只能经 config-server 或 JVM 参数设置）。
 
-- JDK 21
-- Maven
-- Docker / Docker Compose
-- 可用的模型 provider。默认 compose 使用 LiteLLM，LiteLLM 可再接 Ollama/OpenAI/Anthropic 等 provider。
+平台由 **7 个共享库**（`platform-security` / `platform-observability` / `platform-gateway-client` / `platform-protocol` / `platform-audit` / `platform-metering` / `platform-eventbus`，无主类，靠自动装配自注册）加 **一批微服务**（`edge-gateway` / `config-server` / `conversation` / `workflow` / `analytics` / `knowledge` / `agent` / `async-task` / `channel` / `interop` / `eval` / `vision`）组成。
 
-## 常用命令
+两层网关：
+
+- **`edge-gateway`（:8080）** —— 唯一对外入口。校验 `X-Api-Key`，换发短时内部 JWT（`X-Internal-Token`），按路径路由到各服务。
+- **LiteLLM（:4000，外部，非 Java 模块）** —— LLM 网关。所有模型调用走一个 OpenAI 兼容端点，provider 路由/failover/模型名映射都在 `deploy/litellm/config.yaml` 里。
+
+---
+
+## 1. 本地前置条件
+
+| 依赖 | 版本 / 说明 |
+|---|---|
+| JDK | 21（Spring Boot 3.3.5，Java 21） |
+| Maven | 系统 `mvn`（无 wrapper） |
+| Docker / Docker Compose | 起本地整网基础设施与服务镜像 |
+| Ollama | 本机运行，`ollama pull llama3.1`（LiteLLM 默认回连宿主机 Ollama） |
+| LiteLLM | 由 compose 提供；不用 compose 时需自行准备一个可达的 OpenAI 兼容端点，并把 `GATEWAY_BASE_URL` 指过去 |
+
+> 大多数能力（RAG、GraphRAG、JDBC 持久化、向量库、agent 动作、DAG 重规划、事件总线）默认关闭且用内存/确定性实现，因此**本地跑和单测无需任何外部基础设施**。knowledge-service 默认用确定性的 `HashEmbeddingModel`，不真调 embedding。
+
+---
+
+## 2. 起栈命令
 
 ```bash
-# 编译所有模块
+# 1. 构建全部（platform-* 共享库必须先构建，package 会一并处理）
 mvn -DskipTests package
 
-# 跑全量测试
-mvn test
-
-# 启动完整本地环境
+# 2. 起整套本地栈（LiteLLM + Redis + MySQL + Kafka + Qdrant + config-server + 各服务 + edge-gateway）
 docker compose -f deploy/docker-compose.yml up --build
 
-# 校验 compose 展开配置
+# 校验 compose 展开后的最终配置
 docker compose -f deploy/docker-compose.yml config
 
-# 跑 Qdrant RAG smoke
-bash deploy/smoke-qdrant-rag.sh
+# 3. 不用 Docker 单跑某个服务（需本机有 LiteLLM 或把 base-url 指向可用 OpenAI-compat 端点）
+mvn -pl conversation-service spring-boot:run   # :8081
+mvn -pl edge-gateway spring-boot:run           # :8080
 
-# 跑 NL2SQL / ChatBI smoke（栈已起，走 edge-gateway 打 /chat/sql 与 /analytics/sql）
-bash deploy/smoke-nl2sql.sh
+# 4. 冒烟脚本
+bash deploy/smoke-qdrant-rag.sh    # Qdrant 向量 RAG 冒烟
+bash deploy/smoke-nl2sql.sh        # NL2SQL / ChatBI 冒烟（走 edge-gateway 打 /chat/sql、/analytics/sql）
+bash deploy/smoke-failover.sh      # LiteLLM 双上游故障转移冒烟（用 deploy/docker-compose.failover.yml，独立栈）
 ```
 
-## 服务端口
-
-| 服务 | 端口 | 说明 |
-|---|---:|---|
-| edge-gateway | 8080 | 对外统一入口 |
-| conversation-service | 8081 | Chat |
-| workflow-service | 8082 | Flowable workflow |
-| analytics-service | 8083 | NL2SQL |
-| knowledge-service | 8084 | RAG / GraphRAG |
-| agent-service | 8085 | Agent / DAG |
-| async-task-service | 8086 | 通用 async task |
-| channel-service | 8087 | Channel |
-| interop-service | 8088 | A2A / MCP-style |
-| eval-service | 8089 | Evaluation |
-| LiteLLM | 4000 | LLM gateway |
-| MySQL | 3306 | 本地数据库 |
-| Redis | 6379 | registry / metering 可选 |
-| Qdrant HTTP | 6333 | 向量库 HTTP |
-| Qdrant gRPC | 6334 | 向量库 gRPC |
-
-## 鉴权与租户
-
-外部调用统一带 `X-Api-Key`：
+测试命令：
 
 ```bash
-curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
-  -H 'X-Api-Key: dev-key-acme' \
-  -H 'Content-Type: application/json' \
-  -d '{"message":"你好"}'
+mvn test                                    # 全量测试
+mvn -pl knowledge-service test              # 单模块
+mvn -pl agent-service -am test              # 模块 + 上游共享库
+mvn -pl platform-security -Dtest=InternalTokenTest test   # 单类（务必带 -pl）
 ```
 
-常用开发 key 以 `edge-gateway` 配置为准。下游服务不应直接接收外部 API key，而是接收 gateway 转发的 `X-Internal-Token`。
+---
 
-## 关键配置
+## 3. 服务端口一览
 
-### LLM 网关
+| 服务 / 组件 | 端口 | 经网关暴露的路径前缀 | 说明 |
+|---|---:|---|---|
+| edge-gateway | 8080 | —（对外入口本身） | 校验 api-key，换发内部 JWT |
+| conversation-service | 8081 | `/chat`、`/chat/**` | Chat + 可选 RAG 增强、语义缓存、级联 |
+| workflow-service | 8082 | `/workflow`、`/workflow/**` | Flowable 退款审批流 + outbox |
+| analytics-service | 8083 | `/chat/sql`、`/analytics`、`/analytics/**` | NL2SQL / ChatBI |
+| knowledge-service | 8084 | `/rag`、`/rag/**`、`/knowledge`、`/knowledge/**` | 混合 RAG + GraphRAG |
+| agent-service | 8085 | `/agent`、`/agent/**` | ReAct + 多 Agent DAG |
+| async-task-service | 8086 | `/async`、`/async/**` | 通用任务中心、SSE、webhook outbox |
+| channel-service | 8087 | `/channel`、`/channel/**` | 渠道出站/回调 + 可选 Kafka 事件 |
+| interop-service | 8088 | `/interop`、`/interop/**`、`/.well-known/agent-card.json` | A2A + MCP surface |
+| eval-service | 8089 | `/eval`、`/eval/**` | 回归测试客户端 |
+| vision-service | 8090 | `/vision`、`/vision/**` | 多模态看图/OCR |
+| config-server | 8888 | 不经网关 | 集中配置分发（可选） |
+| LiteLLM | 4000 | 不经网关 | LLM 网关 |
+| MySQL | 3306 | — | 本地数据库 |
+| Redis | 6379 | — | RAG registry / metering 可选存储 |
+| Qdrant | 6333(HTTP) / 6334(gRPC) | — | 可选向量库 |
+| Kafka | 9092 | — | 事件总线 / channel 事件 broker |
 
-| 变量 | 默认值 | 说明 |
-|---|---|---|
-| `GATEWAY_BASE_URL` | `http://localhost:4000/v1` | LiteLLM/OpenAI-compatible base URL |
-| `GATEWAY_API_KEY` | 空或 compose 中 master key | 模型网关 key |
-| `GATEWAY_MODEL` | 服务配置决定 | chat model |
+> 网关路由表见 `edge-gateway/src/main/resources/application.yml` 的 `spring.cloud.gateway.routes`。`/.well-known/agent-card.json` 是 A2A 发现别名，在 `ApiKeyToInternalTokenFilter` 里免鉴权放行，其余 `/interop/**` 仍需鉴权。
 
-### Conversation RAG
+---
 
-| 变量 | 默认值 | 说明 |
-|---|---|---|
-| `CONVERSATION_RAG_ENABLED` | `false` | 是否在 `/chat` 前调用 RAG |
-| `KNOWLEDGE_BASE_URL` | `http://localhost:8084` | knowledge-service 地址 |
-| `CONVERSATION_RAG_TOP_K` | `5` | 检索条数 |
-| `CONVERSATION_RAG_CATEGORY` | 空 | 限定知识分类 |
+## 4. 鉴权与租户
 
-### Knowledge
-
-| 变量 | 默认值 | 说明 |
-|---|---|---|
-| `RAG_VECTOR_STORE_PROVIDER` | `in-memory` | `in-memory` 或 `qdrant` |
-| `RAG_REGISTRY_STORE` | `in-memory` | `in-memory` 或 `redis` |
-| `RAG_EMBEDDING_PROVIDER` | `hash` | `hash` 或 OpenAI-compatible |
-| `RAG_HYBRID_ENABLED` | `true` | keyword hybrid 检索 |
-| `RAG_RANKING_VECTOR_WEIGHT` | `1.0` | vector 排序权重 |
-| `RAG_RANKING_KEYWORD_WEIGHT` | `1.0` | keyword 排序权重 |
-| `RAG_RANKING_GRAPH_WEIGHT` | `1.0` | graph 排序权重 |
-| `RAG_GRAPH_ENABLED` | `false` | GraphRAG 抽取和接口 |
-| `RAG_GRAPH_INCLUDE_IN_QUERY` | `false` | graph hit 是否融合进 `/rag/query` |
-| `RAG_GRAPH_STORE` | `in-memory` | `in-memory` 或 `jdbc` |
-| `RAG_GRAPH_DB_URL` | MySQL URL | JDBC graph store URL |
-| `RAG_IMAGE_TEXT_PROVIDER` | `none` | `none` 或 `http`，图片 ingestion 的外部 caption/OCR provider |
-| `RAG_IMAGE_TEXT_ENDPOINT_URL` | `http://localhost:8090/image-text` | HTTP provider endpoint，入参含 `filename`、`contentType`、`imageBase64` |
-
-### Agent
-
-| 变量 | 默认值 | 说明 |
-|---|---|---|
-| `AGENT_ENABLED` | `true` | Agent 服务开关 |
-| `AGENT_MAX_STEPS` | `8` | ReAct 最大步数 |
-| `AGENT_ANALYTICS_ENABLED` | `true` | 是否允许 SQL action |
-| `AGENT_CODE_EXEC_ENABLED` | `false` | 是否启用 code execution |
-| `AGENT_MCP_ENABLED` | `false` | 是否启用 MCP client |
-| `AGENT_BROWSER_ENABLED` | `false` | 是否启用 browser actions |
-| `AGENT_ASYNC_EXTERNAL_ENABLED` | `false` | 是否镜像到 async-task-service |
-| `AGENT_ASYNC_EXTERNAL_AUTHORITATIVE` | `false` | 是否以 async-task-service 为权威任务存储 |
-
-### Async Task
-
-| 变量 | 默认值 | 说明 |
-|---|---|---|
-| `ASYNC_TASK_STORE` | `in-memory` | `in-memory` 或 `jdbc` |
-| `ASYNC_TASK_DB_URL` | MySQL URL | JDBC store URL |
-| `ASYNC_TASK_WEBHOOK_ENABLED` | `true` | 终态 webhook |
-| `ASYNC_TASK_WEBHOOK_MAX_ATTEMPTS` | `3` | 最大投递次数 |
-| `ASYNC_TASK_WEBHOOK_BATCH_SIZE` | `50` | outbox batch |
-| `ASYNC_TASK_WEBHOOK_DELIVERED_RETENTION` | `P7D` | delivered outbox 保留期，0 或负值关闭清理 |
-
-### Workflow / Analytics / Channel / Eval
-
-| 变量 | 默认值 | 说明 |
-|---|---|---|
-| `WORKFLOW_ENABLED` | `false` | workflow 服务开关，compose 中通常开启 |
-| `WORKFLOW_DB_URL` | MySQL URL | Flowable datasource |
-| `WORKFLOW_TERMINAL_NOTIFICATION_MODE` | `local` | `local` 使用 WF_OUTBOX，`async-task` 使用 async-task-service webhook outbox |
-| `ASYNC_TASK_BASE_URL` | `http://localhost:8086` | workflow/agent 调用 async-task-service 的服务地址 |
-| `NL2SQL_ENABLED` | `false` | analytics NL2SQL 开关，compose 中通常开启 |
-| `NL2SQL_DB_URL` | MySQL URL | NL2SQL admin datasource |
-| `CHANNEL_OUTBOUND_ENABLED` | `false` | 是否真实 POST 出站渠道消息 |
-| `CHANNEL_INBOUND_SIGNATURE_ENABLED` | `false` | 是否校验入站签名 |
-| `CHANNEL_VOICE_PROVIDER_URL` | 空 | voice 渠道默认 HTTP provider URL，也可由 `metadata.providerUrl` 覆盖 |
-| `CHANNEL_EVENTS_ENABLED` | `false` | 是否把 channel outbound/inbound event 发布到 Kafka |
-| `CHANNEL_EVENTS_TOPIC` | `platform.channel.events` | channel event Kafka topic |
-| `KAFKA_BOOTSTRAP_SERVERS` | `kafka:9092` | channel-service Kafka producer broker |
-| `EVAL_TARGET_BASE_URL` | `http://edge-gateway:8080` | eval 默认目标 |
-| `EVAL_API_KEY` | 空 | eval 调用目标时带的 API key |
-
-## 健康检查
-
-各服务暴露 Spring Boot actuator health：
-
-```bash
-curl -s http://localhost:8081/actuator/health
-curl -s http://localhost:8084/actuator/health
-curl -s http://localhost:8086/actuator/health
-```
-
-通常业务调用应从 `edge-gateway:8080` 进入；排障时可以直接访问服务端口确认下游是否健康。
-
-## 验证路径
-
-### Chat
+外部调用统一带 `X-Api-Key`（经网关 :8080）。网关按 api-key 查租户绑定，签发短时内部 JWT，下游只认 `X-Internal-Token`。
 
 ```bash
 curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
   -H 'X-Api-Key: dev-key-acme' \
   -H 'Content-Type: application/json' \
   -d '{"message":"用一句话介绍你自己"}'
+# 期望：{"reply":"...","tenantId":"acme","userId":"alice",...}
 ```
 
-### RAG
+### 内置开发 api-key（以 `edge-gateway` 的 `platform.security.api-keys` 为准）
+
+| api-key | 租户 | 用户 | scopes |
+|---|---|---|---|
+| `dev-key-acme` | acme | alice | chat, approve, agent, channel, eval, vision |
+| `dev-key-globex` | globex | bob | chat |
+| `dev-key-tenantA-admin` | tenantA | analyst-a | chat, analytics |
+| `dev-key-acme-ingest` | acme | alice | chat, ingest |
+
+> 下游服务各自也有一份小的 `platform.security.api-keys` 和 `allow-api-key-fallback: true`，仅用于**绕过网关直连调试**；生产可把 `allow-api-key-fallback` 关掉，令下游只信 JWT。
+
+### 内部 JWT 签名（`platform.security.*`）
+
+| 属性 / 变量 | 默认值 | 说明 |
+|---|---|---|
+| `INTERNAL_JWT_SECRET`（→ `platform.security.jwt-secret`） | `dev-only-internal-secret-change-me-please-32b` | HS256 对称密钥，**必须 ≥32 字节**；生产走 Vault / K8s Secret |
+| `platform.security.jwt.algorithm` | `HS256` | `HS256`（对称，用上面的 secret）或 `RS256`（非对称） |
+| `platform.security.jwt.private-key` | 空 | `RS256` 时 edge-gateway 用它签发；PEM（含头尾）或纯 base64，PKCS#8 |
+| `platform.security.jwt.public-key` | 空 | `RS256` 时下游用它验签；PEM 或纯 base64，X.509 |
+| `platform.security.jwt-ttl` | `5m` | 内部 JWT 有效期（仅覆盖一次调用链） |
+| `platform.security.internal-header` | `X-Internal-Token` | 内部 JWT 承载头名 |
+| `platform.security.api-key-header` | `X-Api-Key` | 外部 api-key 头名（仅边缘识别） |
+
+> `jwt.*` 三项在 application.yml 中未做 `${ENV}` 包装，需经 config-server 下发或 JVM 参数 `-Dplatform.security.jwt.algorithm=RS256` 等设置。切 RS256 时须同时给 edge-gateway 配 `private-key`、给所有下游配 `public-key`。
+
+### 网关限流（`edge-gateway` 的 `app.rate-limit`）
+
+默认开启（`enabled: true`，`store: in-memory`）。按 scope 每分钟配额：`chat=60`、`agent=20`、`stream=20`、`ingest=5`、`eval=5`、`default=120`；匿名请求乘以 `anonymous-multiplier=0.2`。
+
+---
+
+## 5. LLM 网关（所有调 LLM 的服务共用 `platform.gateway.*`）
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `GATEWAY_BASE_URL` | `http://localhost:4000/v1` | LiteLLM / OpenAI 兼容 base-url（compose 内为 `http://litellm:4000/v1`） |
+| `GATEWAY_API_KEY` | `sk-litellm-master` | 模型网关 key（compose 用 `LITELLM_MASTER_KEY`） |
+| `GATEWAY_MODEL` | `chat-default` | 逻辑 chat 模型名（映射到 LiteLLM `model_list`） |
+
+> Java 代码里没有任何 provider `switch` —— provider 路由/failover/模型名映射全在 `deploy/litellm/config.yaml`。`eval-service` 只配 `base-url` + `api-key`（judge/embedding 断言用）。
+
+---
+
+## 6. 集中配置（config-server，可选）
+
+各服务通过 `spring.config.import: "optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}"` 接入。**刻意用 `optional`：config-server 不可达也不阻断启动**，各服务本地 `${ENV:default}` 兜底继续生效。
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `CONFIG_SERVER_URI` | `http://localhost:8888` | 各客户端拉配置的地址 |
+| `CONFIG_SERVER_PORT` | `8888` | config-server 监听端口 |
+| `SPRING_PROFILES_ACTIVE` | `native` | `native`（读打包进 jar 的 `classpath:/config/`，即开即用）或 `git` |
+| `CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS` | `classpath:/config/` | native 后端搜索路径，也可指 `file:./config/` |
+| `SPRING_CLOUD_CONFIG_SERVER_GIT_URI` | 示例占位 | 切 git 后端时的配置库地址 |
+| `SPRING_CLOUD_CONFIG_SERVER_GIT_LABEL` | `main` | git 分支 |
+
+> 密钥（如 `INTERNAL_JWT_SECRET`）不放 config-server，仍走各服务 `${ENV:default}` / Vault / K8s Secret。config-server 下发的键会被下游本地同名键覆盖（本地优先）。compose 中 config-server 不作为其他服务的 `depends_on`。
+
+---
+
+## 7. Conversation（`app.conversation.*` / `app.chat.*`）
+
+### RAG 上下文增强（默认关）
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `CONVERSATION_RAG_ENABLED` | `false` | `/chat` 前是否调 knowledge-service 做 RAG 增强 |
+| `KNOWLEDGE_BASE_URL` | `http://localhost:8084` | knowledge-service 地址 |
+| `CONVERSATION_RAG_TOP_K` | `5` | 检索条数 |
+| `CONVERSATION_RAG_MIN_SCORE` | `0.0` | 检索最低分 |
+| `CONVERSATION_RAG_CATEGORY` | 空 | 限定知识分类 |
+| `CONVERSATION_RAG_MAX_CONTEXT_CHARS` | `4000` | 注入上下文字符上限 |
+| `CONVERSATION_RAG_CONNECT_TIMEOUT` / `_READ_TIMEOUT` | `1s` / `3s` | HTTP 超时 |
+
+### L1 语义缓存（默认关，pre-RAG、租户桶、问题级）
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `CONVERSATION_SEMANTIC_CACHE_ENABLED` | `false` | 开关；关时对 `/chat` 零影响 |
+| `CONVERSATION_SEMANTIC_CACHE_THRESHOLD` | `0.95` | 命中相似度阈值 |
+| `CONVERSATION_SEMANTIC_CACHE_MAX_ENTRIES` | `1000` | 每租户最大条数 |
+| `CONVERSATION_SEMANTIC_CACHE_STORE` | `in-memory` | `in-memory` 或 `redis` |
+| `CONVERSATION_SEMANTIC_CACHE_EMBEDDING_PROVIDER` | `hash` | 缓存向量 provider（`hash` 等） |
+| `CONVERSATION_SEMANTIC_CACHE_EMBEDDING_MODEL` | `embedding-default` | 缓存 embedding 模型名 |
+| `CONVERSATION_SEMANTIC_CACHE_REDIS_TTL` | `0s` | redis 档条目 TTL（0 = 不过期） |
+
+### Model Cascade（便宜模型先答 → 低置信升级强模型，默认关）
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `CHAT_CASCADE_ENABLED` | `false` | 开关；关时对 `/chat` 零影响 |
+| `CHAT_CASCADE_CHEAP_MODEL` | 空 | 便宜模型逻辑名（留空退化为网关默认模型） |
+| `CHAT_CASCADE_STRONG_MODEL` | 空 | 强模型逻辑名 |
+| `CHAT_CASCADE_CONFIDENCE_THRESHOLD` | `0.6` | 升级阈值 |
+| `CHAT_CASCADE_MIN_ANSWER_CHARS` | `8` | 便宜答案最短长度 |
+| `CHAT_CASCADE_SELF_RATING` | `false` | 是否让模型自评置信 |
+
+> `token-budget` 默认开启（`in-memory`，时区 `Asia/Shanghai`）；`cost` 默认关。二者经 `ChatModelListener` 挂载，指标从 `/actuator/{tokenbudget,cost,prometheus}` 暴露。
+
+---
+
+## 8. Knowledge / RAG（`app.rag.*`）
+
+### 向量库与租户隔离
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `RAG_VECTOR_STORE_PROVIDER` | `in-memory` | `in-memory` 或 `qdrant` |
+| `RAG_VECTOR_STORE_ISOLATION` | `collection-per-tenant` | `collection-per-tenant`（强隔离，每租户独立 collection）或 `shared`（单 store + metadata filter） |
+| `QDRANT_HOST` / `QDRANT_PORT` | `localhost` / `6334` | Qdrant gRPC 地址（compose 内为 `qdrant:6334`） |
+| `QDRANT_COLLECTION_NAME` | `knowledge_segments` | collection 名 |
+| `QDRANT_USE_TLS` / `QDRANT_API_KEY` | `false` / 空 | TLS 与鉴权 |
+| `QDRANT_TIMEOUT` / `QDRANT_HEALTH_TIMEOUT` | `10s` / `3s` | 超时 |
+| `RAG_REGISTRY_STORE` | `in-memory` | 文档 registry：`in-memory` 或 `redis` |
+
+### Embedding
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `RAG_EMBEDDING_PROVIDER` | `hash` | `hash`（确定性，本地/单测）、`openai`（走 LiteLLM/OpenAI-compat）或 `ollama` |
+| `RAG_EMBEDDING_MODEL` | `embedding-default` | `openai` 档逻辑模型名 |
+| `RAG_EMBEDDING_DIMENSIONS` | `0` | 0 = 由 provider 决定 |
+| `RAG_EMBEDDING_TIMEOUT` / `_MAX_RETRIES` | `60s` / `3` | 调用超时与重试 |
+| `RAG_EMBEDDING_OLLAMA_BASE_URL` | `http://localhost:11434` | `ollama` 档 Ollama 地址 |
+| `RAG_EMBEDDING_OLLAMA_MODEL` | `nomic-embed-text` | `ollama` 档 embedding 模型 |
+
+> `openai` 档复用 `GATEWAY_BASE_URL` / `GATEWAY_API_KEY`。
+
+### 混合检索与排序
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `RAG_HYBRID_ENABLED` | `true` | keyword hybrid 检索（默认开） |
+| `RAG_QUERY_TOP_K` / `RAG_QUERY_MIN_SCORE` | `5` / `0.0` | 查询默认条数与最低分 |
+| `RAG_RANKING_VECTOR_WEIGHT` | `1.0` | vector 排序权重 |
+| `RAG_RANKING_KEYWORD_WEIGHT` | `1.0` | keyword 排序权重 |
+| `RAG_RANKING_GRAPH_WEIGHT` | `1.0` | graph 排序权重 |
+
+### GraphRAG（默认关，确定性三元组抽取）
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `RAG_GRAPH_ENABLED` | `false` | GraphRAG 抽取与 `/rag/graph/**` 接口开关 |
+| `RAG_GRAPH_STORE` | `in-memory` | `in-memory` 或 `jdbc`（MySQL） |
+| `RAG_GRAPH_INCLUDE_IN_QUERY` | 跟随 `RAG_GRAPH_ENABLED` | graph hit 是否融合进 `/rag/query` |
+| `RAG_GRAPH_QUERY_TOP_K` | `20` | graph 查询返回上限 |
+| `RAG_GRAPH_MAX_HOPS` | `2` | 邻居扩展跳数 |
+| `RAG_GRAPH_MAX_TRIPLES` / `_PER_CHUNK` | `20` / `12` | 三元组上限 |
+| `RAG_GRAPH_RELATION_WHITELIST` | 空 | 关系白名单，逗号分隔（如 `隶属于,使用`） |
+| `RAG_GRAPH_ALIASES` | 空 | 实体别名映射（如 `张三经理=张三`） |
+| `RAG_GRAPH_ASYNC` | `false` | 抽取是否异步 |
+| `RAG_GRAPH_DB_URL` / `_USER` / `_PASSWORD` | MySQL `knowledge_graph` 库 / `root` / 空 | `jdbc` 档数据源 |
+
+> 无 Flyway/Liquibase：JDBC store 靠 `Jdbc*Store` 类里的 `CREATE TABLE IF NOT EXISTS` 自建表。
+
+### 图片多模态 ingestion（`RAG_IMAGE_TEXT_*`，默认关）
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `RAG_IMAGE_TEXT_PROVIDER` | `none` | `none` 或 `http`（调外部视觉/OCR 补 caption/OCR） |
+| `RAG_IMAGE_TEXT_ENDPOINT_URL` | `http://localhost:8090/image-text` | HTTP provider 端点 |
+| `RAG_IMAGE_TEXT_CONNECT_TIMEOUT` / `_READ_TIMEOUT` | `2s` / `30s` | 超时 |
+| `RAG_IMAGE_TEXT_MAX_IMAGE_BYTES` | `10485760`（10MB） | 单图字节上限 |
+
+---
+
+## 9. Agent（`app.agent.*`）
+
+### 核心与工具开关
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `AGENT_ENABLED` | `true` | Agent 服务总开关 |
+| `AGENT_MAX_STEPS` | `8` | ReAct 最大步数 |
+| `AGENT_MAX_WALL_CLOCK_MS` / `AGENT_MAX_TOKENS` | `0` / `0` | 0 = 不限 |
+| `AGENT_ALLOW_DELEGATION` / `AGENT_MAX_DEPTH` | `true` / `1` | 子 Agent 委派与深度 |
+| `AGENT_ANALYTICS_ENABLED` | `true` | 是否允许 `analytics_sql` 动作 |
+| `AGENT_RAG_TOP_K` / `AGENT_RAG_CATEGORY` | `5` / 空 | `rag_search` 参数 |
+| `KNOWLEDGE_BASE_URL` / `ANALYTICS_BASE_URL` | `:8084` / `:8083` | 下游动作目标 |
+
+### code-exec（默认关，**非强隔离沙箱**，不可信输入务必保持关）
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `AGENT_CODE_EXEC_ENABLED` | `false` | 开关 |
+| `AGENT_CODE_EXEC_SANDBOX` | `subprocess` | 执行方式 |
+| `AGENT_CODE_EXEC_TIMEOUT_MS` | `3000` | 超时 |
+| `AGENT_CODE_EXEC_MAX_OUTPUT_CHARS` / `_MAX_SOURCE_CHARS` | `2000` / `4000` | 输出/源码截断 |
+| `AGENT_CODE_EXEC_BLOCK_UNSAFE_APIS` / `_MAX_HEAP_MB` | `true` / `64` | denylist 与堆上限 |
+
+### MCP client（默认关）
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `AGENT_MCP_ENABLED` | `false` | `mcp_call` 动作开关 |
+| `AGENT_MCP_TRANSPORT` | `stdio` | `stdio` 或 `http`（compose 覆盖为 `http`） |
+| `AGENT_MCP_HTTP_URL` | `http://localhost:3001/mcp` | http transport 端点 |
+| `AGENT_MCP_STDIO_COMMAND` | 空 | stdio transport 启动命令 |
+
+### browser-use + vision（默认关）
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `AGENT_BROWSER_ENABLED` | `false` | Playwright 浏览器动作（`browser_open/click/type/screenshot`）；首次需装 chromium 二进制 |
+| `AGENT_VISION_ENABLED` | `false` | 视觉后端；`browser_see` 双门控在 browser + vision 同时 true |
+| `VISION_BASE_URL` | `http://localhost:8090` | vision-service 地址 |
+
+### DAG 重规划（Critic/Replanner，默认关）
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `AGENT_DAG_MAX_TASKS` | `6` | 自动规划 DAG 最大子任务数 |
+| `AGENT_DAG_REPLAN_ENABLED` | `false` | 质量闭环开关 |
+| `AGENT_DAG_REPLAN_THRESHOLD` | `0.75` | 综合分阈值 |
+| `AGENT_DAG_REPLAN_MAX_REPLANS` | `1` | 最大重规划轮数 |
+
+### Reflexion / Voting / Prompt Chaining
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `AGENT_REFLEXION_THRESHOLD` / `AGENT_REFLEXION_MAX_ATTEMPTS` | `0.75` / `2` | 单答案自省环（`POST /agent/reflexive`） |
+| `AGENT_VOTING_N` / `AGENT_VOTING_STRATEGY` / `AGENT_VOTING_MIN_AGREEMENT` | `3` / `majority` / `0.5` | 并行投票（`POST /agent/vote`；`majority` 仅适合离散题，自由文本用 `synthesis`） |
+| `app.agent.chaining.steps` | `[]`（属性） | Prompt Chaining（`POST /agent/chain`）；steps 为空则端点返回 400 |
+
+### 异步任务与 webhook
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `AGENT_TASK_WEBHOOK_ENABLED` | `true` | 终态本地 webhook 投递 |
+| `AGENT_TASK_WEBHOOK_MAX_ATTEMPTS` / `_BACKOFF` | `3` / `250ms` | 重投参数 |
+| `AGENT_TASK_WEBHOOK_CONNECT_TIMEOUT` / `_READ_TIMEOUT` | `1s` / `3s` | 超时 |
+| `AGENT_ASYNC_EXTERNAL_ENABLED` | `false` | 是否镜像任务到 async-task-service |
+| `AGENT_ASYNC_EXTERNAL_AUTHORITATIVE` | `false` | 是否以 async-task-service 为权威存储 |
+| `AGENT_ASYNC_EXTERNAL_MIRROR_WEBHOOK` | `false` | 权威档下是否把 webhook 交中心投递（避免重复回调） |
+| `AGENT_ASYNC_WORKER_ID` / `AGENT_ASYNC_LEASE_SECONDS` | `agent-service` / `300` | worker 认领 lease |
+| `ASYNC_TASK_BASE_URL` | `http://localhost:8086` | async-task-service 地址 |
+
+---
+
+## 10. Async Task（`app.async-task.*`）
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `ASYNC_TASK_STORE` | `in-memory` | `in-memory` 或 `jdbc`（自动建 `ASYNC_TASK` / `ASYNC_TASK_WEBHOOK_OUTBOX` 表） |
+| `ASYNC_TASK_DB_URL` / `_USER` / `_PASSWORD` | MySQL `async_task` 库 / `root` / 空 | `jdbc` 档数据源 |
+| `ASYNC_TASK_TTL` | `PT24H` | 任务保留时长 |
+| `app.async-task.webhook.transport` | `http`（属性） | `http`（HTTP outbox 直投）或 `kafka`（改发 `platform.asynctask.lifecycle` 事件，由 channel-service 消费回推；HTTP 通道自动让位） |
+| `ASYNC_TASK_WEBHOOK_ENABLED` | `true` | 终态 webhook |
+| `ASYNC_TASK_WEBHOOK_MAX_ATTEMPTS` / `_BACKOFF` | `3` / `250ms` | 重投参数 |
+| `ASYNC_TASK_WEBHOOK_POLL_INTERVAL_MS` / `_BATCH_SIZE` | `30000` / `50` | outbox 调度 |
+| `ASYNC_TASK_WEBHOOK_DELIVERED_RETENTION` | `P7D` | delivered outbox 保留期，0 或负值关闭清理 |
+
+> `transport=kafka` 要求 store=jdbc（事务性 outbox）并开启事件总线（见第 13 节）。
+
+---
+
+## 11. Workflow / Analytics
+
+### Workflow（`app.workflow.*`）
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `WORKFLOW_ENABLED` | `false`（compose 中设 `true`） | workflow 服务开关 |
+| `WORKFLOW_DB_URL` / `_USER` / `_PASSWORD` | MySQL `flowable` 库 / `root` / `root` | Flowable datasource |
+| `WORKFLOW_AI_CLIENT_MODE` | `http` | `http`（经 tenant/trace 传播调 conversation-service，推荐 prod）或 `local`（本地 ChatModel 兜底） |
+| `CONVERSATION_BASE_URL` | `http://localhost:8081` | `http` 档 conversation-service 地址 |
+| `WORKFLOW_TERMINAL_NOTIFICATION_MODE` | `local` | `local`（本地 `WF_OUTBOX`）、`async-task`（交 async-task-service webhook outbox）或 `kafka`（发终态事件，由 `WorkflowTerminalEventRelay` 走事件总线） |
+| `WORKFLOW_TERMINAL_ASYNC_TASK_KIND` | `workflow.terminal` | async-task 档任务 kind |
+| `WORKFLOW_TERMINAL_FALLBACK_LOCAL` | `true` | 非 local 档失败时是否回退本地 outbox |
+| `ASYNC_TASK_BASE_URL` | `http://localhost:8086` | async-task 档目标地址 |
+| `WORKFLOW_OUTBOX_HMAC_SECRET` | compose 中 `dev-secret-change-me` | outbox 投递签名密钥 |
+
+### Analytics / NL2SQL（`app.nl2sql.*`）
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `NL2SQL_ENABLED` | `false`（compose 中设 `true`） | NL2SQL 开关 |
+| `NL2SQL_DB_URL` / `NL2SQL_DB_READONLY_URL` | MySQL `nl2sql_demo` 库 | admin / 只读数据源 |
+| `NL2SQL_DB_ADMIN_USER` / `_PASSWORD` | `root` / `root` | admin 账号（建库/种子） |
+| `NL2SQL_DB_READONLY_USER` / `_PASSWORD` | `nl2sql_ro` / `nl2sql_ro` | 执行 NL2SQL 的只读账号 |
+| `NL2SQL_SEED_SCRIPT` | `db/nl2sql-demo.sql` | 种子脚本 |
+
+---
+
+## 12. Channel（`app.channel.*` + Kafka）
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `CHANNEL_OUTBOUND_ENABLED` | `false` | 是否真实 POST 出站渠道消息 |
+| `CHANNEL_OUTBOUND_SIGNATURE_ENABLED` / `_SECRET` | `false` / 空 | 出站签名 |
+| `CHANNEL_INBOUND_SIGNATURE_ENABLED` / `_SECRET` | `false` / 空 | 入站签名校验 |
+| `CHANNEL_VOICE_PROVIDER_URL` | 空 | voice 渠道默认 HTTP provider URL（也可由 `metadata.providerUrl` 覆盖） |
+| `CHANNEL_EVENTS_ENABLED` | `false` | 是否把 channel 出/入站事件发布到 Kafka |
+| `CHANNEL_EVENTS_TOPIC` | `platform.channel.events` | channel event topic |
+| `CHANNEL_CONNECT_TIMEOUT` / `_READ_TIMEOUT` | `1s` / `10s` | 出站 HTTP 超时 |
+| `KAFKA_BOOTSTRAP_SERVERS` | `kafka:9092` | Kafka broker |
+| `CHANNEL_DEDUP_STORE`（→ `platform.eventbus.processed-event-store`） | `memory` | 消费终态/生命周期事件的幂等去重存储：`memory`（重启失忆）或 `jdbc`（跨重启，需 `channel.dedup.datasource.*` 指向 MySQL `channel` 库） |
+
+---
+
+## 13. 事件总线（`platform.eventbus.*`，共享库 `platform-eventbus`）
+
+被 `async-task-service`、`channel-service`、`workflow-service` 依赖。**全部默认关闭 / 内存，保证 dev/test 零外部依赖**。
+
+| 属性 | 默认值 | 说明 |
+|---|---|---|
+| `platform.eventbus.enabled` | `false` | 总开关；`false` 时走 `NoopEventPublisher`，无任何 Kafka 依赖 |
+| `platform.eventbus.processed-event-store` | `memory` | 消费幂等去重：`memory` 或 `jdbc`（跨重启） |
+| `platform.eventbus.producer.idempotence` | `true` | 幂等生产者 |
+| `platform.eventbus.producer.send-timeout` | `10s` | 同步发布等 broker ack 超时 |
+| `platform.eventbus.consumer.concurrency` | `1` | 监听并发度 |
+| `platform.eventbus.consumer.retries` / `.retry-backoff-ms` | `3` / `500` | 消费重试（超过进 `<topic>.DLT`） |
+
+> 这些键在 application.yml 中未做 `${ENV}` 包装（channel 的 `processed-event-store` 例外，由 `CHANNEL_DEDUP_STORE` 驱动）。要打开事件总线（例如配合 `async-task webhook.transport=kafka` 或 `workflow terminal-notification.mode=kafka`），需经 config-server 下发或 JVM 参数设置 `platform.eventbus.enabled=true`，并保证 Kafka 可达。
+
+---
+
+## 14. Interop / Eval / Vision
+
+### Interop（`app.interop.*`）
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `AGENT_BASE_URL` | `http://localhost:8085` | 代理 agent 能力的目标 |
+| `INTEROP_DISCOVERY_ENABLED` | `false` | live 能力发现；关时用静态 registry（零下游依赖） |
+| `INTEROP_CAPABILITY_TTL` | `60s` | 能力缓存 TTL |
+| `INTEROP_A2A_AGENT_NAME` / `_BASE_URL` / `_VERSION` | `langchain4j-platform` / `http://localhost:8080` / `0.1.0` | A2A agent-card 字段 |
+
+### Eval（`app.eval.*`）
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `EVAL_TARGET_BASE_URL` | `http://edge-gateway:8080` | 默认回归目标 |
+| `EVAL_API_KEY` / `EVAL_API_KEY_HEADER` | 空 / `X-API-Key` | 调目标时带的 key |
+| `EVAL_JUDGE_ENABLED` / `EVAL_JUDGE_MIN_SCORE` | `false` / `0.7` | LLM judge 断言 |
+| `EVAL_EMBEDDING_ENABLED` / `EVAL_EMBEDDING_MIN_SCORE` | `false` / `0.75` | 语义相似度断言 |
+| `EVAL_GATE_PASS_RATE_TOLERANCE` / `_AVERAGE_SCORE_TOLERANCE` | `0.05` / `0.05` | 双跑门禁容差 |
+| `EVAL_GATE_MIN_AGREEMENT` / `EVAL_GATE_RUNS` | `0.6` / `1` | 一致性阈值与每 case 重复次数 |
+| `EVAL_BASELINE_DIRECTORY` / `_REPORT_DIRECTORY` / `_SNAPSHOT_DIRECTORY` | 空 | baseline / 报告 / 快照目录 |
+
+### Vision（`app.vision.*`）
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `VISION_ENABLED` | `false` | 总开关；关时 `VisionModel` / `VisionController` 全不装配 |
+| `VISION_MODEL` | 空 | 视觉逻辑模型名（LiteLLM `model_list` 里的多模态模型）；**开启但留空 → 启动 fail-fast** |
+| `VISION_TEMPERATURE` | `0.2` | 看图转写偏确定性 |
+| `VISION_MAX_IMAGE_BYTES` | `10485760`（10MB） | 单图字节上限 |
+| `VISION_ALLOWED_MIME` | `image/png,image/jpeg,image/webp,image/gif` | 允许的 MIME |
+| `VISION_CAPTION_CACHE_SIZE` | `256` | caption 缓存条数（按图内容 SHA-256 去重），0 = 关缓存 |
+| `VISION_MAX_UPLOAD` | `12MB` | multipart 上传上限 |
+
+---
+
+## 15. 健康检查与可观测
+
+各服务暴露 Spring Boot actuator health（`/actuator/health`，直连服务端口）：
 
 ```bash
-curl -s -X POST 'http://localhost:8080/rag/documents' \
-  -H 'X-Api-Key: dev-key-acme-ingest' \
-  -H 'Content-Type: application/json' \
-  -d '{"title":"guide.md","text":"这是 acme 的知识库文档。","category":"manual"}'
-
-curl -s -X POST 'http://localhost:8080/rag/query' \
-  -H 'X-Api-Key: dev-key-acme' \
-  -H 'Content-Type: application/json' \
-  -d '{"query":"知识库文档","topK":3,"category":"manual"}'
+curl -s http://localhost:8081/actuator/health   # conversation
+curl -s http://localhost:8084/actuator/health   # knowledge
+curl -s http://localhost:8086/actuator/health   # async-task
 ```
 
-### Async Task SSE
+- `edge-gateway` 额外暴露 `gateway` 端点；`conversation` / `agent` / `vision` 额外暴露 `prometheus,tokenbudget,cost`；多数服务暴露 `prometheus`。
+- traceId 由 `platform-observability` 的 `TraceIdFilter` 生成并跨服务透传。
 
-```bash
-curl -N 'http://localhost:8080/agent/tasks/{taskId}/stream' \
-  -H 'X-Api-Key: dev-key-acme'
-```
+---
 
-## 常见问题
+## 16. 常见排障
 
 ### 下游服务返回 401
 
-通常是绕过 `edge-gateway` 直接访问服务但没有 `X-Internal-Token`。开发调试业务 API 时优先从 `localhost:8080` 访问。
+绕过 `edge-gateway` 直连服务但没带 `X-Internal-Token`。调试业务 API 优先从 `localhost:8080` 走。若确需直连，可依赖下游的 `allow-api-key-fallback: true` + `X-Api-Key`（生产建议关闭该回退）。
+
+### 内部 JWT 校验失败 / 启动报密钥太短
+
+- `INTERNAL_JWT_SECRET` 必须 ≥32 字节，且 edge-gateway 与所有下游一致。
+- 若切了 `platform.security.jwt.algorithm=RS256`，确认 edge-gateway 配了 `private-key`、所有下游配了对应 `public-key`（PEM 或纯 base64）。
 
 ### RAG 查询没有结果
 
-检查：
-
-- 上传和查询是否使用同一租户 key。
-- `category` 是否一致。
-- `RAG_VECTOR_STORE_PROVIDER` 是否和预期一致。
-- 如果使用 Qdrant，确认 `QDRANT_HOST`、`QDRANT_PORT` 和 collection 配置。
+- 上传与查询用同一租户 key、同一 `category`。
+- `RAG_VECTOR_STORE_PROVIDER` 是否符合预期；Qdrant 档确认 `QDRANT_HOST` / `QDRANT_PORT` / collection。
+- `collection-per-tenant` 隔离下，跨租户不可见属正常。
 
 ### GraphRAG 没有图命中
 
-检查：
-
-- `RAG_GRAPH_ENABLED=true`。
-- 文档是否包含 `subject|relation|object` 格式。
-- 查询是否能被实体 linker 链接到图谱实体。
-- 如果希望 `/rag/query` 混入 graph hit，还要设置 `RAG_GRAPH_INCLUDE_IN_QUERY=true`。
+- `RAG_GRAPH_ENABLED=true`；文档含 `subject|relation|object` 格式（换行或分号分隔多条）。
+- 想让 `/rag/query` 混入 graph hit 还需 `RAG_GRAPH_INCLUDE_IN_QUERY=true`。
+- 查询能否被实体 linker 链到图谱实体（必要时配 `RAG_GRAPH_ALIASES`）。
 
 ### Agent 异步任务没有 webhook
 
-检查：
+- `webhookUrl` 是否传入；`AGENT_TASK_WEBHOOK_ENABLED` / `ASYNC_TASK_WEBHOOK_ENABLED` 是否开。
+- authoritative 档下若期望中心投递，需 `AGENT_ASYNC_EXTERNAL_MIRROR_WEBHOOK=true`，否则 agent 本地 notifier 跳过、中心也不投。
 
-- `webhookUrl` 是否传入。
-- `AGENT_TASK_WEBHOOK_ENABLED` 或 `ASYNC_TASK_WEBHOOK_ENABLED` 是否开启。
-- authoritative 模式下是否设置了 `AGENT_ASYNC_EXTERNAL_MIRROR_WEBHOOK=true`，避免误以为 agent 本地也会投递。
+### Kafka 事件不流转（channel 收不到 / 终态事件不发）
+
+- 生产端 `platform.eventbus.enabled=true` 且 Kafka 可达（`KAFKA_BOOTSTRAP_SERVERS`）。
+- `async-task webhook.transport=kafka` 要求 `ASYNC_TASK_STORE=jdbc`（事务性 outbox）。
+- 跨重启去重需消费端 `processed-event-store=jdbc`（channel 用 `CHANNEL_DEDUP_STORE=jdbc` + `channel.dedup.datasource.*`）。
+
+### Vision 启动即失败
+
+`VISION_ENABLED=true` 但 `VISION_MODEL` 留空会 fail-fast（刻意不静默降级）。配一个 LiteLLM `model_list` 里的多模态模型名。
+
+### config-server 不可达
+
+不影响启动 —— `spring.config.import` 用了 `optional:`，各服务 `${ENV:default}` 兜底继续生效。仅集中下发的非密文项会缺失。

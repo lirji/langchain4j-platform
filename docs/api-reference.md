@@ -1,58 +1,84 @@
 # 接口与集成速查
 
-所有业务接口建议从 `edge-gateway` 访问：
+本文按服务列出**代码里真实存在**的 HTTP 端点，每条给出：方法 + 路径 + 用途 + 关键请求字段 + 是否经网关 + 默认开关状态。字段以 controller / `platform-protocol` DTO 源码为准。
+
+## 访问方式
+
+所有业务接口都从 `edge-gateway` 进：
 
 ```text
 http://localhost:8080
 ```
 
-外部调用需要带：
+外部调用带：
 
 ```text
 X-Api-Key: <api-key>
 Content-Type: application/json
 ```
 
-下游服务间调用使用 `X-Internal-Token`，不建议外部直接构造。
+- 网关校验 `X-Api-Key` → 签发短时内部 JWT（`X-Internal-Token`）→ 按路径路由到下游服务。下游只认内部 JWT，**不建议外部直接构造 `X-Internal-Token`**。
+- 免鉴权放行的路径（`ApiKeyToInternalTokenFilter.isOpen`）：`/actuator/**`、`/.well-known/**`、`/health`。其中 `GET /.well-known/agent-card.json` 是唯一对外免鉴权的业务端点（A2A 发现惯例）。
+- 网关路由前缀（`edge-gateway/application.yml`）：`/chat`、`/chat/**` → conversation；`/chat/sql`、`/analytics`、`/analytics/**` → analytics；`/workflow`、`/workflow/**` → workflow；`/rag`、`/rag/**`、`/knowledge`、`/knowledge/**` → knowledge；`/agent`、`/agent/**` → agent；`/async`、`/async/**` → async-task；`/channel`、`/channel/**` → channel；`/interop`、`/interop/**`、`/.well-known/agent-card.json` → interop；`/eval`、`/eval/**` → eval；`/vision`、`/vision/**` → vision。
+- 本文所有端点均可**经网关**访问（`是否经网关：是`）。少量端点是给服务间调用/回调设计的（如 `/conversation/workflow/*`、`/channel/callbacks/*`），虽然也在网关路由前缀内，但通常由内部服务而非终端用户调用，下面会单独标注。
+- 默认开关：平台大量能力是 feature-flag 化的（`@ConditionalOnProperty` / `@ConditionalOnBean`），**默认关闭**的端点在未开启时不注册（404）。每节标注对应开关。
 
-## Conversation
+### 网关内置 api-key（dev 种子）
+
+| api-key | 租户 | 用户 | scopes |
+|---|---|---|---|
+| `dev-key-acme` | acme | alice | chat, approve, agent, channel, eval, vision |
+| `dev-key-globex` | globex | bob | chat |
+| `dev-key-tenantA-admin` | tenantA | analyst-a | chat, analytics |
+| `dev-key-acme-ingest` | acme | alice | chat, ingest |
+
+限流分类（`EdgeRateLimitFilter`，默认 `app.rate-limit.enabled=true`，内存计数）：`chat=60`、`agent=20`、`stream=20`、`ingest=5`、`eval=5`、`default=120`（每分钟）。
+
+---
+
+## Conversation（conversation-service）
 
 ### POST `/chat`
 
-用途：普通聊天，可选 RAG 增强。
+- 用途：普通聊天，可选 RAG 上下文增强。
+- 请求：`{ "message": "..." }`；可选 query `chatId=u1`。
+- 响应核心字段：`reply`、`chatId`、`tenantId`、`userId`。
+- 经网关：是。默认开启。RAG 增强默认关闭，需 `CONVERSATION_RAG_ENABLED=true`（另配 `KNOWLEDGE_BASE_URL` 等）。
 
-请求：
+### POST `/chat/cascade`
 
-```json
-{
-  "message": "用一句话介绍你自己"
-}
-```
+- 用途：模型级联——便宜模型先答，低置信才升级强模型。
+- 请求：`{ "message": "..." }`。
+- 响应核心字段：`answer`、`served`（`cheap`|`strong`）、`cheapConfident`。
+- 经网关：是。**默认关闭**，需 `app.chat.cascade.enabled=true`（`@ConditionalOnBean(CascadeService.class)`）。
 
-可选 query：
+### POST `/conversation/workflow/reply`
 
-```text
-chatId=u1
-```
+- 用途：workflow → conversation 的跨服务能力：生成给用户的受理/通过答复。
+- 请求：`{ "message": "..." }`；响应 `{ "reply": "..." }`。
+- 经网关：是（但设计为 workflow-service 内部调用）。默认开启。
 
-响应核心字段：
+### POST `/conversation/workflow/ticket`
 
-```json
-{
-  "reply": "...",
-  "chatId": "u1",
-  "tenantId": "acme",
-  "userId": "alice"
-}
-```
+- 用途：结构化抽取退款工单。
+- 请求：`{ "message": "..." }`；响应 `{ title, priority, category, summary, tags[] }`。
+- 经网关：是（内部调用）。默认开启。
 
-## Knowledge
+---
+
+## Knowledge（knowledge-service）
 
 ### POST `/rag/documents`
 
-用途：上传知识库文档。需要 `ingest` scope。
+- 用途：上传知识库文档。需要 `ingest` scope。
+- 支持两种 content-type：
+  - `application/json`（`Map<String,String>`）：`title`（必填）、`text`、`contentType`（默认 `text/plain`，有 `imageBase64` 时默认 `image/png`）、`category`、图片可传 `imageBase64` + `caption` + `ocrText`。
+  - `multipart/form-data`：表单字段 `file`（必填）+ 可选 `category`、`caption`、`ocrText`。
+- 图片 ingestion：默认索引调用方传入的 `caption`/`ocrText`；配 `RAG_IMAGE_TEXT_PROVIDER=http` 时调外部视觉/OCR 服务补充。
+- 响应：`DocumentInfo`。
+- 经网关：是。默认开启（向量库默认 `in-memory` + deterministic hash embedding）。
 
-JSON 文本：
+JSON 示例：
 
 ```json
 {
@@ -63,415 +89,335 @@ JSON 文本：
 }
 ```
 
-JSON 图片 ingestion。`caption` / `ocrText` 可由调用方传入；如果配置了 `RAG_IMAGE_TEXT_PROVIDER=http`，服务也会调用外部 provider 补充 caption/OCR：
-
-```json
-{
-  "title": "chart.png",
-  "contentType": "image/png",
-  "imageBase64": "<base64 or data-url>",
-  "caption": "退款趋势图",
-  "ocrText": "May refund 99",
-  "category": "report"
-}
-```
-
-multipart 文件：
-
-```bash
-curl -s -X POST 'http://localhost:8080/rag/documents?category=manual' \
-  -H 'X-Api-Key: dev-key-acme-ingest' \
-  -F 'file=@guide.pdf'
-```
-
-multipart 图片可额外传：
-
-```bash
--F 'caption=退款趋势图' -F 'ocrText=May refund 99'
-```
-
 ### GET `/rag/documents`
 
-用途：列出租户下文档。
+- 用途：列出当前租户文档。响应 `DocumentInfo[]`。
+- 经网关：是。默认开启。
 
 ### GET `/rag/documents/{docId}`
 
-用途：查看文档元数据。
+- 用途：查看单个文档元数据。响应 `DocumentInfo`，不存在返回 404。
+- 经网关：是。默认开启。
 
 ### DELETE `/rag/documents/{docId}`
 
-用途：删除文档、向量和关联图谱。需要 `ingest` scope。
+- 用途：删除文档、向量与关联图谱。需要 `ingest` scope。响应 `{ docId, deleted }`。
+- 经网关：是。默认开启。
 
-### POST `/rag/query`
+### POST `/rag/query`（别名 `/knowledge/query`）
 
-用途：RAG 查询。
-
-请求：
-
-```json
-{
-  "query": "退款规则是什么",
-  "topK": 5,
-  "minScore": 0.0,
-  "category": "manual"
-}
-```
-
-响应命中字段：
-
-```json
-{
-  "query": "退款规则是什么",
-  "tenantId": "acme",
-  "hits": [
-    {
-      "id": "...",
-      "score": 0.91,
-      "docId": "...",
-      "displayName": "guide.md",
-      "category": "manual",
-      "index": "0",
-      "text": "...",
-      "source": "vector|keyword|hybrid|graph"
-    }
-  ]
-}
-```
+- 用途：RAG 查询，融合 vector / keyword / 可选 graph 命中。
+- 请求：`{ query, topK, minScore, category }`（`KnowledgeQueryRequest`）。
+- 响应：`{ query, tenantId, hits[] }`，`hits[]` 含 `id, score, docId, displayName, category, index, text, source`（`source` 为 `vector|keyword|hybrid|graph`）。
+- 经网关：是。默认开启。排序权重可调（`RAG_RANKING_VECTOR_WEIGHT` 等）。
 
 ### POST `/rag/graph/query`
 
-用途：GraphRAG 邻居查询。
-
-```json
-{
-  "query": "张三负责什么团队",
-  "maxHops": 2,
-  "maxTriples": 20,
-  "category": "org"
-}
-```
+- 用途：GraphRAG 实体邻居查询。
+- 请求：`{ query, maxHops, maxTriples, category }`。
+- 经网关：是。**默认关闭**，需 GraphRAG 开启（`RAG_GRAPH_ENABLED=true`，`@ConditionalOnBean(GraphSearchService.class)`）。
 
 ### GET `/rag/graph/entities`
 
-用途：列出租户图谱实体。
+- 用途：列出当前租户图谱实体。可选 query `category=org`。响应 `{ category, entities, size }`。
+- 经网关：是。默认关闭（同上 GraphRAG 开关）。
 
-可选 query：
+---
 
-```text
-category=org
-```
+## Analytics（analytics-service）
 
-## Analytics
+### POST `/chat/sql`（别名 `/analytics/sql`）
 
-### POST `/chat/sql` 或 `/analytics/sql`
+- 用途：NL2SQL / ChatBI，自然语言转 SQL 并执行、解读。
+- 请求：`{ "question": "..." }`（`AnalyticsSqlRequest`，裸 JSON 兼容）。
+- 响应：`{ question, sql, rowCount, rows, answer, guardBlocked }`（`sql` 刻意一并回传，便于审计/复跑）。
+- 经网关：是。**默认关闭**，需 `app.nl2sql.enabled=true`。
 
-用途：NL2SQL / ChatBI。
+---
 
-```json
-{
-  "question": "2026 年 5 月一共退款了多少钱？"
-}
-```
+## Workflow（workflow-service）
 
-## Workflow
+整个 controller 需 `app.workflow.enabled=true`（**默认关闭**）。审批相关端点需 `approve` scope。
 
 ### POST `/workflow/refund/start`
 
-用途：发起退款审批流。
-
-```json
-{
-  "chatId": "u1",
-  "message": "用户申请退款，金额 99 元",
-  "webhookUrl": "http://callback.local/workflow"
-}
-```
+- 用途：发起退款审批流程。发起方普通用户即可。
+- 请求：`{ message, chatId?, dedupeId?, webhookUrl? }`（均 `Map<String,String>`；`chatId` 默认 `default`）。传 `dedupeId` 按 `tenant:chatId:dedupeId` 幂等去重；传 `webhookUrl` 则终态经 outbox 可靠回推。
+- 响应：`StartResult`。经网关：是。
 
 ### GET `/workflow/tasks`
 
-用途：查询当前租户待办。
+- 用途：当前租户待审任务列表。需 `approve` scope。响应 `TaskView[]`。经网关：是。
 
 ### POST `/workflow/tasks/{taskId}/claim`
 
-用途：认领审批任务。
+- 用途：认领任务（设 assignee=当前用户）。需 `approve`。已被他人领 → 409。响应 `TaskView`。经网关：是。
 
 ### POST `/workflow/tasks/{taskId}/unclaim`
 
-用途：取消认领。
+- 用途：取消认领，放回待领池。需 `approve`。经网关：是。
 
 ### POST `/workflow/tasks/{taskId}/complete`
 
-用途：完成审批。
-
-```json
-{
-  "approved": true,
-  "comment": "同意退款"
-}
-```
+- 用途：完成审批。需 `approve`。请求 `{ approved: true, comment? }`。并发双重审批 → 409。响应 `CompleteResult`。经网关：是。
 
 ### GET `/workflow/instances/{instanceId}`
 
-用途：查询流程实例。
+- 用途：查实例状态 + reply。响应 `InstanceView`。经网关：是。
 
 ### DELETE `/workflow/data?chatId=u1`
 
-用途：清理指定 chatId 的工作流数据。
+- 用途：PII 合规删除——清除本租户某 `chatId` 下全部工作流数据。需 `approve`。响应 `{ chatId, purgedInstances }`。经网关：是。
 
-## Agent
+---
+
+## Agent（agent-service）
+
+深度 Agent 相关端点条件装配于 `DeepAgentService`/`AgentDagService`/各 sibling service（bean 存在才注册），部分能力默认关闭需开关。
 
 ### POST `/agent/run`
 
-用途：同步深度 Agent。
-
-```json
-{
-  "goal": "查一下知识库里退款审批规则，并给出简短结论"
-}
-```
+- 用途：同步深度 Agent（ReAct，自主选 `rag_search`/`analytics_sql`/`current_time`/`delegate`/`finish` 等动作）。
+- 请求：`{ "goal": "..." }`（`AgentRunRequest`）。响应 `AgentRunReply`。
+- 经网关：是。默认开启（`@ConditionalOnBean(DeepAgentService.class)`）。
 
 ### POST `/agent/run/async`
 
-用途：异步深度 Agent。
+- 用途：异步提交 Agent 任务，返回任务快照。
+- 请求：`{ goal, webhookUrl? }`。终态时后台 POST 快照到 `webhookUrl`（带 `X-Agent-Task-Id`/`X-Agent-Task-Status`/`X-Tenant-Id`）。
+- 经网关：是。默认开启。
 
-```json
-{
-  "goal": "查一下知识库里退款审批规则，并给出简短结论",
-  "webhookUrl": "http://callback.local/agent"
-}
-```
+### GET `/agent/tasks`
+
+- 用途：列出当前租户 agent 任务。响应 `AgentAsyncTask[]`。经网关：是。默认开启。
+
+### GET `/agent/tasks/{taskId}`
+
+- 用途：查询单个 agent 任务，不存在 404。经网关：是。默认开启。
+
+### DELETE `/agent/tasks/{taskId}`
+
+- 用途：取消 agent 任务。响应 `{ taskId, cancelled }`。经网关：是。默认开启。
+
+### GET `/agent/tasks/{taskId}/stream`
+
+- 用途：SSE 订阅任务状态 + DAG 阶段事件（`text/event-stream`）。经网关：是。默认开启。
 
 ### POST `/agent/dag/run`
 
-用途：显式 DAG Agent。
+- 用途：显式多 Agent DAG 编排，按拓扑分层执行。
+- 请求：`{ goal, tasks[], webhookUrl? }`，`tasks[]` 元素 `{ id, description, dependsOn[] }`（`AgentDagTask`）。
+- 经网关：是。默认开启（`@ConditionalOnBean(AgentDagService.class)`）。
 
 ```json
 {
-  "goal": "分析退款规则并给出运营建议",
+  "goal": "分析退款审批规则，并给出运营建议",
   "tasks": [
-    {
-      "id": "rag",
-      "goal": "查询退款规则",
-      "dependsOn": []
-    },
-    {
-      "id": "summary",
-      "goal": "基于上游结果总结建议",
-      "dependsOn": ["rag"]
-    }
+    {"id": "t1", "description": "从知识库检索退款审批规则要点", "dependsOn": []},
+    {"id": "t2", "description": "基于 t1 总结潜在运营风险", "dependsOn": ["t1"]}
   ]
 }
 ```
 
 ### POST `/agent/dag/plan-run`
 
-用途：自动规划 DAG 并执行。
-
-```json
-{
-  "goal": "分析退款审批规则，并给出运营建议"
-}
-```
+- 用途：只传目标，Planner 自动拆 DAG 后执行。请求 `{ "goal": "..." }`（`Map<String,String>`）。经网关：是。默认开启。
 
 ### POST `/agent/dag/run/async`
 
-用途：异步显式 DAG。
+- 用途：显式 DAG 异步版，返回 `taskId`（用 `/agent/tasks/{taskId}` 查）。请求同 `/agent/dag/run`。经网关：是。默认开启。
 
 ### POST `/agent/dag/plan-run/async`
 
-用途：异步自动规划 DAG。
+- 用途：自动规划 DAG 异步版。请求 `{ goal, webhookUrl? }`（`Map<String,String>`）。经网关：是。默认开启。
 
-### GET `/agent/tasks`
+### POST `/agent/reflexive`
 
-用途：列出当前租户 agent 任务。
+- 用途：Reflexion 自省环，同步跑完返回含各轮评分轨迹的 `ReflexionReply`。
+- 请求：`{ "question": "..." }`（`ReflexionRequest`）。
+- 经网关：是。**默认关闭**（`@ConditionalOnBean(ReflexionService.class)`）。
 
-### GET `/agent/tasks/{taskId}`
+### POST `/agent/reflexive/stream`
 
-用途：查询 agent 任务。
+- 用途：Reflexion SSE，分阶段推 `attempt-start`/`answer`/`critique`/`done` 事件。请求同上。
+- 经网关：是。默认关闭（同上）。
 
-### DELETE `/agent/tasks/{taskId}`
+### POST `/agent/vote`
 
-用途：取消 agent 任务。
+- 用途：并行跑 N 次 + 聚合投票。请求 `{ question, n? }`（`n` 可选，默认 `app.agent.voting.n`）。响应 `VoteReply`（votes/decision/agreement/confident）。
+- 经网关：是。**默认关闭**（`@ConditionalOnBean(VotingService.class)`）。
 
-### GET `/agent/tasks/{taskId}/stream`
+### POST `/agent/chain`
 
-用途：SSE 订阅 agent 任务状态。
+- 用途：Prompt Chaining，跑 yml 预定义链（`app.agent.chaining.steps`）。请求 `{ "input": "..." }`（`ChainRunRequest`）。未配 steps → 400。
+- 经网关：是。**默认关闭**（`@ConditionalOnBean(PromptChainService.class)`）。
 
-```bash
-curl -N 'http://localhost:8080/agent/tasks/{taskId}/stream' \
-  -H 'X-Api-Key: dev-key-acme'
-```
+### GET `/agent/capabilities`
 
-## Async Task
+- 用途：live capability discovery，返回 agent-service 当前暴露的 MCP 工具描述（`McpToolDescriptor[]`：`platform.agent.run`、`platform.agent.run_async`、`platform.agent.dag.plan_run`、`platform.agent.dag.plan_run_async`）。
+- 经网关：是。默认开启（`@ConditionalOnBean(DeepAgentService.class)`）。
+
+> 其他 agent 动作开关（默认关闭）：`AGENT_CODE_EXEC_ENABLED`（JShell 非沙箱）、`AGENT_MCP_ENABLED`（`mcp_call`）、`AGENT_BROWSER_ENABLED`（Playwright 浏览器动作）、`AGENT_DAG_REPLAN_ENABLED`（Critic/Replan 闭环）。详见 README。
+
+---
+
+## Async Task（async-task-service）
+
+通用任务中心。默认内存任务表；可选 `ASYNC_TASK_STORE=jdbc` 持久化到 MySQL。全部默认开启。
 
 ### POST `/async/tasks`
 
-用途：创建通用异步任务。
+- 用途：创建通用异步任务。
+- 请求：`{ kind, input?, taskId?, webhookUrl? }`（`AsyncTaskCreateRequest`；`kind` 必填，`input` 为任意 JSON，`taskId` 可自带做幂等——已存在返回 409）。
+- 响应：`AsyncTask`（202）。经网关：是。
 
 ```json
 {
-  "taskId": "optional-client-task-id",
-  "type": "agent.run",
-  "payload": "{\"goal\":\"...\"}",
-  "webhookUrl": "http://callback.local/task"
+  "kind": "agent.run",
+  "input": {"goal": "..."},
+  "webhookUrl": "http://host.docker.internal:9000/async-task-callback"
 }
 ```
 
 ### GET `/async/tasks`
 
-用途：列出租户任务。
+- 用途：列出当前租户任务。响应 `AsyncTask[]`。经网关：是。
 
 ### GET `/async/tasks/{taskId}`
 
-用途：查询任务。
+- 用途：查询任务（按租户隔离），不存在 404。经网关：是。
 
 ### PATCH `/async/tasks/{taskId}/status`
 
-用途：worker 更新状态。
-
-```json
-{
-  "status": "RUNNING",
-  "result": null,
-  "error": null,
-  "workerId": "agent-service-1"
-}
-```
+- 用途：worker 更新任务状态。
+- 请求：`{ status, result?, error?, workerId? }`（`AsyncTaskStatusUpdateRequest`）。已终态则原样返回；lease 被他 worker 持有 → 409。
+- 经网关：是（worker 调用）。
 
 ### POST `/async/tasks/{taskId}/lease`
 
-用途：worker 认领或续租。
-
-```json
-{
-  "workerId": "agent-service-1",
-  "leaseSeconds": 300
-}
-```
+- 用途：worker 认领/续租（`PENDING` → `RUNNING`）。
+- 请求：`{ workerId, leaseSeconds? }`（`workerId` 必填）。lease 未过期只允许 owner 更新；冲突 → 409。
+- 经网关：是（worker 调用）。
 
 ### DELETE `/async/tasks/{taskId}`
 
-用途：取消任务。
+- 用途：取消任务。响应 `{ taskId, cancelled }`；已终态/不存在 → 404。经网关：是。
 
 ### GET `/async/tasks/{taskId}/stream`
 
-用途：SSE 状态流，支持 `Last-Event-ID` 或 `lastEventId`。
+- 用途：SSE 状态流（`text/event-stream`），支持 `Last-Event-ID` header 或 `lastEventId` query 断点续订。经网关：是。
 
 ### GET `/async/webhook-outbox/dead`
 
-用途：查看 dead webhook outbox rows。
+- 用途：查询当前租户投递耗尽（`DEAD`）的 webhook outbox 记录。可选 query `limit`（默认 50，上限 200）。经网关：是。
 
-## Channel
+---
+
+## Channel（channel-service）
+
+渠道 ACL：出站投递 + 回调转投 + 入站签名校验。全部默认开启。
 
 ### GET `/channel/capabilities`
 
-用途：查看渠道能力。
+- 用途：查看渠道能力。响应 `{ service, tenantId, channels: [feishu, voice, webhook], status }`。经网关：是。
 
 ### POST `/channel/messages`
 
-用途：发送出站渠道消息。
+- 用途：发送出站渠道消息。
+- 请求：`{ channel, target, message, metadata? }`（`ChannelMessageRequest`；三者缺一 → 400）。
+- 经网关：是。
 
 ```json
 {
   "channel": "voice",
   "target": "user-1",
   "message": "hello",
-  "metadata": {
-    "providerUrl": "http://voice-provider.local/calls"
-  }
+  "metadata": {"providerUrl": "http://voice-provider.local/calls"}
 }
 ```
 
 ### POST `/channel/callbacks`
 
-用途：把外部终态回调转换为渠道消息并复用 channel dispatcher。
-
-```json
-{
-  "source": "workflow",
-  "sourceId": "pi-1",
-  "status": "COMPLETED",
-  "channel": "feishu",
-  "target": "chat-1",
-  "message": "审批已完成",
-  "metadata": {}
-}
-```
+- 用途：把外部终态回调转为渠道消息并复用 dispatcher。
+- 请求：`ChannelCallbackRequest`（`{ source, sourceId, status, channel, target, message, metadata? }`）。
+- 经网关：是（内部/外部回调）。
 
 ### POST `/channel/callbacks/async-task`
 
-用途：接收 async-task-service 终态 webhook payload。`channel` / `target` / `message` 可放在顶层、`result` 或 `metadata` 中。
-
-```json
-{
-  "taskId": "task-1",
-  "status": "SUCCEEDED",
-  "result": {
-    "channel": "feishu",
-    "target": "chat-1",
-    "message": "任务已完成"
-  }
-}
-```
+- 用途：接收 async-task-service 终态 webhook。请求为原始 `Map` payload + 头 `X-Async-Task-Id`/`X-Async-Task-Status`；`channel`/`target`/`message` 可在顶层、`result` 或 `metadata` 中。
+- 经网关：是（内部回调）。
 
 ### POST `/channel/callbacks/workflow`
 
-用途：接收 workflow 终态 webhook payload，映射规则同 async-task callback。
+- 用途：接收 workflow 终态 webhook，映射规则同 async-task callback；头为 `X-Workflow-Instance-Id`/`X-Workflow-Status`。
+- 经网关：是（内部回调）。
 
 ### POST `/channel/inbound`
 
-用途：接收入站渠道事件。
+- 用途：接收入站渠道事件。请求 `ChannelInboundEvent`（`{ eventId, channel, source, eventType, payload }`；`channel`/`eventType` 必填）+ 头 `X-Channel-Signature`（签名校验失败 → 401）。响应 `{ eventId, status, receivedAt }`。
+- 经网关：是（外部 webhook 入站）。
 
-```json
-{
-  "eventId": "evt-1",
-  "channel": "webhook",
-  "source": "external",
-  "eventType": "message",
-  "payload": "{}"
-}
-```
+---
 
-## Interop
+## Interop（interop-service）
+
+A2A + MCP surface。全部默认开启。
 
 ### GET `/interop/agent-card`
 
-用途：A2A-style agent card，capabilities 从当前 MCP tool registry 生成。
+- 用途：平台自有互操作 agent card，capabilities 由 MCP tool registry 生成。响应 `AgentCard`。经网关：是。
 
 ### GET `/interop/a2a/agent-card`
 
-用途：A2A-style agent card 兼容别名。
+- 用途：上者的兼容别名，返回同一 `AgentCard`。经网关：是。
 
 ### GET `/interop/mcp/tools`
 
-用途：列出 MCP-style tool surface。
+- 用途：列出 MCP-style tool surface。响应 `McpToolDescriptor[]`。经网关：是。
 
 ### GET `/interop/mcp/tools/{toolName}`
 
-用途：查询单个 MCP-style tool descriptor 和输入 schema。
+- 用途：查询单个 MCP tool 描述 + 输入 schema。未知 tool → 404。经网关：是。
 
 ### POST `/interop/mcp/call`
 
-用途：调用 MCP-style tool。
+- 用途：调用 MCP-style tool（代理到下游服务）。
+- 请求：`{ tool, arguments }`（`McpToolCallRequest`）。响应 `McpToolCallReply`；未知 tool → 404，下游失败 → 502，缺 goal → 400。
+- 经网关：是。
 
 ```json
 {
   "tool": "platform.agent.run",
-  "arguments": {
-    "goal": "查询退款规则"
-  }
+  "arguments": {"goal": "查询退款规则"}
 }
 ```
 
-## Eval
+### GET `/.well-known/agent-card.json`
+
+- 用途：真 A2A Server 发现端点，返回 `A2aAgentCard`（纯静态元数据）。
+- 经网关：是，且**免鉴权**（网关白名单放行，无需 `X-Api-Key`）。
+
+### POST `/interop/a2a`
+
+- 用途：真 A2A Server JSON-RPC 2.0 单端点，代理到 agent-service。**需鉴权**。
+- 请求：JSON-RPC 报文 `{ jsonrpc, id, method, params }`；缺/非字符串 `method` → JSON-RPC INVALID_REQUEST。响应 `JsonRpcResponse`。
+- 经网关：是。
+
+---
+
+## Eval（eval-service）
+
+外部回归测试客户端。全部默认开启。
 
 ### GET `/eval/capabilities`
 
-用途：查看评测能力。
+- 用途：查看评测能力（支持的断言类型、dualRun 模式/指标、baseline/snapshot 位置）。经网关：是。
 
 ### POST `/eval/run`
 
-用途：执行一组 HTTP eval case。
+- 用途：执行一组 HTTP eval case。
+- 请求：`EvalRunRequest`（`{ targetBaseUrl?, cases[] }`；`cases` 不能为空，`targetBaseUrl` 缺省用 `app.eval` 配置）。`case` 支持 `expectedContains`/`oracleContains`/`expectedJsonPaths`/`semanticExpected`+`semanticMinScore`/`judgeExpected`/`embeddingExpected` 等断言。
+- 响应：`EvalRunReply`（202）。经网关：是（受 `eval` scope + `eval` 限流约束）。
 
 ```json
 {
@@ -482,12 +428,7 @@ curl -N 'http://localhost:8080/agent/tasks/{taskId}/stream' \
       "method": "POST",
       "endpoint": "/chat?chatId=eval",
       "body": {"message": "hello"},
-      "expectedContains": "reply",
-      "expectedJsonPaths": {
-        "$.answer": "reply"
-      },
-      "semanticExpected": "退款审批需要人工确认",
-      "semanticMinScore": 0.6
+      "expectedContains": "reply"
     }
   ]
 }
@@ -495,10 +436,29 @@ curl -N 'http://localhost:8080/agent/tasks/{taskId}/stream' \
 
 ### POST `/eval/suites/{suiteName}/run`
 
-用途：执行内置或外部 baseline suite。
+- 用途：执行内置或外部 baseline suite。请求可选 `{ targetBaseUrl }`（`EvalSuiteRunRequest`）。suite 不存在 → 404，无 case → 400。响应 `EvalRunReply`（202）。经网关：是。
 
-```json
-{
-  "targetBaseUrl": "http://edge-gateway:8080"
-}
-```
+### POST `/eval/dual-run`
+
+- 用途：oracle vs candidate 双跑，返回门禁明细，**HTTP 恒 200**（信息化）。
+- 请求：`EvalDualRunRequest`。响应 `EvalDualRunReply`。经网关：是。
+
+### POST `/eval/gate`
+
+- 用途：CI 门禁——双跑后有回归返回 **HTTP 422**（body 为 `EvalDualRunReply`，含 regressions 明细），无回归 200。
+- 请求：`EvalDualRunRequest`。经网关：是。
+
+---
+
+## Vision（vision-service）
+
+整个 controller 需 `app.vision.enabled=true`（**默认关闭**）。
+
+### POST `/vision/caption`（别名 `/vision/describe`）
+
+- 用途：图像描述 / OCR（caption + 文字转写）。两种入参：
+  - `application/json`：`VisionCaptionRequest`（`{ imageBase64, mimeType?, instruction? }`；`imageBase64` 必填，跨服务调用如 agent `browser_see` 走这条）。
+  - `multipart/form-data`：表单字段 `file`（必填）+ 可选 `instruction`。
+- `instruction` 留空 → 用配置的默认 caption/OCR 指令；`mimeType` 缺省兜底 `image/png`。守卫/入参校验失败 → 400。
+- 响应：`VisionCaptionReply`（`{ text, modelName, length }`）。
+- 经网关：是（受 `vision` scope 约束）。默认关闭。
