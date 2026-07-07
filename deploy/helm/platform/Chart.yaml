@@ -1,0 +1,17 @@
+apiVersion: v2
+name: platform
+description: >-
+  langchain4j-platform 伞状（umbrella）Helm chart。用 values 参数化 12 个 Java
+  Spring Boot 微服务的 Deployment/Service/HPA（复用 charts/platform-lib 库模板），
+  基础设施（MySQL/Redis/Kafka/Qdrant/LiteLLM）以 ExternalName Service 指向外部托管实例，
+  不自建 StatefulSet。密钥走 Secret（占位值，生产用 External Secrets Operator/Vault 注入），
+  内部 JWT 采用 RS256（edge-gateway 私钥签发、下游公钥验签）。
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+# 库子 chart platform-lib 直接 vendored 在 charts/ 下（file:// 依赖），
+# Helm 自动加载其 define 模板，无需联网 `helm dependency build`（离线可直接 lint/template）。
+dependencies:
+  - name: platform-lib
+    version: 0.1.0
+    repository: "file://charts/platform-lib"

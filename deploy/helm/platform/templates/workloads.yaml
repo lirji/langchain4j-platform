@@ -1,0 +1,17 @@
+{{/*
+遍历 values.services，为每个业务服务渲染 Deployment + Service（+ 可选 HPA），
+全部复用 charts/platform-lib 的库模板。副本为 0 的服务仍渲染（便于按需 scale）。
+*/}}
+{{- $root := . -}}
+{{- range $name, $svc := .Values.services }}
+---
+{{ include "platform-lib.deployment" (dict "name" $name "svc" $svc "root" $root) }}
+---
+{{ include "platform-lib.service" (dict "name" $name "svc" $svc "root" $root) }}
+{{- if $svc.hpa }}
+{{- if $svc.hpa.enabled }}
+---
+{{ include "platform-lib.hpa" (dict "name" $name "svc" $svc "root" $root) }}
+{{- end }}
+{{- end }}
+{{- end }}

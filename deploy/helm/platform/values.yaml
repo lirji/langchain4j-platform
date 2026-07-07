@@ -1,0 +1,396 @@
+# =============================================================================
+# langchain4j-platform 伞状 chart values
+# =============================================================================
+# 结构：
+#   global.*        —— 所有服务共享的镜像/探针/资源/envFrom 默认
+#   config.*        —— 非敏感 base-url / feature flag（渲染进 ConfigMap platform-config）
+#   secrets.*       —— 敏感项占位值（渲染进 Secret；生产用 External Secrets Operator/Vault 覆盖）
+#   externalInfra.* —— 外部托管基础设施（ExternalName Service，不自建 StatefulSet）
+#   services.*      —— 每个业务服务的 Deployment/Service/HPA 参数
+#   ingress.*       —— edge-gateway 对外暴露
+#
+# Service DNS 约定：k8s Service 名 == docker-compose 服务名 == 各服务硬编码在 env 里的
+# 主机名（如 http://knowledge-service:8084、mysql:3306、kafka:9092），故跨服务调用近零改动。
+# =============================================================================
+
+global:
+  image:
+    # 默认镜像仓库前缀；单服务镜像 = <registry>/<服务名>:<tag>，可在 services.<svc>.image 覆盖。
+    registry: ghcr.io/your-org/langchain4j-platform
+    tag: latest
+    pullPolicy: IfNotPresent
+  imagePullSecrets: []
+
+  # 所有服务默认 envFrom：共享 ConfigMap（非敏感）+ 共享 Secret（敏感）。
+  # edge-gateway 额外挂 gateway 私钥 Secret（见 services.edge-gateway.envFrom）。
+  envFrom:
+    - configMap: platform-config
+    - secret: platform-secrets
+
+  # 追加给所有服务的明文 env（此处留空；私钥/公钥等走 Secret）。
+  sharedEnv: []
+
+  # 探针复用 Spring Boot actuator health group（各服务 application.yml 已 probes.enabled=true）。
+  probes:
+    enabled: true
+    livenessPath: /actuator/health/liveness
+    readinessPath: /actuator/health/readiness
+    liveness:
+      initialDelaySeconds: 40
+      periodSeconds: 15
+      timeoutSeconds: 3
+      failureThreshold: 6
+    readiness:
+      initialDelaySeconds: 20
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 6
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 384Mi
+    limits:
+      cpu: "1"
+      memory: 768Mi
+
+# -----------------------------------------------------------------------------
+# 非敏感配置 → ConfigMap platform-config（envFrom 注入所有服务；未用到的 key 无害）
+# 主机名一律用 k8s Service 名（== compose 服务名），DNS 自动解析。
+# -----------------------------------------------------------------------------
+config:
+  # --- LLM 网关（LiteLLM）与模型 ---
+  GATEWAY_BASE_URL: "http://litellm:4000/v1"
+  GATEWAY_MODEL: "chat-default"
+
+  # --- 内部 JWT：RS256（algorithm 非敏感入 ConfigMap；公钥/私钥入 Secret） ---
+  # edge-gateway 用私钥签发、下游用公钥验签 → 缩小密钥轮转爆炸半径。
+  PLATFORM_SECURITY_JWT_ALGORITHM: "RS256"
+
+  # --- 集中配置中心（Spring Cloud Config Server，集群内 Service） ---
+  CONFIG_SERVER_URI: "http://config-server:8888"
+
+  # --- 跨服务 base-url（下游服务互调） ---
+  KNOWLEDGE_BASE_URL: "http://knowledge-service:8084"
+  ANALYTICS_BASE_URL: "http://analytics-service:8083"
+  ASYNC_TASK_BASE_URL: "http://async-task-service:8086"
+  VISION_BASE_URL: "http://vision-service:8090"
+  AGENT_BASE_URL: "http://agent-service:8085"
+
+  # --- edge-gateway 路由目标 URI ---
+  CONVERSATION_URI: "http://conversation-service:8081"
+  WORKFLOW_URI: "http://workflow-service:8082"
+  ANALYTICS_URI: "http://analytics-service:8083"
+  KNOWLEDGE_URI: "http://knowledge-service:8084"
+  AGENT_URI: "http://agent-service:8085"
+  ASYNC_TASK_URI: "http://async-task-service:8086"
+  CHANNEL_URI: "http://channel-service:8087"
+  INTEROP_URI: "http://interop-service:8088"
+  EVAL_URI: "http://eval-service:8089"
+  VISION_URI: "http://vision-service:8090"
+
+  # --- eval 客户端目标（打自己的边缘网关） ---
+  EVAL_TARGET_BASE_URL: "http://edge-gateway:8080"
+
+  # --- 外部基础设施 endpoint（ExternalName Service 名，见 externalInfra） ---
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  QDRANT_HOST: "qdrant"
+  QDRANT_PORT: "6334"
+  QDRANT_COLLECTION_NAME: "knowledge_segments"
+
+  # --- workflow（Flowable BPMN） ---
+  WORKFLOW_ENABLED: "true"
+  WORKFLOW_DB_URL: "jdbc:mysql://mysql:3306/flowable?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+  WORKFLOW_DB_USER: "root"
+  WORKFLOW_TERMINAL_NOTIFICATION_MODE: "async-task"
+
+  # --- analytics（NL2SQL） ---
+  NL2SQL_ENABLED: "true"
+  NL2SQL_DB_URL: "jdbc:mysql://mysql:3306/nl2sql_demo?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useInformationSchema=true"
+  NL2SQL_DB_READONLY_URL: "jdbc:mysql://mysql:3306/nl2sql_demo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useInformationSchema=true"
+  NL2SQL_DB_ADMIN_USER: "root"
+
+  # --- knowledge（RAG / 向量库 / GraphRAG） ---
+  RAG_EMBEDDING_PROVIDER: "hash"
+  RAG_EMBEDDING_MODEL: "embedding-default"
+  RAG_VECTOR_STORE_PROVIDER: "in-memory"
+  RAG_REGISTRY_STORE: "in-memory"
+  RAG_HYBRID_ENABLED: "true"
+  RAG_RANKING_VECTOR_WEIGHT: "1.0"
+  RAG_RANKING_KEYWORD_WEIGHT: "1.0"
+  RAG_RANKING_GRAPH_WEIGHT: "1.0"
+  RAG_GRAPH_ENABLED: "false"
+  RAG_GRAPH_STORE: "in-memory"
+  RAG_GRAPH_INCLUDE_IN_QUERY: "false"
+  RAG_GRAPH_QUERY_TOP_K: "20"
+  RAG_GRAPH_DB_URL: "jdbc:mysql://mysql:3306/knowledge_graph?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true"
+  RAG_GRAPH_DB_USER: "root"
+
+  # --- conversation（可选 RAG 增强） ---
+  CONVERSATION_RAG_ENABLED: "false"
+  CONVERSATION_RAG_TOP_K: "5"
+
+  # --- agent（ReAct + DAG + 异步） ---
+  AGENT_ENABLED: "true"
+  AGENT_MAX_STEPS: "8"
+  AGENT_RAG_TOP_K: "5"
+  AGENT_ANALYTICS_ENABLED: "true"
+  AGENT_CODE_EXEC_ENABLED: "false"
+  AGENT_BROWSER_ENABLED: "false"
+  AGENT_MCP_ENABLED: "false"
+  AGENT_MCP_TRANSPORT: "http"
+  AGENT_VISION_ENABLED: "false"
+  AGENT_TASK_WEBHOOK_ENABLED: "true"
+  AGENT_TASK_WEBHOOK_MAX_ATTEMPTS: "3"
+  AGENT_TASK_WEBHOOK_BACKOFF: "250ms"
+  # 多副本水平扩展语义：若 agent 副本 >1，异步任务领取需以 async-task-service 为权威，
+  # 请将下面两项设为 true（避免各副本重复领取/状态漂移）：
+  #   AGENT_ASYNC_EXTERNAL_ENABLED: "true"
+  #   AGENT_ASYNC_EXTERNAL_AUTHORITATIVE: "true"
+  AGENT_ASYNC_EXTERNAL_ENABLED: "false"
+  AGENT_ASYNC_EXTERNAL_AUTHORITATIVE: "false"
+  AGENT_ASYNC_EXTERNAL_MIRROR_WEBHOOK: "false"
+  AGENT_ASYNC_LEASE_SECONDS: "300"
+
+  # --- async-task ---
+  # 单副本默认内存存储；如需多副本水平扩展，改 ASYNC_TASK_STORE=jdbc（持久化到 MySQL），
+  # 否则各副本内存态不共享。见 services.async-task-service 注释。
+  ASYNC_TASK_STORE: "in-memory"
+  ASYNC_TASK_DB_URL: "jdbc:mysql://mysql:3306/async_task?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true"
+  ASYNC_TASK_DB_USER: "root"
+  ASYNC_TASK_WEBHOOK_ENABLED: "true"
+  ASYNC_TASK_WEBHOOK_MAX_ATTEMPTS: "3"
+  ASYNC_TASK_WEBHOOK_BACKOFF: "250ms"
+  ASYNC_TASK_WEBHOOK_DELIVERED_RETENTION: "P7D"
+
+  # --- channel（出站投递 + Kafka 事件） ---
+  CHANNEL_OUTBOUND_ENABLED: "false"
+  CHANNEL_OUTBOUND_SIGNATURE_ENABLED: "false"
+  CHANNEL_EVENTS_ENABLED: "false"
+  CHANNEL_EVENTS_TOPIC: "platform.channel.events"
+
+  # --- vision ---
+  VISION_ENABLED: "false"
+  VISION_MAX_IMAGE_BYTES: "10485760"
+
+# -----------------------------------------------------------------------------
+# 敏感配置 → Secret（占位值；生产切勿提交真值）
+# 生产：把 create 置 false，改用 External Secrets Operator（见 templates/externalsecret-sample.yaml）
+# 从 Vault / 云 Secrets Manager 同步出同名 Secret（platform-secrets / edge-gateway-jwt）。
+# -----------------------------------------------------------------------------
+secrets:
+  # 是否由本 chart 创建占位 Secret。生产用 ESO 时置 false。
+  create: true
+
+  # --- 共享 Secret：platform-secrets（envFrom 注入所有服务） ---
+  shared:
+    # 内部 JWT RS256 验签公钥（X.509 SubjectPublicKeyInfo，PEM 或纯 base64）。
+    # 下游所有服务持公钥验签；仅 edge-gateway 持私钥签发（见 gateway 段）。
+    PLATFORM_SECURITY_JWT_PUBLIC_KEY: |
+      -----BEGIN PUBLIC KEY-----
+      REPLACE_WITH_RS256_PUBLIC_KEY_VIA_EXTERNAL_SECRETS
+      -----END PUBLIC KEY-----
+    # HS256 兼容兜底（algorithm=HS256 时使用）；RS256 下不生效，但保留以便回退。必须 >=32 字节。
+    INTERNAL_JWT_SECRET: "dev-only-internal-secret-change-me-please-32b"
+    # LiteLLM 网关 master key（各服务调 LLM 用）。
+    GATEWAY_API_KEY: "sk-litellm-master"
+    # 各数据库口令。
+    WORKFLOW_DB_PASSWORD: "change-me"
+    NL2SQL_DB_ADMIN_PASSWORD: "change-me"
+    ASYNC_TASK_DB_PASSWORD: "change-me"
+    RAG_GRAPH_DB_PASSWORD: "change-me"
+    # workflow outbox HMAC 签名密钥。
+    WORKFLOW_OUTBOX_HMAC_SECRET: "dev-secret-change-me"
+    # channel 出站签名密钥（CHANNEL_OUTBOUND_SIGNATURE_ENABLED=true 时用）。
+    CHANNEL_OUTBOUND_SIGNATURE_SECRET: ""
+    # eval 客户端打边缘网关用的 api-key。
+    EVAL_API_KEY: "dev-key-acme"
+
+  # --- edge-gateway 专属 Secret：edge-gateway-jwt（仅 gateway envFrom） ---
+  # RS256 私钥隔离在此 Secret，只有 edge-gateway 挂载 → 下游拿不到私钥，缩小爆炸半径。
+  gatewayJwt:
+    PLATFORM_SECURITY_JWT_PRIVATE_KEY: |
+      -----BEGIN PRIVATE KEY-----
+      REPLACE_WITH_RS256_PRIVATE_KEY_VIA_EXTERNAL_SECRETS
+      -----END PRIVATE KEY-----
+
+  # --- edge-gateway api-key→租户 目录（Secret 卷挂载为 yaml，SPRING_CONFIG_IMPORT 追加导入） ---
+  # 占位与 edge-gateway/application.yml 一致；生产从 Vault 注入真实目录。
+  gatewayApiKeys:
+    apikeys.yaml: |
+      platform:
+        security:
+          api-keys:
+            dev-key-acme:
+              tenant: acme
+              user: alice
+              scopes: [chat, approve, agent, channel, eval, vision]
+            dev-key-globex:
+              tenant: globex
+              user: bob
+              scopes: [chat]
+
+# -----------------------------------------------------------------------------
+# External Secrets Operator（ESO）对接（默认关闭，用上面的占位 Secret）
+# 生产：secrets.create=false + externalSecrets.enabled=true，由 ESO 从 Vault 同步同名 Secret。
+# 样例 ExternalSecret CRD 见 templates/externalsecret-sample.yaml。
+# -----------------------------------------------------------------------------
+externalSecrets:
+  enabled: false
+  refreshInterval: "1h"
+  # Vault 中密钥路径前缀（如 KV v2 挂载 secret/data/platform）。
+  vaultPath: "secret/data/langchain4j-platform"
+  secretStoreRef:
+    name: vault-backend
+    kind: ClusterSecretStore
+
+# -----------------------------------------------------------------------------
+# 外部托管基础设施 → ExternalName Service（不自建 StatefulSet）
+# Service 名 == compose 服务名，使各服务硬编码主机名（mysql/redis/kafka/qdrant/litellm）解析到外部实例。
+#
+# 若外部实例只有 IP（ExternalName 需 DNS CNAME，不接受裸 IP）：把 enabled 置 false，
+# 转而直接在 config.* 覆盖对应 base-url（如 GATEWAY_BASE_URL / WORKFLOW_DB_URL / KAFKA_BOOTSTRAP_SERVERS）指向 IP。
+# -----------------------------------------------------------------------------
+externalInfra:
+  mysql:
+    enabled: true
+    externalName: mysql.external.example.com
+  redis:
+    enabled: true
+    externalName: redis.external.example.com
+  kafka:
+    enabled: true
+    externalName: kafka.external.example.com
+  qdrant:
+    enabled: true
+    externalName: qdrant.external.example.com
+  litellm:
+    enabled: true
+    externalName: litellm.external.example.com
+
+# -----------------------------------------------------------------------------
+# edge-gateway 对外暴露：Ingress（默认）或直接把 services.edge-gateway.service.type 设为 LoadBalancer
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: false
+  className: nginx
+  host: platform.example.com
+  path: /
+  pathType: Prefix
+  annotations: {}
+  tls: []
+
+# =============================================================================
+# 12 个业务服务（6 个 platform-* 是库，不部署）
+# 每项：port（== 容器/Service 端口，与 compose 一致）、replicaCount、可选 hpa、可选覆盖。
+# =============================================================================
+services:
+  # -------- 集中配置中心 --------
+  config-server:
+    port: 8888
+    replicaCount: 1
+    # config-server 自身不 import 配置，SPRING_PROFILES_ACTIVE 必须单服务设置（不能进共享 ConfigMap，
+    # 否则会给所有服务激活 native profile）。
+    env:
+      - name: SPRING_PROFILES_ACTIVE
+        value: "native"
+      - name: CONFIG_SERVER_PORT
+        value: "8888"
+
+  # -------- 对外边缘网关 --------
+  edge-gateway:
+    port: 8080
+    replicaCount: 2
+    service:
+      # 默认 ClusterIP + 走 Ingress；也可直接改 LoadBalancer（并设 ingress.enabled=false）。
+      type: ClusterIP
+    # 额外挂 gateway 私钥 Secret（下游不挂 → RS256 私钥隔离）。
+    envFrom:
+      - secret: edge-gateway-jwt
+    env:
+      # 覆盖 spring.config.import：叠加配置中心 + 卷内 api-key 目录（Secret 挂载）。
+      - name: SPRING_CONFIG_IMPORT
+        value: "optional:configserver:http://config-server:8888,optional:file:/etc/platform/apikeys/apikeys.yaml"
+    volumeMounts:
+      - name: apikeys
+        mountPath: /etc/platform/apikeys
+        readOnly: true
+    volumes:
+      - name: apikeys
+        secret:
+          secretName: edge-gateway-apikeys
+    hpa:
+      enabled: false
+      minReplicas: 2
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 70
+
+  # -------- 业务服务 --------
+  conversation-service:
+    port: 8081
+    replicaCount: 1
+    hpa:
+      enabled: false
+      minReplicas: 1
+      maxReplicas: 4
+      targetCPUUtilizationPercentage: 75
+
+  workflow-service:
+    port: 8082
+    replicaCount: 1
+    # Flowable 在共享 MySQL 上自管表，多副本安全；如需扩容开 hpa。
+    hpa:
+      enabled: false
+      minReplicas: 1
+      maxReplicas: 3
+
+  analytics-service:
+    port: 8083
+    replicaCount: 1
+
+  knowledge-service:
+    port: 8084
+    replicaCount: 1
+    hpa:
+      enabled: false
+      minReplicas: 1
+      maxReplicas: 4
+
+  agent-service:
+    port: 8085
+    replicaCount: 1
+    # 水平扩展提醒：agent 副本 >1 时，异步任务须以 async-task-service 为权威，
+    # 在 config.* 设 AGENT_ASYNC_EXTERNAL_ENABLED=true + AGENT_ASYNC_EXTERNAL_AUTHORITATIVE=true，
+    # 否则各副本内存态各自领取会冲突。默认单副本。
+    hpa:
+      enabled: false
+      minReplicas: 1
+      maxReplicas: 4
+
+  async-task-service:
+    port: 8086
+    replicaCount: 1
+    # 水平扩展提醒：async-task 副本 >1 时，须设 config.ASYNC_TASK_STORE=jdbc（持久化到 MySQL），
+    # 否则内存存储各副本不共享，任务/租约/webhook 状态会分裂。默认单副本 + 内存。
+    hpa:
+      enabled: false
+      minReplicas: 1
+      maxReplicas: 4
+
+  channel-service:
+    port: 8087
+    replicaCount: 1
+
+  interop-service:
+    port: 8088
+    replicaCount: 1
+
+  vision-service:
+    port: 8090
+    replicaCount: 1
+
+  # eval-service 是回归测试客户端，不是常驻业务服务。默认副本 0（不常驻）；
+  # 需要跑评测时临时 `--set services.eval-service.replicaCount=1` 或改造成 Job/CronJob 按需触发。
+  eval-service:
+    port: 8089
+    replicaCount: 0

@@ -1,0 +1,25 @@
+{{/*
+外部托管基础设施：ExternalName Service（不自建 StatefulSet）。
+Service 名 == compose 服务名，使各服务硬编码主机名解析到外部实例：
+  mysql:3306 / redis:6379 / kafka:9092 / qdrant:6334 / litellm:4000
+ExternalName 将集群内 DNS 名 CNAME 到外部 FQDN，端口由客户端 env 决定（透传）。
+*/}}
+{{- range $name, $ext := .Values.externalInfra }}
+{{- if $ext.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    app.kubernetes.io/name: {{ $name }}
+    app.kubernetes.io/part-of: langchain4j-platform
+    app.kubernetes.io/component: external-infra
+  annotations:
+    # 指向外部托管/现有实例；生产替换为真实 FQDN。仅有 IP 时改用 config.* 直配 base-url。
+    platform.lrj.com/external: "true"
+spec:
+  type: ExternalName
+  externalName: {{ $ext.externalName | quote }}
+{{- end }}
+{{- end }}

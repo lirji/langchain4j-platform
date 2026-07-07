@@ -1,0 +1,8 @@
+apiVersion: v2
+name: platform-lib
+description: >-
+  Library chart for langchain4j-platform. Provides reusable named templates
+  (Deployment / Service / HPA) so the umbrella chart can render every Java
+  Spring Boot microservice from values. Not installed on its own (type: library).
+type: library
+version: 0.1.0

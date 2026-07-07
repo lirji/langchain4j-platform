@@ -1,0 +1,15 @@
+{{/*
+非敏感 base-url / feature flag → ConfigMap platform-config。
+所有服务 envFrom 注入（未用到的 key 无害）。主机名均为 k8s Service 名（compose 同名），DNS 解析。
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-config
+  labels:
+    app.kubernetes.io/name: platform-config
+    app.kubernetes.io/part-of: langchain4j-platform
+data:
+  {{- range $k, $v := .Values.config }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}

@@ -1,0 +1,36 @@
+{{/*
+edge-gateway 对外暴露（默认关闭）。开关：ingress.enabled=true。
+另一种方式：不开 Ingress，直接把 services.edge-gateway.service.type 设为 LoadBalancer。
+*/}}
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: edge-gateway
+  labels:
+    app.kubernetes.io/name: edge-gateway
+    app.kubernetes.io/part-of: langchain4j-platform
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.path }}
+            pathType: {{ .Values.ingress.pathType }}
+            backend:
+              service:
+                name: edge-gateway
+                port:
+                  number: {{ (index .Values.services "edge-gateway").port }}
+{{- end }}
