@@ -404,3 +404,28 @@ live discovery 影响的是 **MCP 工具目录**（`/interop/mcp/tools`、平台
 | `/interop/mcp/call` | POST | 需鉴权 | 调用 MCP 工具 |
 
 > 全部经 `edge-gateway`（:8080）访问；`interop-service` 直连端口为 :8088。
+
+## 生产配置
+
+对外暴露前，把 agent-card 元数据配成真实值（`interop-service` 环境变量）：
+
+| 环境变量 | 作用 | 默认 |
+|---|---|---|
+| `INTEROP_A2A_AGENT_NAME` | agent-card `name` | `langchain4j-platform` |
+| `INTEROP_A2A_AGENT_DESCRIPTION` | agent-card `description` | 见默认 |
+| `INTEROP_A2A_BASE_URL` | agent-card `url` 前缀（对外可达的 A2A 端点基址） | `http://localhost:8080` |
+| `INTEROP_A2A_VERSION` | agent-card `version` | `0.1.0` |
+| `INTEROP_DISCOVERY_ENABLED` | live capability discovery（从 agent-service 动态拉能力） | `false` |
+| `AGENT_BASE_URL` | interop→agent 内网地址 | `http://localhost:8085` |
+
+鉴权：`/.well-known/agent-card.json` **免鉴权对外**（A2A 发现惯例，已在 edge-gateway 白名单）；`/interop/a2a` JSON-RPC 端点**需 `X-Api-Key`**（agent-card 的 `securitySchemes.apiKey` 已声明）。对外发布时，为外部调用方分配专用 api-key→租户 映射即可按租户隔离。
+
+## 冒烟验证
+
+栈起好后一键验证「发现 → chat → deep-research task 轮询」：
+
+```bash
+BASE_URL=http://localhost:8080 API_KEY=dev-key-acme bash deploy/smoke-a2a.sh
+```
+
+脚本依次：① 免鉴权拉 `/.well-known/agent-card.json` 并打印 name/version/skills；② `message/send`（chat skill）拿同步回复；③ `message/send`（`metadata.skill=deep-research`）拿 A2A Task → `tasks/get` 轮询到 `completed`。
