@@ -1,8 +1,10 @@
 package com.lrj.platform.gateway;
 
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.listener.ChatModelListener;
 import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 
 import java.util.List;
 
@@ -42,6 +44,29 @@ public class GatewayChatModelFactory {
                 .temperature(temperature)
                 .timeout(props.getTimeout())
                 .maxRetries(props.getMaxRetries())
+                .listeners(listeners)
+                .logRequests(props.isLogRequests())
+                .logResponses(props.isLogResponses())
+                .build();
+    }
+
+    /**
+     * 流式主模型（token 级 SSE）。同样指向 LiteLLM、灌入相同 {@link ChatModelListener}，
+     * 使流式调用的指标 / 成本 / token 预算归因与同步链路一致。供 {@code /chat/stream}、
+     * 流式反思 / 多 Agent 合成等使用。
+     */
+    public StreamingChatModel buildStreaming() {
+        return buildStreaming(props.getModelName(), props.getTemperature());
+    }
+
+    /** 指定逻辑模型名 + 温度的流式变体。 */
+    public StreamingChatModel buildStreaming(String modelName, Double temperature) {
+        return OpenAiStreamingChatModel.builder()
+                .baseUrl(props.getBaseUrl())
+                .apiKey(props.getApiKey())
+                .modelName(modelName)
+                .temperature(temperature)
+                .timeout(props.getTimeout())
                 .listeners(listeners)
                 .logRequests(props.isLogRequests())
                 .logResponses(props.isLogResponses())

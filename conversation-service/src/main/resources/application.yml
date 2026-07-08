@@ -14,6 +14,9 @@ platform:
     base-url: ${GATEWAY_BASE_URL:http://localhost:4000/v1}
     api-key: ${GATEWAY_API_KEY:sk-litellm-master}
     model-name: ${GATEWAY_MODEL:chat-default}
+    # token 级流式 StreamingChatModel（供 /chat/stream）。默认开；无流式需求可置 false 省一个 Bean。
+    streaming:
+      enabled: ${GATEWAY_STREAMING_ENABLED:true}
   security:
     jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
     # 本地直连调试用的 api key → 租户映射（生产下游只信 JWT，可关 allow-api-key-fallback）
@@ -45,6 +48,22 @@ app:
       max-context-chars: ${CONVERSATION_RAG_MAX_CONTEXT_CHARS:4000}
       connect-timeout: ${CONVERSATION_RAG_CONNECT_TIMEOUT:1s}
       read-timeout: ${CONVERSATION_RAG_READ_TIMEOUT:3s}
+    # 多轮 Chat Memory（对齐单体 memory/）。默认开启、内存滑窗，零外部依赖；redis 档多副本共享 + 重启不丢。
+    # window-mode: messages(最近 N 条) | tokens(近似 token 窗) | summary(旧消息 LLM 压缩为摘要，长对话保早期要点)
+    memory:
+      store: ${CONVERSATION_MEMORY_STORE:in-memory}          # in-memory | redis
+      window-mode: ${CONVERSATION_MEMORY_WINDOW_MODE:messages}  # messages | tokens | summary
+      max-messages: ${CONVERSATION_MEMORY_MAX_MESSAGES:20}
+      max-tokens: ${CONVERSATION_MEMORY_MAX_TOKENS:2000}     # tokens 档用
+      token-model: ${CONVERSATION_MEMORY_TOKEN_MODEL:gpt-4o-mini}  # tokens 档 tokenizer 依据
+      redis-ttl: ${CONVERSATION_MEMORY_REDIS_TTL:P7D}        # redis 档会话 TTL（ISO-8601，如 P7D / PT12H）
+    # 对话护栏（移植单体 PromptInjection/PII）。默认全关、零回归；生产建议开启（安全合规）。
+    guardrail:
+      injection:
+        enabled: ${CONVERSATION_GUARDRAIL_INJECTION_ENABLED:false}
+        mode: ${CONVERSATION_GUARDRAIL_INJECTION_MODE:block}   # block(拒答) | sanitize(剥离控制token) | audit(仅记日志放行)
+      pii:
+        enabled: ${CONVERSATION_GUARDRAIL_PII_ENABLED:false}    # 输出里的 email/手机号/身份证就地脱敏
     # L1 语义缓存（应用侧 / 问题级 / 租户桶 / pre-RAG）。默认关闭，对现有 /chat 行为零影响。
     semantic-cache:
       enabled: ${CONVERSATION_SEMANTIC_CACHE_ENABLED:false}

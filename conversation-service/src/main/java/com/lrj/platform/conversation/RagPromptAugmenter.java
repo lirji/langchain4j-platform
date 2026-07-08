@@ -32,16 +32,40 @@ public class RagPromptAugmenter {
         this.maxContextChars = Math.max(256, maxContextChars);
     }
 
+    /**
+     * 老式「上下文 + 用户问题」合并串（保留兼容：把知识来源与问题拼进单条消息）。
+     * 新的多轮记忆流程改用 {@link #contextFor(String)}，把来源与用户消息分开。
+     */
     public String augment(String message) {
-        if (!enabled || message == null || message.isBlank()) {
+        String block = sourcesBlock(message);
+        if (block == null) {
             return message;
+        }
+        return block + "\n[User question]\n" + message;
+    }
+
+    /**
+     * 只返回「知识来源」上下文块（不含用户问题），供经 {@code @V("context")} 注入系统提示。
+     * 未开启 / 无命中 / 空问题时返回空串——此时对话与无 RAG 完全一致。
+     */
+    public String contextFor(String message) {
+        String block = sourcesBlock(message);
+        return block == null ? "" : block;
+    }
+
+    /**
+     * 检索并拼出 {@code [Knowledge sources]} 来源块；未开启 / 空问题 / 无有效命中时返回 {@code null}。
+     */
+    private String sourcesBlock(String message) {
+        if (!enabled || message == null || message.isBlank()) {
+            return null;
         }
         KnowledgeQueryReply reply = knowledgeClient.query(new KnowledgeQueryRequest(message, topK, minScore, category));
         List<KnowledgeHit> hits = reply.hits().stream()
                 .filter(hit -> hit.text() != null && !hit.text().isBlank())
                 .toList();
         if (hits.isEmpty()) {
-            return message;
+            return null;
         }
         StringBuilder context = new StringBuilder();
         context.append("[Knowledge sources]\n");
@@ -58,9 +82,8 @@ public class RagPromptAugmenter {
             used += block.length();
         }
         if (used == 0) {
-            return message;
+            return null;
         }
-        context.append("\n[User question]\n").append(message);
         return context.toString();
     }
 
