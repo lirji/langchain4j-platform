@@ -151,6 +151,9 @@ services:
       RAG_GRAPH_DB_URL: jdbc:mysql://mysql:3306/knowledge_graph?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
       RAG_GRAPH_DB_USER: root
       RAG_GRAPH_DB_PASSWORD: root
+      # 指向栈内 redis 容器（默认 in-memory registry 时仅供健康探针；RAG_REGISTRY_STORE=redis 时才真正使用）
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
     depends_on:
       - mysql
