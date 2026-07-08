@@ -1,7 +1,7 @@
 package com.lrj.platform.agent.voting;
 
 import com.lrj.platform.protocol.agent.VoteRequest;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -17,7 +17,7 @@ import java.util.Map;
  * → 并行跑 N 次 + 聚合，返回 {@code VoteReply}（votes / decision / agreement / confident）。
  */
 @RestController
-@ConditionalOnBean(VotingService.class)
+@ConditionalOnProperty(name = "app.agent.enabled", havingValue = "true", matchIfMissing = true)
 public class VotingController {
 
     private final VotingService voting;

@@ -5,7 +5,7 @@ import com.lrj.platform.protocol.agent.ReflexionRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,7 +29,7 @@ import java.util.concurrent.Executor;
  * </ul>
  */
 @RestController
-@ConditionalOnBean(ReflexionService.class)
+@ConditionalOnProperty(name = "app.agent.enabled", havingValue = "true", matchIfMissing = true)
 public class ReflexionController {
 
     private static final Logger log = LoggerFactory.getLogger(ReflexionController.class);

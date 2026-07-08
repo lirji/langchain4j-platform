@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
@@ -31,7 +31,7 @@ import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
 @Service
-@ConditionalOnBean(DeepAgentService.class)
+@ConditionalOnProperty(name = "app.agent.enabled", havingValue = "true", matchIfMissing = true)
 public class AgentAsyncTaskService {
 
     private static final Logger log = LoggerFactory.getLogger(AgentAsyncTaskService.class);

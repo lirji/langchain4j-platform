@@ -1,7 +1,7 @@
 package com.lrj.platform.agent.chaining;
 
 import com.lrj.platform.protocol.agent.ChainRunRequest;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -18,7 +18,7 @@ import java.util.Map;
  * （{@code app.agent.chaining.steps}），返回逐步 trace + 是否全程通过。
  */
 @RestController
-@ConditionalOnBean(PromptChainService.class)
+@ConditionalOnProperty(name = "app.agent.enabled", havingValue = "true", matchIfMissing = true)
 public class ChainController {
 
     private final PromptChainService chain;

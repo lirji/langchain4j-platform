@@ -2,7 +2,6 @@ package com.lrj.platform.agent.browser;
 
 import com.lrj.platform.agent.AgentAction;
 import com.lrj.platform.agent.client.VisionClient;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -17,7 +16,6 @@ import org.springframework.stereotype.Component;
  * 视觉 token 由 vision-service 的 ChatModelListener 按透传的租户归因，正确纳入配额。
  */
 @Component
-@ConditionalOnBean(BrowserSession.class)
 @ConditionalOnProperty(name = {"app.agent.enabled", "app.agent.browser.enabled", "app.agent.vision.enabled"},
         havingValue = "true")
 public class BrowserSeeAction implements AgentAction {

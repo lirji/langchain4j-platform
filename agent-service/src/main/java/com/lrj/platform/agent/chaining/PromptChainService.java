@@ -5,7 +5,7 @@ import com.lrj.platform.protocol.agent.ChainStepResult;
 import com.lrj.platform.security.TenantContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -22,7 +22,7 @@ import java.util.regex.Pattern;
  * DAG 是<strong>并行</strong>分层。
  */
 @Service
-@ConditionalOnBean(ChainLink.class)
+@ConditionalOnProperty(name = "app.agent.enabled", havingValue = "true", matchIfMissing = true)
 public class PromptChainService {
 
     private static final Logger log = LoggerFactory.getLogger(PromptChainService.class);

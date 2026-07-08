@@ -17,7 +17,7 @@ import com.lrj.platform.security.TenantContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -35,7 +35,7 @@ import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
 
 @Service
-@ConditionalOnBean(DeepAgentService.class)
+@ConditionalOnProperty(name = "app.agent.enabled", havingValue = "true", matchIfMissing = true)
 public class AgentDagService {
 
     private static final Logger log = LoggerFactory.getLogger(AgentDagService.class);

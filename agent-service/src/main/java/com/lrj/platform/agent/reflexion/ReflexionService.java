@@ -9,7 +9,7 @@ import com.lrj.platform.protocol.agent.ReflexionReply;
 import com.lrj.platform.security.TenantContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -29,7 +29,7 @@ import java.util.Map;
  * {@code /chat/reflexive/stream} 的分阶段推进风格。
  */
 @Service
-@ConditionalOnBean(ReflexionAnswerer.class)
+@ConditionalOnProperty(name = "app.agent.enabled", havingValue = "true", matchIfMissing = true)
 public class ReflexionService {
 
     private static final Logger log = LoggerFactory.getLogger(ReflexionService.class);

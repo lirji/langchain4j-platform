@@ -2,7 +2,7 @@ package com.lrj.platform.agent.dag;
 
 import com.lrj.platform.agent.async.AgentAsyncTaskService;
 import com.lrj.platform.protocol.agent.AgentDagRunRequest;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 @RestController
-@ConditionalOnBean(AgentDagService.class)
+@ConditionalOnProperty(name = "app.agent.enabled", havingValue = "true", matchIfMissing = true)
 public class AgentDagController {
 
     private final AgentDagService dag;

@@ -1,7 +1,7 @@
 package com.lrj.platform.agent;
 
 import com.lrj.platform.protocol.interop.McpToolDescriptor;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -16,7 +16,7 @@ import java.util.Map;
  * 其内置静态默认，与本端点声明的工具集一致，保证 discovery 与 fallback 行为对齐。
  */
 @RestController
-@ConditionalOnBean(DeepAgentService.class)
+@ConditionalOnProperty(name = "app.agent.enabled", havingValue = "true", matchIfMissing = true)
 public class AgentCapabilitiesController {
 
     @GetMapping("/agent/capabilities")

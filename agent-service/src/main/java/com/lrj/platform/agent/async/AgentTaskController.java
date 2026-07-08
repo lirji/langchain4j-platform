@@ -1,7 +1,7 @@
 package com.lrj.platform.agent.async;
 
 import com.lrj.platform.protocol.agent.AgentRunRequest;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@ConditionalOnBean(AgentAsyncTaskService.class)
+@ConditionalOnProperty(name = "app.agent.enabled", havingValue = "true", matchIfMissing = true)
 public class AgentTaskController {
 
     private final AgentAsyncTaskService tasks;

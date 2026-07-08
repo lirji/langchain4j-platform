@@ -1,12 +1,10 @@
 package com.lrj.platform.agent.browser;
 
 import com.lrj.platform.agent.AgentAction;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConditionalOnBean(BrowserSession.class)
 @ConditionalOnProperty(name = {"app.agent.enabled", "app.agent.browser.enabled"}, havingValue = "true")
 public class BrowserClickXyAction implements AgentAction {
 
