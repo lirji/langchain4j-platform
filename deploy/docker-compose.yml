@@ -17,6 +17,10 @@ services:
 
   redis:
     image: redis:7-alpine
+    # appendonly 持久化 + 命名卷：限流/令牌预算/成本/语义缓存/文档注册表等跨重启存活
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
     ports:
       - "6379:6379"
 
@@ -78,6 +82,8 @@ services:
       CONVERSATION_RAG_TOP_K: ${CONVERSATION_RAG_TOP_K:-5}
       CONVERSATION_RAG_CATEGORY: ${CONVERSATION_RAG_CATEGORY:-}
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:
       - litellm
       - knowledge-service
@@ -96,6 +102,8 @@ services:
       GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
       GATEWAY_MODEL: chat-default
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
       WORKFLOW_OUTBOX_HMAC_SECRET: ${WORKFLOW_OUTBOX_HMAC_SECRET:-dev-secret-change-me}
       WORKFLOW_TERMINAL_NOTIFICATION_MODE: async-task
       ASYNC_TASK_BASE_URL: http://async-task-service:8086
@@ -119,6 +127,8 @@ services:
       GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
       GATEWAY_MODEL: chat-default
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:
       - mysql
       - litellm
@@ -133,28 +143,28 @@ services:
       GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
       RAG_EMBEDDING_PROVIDER: ${RAG_EMBEDDING_PROVIDER:-hash}
       RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-embedding-default}
-      RAG_VECTOR_STORE_PROVIDER: ${RAG_VECTOR_STORE_PROVIDER:-in-memory}
+      RAG_VECTOR_STORE_PROVIDER: ${RAG_VECTOR_STORE_PROVIDER:-qdrant}
       QDRANT_HOST: qdrant
       QDRANT_PORT: 6334
       QDRANT_COLLECTION_NAME: knowledge_segments
-      RAG_REGISTRY_STORE: ${RAG_REGISTRY_STORE:-in-memory}
+      RAG_REGISTRY_STORE: ${RAG_REGISTRY_STORE:-redis}
       RAG_HYBRID_ENABLED: ${RAG_HYBRID_ENABLED:-true}
       RAG_RANKING_VECTOR_WEIGHT: ${RAG_RANKING_VECTOR_WEIGHT:-1.0}
       RAG_RANKING_KEYWORD_WEIGHT: ${RAG_RANKING_KEYWORD_WEIGHT:-1.0}
       RAG_RANKING_GRAPH_WEIGHT: ${RAG_RANKING_GRAPH_WEIGHT:-1.0}
-      RAG_GRAPH_ENABLED: ${RAG_GRAPH_ENABLED:-false}
-      RAG_GRAPH_STORE: ${RAG_GRAPH_STORE:-in-memory}
-      RAG_GRAPH_INCLUDE_IN_QUERY: ${RAG_GRAPH_INCLUDE_IN_QUERY:-${RAG_GRAPH_ENABLED:-false}}
+      RAG_GRAPH_ENABLED: ${RAG_GRAPH_ENABLED:-true}
+      RAG_GRAPH_STORE: ${RAG_GRAPH_STORE:-jdbc}
+      RAG_GRAPH_INCLUDE_IN_QUERY: ${RAG_GRAPH_INCLUDE_IN_QUERY:-${RAG_GRAPH_ENABLED:-true}}
       RAG_GRAPH_QUERY_TOP_K: ${RAG_GRAPH_QUERY_TOP_K:-20}
       RAG_GRAPH_RELATION_WHITELIST: ${RAG_GRAPH_RELATION_WHITELIST:-}
       RAG_GRAPH_ALIASES: ${RAG_GRAPH_ALIASES:-}
       RAG_GRAPH_DB_URL: jdbc:mysql://mysql:3306/knowledge_graph?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
       RAG_GRAPH_DB_USER: root
       RAG_GRAPH_DB_PASSWORD: root
-      # 指向栈内 redis 容器（默认 in-memory registry 时仅供健康探针；RAG_REGISTRY_STORE=redis 时才真正使用）
+      # 指向栈内 redis 容器：registry/semantic-cache/rate-limit/token-budget/cost 默认已持久化到 redis
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
-      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
     depends_on:
       - mysql
       - redis
@@ -193,6 +203,8 @@ services:
       AGENT_ASYNC_LEASE_SECONDS: ${AGENT_ASYNC_LEASE_SECONDS:-300}
       ASYNC_TASK_BASE_URL: http://async-task-service:8086
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:
       - litellm
       - knowledge-service
@@ -206,7 +218,9 @@ services:
       context: ../async-task-service
     environment:
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
-      ASYNC_TASK_STORE: ${ASYNC_TASK_STORE:-in-memory}
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
+      ASYNC_TASK_STORE: ${ASYNC_TASK_STORE:-jdbc}
       ASYNC_TASK_DB_URL: jdbc:mysql://mysql:3306/async_task?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
       ASYNC_TASK_DB_USER: root
       ASYNC_TASK_DB_PASSWORD: root
@@ -224,6 +238,8 @@ services:
       context: ../channel-service
     environment:
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
       CHANNEL_OUTBOUND_ENABLED: ${CHANNEL_OUTBOUND_ENABLED:-false}
       CHANNEL_OUTBOUND_SIGNATURE_ENABLED: ${CHANNEL_OUTBOUND_SIGNATURE_ENABLED:-false}
       CHANNEL_OUTBOUND_SIGNATURE_SECRET: ${CHANNEL_OUTBOUND_SIGNATURE_SECRET:-}
@@ -241,6 +257,8 @@ services:
       context: ../interop-service
     environment:
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
       AGENT_BASE_URL: http://agent-service:8085
     depends_on:
       - agent-service
@@ -268,6 +286,8 @@ services:
       VISION_MODEL: ${VISION_MODEL:-}
       VISION_MAX_IMAGE_BYTES: ${VISION_MAX_IMAGE_BYTES:-10485760}
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:
       - litellm
     ports:
@@ -288,6 +308,8 @@ services:
       EVAL_URI: http://eval-service:8089
       VISION_URI: http://vision-service:8090
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:
       - conversation-service
       - workflow-service
@@ -304,3 +326,4 @@ services:
 volumes:
   mysql-data:
   qdrant-data:
+  redis-data:

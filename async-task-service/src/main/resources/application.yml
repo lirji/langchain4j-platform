@@ -20,7 +20,7 @@ platform:
 
 app:
   async-task:
-    store: ${ASYNC_TASK_STORE:in-memory}
+    store: ${ASYNC_TASK_STORE:jdbc}
     task-ttl: ${ASYNC_TASK_TTL:PT24H}
     cleanup-delay-ms: ${ASYNC_TASK_CLEANUP_DELAY_MS:60000}
     cleanup-initial-delay-ms: ${ASYNC_TASK_CLEANUP_INITIAL_DELAY_MS:60000}
