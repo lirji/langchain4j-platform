@@ -3,6 +3,7 @@ package com.lrj.platform.eval;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lrj.platform.protocol.eval.EvalCase;
 import com.lrj.platform.protocol.eval.EvalCaseResult;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -31,6 +32,9 @@ public class EvalRunner {
     private final EvalEmbeddingComparator embeddingComparator;
     private final ObjectMapper mapper = new ObjectMapper();
 
+    // 显式标注注入构造器：本类另有一个 2 参便捷构造器（供纯 POJO 单测），
+    // 存在多个构造器时 Spring 不再自动选唯一构造器，缺此注解会回退无参构造器导致启动失败。
+    @Autowired
     public EvalRunner(RestTemplate restTemplate,
                       EvalProperties properties,
                       EvalJudge judge,
