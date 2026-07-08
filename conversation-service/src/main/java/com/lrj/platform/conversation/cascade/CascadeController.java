@@ -1,6 +1,6 @@
 package com.lrj.platform.conversation.cascade;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -17,7 +17,7 @@ import java.util.Map;
  * 返回 {@link CascadeResult}（answer / served=cheap|strong / cheapConfident）。
  */
 @RestController
-@ConditionalOnBean(CascadeService.class)
+@ConditionalOnProperty(name = "app.chat.cascade.enabled", havingValue = "true")
 public class CascadeController {
 
     private final CascadeService cascade;
