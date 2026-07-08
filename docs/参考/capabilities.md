@@ -2,12 +2,12 @@
 
 ## 一句话概览
 
-本项目是一个基于 Spring Boot、LangChain4j、LiteLLM 和 DDD 限界上下文拆分的企业级 AI 微服务平台。它把对话、语义缓存、模型级联、知识库 RAG/GraphRAG、NL2SQL、多种 Agent 编排模式（ReAct / DAG / 反思 / 投票 / 链式）、工作流审批、异步任务中心、渠道接入、A2A/MCP 互操作、多模态视觉和回归评测拆成独立服务，并通过两层网关、租户鉴权、事件总线、集中配置、共享协议和可观测能力连接起来。
+本项目是一个基于 Spring Boot、LangChain4j、LiteLLM 和 DDD 限界上下文拆分的企业级 AI 微服务平台。它把对话、语义缓存、模型级联、多轮记忆与长期画像、意图路由、安全护栏（PII/注入）、知识库 RAG/GraphRAG（含 rerank / 查询扩展 / 上下文增强）、NL2SQL、多种 Agent 编排模式（ReAct / DAG / 反思 / 投票 / 链式）、工作流审批、异步任务中心、渠道接入、A2A/MCP 互操作、多模态视觉、语音闭环（ASR→对话→TTS）和回归评测拆成独立服务，并通过两层网关、租户鉴权、事件总线、集中配置、共享协议和可观测能力连接起来。
 
 ## 访问方式与端口约定
 
 - **唯一对外入口是 `edge-gateway`（:8080）**：校验 `X-Api-Key` → 签发短时内部 JWT（`X-Internal-Token`）→ 按路径路由到下游。下文所有"经网关"的业务端点都可以用 `http://localhost:8080` + api-key 访问。
-- **服务直连端口**（本地调试/服务间调用）：conversation `:8081`、workflow `:8082`、analytics `:8083`、knowledge `:8084`、agent `:8085`、async-task `:8086`、channel `:8087`、interop `:8088`、eval `:8089`、vision `:8090`。
+- **服务直连端口**（本地调试/服务间调用）：conversation `:8081`、workflow `:8082`、analytics `:8083`、knowledge `:8084`、agent `:8085`、async-task `:8086`、channel `:8087`、interop `:8088`、eval `:8089`、vision `:8090`、voice `:8091`。
 - **不经 edge-gateway 暴露**：`config-server`（:8888，集中配置基础设施，仅服务内部经 `spring.config.import` 拉取）。
 - **默认开关基线**：绝大多数新能力**默认关闭 / 内存实现**，dev/test 零外部依赖。下文每项都标注了默认开关状态与开启用的环境变量。
 
@@ -23,7 +23,19 @@
 | 对话 | `/chat` 入口，可选 RAG 上下文增强 | `/chat`（conversation :8081） | RAG 增强 `CONVERSATION_RAG_ENABLED=false` |
 | 语义缓存 L1 | 问题级 / 租户桶 / pre-RAG 语义缓存，命中即短路 RAG+LLM；含失效端点 | `/chat` 旁路、`DELETE /chat/cache` | `CONVERSATION_SEMANTIC_CACHE_ENABLED=false` |
 | 模型级联 | 便宜模型先答、低置信才升级强模型 | `/chat/cascade`（conversation） | `CHAT_CASCADE_ENABLED=false` |
+| 意图路由 | LLM-as-Router 自动分类问题再分派应答 | `/chat/auto`（conversation） | `CONVERSATION_ROUTER_ENABLED=false` |
+| 视觉对话 | 看图对话，图片+问题委托 vision-service | `/chat/vision`（conversation multipart） | `CONVERSATION_VISION_ENABLED=false` |
+| MCP 对话 | 工具来自外部 MCP server 的对话 | `/chat/mcp`（conversation） | `CONVERSATION_MCP_ENABLED=false` |
+| 结构化抽取 | 自由文本 → 结构化 POJO（工单等） | `/extract?type=`（conversation） | 端点常开（抽取器注册表） |
+| 多轮记忆 | 按会话隔离的滑窗记忆（messages/tokens/summary），内存或 Redis | `/chat`、`/chat/stream` 记忆键 | `CONVERSATION_MEMORY_STORE=in-memory`（常开，内存滑窗） |
+| 长期画像 | 跨会话用户画像抽取/召回、合规查看与删除 | `/chat/memory`、`GET/DELETE /memory/profile` | `CONVERSATION_MEMORY_PROFILE_ENABLED=false` |
+| 安全护栏 | 提示注入前置拦截、PII 输出脱敏，流式/非流式一致 | `/chat` 前后置 | 注入 `CONVERSATION_GUARDRAIL_INJECTION_ENABLED=false`、PII `CONVERSATION_GUARDRAIL_PII_ENABLED=false` |
 | 知识库 RAG | 文档上传、Tika 抽取、分块、向量 + keyword hybrid 检索、可配置排序权重 | `/rag/documents/**`、`/rag/query`（knowledge :8084） | 上传/查询常开；hybrid `RAG_HYBRID_ENABLED=true` |
+| 检索重排 | 召回放大后二次打分重排（LLM-as-judge 或 Jina reranker） | `/rag/query` 后置 | `RAG_RERANK_ENABLED=false` |
+| 查询扩展 | 用 LLM 生成 query 变体扩大召回 | `/rag/query` 前置 | `RAG_QUERY_EXPANSION_ENABLED=false` |
+| 上下文增强 | 入库时逐 chunk 加文档级上下文前缀再嵌入（Contextual Retrieval） | `/rag/documents` ingest 期 | `RAG_CONTEXTUAL_ENABLED=false` |
+| 中文分词 | keyword hybrid 支持 HanLP 中文分词（默认 simple 零依赖） | `/rag/query` keyword 路 | `RAG_HYBRID_TOKENIZER=simple`（默认）/`hanlp` |
+| Obsidian 导入 | 把 zip 打包的 Obsidian vault 批量导入 RAG（`[[双链]]`→GraphRAG 三元组） | `POST /rag/obsidian/import`（multipart） | 端点常开 |
 | 多租户隔离 | collection-per-tenant 强隔离（每租户独立 collection/namespace） | knowledge 向量库 | `RAG_VECTOR_STORE_ISOLATION=collection-per-tenant`（默认） |
 | 向量存储 | in-memory 默认；qdrant/pgvector/milvus/chroma/doris 可选，均 collection-per-tenant | knowledge | `RAG_VECTOR_STORE_PROVIDER=in-memory`（默认） |
 | Embedding | 确定性 hash（默认）/ OpenAI-compat（LiteLLM）/ Ollama | knowledge | `RAG_EMBEDDING_PROVIDER=hash`（默认） |
@@ -42,6 +54,7 @@
 | 互操作（A2A/MCP） | 真 A2A JSON-RPC task 协议、agent-card、MCP tool surface、可选 live discovery | `/interop/**`、`/interop/a2a`、`/.well-known/agent-card.json`（interop :8088） | 常开；live discovery `INTEROP_DISCOVERY_ENABLED=false` |
 | 回归评测 | HTTP case/suite 执行、双跑门禁、contains/JSON-path/semantic/oracle 断言 | `/eval/**`（eval :8089） | 常开；judge/embedding 比较默认关 |
 | 多模态视觉 | 图片 caption/描述（多模态 ChatModel 经 LiteLLM），供 knowledge/agent 复用 | `/vision/caption`、`/vision/describe`（vision :8090） | `VISION_ENABLED=false`（默认整服务不装配） |
+| 语音闭环 | 音频 → ASR(whisper) → `/chat` → TTS，支持整轮 / SSE 半流式 / 纯转写 | `/voice/chat`、`/voice/chat/stream`、`/voice/transcribe`（voice :8091） | `VOICE_ENABLED=false`（默认整服务不装配） |
 | 审计与计量 | 审计日志、LLM audit listener、token budget、cost attribution | `platform-audit`、`platform-metering` | audit/budget 常开、cost 默认关 |
 | 可观测性 | trace id 生成与跨服务透传 | `platform-observability` | 常开 |
 
@@ -131,13 +144,14 @@
 | interop | 8088 | A2A JSON-RPC · MCP surface |
 | eval | 8089 | HTTP 回归 · 可选 judge/embedding |
 | vision | 8090 | LangChain4j 多模态 ChatModel |
+| voice | 8091 | OpenAI 兼容 ASR(whisper)/TTS · 分句半流式 SSE · 转发 conversation `/chat` |
 | platform-\* | — | security(JJWT) · observability · gateway-client · protocol · audit · metering · eventbus(Kafka) |
 
 ## 平台基建
 
 ### 两层网关
 
-- **`edge-gateway`（:8080）** —— 唯一对外入口。校验 `X-Api-Key`，按绑定关系识别租户/用户/scope，签发短时内部 JWT（`X-Internal-Token`），按路径路由。路由表覆盖 conversation/analytics/workflow/knowledge/agent/async-task/channel/interop/eval/vision，并对 `/.well-known/agent-card.json` 放行给 interop。
+- **`edge-gateway`（:8080）** —— 唯一对外入口。校验 `X-Api-Key`，按绑定关系识别租户/用户/scope，签发短时内部 JWT（`X-Internal-Token`），按路径路由。路由表覆盖 conversation/analytics/workflow/knowledge/agent/async-task/channel/interop/eval/vision/voice，并对 `/.well-known/agent-card.json` 放行给 interop。
 - **LiteLLM**（外部，非 Java 模块） —— LLM 网关。所有模型调用统一走一个 OpenAI 兼容端点，provider 路由/failover/模型名映射都在 LiteLLM 配置里，Java 侧没有任何 provider `switch`。
 
 ### 内部 JWT（HS256 / RS256）
@@ -177,6 +191,13 @@
 - **`DELETE /chat/cache`** 语义缓存失效：清当前租户的缓存桶（带 `question` 参数则定向失效某问题）。租户取自内部 JWT，只能清自己的桶；语义缓存关闭时 no-op。知识库更新后调它可避免 `/chat` 返回缓存旧答案（也可由 knowledge-service 自动触发，见 §2）。
 - **`POST /chat/cascade`** 模型级联（默认关，`CHAT_CASCADE_ENABLED=true` 开启，端点仅在开启时装配）：便宜模型先答，低置信才升级强模型。`CHAT_CASCADE_CHEAP_MODEL` / `CHAT_CASCADE_STRONG_MODEL` 为 LiteLLM 里的逻辑模型名（留空退化为网关默认模型），置信门 `CHAT_CASCADE_CONFIDENCE_THRESHOLD`（默认 0.6），可选 `CHAT_CASCADE_SELF_RATING`。返回体含 `served=cheap|strong`。cascade 变体 ChatModel 由 `platform-gateway-client` 产出。
 - **`POST /conversation/workflow/reply`**、**`POST /conversation/workflow/ticket`**：给 workflow-service 用的回复生成 + 结构化工单抽取端点，让 workflow 经 HTTP 调用而不直连本地 ChatModel。
+- **`POST /chat/auto`** 意图路由（默认关，`CONVERSATION_ROUTER_ENABLED=true` 开启）：LLM-as-Router 用 temp=0 判官模型先给问题分类，再分派到对应应答路径；返回体含 `route`（路由类型）、`reason`、`classifyMs`/`answerMs`。记忆键（`<tenantId>::<chatId>`）与 `/chat` 一致，与普通对话共享多轮记忆。未启用时返回明确禁用提示。
+- **`POST /chat/vision`** 看图对话（multipart，默认关，`CONVERSATION_VISION_ENABLED=true` 开启）：图片 base64 后连同 `message`（作为 vision 指令）转发给 vision-service（`CONVERSATION_VISION_BASE_URL`，默认 `http://localhost:8090`），返回 `reply`/`model`/`chars`。未启用或缺图返回明确提示。
+- **`POST /chat/mcp`** MCP 工具对话（默认关，`CONVERSATION_MCP_ENABLED=true` 开启）：工具来自外部 MCP server（`CONVERSATION_MCP_TRANSPORT=stdio`（默认）|`http`），由 `McpAssistant` 挂载工具后应答。未启用时返回禁用提示。
+- **`POST /extract?type=ticket`** 结构化抽取（端点常开）：自由文本 → 结构化 POJO（langchain4j structured output），用抽取器注册表按 `type` 分派，未知类型返回 400。新增目标类型只需注册一个 `type → 抽取函数`。
+- **多轮记忆**（默认内存滑窗，常开）：`Assistant.chat(@MemoryId ...)` 按会话隔离记忆。`CONVERSATION_MEMORY_STORE=in-memory`（默认）|`redis`（`CONVERSATION_MEMORY_REDIS_TTL`，默认 `P7D`）；滑窗 `CONVERSATION_MEMORY_WINDOW_MODE=messages`（默认，`_MAX_MESSAGES=20`）|`tokens`（`_MAX_TOKENS=2000`，tokenizer 依据 `_TOKEN_MODEL=gpt-4o-mini`）|`summary`（旧消息用 LLM 压缩成中文摘要）。默认零外部依赖。
+- **长期用户画像**（默认关，`CONVERSATION_MEMORY_PROFILE_ENABLED=true` 开启）：跨会话抽取并召回用户画像事实。`POST /chat/memory` 带画像对话、`GET /memory/profile` 查看、`DELETE /memory/profile` 合规清空。租户+用户取自内部 JWT，天然只操作自己的画像。`_STORE=in-memory`（默认，redis 变体待补）、`_MAX_ITEMS=50`、`_RECALL_LIMIT=12`、`_ASYNC=true`（异步抽取不阻塞应答）。未启用时端点返回禁用提示。
+- **安全护栏**（提示注入 + PII，均默认关）：controller 层前置扫描输入、后置脱敏输出，纯确定性逻辑、流式/非流式一致，不依赖 langchain4j guardrail SPI。注入护栏 `CONVERSATION_GUARDRAIL_INJECTION_ENABLED=true` + `CONVERSATION_GUARDRAIL_INJECTION_MODE=block`（命中即拒答，默认）|`sanitize`（剥离控制 token 后继续）|`audit`（仅记日志放行）；PII 护栏 `CONVERSATION_GUARDRAIL_PII_ENABLED=true` 对输出里的 email/手机号/身份证就地脱敏。生产建议开启，因平台约定默认关需显式打开。
 
 ### 2. 知识库、RAG 与 GraphRAG
 
@@ -190,6 +211,11 @@
 - **Embedding provider**：`RAG_EMBEDDING_PROVIDER=hash`（默认，确定性本地）| `openai`（走 LiteLLM/OpenAI 兼容）| `ollama`（`RAG_EMBEDDING_OLLAMA_BASE_URL`、`RAG_EMBEDDING_OLLAMA_MODEL`，默认 `nomic-embed-text`）。含维度守卫、超时/重试参数。
 - **GraphRAG**（默认关，`RAG_GRAPH_ENABLED=true`）：`POST /rag/graph/query`（实体邻居查询）、`GET /rag/graph/entities`。确定性三元组抽取，受控格式 `subject|relation|object`（换行或分号分隔）；`RAG_GRAPH_INCLUDE_IN_QUERY` 决定是否融合进 `/rag/query`；关系白名单 `RAG_GRAPH_RELATION_WHITELIST`、别名 `RAG_GRAPH_ALIASES`、最大跳数 `RAG_GRAPH_MAX_HOPS`。图谱存储 `RAG_GRAPH_STORE=in-memory`（默认）| `jdbc`（MySQL）。
 - **语义缓存失效联动**（默认关，`RAG_CACHE_INVALIDATION_ENABLED=true`）：文档 `upload`/`delete` 成功后，尽力而为地调 conversation 的 `DELETE /chat/cache` 失效同租户语义缓存（松耦合、带内部 JWT 传播租户、失败只记日志不阻断 ingest），配合 §1 的失效端点实现「文档更新 → 缓存即新鲜」。默认 Noop 实现，零影响。
+- **检索重排（rerank）**（默认关，`RAG_RERANK_ENABLED=true`）：先按 `RAG_RERANK_CANDIDATE_MULTIPLIER`（默认 3）放大召回，再二次打分重排。`RAG_RERANK_TYPE=llm`（默认，复用共享 temp=0 ChatModel 让 LLM 打 0..1 相关性分，零外部依赖）|`jina`（Jina reranker 云 API，`RAG_RERANK_JINA_MODEL`，默认 `jina-reranker-v2-base-multilingual` + `JINA_API_KEY`）。默认 Noop 不重排。
+- **查询扩展（query-expansion）**（默认关，`RAG_QUERY_EXPANSION_ENABLED=true`）：用共享 temp=0 ChatModel 为原 query 生成同义/多角度变体扩大召回，`RAG_QUERY_EXPANSION_MAX_VARIANTS`（默认 4，含原 query）。默认 Noop 不扩展。
+- **上下文增强（Contextual Retrieval）**（默认关，`RAG_CONTEXTUAL_ENABLED=true`）：入库时逐 chunk 用共享 temp=0 ChatModel 生成「该片段在全文中的位置与主题」一句上下文前缀再嵌入，提升脱离全文后的可检索性；`RAG_CONTEXTUAL_MAX_DOC_CHARS`（默认 8000）限制喂给生成器的文档截断。每 chunk 一次 LLM 调用，仅 ingest 期发生。默认 Noop 不增强。
+- **中文分词（HanLP）**：keyword hybrid 检索的分词器 `RAG_HYBRID_TOKENIZER=simple`（默认，零依赖）|`hanlp`（HanLP 中文分词，切词更准，随 knowledge 依赖引入，需 HanLP 词典）。
+- **Obsidian vault 导入**：`POST /rag/obsidian/import`（multipart `file`=vault zip，可选 `category`）把一个 zip 打包的 Obsidian 库批量导入 RAG —— 每篇 `.md` 笔记成为一个文档、`[[双链]]` 成为 GraphRAG 三元组；缺文件返回 400。端点常开，需带具备 ingest 权限的 api-key。
 
 ### 3. Agent 编排（五种模式）
 
@@ -242,7 +268,7 @@
 - `GET /channel/capabilities` 能力、`POST /channel/messages` 出站投递、`POST /channel/inbound` 入站事件。
 - callback 转渠道消息：`POST /channel/callbacks`、`POST /channel/callbacks/async-task`、`POST /channel/callbacks/workflow`。
 - 出站适配：webhook、飞书 webhook 机器人文本、钉钉机器人、voice HTTP provider。默认 `CHANNEL_OUTBOUND_ENABLED=false`。
-- **入站事件桥（飞书 / 钉钉）**（默认关，`FEISHU_*` / `DINGTALK_*` 开）：`POST /channel/feishu/events`、`POST /channel/dingtalk/events` 接收群内 @机器人 消息 → 验签（飞书 SHA-256+AES-256-CBC / 钉钉 HmacSHA256）+ 按 msgId 去重 → 设租户 → 调 conversation `/chat`（可带 RAG）→ 机器人回消息（飞书 im API / 钉钉发消息 API）。**钉钉侧含「知识库无命中 → 转人工 @人工客服」兜底闸门**（作答前先查 `/rag/query` 判命中，命中不足则转人工、不调 LLM）。edge-gateway 白名单放行这两个回调路径（免 api-key，靠渠道签名验真）。详见 `docs/dingtalk-guide.md`。
+- **入站事件桥（飞书 / 钉钉）**（默认关，`FEISHU_*` / `DINGTALK_*` 开）：`POST /channel/feishu/events`、`POST /channel/dingtalk/events` 接收群内 @机器人 消息 → 验签（飞书 SHA-256+AES-256-CBC / 钉钉 HmacSHA256）+ 按 msgId 去重 → 设租户 → 调 conversation `/chat`（可带 RAG）→ 机器人回消息（飞书 im API / 钉钉发消息 API）。**钉钉侧含「知识库无命中 → 转人工 @人工客服」兜底闸门**（作答前先查 `/rag/query` 判命中，命中不足则转人工、不调 LLM）。edge-gateway 白名单放行这两个回调路径（免 api-key，靠渠道签名验真）。详见 `docs/互操作渠道/dingtalk-guide.md`。
 - 签名：出站/入站 HMAC 签名校验默认关（`CHANNEL_OUTBOUND_SIGNATURE_ENABLED` / `CHANNEL_INBOUND_SIGNATURE_ENABLED`）。
 - 可选 Kafka channel event 发布（`CHANNEL_EVENTS_ENABLED=false`，topic `platform.channel.events`）；作为 platform-eventbus 生命周期事件消费方，去重存储 `CHANNEL_DEDUP_STORE=memory`（默认）| `jdbc`。
 
@@ -271,10 +297,20 @@
 - 图片字节上限 `VISION_MAX_IMAGE_BYTES`（默认 10MB）、允许 MIME `VISION_ALLOWED_MIME`、caption 结果按内容 SHA-256 缓存（`VISION_CAPTION_CACHE_SIZE`）。vision token 计入 metering。
 - 供 agent-service（`browser_see`）复用。
 
+### 11. 语音闭环（ASR → 对话 → TTS）
+
+`voice-service`（:8091，`/voice/**`）独立语音客服服务，**默认整服务不装配**（`VOICE_ENABLED=false`）。走与 `/chat` 同一套鉴权链（edge-gateway 签发内部 JWT + 多租户），语音转出的文本经 HTTP 调 conversation-service（`VOICE_CONVERSATION_BASE_URL`，默认 `http://localhost:8081`）应答：
+
+- **`POST /voice/chat`**（multipart `audio`[，`chatId`]）：完整轮次 音频 → ASR → `/chat` → TTS，返回 `transcript` + 回复文本 + base64 语音；未传 `chatId` 自动生成 `voice-<uuid>`。
+- **`POST /voice/chat/stream`**（multipart，SSE）：半流式 —— 先发 `transcript` 事件，再按句切分逐句 TTS 发 `audio-chunk`（`{text, audioContentType, audioBase64}`），最后 `done`。句最小字数 `VOICE_STREAM_MIN_CHARS`（默认 8）防碎句、省调用。
+- **`POST /voice/transcribe`**（multipart `audio`）：仅做 ASR（调试 / 纯转写），返回 `transcript`。
+- provider `VOICE_PROVIDER=openai`（OpenAI 兼容协议，`VOICE_BASE_URL` 可指云 OpenAI / Azure / 本地 whisper+tts 网关，`VOICE_API_KEY`）；ASR 模型 `VOICE_ASR_MODEL`（默认 `whisper-1`）、TTS 模型 `VOICE_TTS_MODEL`（默认 `tts-1`）、音色 `VOICE_TTS_VOICE`（默认 `alloy`）、输出格式 `VOICE_TTS_FORMAT`（默认 `mp3`，决定回复 content-type）、ASR 语言提示 `VOICE_LANGUAGE`（留空自动检测）。
+- 上传音频上限 `VOICE_MAX_AUDIO_BYTES`（默认 25MB，超限返回 400）+ multipart 上限 `VOICE_MAX_UPLOAD`（默认 25MB）；超时 `VOICE_TIMEOUT_SECONDS`（默认 30）。
+
 ## 当前限制
 
 - GraphRAG 抽取是确定性三元组格式，不是开放信息抽取。
 - A2A `message/stream` 已是真 SSE（chat 代理 conversation token 流、research 代理 agent 任务流）；push 通知按 A2A Task 信封由 interop 中继回推（默认经 agent webhook 触发，零外部依赖；push 配置存储默认内存、多副本需换 Redis/JDBC）。
 - 契约测试当前覆盖 knowledge/agent 两个 P0 provider（analytics/async-task 待补），网关 failover 为独立 smoke 脚本、不进默认 CI。
 - `code_exec` 子进程沙箱是中等隔离，非强隔离容器；生产对不可信输入应进一步收紧。
-- RS256、Config Server git 后端、vision 模型、Kafka EOS 等生产能力默认关闭或需填真实外部配置。
+- RS256、Config Server git 后端、vision 模型、voice ASR/TTS（需真实 OpenAI 兼容语音端点）、RAG rerank(jina)/查询扩展/上下文增强、HanLP 分词、Kafka EOS 等生产能力默认关闭或需填真实外部配置。

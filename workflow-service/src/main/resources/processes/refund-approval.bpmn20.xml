@@ -5,7 +5,7 @@
              targetNamespace="http://www.flowable.org/processdef">
 
     <!--
-      退款审批样板流程（docs/workflow-integration.md）。
+      退款审批样板流程（docs/Agent编排/workflow-guide.md）。
       assess(抽工单) → 网关(priority 高?) → [UserTask 人工审批] → 网关(批准?) → resolve / reject → End
 
       ServiceTask 用 flowable:expression 调 Spring bean serviceTaskDelegates 的方法（见 ServiceTaskDelegates）。

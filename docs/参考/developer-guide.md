@@ -52,7 +52,7 @@ docs/                   项目文档
 - 如有跨服务协议，加入 `platform-protocol`。
 - 在 `edge-gateway` 增加 route。
 - 在 `deploy/docker-compose.yml` 增加 service。
-- 在 `docs/capabilities.md`、`docs/architecture.md`、`docs/api-reference.md` 更新说明。
+- 在 `docs/参考/capabilities.md`、`docs/参考/架构文档.md`、`docs/参考/api-reference.md` 更新说明。
 
 ## 测试策略
 
@@ -95,11 +95,11 @@ docker compose -f deploy/docker-compose.yml config
 
 每个新能力落地后至少更新：
 
-- `docs/capabilities.md`：能力矩阵和限制。
-- `docs/api-reference.md`：新增或变化的 HTTP API。
-- `docs/architecture.md`：如果引入新服务、新存储或新调用链。
-- `docs/operations.md`：如果新增环境变量、端口、启动依赖。
-- `docs/migration-roadmap.md`：更新已完成/待办状态。
+- `docs/参考/capabilities.md`：能力矩阵和限制。
+- `docs/参考/api-reference.md`：新增或变化的 HTTP API。
+- `docs/参考/架构文档.md`：如果引入新服务、新存储或新调用链。
+- `docs/参考/operations.md`：如果新增环境变量、端口、启动依赖。
+- `docs/迁移/migration-roadmap.md`：更新已完成/待办状态。
 
 ## 提交建议
 

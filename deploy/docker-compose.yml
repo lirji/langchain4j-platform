@@ -296,6 +296,25 @@ services:
     ports:
       - "8090:8090"
 
+  voice-service:
+    build:
+      context: ../voice-service
+    environment:
+      VOICE_ENABLED: ${VOICE_ENABLED:-false}
+      VOICE_PROVIDER: ${VOICE_PROVIDER:-openai}
+      VOICE_BASE_URL: ${VOICE_BASE_URL:-https://api.openai.com/v1}
+      VOICE_API_KEY: ${VOICE_API_KEY:-${OPENAI_API_KEY:-}}
+      VOICE_ASR_MODEL: ${VOICE_ASR_MODEL:-whisper-1}
+      VOICE_TTS_MODEL: ${VOICE_TTS_MODEL:-tts-1}
+      VOICE_TTS_VOICE: ${VOICE_TTS_VOICE:-alloy}
+      VOICE_TTS_FORMAT: ${VOICE_TTS_FORMAT:-mp3}
+      VOICE_CONVERSATION_BASE_URL: http://conversation-service:8081
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+    depends_on:
+      - conversation-service
+    ports:
+      - "8091:8091"
+
   edge-gateway:
     build:
       context: ../edge-gateway
@@ -310,6 +329,7 @@ services:
       INTEROP_URI: http://interop-service:8088
       EVAL_URI: http://eval-service:8089
       VISION_URI: http://vision-service:8090
+      VOICE_URI: http://voice-service:8091
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
@@ -323,6 +343,7 @@ services:
       - channel-service
       - interop-service
       - vision-service
+      - voice-service
     ports:
       - "8080:8080"
 

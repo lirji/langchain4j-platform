@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "1c4a0000-0001-4a2b-8c3d-la4jplatform01",
     "name": "LangChain4j 平台 · 网关演示",
-    "description": "从 edge-gateway 直接调用的接口集合:RAG 知识库闭环 + /chat 对话 + /agent/run 智能体。\n\n**导入即用**:\n1. 集合变量已内置(见 Variables 标签页):\n   - `baseUrl` = http://127.0.0.1:18080 (网关当前实际端口;若从 docker-compose.yml 重启则改成 8080)\n   - `apiKey` = dev-key-acme-ingest (租户 acme,带 ingest scope,上传/删除必需)\n   - `docId` = 空,由「上传」请求的测试脚本自动写入,供「查单个/删除」复用\n2. **先跑一次「上传文本知识」**,`docId` 会自动保存,之后「查单个」「删除」直接能用。\n3. `/chat` 和 `/agent/run` 会真调大模型(Ollama llama3.1),耗时数秒~数十秒。**建议把 Postman 的请求超时调大**(Settings → General → Request timeout in ms 设为 0 或 180000)。\n\n对应文档:docs/rag-api-demo.md;一键脚本:deploy/rag-demo.sh。",
+    "description": "从 edge-gateway 直接调用的接口集合:RAG 知识库闭环 + /chat 对话 + /agent/run 智能体。\n\n**导入即用**:\n1. 集合变量已内置(见 Variables 标签页):\n   - `baseUrl` = http://127.0.0.1:18080 (网关当前实际端口;若从 docker-compose.yml 重启则改成 8080)\n   - `apiKey` = dev-key-acme-ingest (租户 acme,带 ingest scope,上传/删除必需)\n   - `docId` = 空,由「上传」请求的测试脚本自动写入,供「查单个/删除」复用\n2. **先跑一次「上传文本知识」**,`docId` 会自动保存,之后「查单个」「删除」直接能用。\n3. `/chat` 和 `/agent/run` 会真调大模型(Ollama llama3.1),耗时数秒~数十秒。**建议把 Postman 的请求超时调大**(Settings → General → Request timeout in ms 设为 0 或 180000)。\n\n对应文档:docs/对话与检索/rag-api-demo.md;一键脚本:deploy/rag-demo.sh。",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [

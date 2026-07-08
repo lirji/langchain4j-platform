@@ -50,7 +50,7 @@ conversation-service :8081  POST /chat        ── CONVERSATION_RAG_ENABLED=tr
 
 ### 2.1 平台侧：先把客服知识灌进知识库
 
-钉钉回复「对不对」，根子在知识库里有没有对的内容。先按 [RAG 接入指南](rag-guide.md) 把客服文档（FAQ、话术、政策、操作手册）上传，建议统一打上一个类目（如 `category=客服`）便于隔离检索：
+钉钉回复「对不对」，根子在知识库里有没有对的内容。先按 [RAG 接入指南](../对话与检索/rag-guide.md) 把客服文档（FAQ、话术、政策、操作手册）上传，建议统一打上一个类目（如 `category=客服`）便于隔离检索：
 
 ```bash
 curl -s -X POST 'http://localhost:8080/rag/documents' \
@@ -275,6 +275,6 @@ if (answer != null && !answer.isBlank()) {
 - **3 秒 ACK**：控制器解析 + 验签后立即返回，重活丢给 `executor` 异步跑（飞书桥已是此模式，直接沿用）。
 - **多副本去重**：`FeishuMessageBridge` 的进程内 `ConcurrentHashMap` 去重是 best-effort；多副本部署需换 Redis/JDBC 去重（参考 `CHANNEL_DEDUP_STORE=jdbc`）。
 - **token 缓存**：`HttpDingtalkReplyClient` 缓存 access_token 至过期前 60s，避免每条消息都换 token（照搬飞书）。
-- **凭据管理**：`DINGTALK_APP_SECRET` 等走密钥管理（见 [部署指南](deployment-guide.md) 的 External Secrets），不要写进代码或明文配置。
+- **凭据管理**：`DINGTALK_APP_SECRET` 等走密钥管理（见 [部署指南](../平台工程/deployment-guide.md) 的 External Secrets），不要写进代码或明文配置。
 - **多钉钉企业 / 多租户**：一个机器人 = 一个租户。要支持多个钉钉企业，扩成按 `robotCode → tenantId` 的映射表，或起多份 dingtalk 配置。
 - **回复失败降级**：发消息 API 失败只记 warn、不抛断链路（照搬飞书 `replyText` 的 try/catch）。

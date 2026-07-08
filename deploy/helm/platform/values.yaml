@@ -76,6 +76,7 @@ config:
   ASYNC_TASK_BASE_URL: "http://async-task-service:8086"
   VISION_BASE_URL: "http://vision-service:8090"
   AGENT_BASE_URL: "http://agent-service:8085"
+  VOICE_CONVERSATION_BASE_URL: "http://conversation-service:8081"
 
   # --- edge-gateway 路由目标 URI ---
   CONVERSATION_URI: "http://conversation-service:8081"
@@ -88,6 +89,7 @@ config:
   INTEROP_URI: "http://interop-service:8088"
   EVAL_URI: "http://eval-service:8089"
   VISION_URI: "http://vision-service:8090"
+  VOICE_URI: "http://voice-service:8091"
 
   # --- eval 客户端目标（打自己的边缘网关） ---
   EVAL_TARGET_BASE_URL: "http://edge-gateway:8080"
@@ -172,6 +174,15 @@ config:
   # --- vision ---
   VISION_ENABLED: "false"
   VISION_MAX_IMAGE_BYTES: "10485760"
+
+  # --- voice（ASR→对话→TTS 语音闭环；默认关。开启时 VOICE_API_KEY 走 Secret/ESO） ---
+  VOICE_ENABLED: "false"
+  VOICE_PROVIDER: "openai"
+  VOICE_BASE_URL: "https://api.openai.com/v1"
+  VOICE_ASR_MODEL: "whisper-1"
+  VOICE_TTS_MODEL: "tts-1"
+  VOICE_TTS_VOICE: "alloy"
+  VOICE_TTS_FORMAT: "mp3"
 
 # -----------------------------------------------------------------------------
 # 敏感配置 → Secret（占位值；生产切勿提交真值）
@@ -387,6 +398,10 @@ services:
 
   vision-service:
     port: 8090
+    replicaCount: 1
+
+  voice-service:
+    port: 8091
     replicaCount: 1
 
   # eval-service 是回归测试客户端，不是常驻业务服务。默认副本 0（不常驻）；

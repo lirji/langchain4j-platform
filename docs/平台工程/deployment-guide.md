@@ -32,18 +32,20 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 | `deploy/smoke-qdrant-rag.sh` | Qdrant 向量库 RAG 冒烟 |
 | `deploy/smoke-failover.sh` | 干掉一个 LiteLLM 上游、验证 fallback |
 
-各服务端口：edge-gateway `8080`、config-server `8888`、conversation `8081`、workflow `8082`、analytics `8083`、knowledge `8084`、agent `8085`、async-task `8086`、channel `8087`、interop `8088`、eval `8089`、vision `8090`。
+compose 编排的各服务端口：edge-gateway `8080`、config-server `8888`、conversation `8081`、workflow `8082`、analytics `8083`、knowledge `8084`、agent `8085`、async-task `8086`、channel `8087`、interop `8088`、eval `8089`、vision `8090`、voice `8091`。
 
-全部启用开关见 [operations.md](operations.md)。
+> **voice-service（:8091）** 已纳入 `docker-compose.yml`（`build` 上下文 `../voice-service`，其 Dockerfile 已随模块提供）与 Helm 伞状 chart。默认关闭（`VOICE_ENABLED=false` → voice 相关 Bean 全不装配、零依赖零网络），此时容器空跑仅占端口。启用时按 OpenAI 兼容 ASR/TTS 协议配置：`VOICE_ENABLED=true`、`VOICE_PROVIDER=openai`、`VOICE_BASE_URL=https://api.openai.com/v1`（可指云 OpenAI / Azure / 本地 whisper+tts 网关）、`VOICE_API_KEY=<key>`（生产走 Secret/ESO，不入 ConfigMap）。它的「大脑」是 conversation-service，容器/集群内已默认注入 `VOICE_CONVERSATION_BASE_URL=http://conversation-service:8081`。完整语音开关（`VOICE_ASR_MODEL`/`VOICE_TTS_MODEL`/`VOICE_TTS_VOICE` 等）见 [operations.md](../参考/operations.md)。
+
+全部启用开关见 [operations.md](../参考/operations.md)。
 
 ---
 
 ## 二、k8s / Helm 伞状 chart
 
-完整清单在 `deploy/helm/platform/`，深度参数说明见 **[deploy/helm/README.md](../deploy/helm/README.md)**。这里给关键点。
+完整清单在 `deploy/helm/platform/`，深度参数说明见 **[deploy/helm/README.md](../../deploy/helm/README.md)**。这里给关键点。
 
 ### 结构
-伞状 chart + vendored 库 chart `platform-lib`（`type: library`，`charts/` 下已 vendored，`helm lint`/`template` 无需联网 `helm dependency build`）。`templates/workloads.yaml` 遍历 `values.services` 渲染 12 个业务服务的 Deployment/Service/(可选)HPA；`external-services.yaml` 为 MySQL/Redis/Kafka/Qdrant/LiteLLM 渲染 **ExternalName** Service（不自建 StatefulSet）。
+伞状 chart + vendored 库 chart `platform-lib`（`type: library`，`charts/` 下已 vendored，`helm lint`/`template` 无需联网 `helm dependency build`）。`templates/workloads.yaml` 遍历 `values.services` 渲染 13 个业务服务（edge-gateway、config-server、conversation、workflow、analytics、knowledge、agent、async-task、channel、interop、eval、vision、voice）的 Deployment/Service/(可选)HPA；`external-services.yaml` 为 MySQL/Redis/Kafka/Qdrant/LiteLLM 渲染 **ExternalName** Service（不自建 StatefulSet）。
 
 ### 校验与安装
 ```bash
@@ -101,6 +103,6 @@ helm install platform deploy/helm/platform -n platform --create-namespace \
 ---
 
 ## 相关文档
-- 全部环境变量与启用开关：[operations.md](operations.md)
+- 全部环境变量与启用开关：[operations.md](../参考/operations.md)
 - 事件总线 / Kafka 可靠投递的生产启用：[eventbus-guide.md](eventbus-guide.md)
-- Helm 参数逐项说明：[deploy/helm/README.md](../deploy/helm/README.md)
+- Helm 参数逐项说明：[deploy/helm/README.md](../../deploy/helm/README.md)

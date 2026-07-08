@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 测「限流桶落 Redis」范式的共享纯函数 helper {@link RateLimitKeys} —— 桶 key 布局 + retry-after 换算。
- * 不连 Redis；Lua token bucket 往返属集成，靠真 Redis 起服务验证（见 docs/distributed-state.md）。
+ * 不连 Redis；Lua token bucket 往返属集成，靠真 Redis 起服务验证（见 docs/平台工程/cost-attribution.md）。
  */
 class RateLimitKeysTest {
 

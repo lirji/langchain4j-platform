@@ -19,7 +19,7 @@ Content-Type: application/json
 
 - 网关校验 `X-Api-Key` → 签发短时内部 JWT（`X-Internal-Token`）→ 按路径路由到下游服务。下游只认内部 JWT，**不建议外部直接构造 `X-Internal-Token`**。
 - 免鉴权放行的路径（`ApiKeyToInternalTokenFilter.isOpen`）：`/actuator/**`、`/.well-known/**`、`/health`。其中 `GET /.well-known/agent-card.json` 是唯一对外免鉴权的业务端点（A2A 发现惯例）。
-- 网关路由前缀（`edge-gateway/application.yml`）：`/chat`、`/chat/**` → conversation；`/chat/sql`、`/analytics`、`/analytics/**` → analytics；`/workflow`、`/workflow/**` → workflow；`/rag`、`/rag/**`、`/knowledge`、`/knowledge/**` → knowledge；`/agent`、`/agent/**` → agent；`/async`、`/async/**` → async-task；`/channel`、`/channel/**` → channel；`/interop`、`/interop/**`、`/.well-known/agent-card.json` → interop；`/eval`、`/eval/**` → eval；`/vision`、`/vision/**` → vision。
+- 网关路由前缀（`edge-gateway/application.yml`）：`/chat`、`/chat/**`、`/extract`、`/extract/**`、`/memory`、`/memory/**` → conversation；`/chat/sql`、`/analytics`、`/analytics/**` → analytics；`/workflow`、`/workflow/**` → workflow；`/rag`、`/rag/**`、`/knowledge`、`/knowledge/**` → knowledge；`/agent`、`/agent/**` → agent；`/async`、`/async/**` → async-task；`/channel`、`/channel/**` → channel；`/interop`、`/interop/**`、`/.well-known/agent-card.json` → interop；`/eval`、`/eval/**` → eval；`/vision`、`/vision/**` → vision；`/voice`、`/voice/**` → voice。
 - 本文所有端点均可**经网关**访问（`是否经网关：是`）。少量端点是给服务间调用/回调设计的（如 `/conversation/workflow/*`、`/channel/callbacks/*`），虽然也在网关路由前缀内，但通常由内部服务而非终端用户调用，下面会单独标注。
 - 默认开关：平台大量能力是 feature-flag 化的（`@ConditionalOnProperty` / `@ConditionalOnBean`），**默认关闭**的端点在未开启时不注册（404）。每节标注对应开关。
 
@@ -44,6 +44,84 @@ Content-Type: application/json
 - 请求：`{ "message": "..." }`；可选 query `chatId=u1`。
 - 响应核心字段：`reply`、`chatId`、`tenantId`、`userId`。
 - 经网关：是。默认开启。RAG 增强默认关闭，需 `CONVERSATION_RAG_ENABLED=true`（另配 `KNOWLEDGE_BASE_URL` 等）。
+
+### POST `/chat/stream`
+
+- 用途：token 级 SSE 流式对话（与同步 `/chat` 同一套记忆键 `<tenantId>::<chatId>`、RAG 增强、注入护栏）。流式不挂语义缓存。
+- 请求：`{ "message": "..." }`，可选 `category`；可选 query `chatId=u1`。
+- 响应：`text/event-stream`。逐 token 以默认 `data:` 事件下发；注入护栏 block 命中 → 发 `event: blocked` 后 `event: done` 收尾（不进 LLM）；grounding 校验不通过 → 追加 `event: grounding-warning`；正常结束 `event: done`；出错 `event: error`。
+- 经网关：是。默认开启（底层流式受 `GATEWAY_STREAMING_ENABLED=true`，默认开）。限流分类 `stream`（20/min）。
+
+```bash
+curl -sN -X POST 'http://localhost:8080/chat/stream?chatId=u1' \
+  -H 'X-Api-Key: dev-key-acme' -H 'Content-Type: application/json' \
+  -d '{"message":"用一句话介绍你自己"}'
+```
+
+### POST `/chat/auto`
+
+- 用途：LLM-as-Router——先对问题分类，再分派到对应处理后回答。与 `/chat` 共享多轮记忆（键 `<tenantId>::<chatId>`）。
+- 请求：`{ "message": "..." }`；可选 query `chatId=u1`。
+- 响应：`{ reply, route, reason, classifyMs, answerMs, chatId, tenantId, userId }`。
+- 经网关：是。**默认关闭**，需 `CONVERSATION_ROUTER_ENABLED=true`（`app.conversation.router.enabled`）。未启用时 controller 仍在，返回明确禁用提示（非 404）。
+
+### POST `/chat/vision`
+
+- 用途：看图对话——图片 + 问题委托给 vision-service。
+- 请求：`multipart/form-data`，表单字段 `image`（必填）+ 可选 `message`（作为 vision-service 的 `instruction`，非空即看图问答）。
+- 响应：`{ reply, model, chars, tenantId, userId }`。缺图片 → 返回错误提示。
+- 经网关：是。**默认关闭**，需 `CONVERSATION_VISION_ENABLED=true`（另配 `CONVERSATION_VISION_BASE_URL`，默认 `http://localhost:8090`）。未启用时返回明确禁用提示（非 404）。
+
+```bash
+curl -s -X POST 'http://localhost:8080/chat/vision' \
+  -H 'X-Api-Key: dev-key-acme' \
+  -F 'image=@/path/to/pic.png' -F 'message=图里是什么？'
+```
+
+### POST `/chat/mcp`
+
+- 用途：工具全部来自 MCP server 的对话（`McpAssistant`）。
+- 请求：`{ "message": "..." }`。
+- 响应：`{ reply, tenantId, userId }`。
+- 经网关：是。**默认关闭**，需 `CONVERSATION_MCP_ENABLED=true`（`app.conversation.mcp.enabled`）。未启用时返回明确禁用提示（非 404）。
+
+### POST `/chat/memory`
+
+- 用途：带长期用户画像记忆的对话（跨会话记住用户偏好/事实）。租户+用户取自内部 JWT，天然只操作自己的画像。
+- 请求：`{ "message": "..." }`；可选 query `chatId=u1`。
+- 响应：`{ reply, chatId, tenantId, userId }`。
+- 经网关：是。**默认关闭**，需 `CONVERSATION_MEMORY_PROFILE_ENABLED=true`。未启用时返回明确禁用提示（非 404）。
+
+### GET `/memory/profile`
+
+- 用途：查看当前用户长期画像条目。
+- 响应：`{ count, items, tenantId }`。
+- 经网关：是。默认关闭（同上 `CONVERSATION_MEMORY_PROFILE_ENABLED`）。
+
+### DELETE `/memory/profile`
+
+- 用途：清空当前用户长期画像（PII 合规删除）。
+- 响应：`{ removed, tenantId }`。
+- 经网关：是。默认关闭（同上）。
+
+### DELETE `/chat/cache`
+
+- 用途：失效当前租户的 L1 语义缓存——知识库更新后调用，避免 `/chat` 返回缓存里的旧答案。租户取自内部 JWT，只能清自己的桶。
+- 请求：可选 query `question`。不带 → 清空整租户桶，响应 `{ tenantId, scope: "tenant", cleared }`；带 → 只失效该原始问题，响应 `{ tenantId, scope: "question", removed }`。
+- 经网关：是。默认开启（语义缓存关闭时为 no-op，清 0 条）。
+
+### POST `/extract`
+
+- 用途：自由文本 → 结构化 POJO（langchain4j structured output）。按 query `type` 分派抽取器，未知类型 → 400。
+- 请求：query `type`（默认 `ticket`）+ body `{ "text": "..." }`。
+- 响应：抽取结果 POJO；`type=ticket` → `{ title, priority, category, summary, tags[] }`。
+- 经网关：是。默认开启（无 feature flag）。
+
+```bash
+curl -s -X POST 'http://localhost:8080/extract?type=ticket' \
+  -H 'X-Api-Key: dev-key-acme' -H 'Content-Type: application/json' \
+  -d '{"text":"我上周买的耳机右声道没声音，想退货"}'
+```
 
 ### POST `/chat/cascade`
 
@@ -414,8 +492,16 @@ A2A + MCP surface。全部默认开启。
 ### POST `/interop/a2a`
 
 - 用途：真 A2A Server JSON-RPC 2.0 单端点，代理到 agent-service。**需鉴权**。
-- 请求：JSON-RPC 报文 `{ jsonrpc, id, method, params }`；缺/非字符串 `method` → JSON-RPC INVALID_REQUEST。响应 `JsonRpcResponse`。
-- 经网关：是。
+- 请求：JSON-RPC 报文 `{ jsonrpc, id, method, params }`；缺/非字符串 `method` → JSON-RPC INVALID_REQUEST。
+- 响应：`message/stream` 方法返回 `text/event-stream`（**真流式**，逐事件推任务进展）；其余方法（`message/send`、`tasks/*`、push config）返回 `JsonRpcResponse`（application/json）。
+- 经网关：是。流式读超时 `INTEROP_STREAM_READ_TIMEOUT`（默认 120s）。
+
+### POST `/interop/a2a/push-callback`
+
+- 用途：A2A push 通知中继回调——接收 agent-service 的任务终态 webhook（内网直连、**不经 edge-gateway、不带内部 JWT**），据头判断是否把终态回推给已登记 push 的 A2A 客户端。
+- 请求：无 body；头 `X-Agent-Task-Id` / `X-Tenant-Id`。未登记 push 的任务被忽略。
+- 响应：恒 `200`（webhook 语义：收到即确认）。
+- 经网关：否（agent-service → interop-service 内网直连，非终端用户调用）。
 
 ---
 
@@ -476,3 +562,39 @@ A2A + MCP surface。全部默认开启。
 - `instruction` 留空 → 用配置的默认 caption/OCR 指令；`mimeType` 缺省兜底 `image/png`。守卫/入参校验失败 → 400。
 - 响应：`VisionCaptionReply`（`{ text, modelName, length }`）。
 - 经网关：是（受 `vision` scope 约束）。默认关闭。
+
+---
+
+## Voice（voice-service）
+
+语音闭环：**ASR → conversation-service(`/chat`) → TTS**，对话大脑/RAG/多租户全部在下游复用。整个 controller 需 `app.voice.enabled=true`（**默认关闭**），走与 `/chat` 同一套鉴权链（任意合法 api-key 可用）。默认 provider `openai`（兼容协议），指向 `VOICE_BASE_URL`（默认 `https://api.openai.com/v1`），需配 `VOICE_API_KEY`；`base-url` 也可指向 Azure / 本地 whisper+tts 网关。
+
+### POST `/voice/chat`
+
+- 用途：完整轮次——音频 → ASR → `/chat` → TTS，一次返回转写 + 回复文本 + base64 语音。
+- 请求：`multipart/form-data`，表单字段 `audio`（必填）+ 可选 query `chatId`（缺省自动生成 `voice-<uuid>`；同 `/chat` 隔离多轮记忆）。
+- 响应：`VoiceReply` `{ transcript, reply, route, audioBase64, audioContentType }`。`route` 为 `CHAT`；转写为空则不进对话（不烧 token），`route=NONE` 并播固定"没听清"提示。回复文本保留 `[doc=...]` 引用标记，TTS 语音已剥离。
+- 校验：空音频或超 `VOICE_MAX_AUDIO_BYTES`（默认 25MB）→ 400。
+- 经网关：是。默认关闭。
+
+```bash
+curl -s -X POST 'http://localhost:8080/voice/chat?chatId=u1' \
+  -H 'X-Api-Key: dev-key-acme' \
+  -F 'audio=@/path/to/question.mp3'
+```
+
+### POST `/voice/chat/stream`
+
+- 用途：SSE 半流式——音频 → ASR → `/chat` → 分句 TTS，边生成边逐句回传语音。
+- 请求：同 `/voice/chat`（multipart `audio` + 可选 query `chatId`）。
+- 响应：`text/event-stream`。先发 `transcript` 事件，再逐句发 `audio-chunk`（`{ text, audioContentType, audioBase64 }`），最后 `done`。分句最小字数 `VOICE_STREAM_MIN_CHARS`（默认 8，过短句不单独切）。空/超大音频以 SSE error 收尾。
+- 经网关：是。默认关闭。
+
+### POST `/voice/transcribe`
+
+- 用途：只做 ASR（调试 / 纯转写需求），不进对话、不合成语音。
+- 请求：`multipart/form-data`，表单字段 `audio`（必填）。
+- 响应：`{ transcript }`。空/超大音频 → 400。
+- 经网关：是。默认关闭。
+
+> 主要开关（默认全关）：`VOICE_ENABLED=false`、`VOICE_PROVIDER=openai`、`VOICE_BASE_URL=https://api.openai.com/v1`、`VOICE_API_KEY`、`VOICE_ASR_MODEL=whisper-1`、`VOICE_TTS_MODEL=tts-1`、`VOICE_TTS_VOICE=alloy`、`VOICE_TTS_FORMAT=mp3`（决定回复音频 content-type）、`VOICE_LANGUAGE`（留空自动检测）、`VOICE_CONVERSATION_BASE_URL=http://localhost:8081`、`VOICE_STREAM_MIN_CHARS=8`、`VOICE_MAX_AUDIO_BYTES=26214400`(25MB)、`VOICE_MAX_UPLOAD=25MB`、`VOICE_TIMEOUT_SECONDS=30`。

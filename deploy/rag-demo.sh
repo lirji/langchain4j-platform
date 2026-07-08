@@ -9,7 +9,7 @@
 #   bash deploy/rag-demo.sh --with-llm --cleanup   # 两个开关可组合，顺序不限
 #   BASE_URL=http://127.0.0.1:8080 bash deploy/rag-demo.sh   # 覆盖网关地址
 #
-# 说明见 docs/rag-api-demo.md。依赖：curl + python3（无需 jq）。
+# 说明见 docs/对话与检索/rag-api-demo.md。依赖：curl + python3（无需 jq）。
 set -euo pipefail
 
 # 网关当前实际映射到宿主机 18080（docker-compose.yml 里写的是 8080，若你从该文件重启则用 8080）。
@@ -100,7 +100,7 @@ try:
 except Exception:
     raise SystemExit(0)
 steps = a.get("steps") or []
-fa = a.get("finalAnswer") or "(空 —— 小模型未收敛，属正常，详见 docs/rag-api-demo.md)"
+fa = a.get("finalAnswer") or "(空 —— 小模型未收敛，属正常，详见 docs/对话与检索/rag-api-demo.md)"
 print(f"→ 共 {len(steps)} 步 | stopReason={a.get('stopReason')} | finalAnswer={fa}")
 PY
   fi

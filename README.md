@@ -12,7 +12,7 @@ client ──X-Api-Key──▶ edge-gateway (Spring Cloud Gateway)
                           ▼
                   ┌───────────────── 各微服务 ─────────────────┐
    conversation / knowledge / agent / analytics / workflow /
-   async-task / channel / interop / eval
+   async-task / channel / interop / eval / vision / voice
                           │  所有 LLM 调用统一走 ▼
                      LiteLLM (AI 网关)  ── provider 路由 + failover ──▶ ollama/openai/anthropic/...
 ```
@@ -30,15 +30,18 @@ client ──X-Api-Key──▶ edge-gateway (Spring Cloud Gateway)
 | `platform-protocol` | 共享库 | 跨服务 DTO 契约 |
 | `platform-audit` | 共享库 | 审计日志 + LLM audit listener |
 | `platform-metering` | 共享库 | token budget + cost attribution |
-| `conversation-service` | 服务 | `/chat`（可选跨服务调用 `knowledge-service` 做 RAG prompt 增强） |
+| `platform-eventbus` | 共享库 | 跨服务事件总线抽象（内存默认，可选 Kafka）；channel 出入站事件走它 |
+| `conversation-service` | 服务 | `/chat`（可选 RAG 增强）+ `/chat/stream` SSE 流式 + `/chat/auto` 意图路由 + `/chat/vision` 视觉对话 + `/chat/mcp` MCP 工具对话 + `/chat/cascade` 级联模型 + `/chat/memory`·`/memory/profile` 长期画像 + `/extract` 结构化抽取；多轮记忆、PII/注入护栏可选开启 |
 | `workflow-service` | 服务 | `/workflow/**` Flowable 退款审批流 + outbox |
 | `analytics-service` | 服务 | `/chat/sql`、`/analytics/sql` NL2SQL / ChatBI |
-| `knowledge-service` | 服务 | `/rag/documents/**` 文档上传/列表/删除 + `/rag/query` 向量 + keyword hybrid 检索；可选 `/rag/graph/**` GraphRAG 图谱查询 |
-| `agent-service` | 服务 | `/agent/run` 同步深度 Agent 编排；`/agent/run/async` + `/agent/tasks/**` 异步任务/SSE；`/agent/dag/run` 显式多 Agent DAG 编排；`/agent/dag/plan-run` 自动规划 DAG；动作通过跨服务协议调用 knowledge / analytics |
+| `knowledge-service` | 服务 | `/rag/documents/**` 文档上传/列表/删除 + `/rag/query` 向量+keyword hybrid（可选 rerank / query-expansion / contextual / HanLP 分词）；`/rag/image*` CLIP 多模态；`/rag/graph/**` GraphRAG；`/rag/obsidian/import` Obsidian 导入 |
+| `agent-service` | 服务 | `/agent/run`(+`/async`) 深度 Agent 编排 + `/agent/tasks/**` SSE；`/agent/dag/**` 多 Agent DAG（含自动规划/重规划）；`/agent/chain` 提示词链、`/agent/vote` 投票自一致、`/agent/reflexive`(+`/stream`) Reflexion 自反思；动作跨服务调用 knowledge / analytics / vision |
 | `async-task-service` | 服务 | `/async/tasks/**` 通用任务状态、SSE 断点续订、取消与 webhook 通知中心；后续 agent/workflow 会逐步切到该服务 |
-| `channel-service` | 服务 | `/channel/**` 渠道 ACL：webhook/Feishu/voice 出站、async-task/workflow callback、出入站签名校验、可选 Kafka event |
-| `interop-service` | 服务 | `/interop/**` A2A agent-card、MCP tool surface，并可代理 agent run/async/DAG 能力 |
+| `channel-service` | 服务 | `/channel/**` 渠道 ACL：webhook/Feishu/voice 出站、async-task/workflow callback、出入站签名校验；`/channel/dingtalk/events`·`/channel/feishu/events` 入站客服桥；可选 Kafka event |
+| `interop-service` | 服务 | `/interop/**` A2A（`message/send`、`message/stream` 真 SSE、push 通知中继 `/interop/a2a/push-callback`、`/.well-known/agent-card.json`）、MCP tool surface，并可代理 agent run/async/DAG 能力 |
 | `eval-service` | 服务 | `/eval/**` 外部回归测试客户端，可执行 HTTP target case、加载 baseline suite、做响应/oracle 断言并输出 JSON report |
+| `vision-service` | 服务 | `/vision/caption`·`/vision/describe` 图像描述（多模态，JSON 或 multipart 上传）；默认关（`VISION_ENABLED=false`） |
+| `voice-service` | 服务 | `/voice/transcribe` 转写 + `/voice/chat`(+`/stream`) 语音闭环 ASR(whisper)→`/chat`→TTS；默认关（`VOICE_ENABLED=false`） |
 | `edge-gateway` | 服务 | 边缘 API 网关 |
 
 > 后续继续加固 `channel`/`interop`/`eval` 的真实适配逻辑，并继续加固 `knowledge`/`async-task` 的持久化和跨服务协议。
@@ -46,11 +49,19 @@ client ──X-Api-Key──▶ edge-gateway (Spring Cloud Gateway)
 ## 文档
 
 - [文档入口](docs/README.md)
-- [能力文档](docs/capabilities.md)
-- [架构文档](docs/architecture.md)
-- [运行与配置手册](docs/operations.md)
-- [接口与集成速查](docs/api-reference.md)
-- [开发者指南](docs/developer-guide.md)
+- [能力文档](docs/参考/capabilities.md)
+- [架构文档](docs/参考/架构文档.md)
+- [运行与配置手册](docs/参考/operations.md)
+- [接口与集成速查](docs/参考/api-reference.md)
+- [开发者指南](docs/参考/developer-guide.md)
+- [部署指南](docs/平台工程/deployment-guide.md)
+- [业务场景总览](docs/scenarios.md)
+- 对话与检索：[RAG](docs/对话与检索/rag-guide.md) · [记忆](docs/对话与检索/memory-guide.md) · [语义缓存](docs/对话与检索/semantic-cache.md) · [模型级联](docs/对话与检索/model-cascade.md) · [NL2SQL](docs/对话与检索/nl2sql-guide.md)
+- Agent 与编排：[Agent](docs/Agent编排/agent-guide.md) · [工作流](docs/Agent编排/workflow-guide.md) · [Code Interpreter](docs/Agent编排/code-exec.md)
+- 多模态与语音：[视觉](docs/多模态语音/vision-guide.md) · [语音](docs/多模态语音/voice-guide.md)
+- 互操作与渠道：[A2A](docs/互操作渠道/a2a-guide.md) · [MCP](docs/互操作渠道/mcp-guide.md) · [钉钉桥](docs/互操作渠道/dingtalk-guide.md)
+- 平台工程：[事件总线](docs/平台工程/eventbus-guide.md) · [可观测性](docs/平台工程/observability-guide.md) · [成本归因](docs/平台工程/cost-attribution.md) · [评测](docs/平台工程/eval-guide.md)
+- [迁移路线图](docs/迁移/migration-roadmap.md)
 
 ## 本地跑（Phase 0）
 
@@ -95,7 +106,24 @@ curl -s -X POST 'http://localhost:8080/rag/query' \
 ```
 
 `knowledge-service` 默认使用 `RAG_VECTOR_STORE_PROVIDER=in-memory` 和本地 deterministic hash embedding，适合开发和单测。向量库 provider 可选 `in-memory`（默认）| `qdrant` | `pgvector` | `milvus` | `chroma` | `doris`，全部走 collection-per-tenant 强隔离，基名由 `RAG_VECTOR_STORE_BASE_COLLECTION`（默认 `knowledge_segments`）决定。
-`/rag/query` 会融合 vector、keyword 和可选 GraphRAG 命中，可通过 `RAG_RANKING_VECTOR_WEIGHT`、`RAG_RANKING_KEYWORD_WEIGHT`、`RAG_RANKING_GRAPH_WEIGHT` 调整排序权重。
+`/rag/query` 会融合 vector、keyword 和可选 GraphRAG 命中，可通过 `RAG_RANKING_VECTOR_WEIGHT`、`RAG_RANKING_KEYWORD_WEIGHT`、`RAG_RANKING_GRAPH_WEIGHT` 调整排序权重。中文 keyword 检索用 HanLP 分词。
+
+检索质量增强开关（默认全关，可叠加）：
+
+```bash
+RAG_RERANK_ENABLED=true            # 召回后重排；RAG_RERANK_TYPE=llm|jina
+RAG_RERANK_CANDIDATE_MULTIPLIER=3  # 先取 topK*N 候选再重排回 topK
+RAG_QUERY_EXPANSION_ENABLED=true   # 查询改写扩展；RAG_QUERY_EXPANSION_MAX_VARIANTS=4
+RAG_CONTEXTUAL_ENABLED=true        # 入库时给分块补文档级上下文；RAG_CONTEXTUAL_MAX_DOC_CHARS=8000
+```
+
+Obsidian 知识库可整包导入（multipart 上传 vault 压缩包，自动切分入库）：
+
+```bash
+curl -s -X POST 'http://localhost:8080/rag/obsidian/import' \
+  -H 'X-Api-Key: dev-key-acme-ingest' \
+  -F 'file=@./my-vault.zip' -F 'category=notes'
+```
 
 图片走原生 CLIP 多模态 embedding：向量存入独立的 image collection（`knowledge_images_<tenant>`，与文本集合隔离），文本 query 可跨模态检索图片。默认关闭（`RAG_MULTIMODAL_ENABLED=false`），关闭时上传图片返回 400。
 
@@ -190,6 +218,63 @@ CONVERSATION_RAG_ENABLED=true
 KNOWLEDGE_BASE_URL=http://knowledge-service:8084
 CONVERSATION_RAG_TOP_K=5
 CONVERSATION_RAG_CATEGORY=manual
+```
+
+### 对话增强：流式 / 记忆 / 护栏 / 路由 / 级联 / 视觉 / 抽取
+
+`/chat/stream` 用 SSE 逐 token 推送（底层 `GATEWAY_STREAMING_ENABLED=true`）：
+
+```bash
+curl -N -X POST 'http://localhost:8080/chat/stream?chatId=u1' \
+  -H 'X-Api-Key: dev-key-acme' \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"讲个关于向量数据库的冷笑话"}'
+```
+
+多轮记忆 + PII/注入护栏（默认全关，按需开启）：
+
+```bash
+CONVERSATION_MEMORY_STORE=redis            # 默认 in-memory；窗口 CONVERSATION_MEMORY_MAX_MESSAGES=20
+CONVERSATION_MEMORY_WINDOW_MODE=tokens     # 或按 token 截断，CONVERSATION_MEMORY_MAX_TOKENS=2000
+CONVERSATION_MEMORY_PROFILE_ENABLED=true   # 长期用户画像（跨会话），/chat/memory + /memory/profile
+CONVERSATION_GUARDRAIL_PII_ENABLED=true    # 出入参 PII 脱敏
+CONVERSATION_GUARDRAIL_INJECTION_ENABLED=true  # 提示注入检测，_MODE=block|sanitize|audit
+```
+
+意图路由 `/chat/auto`（`CONVERSATION_ROUTER_ENABLED=true`）按分类分发；级联 `/chat/cascade`（`CHAT_CASCADE_ENABLED=true`，便宜模型先答、低置信度升级 `CHAT_CASCADE_STRONG_MODEL`）；`/chat/mcp` 让对话直接调用外部 MCP 工具；`/extract?type=ticket` 做结构化抽取：
+
+```bash
+curl -s -X POST 'http://localhost:8080/chat/auto?chatId=u1' \
+  -H 'X-Api-Key: dev-key-acme' -H 'Content-Type: application/json' \
+  -d '{"message":"帮我退款"}'
+
+curl -s -X POST 'http://localhost:8080/extract?type=ticket' \
+  -H 'X-Api-Key: dev-key-acme' -H 'Content-Type: application/json' \
+  -d '{"text":"我叫张三，订单 A100 迟迟未发货，请尽快处理"}'
+```
+
+### 视觉与语音服务
+
+`vision-service`（:8090，`VISION_ENABLED=true`）做图像描述；conversation 侧 `/chat/vision`（`CONVERSATION_VISION_ENABLED=true`）转发给它：
+
+```bash
+# 直接调 vision-service：JSON(imageBase64/imageUrl) 或 multipart 上传
+curl -s -X POST 'http://localhost:8080/vision/caption' \
+  -H 'X-Api-Key: dev-key-acme' \
+  -F 'file=@./chart.png' -F 'instruction=这张图讲了什么'
+
+# 走对话入口，带图提问
+curl -s -X POST 'http://localhost:8080/chat/vision' \
+  -H 'X-Api-Key: dev-key-acme' \
+  -F 'image=@./chart.png' -F 'message=这张图的结论是什么'
+```
+
+`voice-service`（:8091，`VOICE_ENABLED=true`）做语音闭环：`/voice/transcribe` 只转写，`/voice/chat` 走 ASR(whisper)→`/chat`→TTS 返回音频，`/voice/chat/stream` 分句流式。默认 provider 走 OpenAI 兼容端点（`VOICE_BASE_URL`、`VOICE_API_KEY`、`VOICE_ASR_MODEL=whisper-1`、`VOICE_TTS_MODEL=tts-1`）。voice-service 已随 `docker compose` 起在 :8091（默认 `VOICE_ENABLED=false` 时空跑占位）：
+
+```bash
+curl -s -X POST 'http://localhost:8080/voice/chat?chatId=u1' \
+  -H 'X-Api-Key: dev-key-acme' \
+  -F 'audio=@./question.mp3' --output reply.mp3
 ```
 
 深度 Agent 可通过 `/agent/run` 自主选择 `rag_search` / `analytics_sql` / `current_time` / `delegate` / `finish`：
@@ -314,6 +399,18 @@ AGENT_DAG_REPLAN_MAX_REPLANS=1
 
 响应中的 `attempts[]` 会包含每轮 DAG 执行结果、`critique` 和聚合分；`acceptedByThreshold=false` 表示达到重规划上限后仍未过阈值。
 
+除 ReAct / DAG 外，agent-service 还提供三种轻量编排模式：`/agent/chain` 提示词链式串联、`/agent/vote` 多候选投票取自一致答案、`/agent/reflexive`（及 `/agent/reflexive/stream` SSE）Reflexion 自我反思后重试：
+
+```bash
+curl -s -X POST 'http://localhost:8080/agent/reflexive' \
+  -H 'X-Api-Key: dev-key-acme' -H 'Content-Type: application/json' \
+  -d '{"question":"写一个判断闰年的函数并自检边界"}'
+
+curl -s -X POST 'http://localhost:8080/agent/vote' \
+  -H 'X-Api-Key: dev-key-acme' -H 'Content-Type: application/json' \
+  -d '{"question":"13 是质数吗？给出结论","n":5}'
+```
+
 `agent-service` 还迁入了单体里的 `code_exec` 动作，但默认关闭。需要让 Agent 执行受限 Java 片段做精确计算/格式转换时，显式开启：
 
 ```bash
@@ -323,7 +420,7 @@ AGENT_CODE_EXEC_MAX_OUTPUT_CHARS=2000
 AGENT_CODE_EXEC_MAX_SOURCE_CHARS=4000
 ```
 
-注意：当前实现基于 JDK JShell，同 JVM 执行，不是真正强隔离沙箱；它只做 denylist、超时和输出截断，生产环境应优先改成独立受限进程/容器后再开放给不可信请求。
+注意：默认沙箱为 `AGENT_CODE_EXEC_SANDBOX=subprocess`（独立 JDK 子进程 + 堆上限 + 清空环境/空临时 cwd + 超时强杀，中等隔离；仍共享内核/文件系统/网络命名空间，非容器级），可选降级 `jshell`（同 JVM，隔离更弱）。两种都只做 denylist、超时和输出截断，对不可信输入应保持关闭，生产建议再包独立容器/远端沙箱。详见 [docs/Agent编排/code-exec.md](docs/Agent编排/code-exec.md)。
 
 需要让 Agent 调用外部 MCP server 时，可开启 `mcp_call` 动作：
 

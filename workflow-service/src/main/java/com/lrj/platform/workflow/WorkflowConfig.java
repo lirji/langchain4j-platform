@@ -37,7 +37,7 @@ import java.util.List;
  * 与本项目"默认无主 SQL 源 + DataSourceAutoConfiguration 已排除"冲突。这里用 flowable-spring
  * 核心，引擎只在开关打开时由本类显式构建。
  *
- * <p>三个落地决定（对应 docs/workflow-integration.md 的 3 个坑）：
+ * <p>三个落地决定（对应 docs/Agent编排/workflow-guide.md 的 3 个坑）：
  * <ul>
  *   <li><b>坑 1 无主 SQL 源</b>：这里手动建独立 Hikari DataSource（MySQL，驱动复用 mysql-connector-j），
  *       <em>不</em>注册成全局 {@code @Primary} DataSource，避免跟 NL2SQL 只读库互相污染。</li>

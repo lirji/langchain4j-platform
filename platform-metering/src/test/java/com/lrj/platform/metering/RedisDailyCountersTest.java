@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 测「per-tenant 日计数落 Redis」范式的共享纯函数 helper {@link RedisDailyCounters} ——
  * key 布局 / 租户解析 / 次日午夜 epoch。不连 Redis；Redis 往返（Lua INCRBY(FLOAT)+PEXPIREAT / SCAN）
- * 属集成，靠真 Redis 起服务验证，见 docs/distributed-state.md「怎么跑」。
+ * 属集成，靠真 Redis 起服务验证，见 docs/平台工程/cost-attribution.md「怎么跑」。
  * {@link RedisTokenBudgetTracker}（token）与 {@link com.lrj.platform.metering.RedisCostTracker}（USD）共用这套。
  */
 class RedisDailyCountersTest {

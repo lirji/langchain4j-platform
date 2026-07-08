@@ -3,7 +3,7 @@
 本手册面向本地起栈、部署与排障，覆盖前置依赖、启动命令、按能力分组的环境变量，以及常见问题。
 所有配置项均以各服务 `src/main/resources/application.yml` 和 `deploy/docker-compose.yml` 源码为准；表格里的“默认值”就是 yml 里 `${ENV:default}` 的 default，未显式给出 `${ENV}` 包装的项会标注为「属性」（只能经 config-server 或 JVM 参数设置）。
 
-平台由 **7 个共享库**（`platform-security` / `platform-observability` / `platform-gateway-client` / `platform-protocol` / `platform-audit` / `platform-metering` / `platform-eventbus`，无主类，靠自动装配自注册）加 **一批微服务**（`edge-gateway` / `config-server` / `conversation` / `workflow` / `analytics` / `knowledge` / `agent` / `async-task` / `channel` / `interop` / `eval` / `vision`）组成。
+平台由 **7 个共享库**（`platform-security` / `platform-observability` / `platform-gateway-client` / `platform-protocol` / `platform-audit` / `platform-metering` / `platform-eventbus`，无主类，靠自动装配自注册）加 **一批微服务**（`edge-gateway` / `config-server` / `conversation` / `workflow` / `analytics` / `knowledge` / `agent` / `async-task` / `channel` / `interop` / `eval` / `vision` / `voice`）组成。
 
 两层网关：
 
@@ -74,6 +74,7 @@ mvn -pl platform-security -Dtest=InternalTokenTest test   # 单类（务必带 -
 | interop-service | 8088 | `/interop`、`/interop/**`、`/.well-known/agent-card.json` | A2A + MCP surface |
 | eval-service | 8089 | `/eval`、`/eval/**` | 回归测试客户端 |
 | vision-service | 8090 | `/vision`、`/vision/**` | 多模态看图/OCR |
+| voice-service | 8091 | `/voice`、`/voice/**` | ASR + 对话 + TTS 语音闭环 |
 | config-server | 8888 | 不经网关 | 集中配置分发（可选） |
 | LiteLLM | 4000 | 不经网关 | LLM 网关 |
 | MySQL | 3306 | — | 本地数据库 |
@@ -124,7 +125,7 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 
 ### 网关限流（`edge-gateway` 的 `app.rate-limit`）
 
-默认开启（`enabled: true`，`store: in-memory`）。按 scope 每分钟配额：`chat=60`、`agent=20`、`stream=20`、`ingest=5`、`eval=5`、`default=120`；匿名请求乘以 `anonymous-multiplier=0.2`。
+默认开启（`enabled: true`，`store: redis`，`RATE_LIMIT_STORE=redis`；单机无 redis 时设 `in-memory`）。按 scope 每分钟配额：`chat=60`、`agent=20`、`stream=20`、`ingest=5`、`eval=5`、`default=120`；匿名请求乘以 `anonymous-multiplier=0.2`。
 
 ---
 
@@ -171,6 +172,67 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 | `CONVERSATION_RAG_MAX_CONTEXT_CHARS` | `4000` | 注入上下文字符上限 |
 | `CONVERSATION_RAG_CONNECT_TIMEOUT` / `_READ_TIMEOUT` | `1s` / `3s` | HTTP 超时 |
 
+### 多轮记忆（Chat Memory，默认开启内存滑窗，零外部依赖）
+
+`/chat` 按 `chatId` 维护多轮上下文。默认开启、内存滑窗；`redis` 档可多副本共享且重启不丢。
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `CONVERSATION_MEMORY_STORE` | `in-memory` | `in-memory` 或 `redis`（多副本共享 + 重启不丢） |
+| `CONVERSATION_MEMORY_WINDOW_MODE` | `messages` | `messages`（最近 N 条）\| `tokens`（近似 token 窗）\| `summary`（旧消息 LLM 压缩为摘要，长对话保早期要点） |
+| `CONVERSATION_MEMORY_MAX_MESSAGES` | `20` | `messages` 档窗口条数 |
+| `CONVERSATION_MEMORY_MAX_TOKENS` | `2000` | `tokens` 档窗口 token 上限 |
+| `CONVERSATION_MEMORY_TOKEN_MODEL` | `gpt-4o-mini` | `tokens` 档 tokenizer 依据 |
+| `CONVERSATION_MEMORY_REDIS_TTL` | `P7D` | `redis` 档会话 TTL（ISO-8601，如 `P7D` / `PT12H`） |
+
+### 长期画像（用户画像记忆，默认关）
+
+跨会话抽取用户持久事实，对话前作为 context 新鲜注入。端点：`POST /chat/memory`、`GET/DELETE /memory/profile`。开启后每轮多一次 temp=0 抽取。
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `CONVERSATION_MEMORY_PROFILE_ENABLED` | `false` | 长期画像开关 |
+| `CONVERSATION_MEMORY_PROFILE_STORE` | `in-memory` | 画像存储（`in-memory`；redis 变体待补） |
+| `CONVERSATION_MEMORY_PROFILE_MAX_ITEMS` | `50` | 每用户画像条目上限 |
+| `CONVERSATION_MEMORY_PROFILE_RECALL_LIMIT` | `12` | 每轮注入的画像条数上限 |
+| `CONVERSATION_MEMORY_PROFILE_ASYNC` | `true` | 抽取是否异步（不阻塞回复） |
+
+### 对话护栏（PII / 提示注入，默认全关）
+
+移植自单体 `PromptInjection` / `PII`。默认全关、零回归；生产建议开启（安全合规）。
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `CONVERSATION_GUARDRAIL_INJECTION_ENABLED` | `false` | 提示注入检测开关 |
+| `CONVERSATION_GUARDRAIL_INJECTION_MODE` | `block` | `block`（拒答）\| `sanitize`（剥离控制 token）\| `audit`（仅记日志放行） |
+| `CONVERSATION_GUARDRAIL_PII_ENABLED` | `false` | 输出里的 email / 手机号 / 身份证就地脱敏 |
+
+### 意图路由（LLM-as-Router，默认关）
+
+分类 query（RAG / TOOL / CHAT）后分派 —— RAG 走检索、TOOL/CHAT 裸答。端点：`POST /chat/auto`。开启后每轮多一次 temp=0 分类调用。
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `CONVERSATION_ROUTER_ENABLED` | `false` | 意图路由开关（驱动 `/chat/auto`） |
+
+### 视觉对话（`/chat/vision`，默认关）
+
+`/chat/vision` 把「图片 + 问题」委托给 vision-service（视觉能力在那边）。默认关。
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `CONVERSATION_VISION_ENABLED` | `false` | 视觉对话开关（驱动 `/chat/vision`） |
+| `CONVERSATION_VISION_BASE_URL` | `http://localhost:8090` | vision-service 地址 |
+| `CONVERSATION_VISION_CONNECT_TIMEOUT` / `_READ_TIMEOUT` | `1s` / `60s` | HTTP 超时 |
+
+### Token 流式（`/chat/stream`）
+
+`platform.gateway.streaming.enabled` 装配 token 级 `StreamingChatModel`，供 SSE 端点 `POST /chat/stream`。默认开；无流式需求可置 `false` 省一个 Bean。
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `GATEWAY_STREAMING_ENABLED` | `true` | 流式 `StreamingChatModel` bean 开关（驱动 `/chat/stream`） |
+
 ### L1 语义缓存（默认关，pre-RAG、租户桶、问题级）
 
 | 变量 | 默认值 | 说明 |
@@ -178,7 +240,7 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 | `CONVERSATION_SEMANTIC_CACHE_ENABLED` | `false` | 开关；关时对 `/chat` 零影响 |
 | `CONVERSATION_SEMANTIC_CACHE_THRESHOLD` | `0.95` | 命中相似度阈值 |
 | `CONVERSATION_SEMANTIC_CACHE_MAX_ENTRIES` | `1000` | 每租户最大条数 |
-| `CONVERSATION_SEMANTIC_CACHE_STORE` | `in-memory` | `in-memory` 或 `redis` |
+| `CONVERSATION_SEMANTIC_CACHE_STORE` | `redis` | `redis`（默认，需可达 redis）或 `in-memory` |
 | `CONVERSATION_SEMANTIC_CACHE_EMBEDDING_PROVIDER` | `hash` | 缓存向量 provider（`hash` 等） |
 | `CONVERSATION_SEMANTIC_CACHE_EMBEDDING_MODEL` | `embedding-default` | 缓存 embedding 模型名 |
 | `CONVERSATION_SEMANTIC_CACHE_REDIS_TTL` | `0s` | redis 档条目 TTL（0 = 不过期） |
@@ -194,7 +256,7 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 | `CHAT_CASCADE_MIN_ANSWER_CHARS` | `8` | 便宜答案最短长度 |
 | `CHAT_CASCADE_SELF_RATING` | `false` | 是否让模型自评置信 |
 
-> `token-budget` 默认开启（`in-memory`，时区 `Asia/Shanghai`）；`cost` 默认关。二者经 `ChatModelListener` 挂载，指标从 `/actuator/{tokenbudget,cost,prometheus}` 暴露。
+> `token-budget` 默认开启（计数默认持久化到 `redis`，`TOKEN_BUDGET_STORE=redis`；无 redis 时设 `in-memory`，时区 `Asia/Shanghai`）；`cost` 默认关（开启后 `COST_STORE` 同样默认 `redis`）。二者经 `ChatModelListener` 挂载，指标从 `/actuator/{tokenbudget,cost,prometheus}` 暴露。
 
 ---
 
@@ -225,7 +287,7 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 | `RAG_DORIS_USER` / `_PASSWORD` | `root` / 空 | Doris 账号密码 |
 | `RAG_DORIS_METRIC` | `cosine` | 距离度量（`cosine` \| `l2`） |
 | `RAG_DORIS_CREATE_TABLE` / `_BUCKETS` | `true` / `4` | 是否自动建表及分桶数 |
-| `RAG_REGISTRY_STORE` | `in-memory` | 文档 registry：`in-memory` 或 `redis` |
+| `RAG_REGISTRY_STORE` | `redis` | 文档 registry：`redis`（默认，需可达 redis）或 `in-memory` |
 
 ### Embedding
 
@@ -249,6 +311,23 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 | `RAG_RANKING_VECTOR_WEIGHT` | `1.0` | vector 排序权重 |
 | `RAG_RANKING_KEYWORD_WEIGHT` | `1.0` | keyword 排序权重 |
 | `RAG_RANKING_GRAPH_WEIGHT` | `1.0` | graph 排序权重 |
+
+### RAG 检索增强（rerank / 查询扩展 / 上下文化，默认全关）
+
+三项可选的 LLM 检索增强，默认全关、零回归。开启后共用 `RAG_LLM_*`（缺省复用 `platform.gateway.*`）网关模型。
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `RAG_RERANK_ENABLED` | `false` | 召回后重排序开关 |
+| `RAG_RERANK_TYPE` | `llm` | `llm`（复用共享 temp=0 ChatModel 打分）或 `jina`（Jina reranker 云 API） |
+| `RAG_RERANK_CANDIDATE_MULTIPLIER` | `3` | 送入重排的候选倍数（先多召回再截断到 top-k） |
+| `RAG_RERANK_JINA_MODEL` | `jina-reranker-v2-base-multilingual` | `jina` 档 reranker 模型（配合 `JINA_API_KEY`） |
+| `RAG_QUERY_EXPANSION_ENABLED` | `false` | 查询扩展开关：把 1 query 扩成 N 变体多路召回 |
+| `RAG_QUERY_EXPANSION_MAX_VARIANTS` | `4` | 扩展变体上限 |
+| `RAG_CONTEXTUAL_ENABLED` | `false` | Contextual Retrieval：入库时逐 chunk 加文档级上下文前缀再嵌入（每 chunk 一次 LLM 调用） |
+| `RAG_CONTEXTUAL_MAX_DOC_CHARS` | `8000` | 生成上下文前缀时读取的文档字符上限 |
+
+> keyword hybrid 检索的中文分词可切 `RAG_HYBRID_TOKENIZER=hanlp`（默认 `simple` 零依赖；`hanlp` 更准，需 HanLP 词典，随 knowledge 依赖引入）。
 
 ### GraphRAG（默认关，确定性三元组抽取）
 
@@ -442,7 +521,7 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 
 ---
 
-## 14. Interop / Eval / Vision
+## 14. Interop / Eval / Vision / Voice
 
 ### Interop（`app.interop.*`）
 
@@ -476,6 +555,30 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 | `VISION_ALLOWED_MIME` | `image/png,image/jpeg,image/webp,image/gif` | 允许的 MIME |
 | `VISION_CAPTION_CACHE_SIZE` | `256` | caption 缓存条数（按图内容 SHA-256 去重），0 = 关缓存 |
 | `VISION_MAX_UPLOAD` | `12MB` | multipart 上传上限 |
+
+### Voice（`app.voice.*`，:8091，默认关）
+
+语音闭环：ASR（转写）→ 转发 conversation-service `/chat` 取回复 → TTS（合成）。端点：`POST /voice/chat`（multipart audio → 音频/JSON）、`POST /voice/chat/stream`（SSE 流式）、`POST /voice/transcribe`（仅转写）。**总开关默认关 → voice 相关 Bean 全不装配，零依赖、零网络。**
+
+单跑：`mvn -pl voice-service spring-boot:run`（:8091）。
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `VOICE_ENABLED` | `false` | 总开关；关时不装配任何 voice Bean |
+| `VOICE_PROVIDER` | `openai` | ASR/TTS provider（目前仅 openai 兼容协议） |
+| `VOICE_BASE_URL` | `https://api.openai.com/v1` | provider base-url（可指云 OpenAI / Azure / 本地 whisper+tts 网关） |
+| `VOICE_API_KEY` | 空（回退 `OPENAI_API_KEY`） | provider 鉴权 key |
+| `VOICE_ASR_MODEL` | `whisper-1` | 语音转写模型 |
+| `VOICE_TTS_MODEL` | `tts-1` | 语音合成模型 |
+| `VOICE_TTS_VOICE` | `alloy` | TTS 音色 |
+| `VOICE_TTS_FORMAT` | `mp3` | TTS 输出音频格式 |
+| `VOICE_LANGUAGE` | 空 | ASR 语言提示（留空自动识别） |
+| `VOICE_TIMEOUT_SECONDS` | `30` | provider 调用超时（秒） |
+| `VOICE_STREAM_MIN_CHARS` | `8` | 流式档单句最小字符数（攒够再合成，`/voice/chat/stream`） |
+| `VOICE_MAX_AUDIO_BYTES` | `26214400`（25MB） | 单条音频字节上限 |
+| `VOICE_MAX_UPLOAD` | `25MB` | multipart 上传上限（含请求体） |
+| `VOICE_CONVERSATION_BASE_URL` | `http://localhost:8081` | 「大脑」= conversation-service 地址（转写文本经此对话取回复） |
+| `VOICE_CONVERSATION_CONNECT_TIMEOUT` / `_READ_TIMEOUT` | `1s` / `60s` | 调 conversation-service 的 HTTP 超时 |
 
 ---
 

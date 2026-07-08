@@ -6,7 +6,7 @@
 #
 # 前置:宿主机 Ollama 已 `ollama pull nomic-embed-text`;redis / qdrant / mysql 已在跑。
 # 换 embedding = 换向量维度(hash 64 → nomic 768),切换后需删旧 Qdrant collection 并重新导入
-# (bash deploy/seed-kb.sh)。详见 docs/rag-api-demo.md §六。
+# (bash deploy/seed-kb.sh)。详见 docs/对话与检索/rag-api-demo.md §六。
 services:
   knowledge-service:
     extra_hosts:

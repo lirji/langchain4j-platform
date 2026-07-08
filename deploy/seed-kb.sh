@@ -8,7 +8,7 @@
 #   bash deploy/seed-kb.sh --purge    # 先删除这些同名文档再重新导入(干净演示)
 #   BASE_URL=http://127.0.0.1:8080 bash deploy/seed-kb.sh
 #
-# 依赖：curl + python3。说明见 docs/rag-api-demo.md。
+# 依赖：curl + python3。说明见 docs/对话与检索/rag-api-demo.md。
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:18080}"

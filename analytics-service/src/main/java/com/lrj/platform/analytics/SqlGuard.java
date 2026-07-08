@@ -9,7 +9,7 @@ import java.util.regex.Pattern;
 
 /**
  * NL2SQL 的确定性 SQL 安全护栏（L2–L4 + L6，纯逻辑、零外部依赖、无 Spring）。
- * 配合执行层的 L1（只读 DB 账号）和 L5（statement 超时）构成 6 层纵深防御 —— 见 {@code docs/nl2sql.md}。
+ * 配合执行层的 L1（只读 DB 账号）和 L5（statement 超时）构成 6 层纵深防御 —— 见 {@code docs/对话与检索/nl2sql-guide.md}。
  *
  * <p>对一条候选 SQL 顺序执行：
  * <ol>

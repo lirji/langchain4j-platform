@@ -1,6 +1,6 @@
 # 迁移收尾实施方案（未完成项）
 
-本文件汇总 `docs/migration-roadmap.md` 中尚未落地项的实施方案，由分阶段工作流产出。
+本文件汇总 `docs/迁移/migration-roadmap.md` 中尚未落地项的实施方案，由分阶段工作流产出。
 分两部分：**A. 已实现并验证的低风险项**（改动已在工作树，未提交）、**B. 待你拍板的设计方案**（仅设计，未写码）。
 
 > 各方案的完整 approach / filesToTouch / testPlan 见工作流 journal：
@@ -46,7 +46,7 @@
 
 | 项 | 验证 | 关键改动 | 开关（默认关，零依赖 dev/test） |
 |---|---|---|---|
-| analytics docker smoke 脚本 | `bash -n` 通过 | 新增 `deploy/smoke-nl2sql.sh`（轮询健康→打 `/chat/sql`、`/analytics/sql`→校验 `NlToSqlService.Result` 字段），补 `docs/operations.md` 一行 | — |
+| analytics docker smoke 脚本 | `bash -n` 通过 | 新增 `deploy/smoke-nl2sql.sh`（轮询健康→打 `/chat/sql`、`/analytics/sql`→校验 `NlToSqlService.Result` 字段），补 `docs/参考/operations.md` 一行 | — |
 | eval-service embedding / LLM-judge 比较模式 | `mvn -pl eval-service -am test` 28 passed | `EvalJudge`/`EvalEmbeddingComparator` 接口 + Disabled 默认 + Gateway/Llm 变体；`EvalCase` 加 4 个可空字段（在 platform-protocol） | `EVAL_JUDGE_ENABLED`、`EVAL_EMBEDDING_ENABLED`（默认 false） |
 | 语义缓存 L1（问题级/租户桶/pre-RAG） | `mvn -pl conversation-service -am test` 18 passed | `conversation/cache/*`：Embedder（hash 默认/gateway 可选）+ Store（内存默认/redis 可选）+ `SemanticCache` 编排器；`ConversationController` 命中短路 RAG+LLM | `CONVERSATION_SEMANTIC_CACHE_ENABLED`（默认 false） |
 

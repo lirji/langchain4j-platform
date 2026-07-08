@@ -1,6 +1,6 @@
 # 迁移缺口补齐方案（对话/RAG 基础层）
 
-本文件承接 `docs/migration-roadmap.md` 与 `docs/migration-remaining-plan.md`。
+本文件承接 `docs/迁移/migration-roadmap.md` 与 `docs/迁移/migration-remaining-plan.md`。
 后两者聚焦 Agent/编排/基建/部署维度（已完成）；本文件收口**代码级逐文件核对后发现的、对话与 RAG「可控管道」基础层的未覆盖缺口**（约 20 项）。
 
 > 核对方法：两仓 `grep -rl` 权威比对 + 端点清单 + 关键类。legacy = `/Users/liruijun/personal/LLM/LangChain4j_project`。

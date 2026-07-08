@@ -41,7 +41,7 @@ app:
     read-timeout: ${CHANNEL_READ_TIMEOUT:10s}
     # 钉钉知识库客服桥：默认关闭；开启后 /channel/dingtalk/events 接收企业内部机器人的消息回调，
     # 先查知识库（无命中转人工），命中则调 conversation /chat（需其 CONVERSATION_RAG_ENABLED=true）再回群。
-    # 详见 docs/dingtalk-guide.md。
+    # 详见 docs/互操作渠道/dingtalk-guide.md。
     dingtalk:
       enabled: ${DINGTALK_ENABLED:false}
       tenant-id: ${DINGTALK_TENANT:default}          # 该钉钉企业绑定的平台租户
