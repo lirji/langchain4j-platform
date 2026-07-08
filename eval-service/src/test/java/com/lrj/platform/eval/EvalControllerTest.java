@@ -1,6 +1,7 @@
 package com.lrj.platform.eval;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lrj.platform.eval.retrieval.RetrievalEvaluator;
 import com.lrj.platform.protocol.eval.EvalCase;
 import com.lrj.platform.protocol.eval.EvalCaseResult;
 import com.lrj.platform.protocol.eval.EvalDualRunReply;
@@ -129,7 +130,9 @@ class EvalControllerTest {
     private static EvalController controller(EvalRunner runner, EvalSuiteLoader loader, EvalProperties properties) {
         EvalSnapshotLoader snapshotLoader = new EvalSnapshotLoader(new ObjectMapper().findAndRegisterModules(), properties);
         EvalDualRunner dualRunner = new EvalDualRunner(runner, loader, snapshotLoader, properties);
-        return new EvalController(runner, loader, disabledReportWriter(), properties, dualRunner);
+        RetrievalEvaluator retrievalEvaluator = new RetrievalEvaluator(
+                (base, question, topK, category) -> java.util.List.of());
+        return new EvalController(runner, loader, disabledReportWriter(), properties, dualRunner, retrievalEvaluator);
     }
 
     private static EvalReportWriter disabledReportWriter() {

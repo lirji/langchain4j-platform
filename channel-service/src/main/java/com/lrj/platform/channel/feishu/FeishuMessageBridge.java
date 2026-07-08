@@ -24,16 +24,21 @@ public class FeishuMessageBridge {
 
     private final HttpConversationClient conversation;
     private final HttpFeishuReplyClient reply;
+    private final HttpWorkflowClient workflow;
     private final Executor executor;
     private final String tenantId;
+    private final boolean intentRoutingEnabled;
     private final ConcurrentHashMap<String, Boolean> seen = new ConcurrentHashMap<>();
 
     public FeishuMessageBridge(HttpConversationClient conversation, HttpFeishuReplyClient reply,
+                               HttpWorkflowClient workflow,
                                Executor feishuBridgeExecutor, FeishuProperties props) {
         this.conversation = conversation;
         this.reply = reply;
+        this.workflow = workflow;
         this.executor = feishuBridgeExecutor;
         this.tenantId = props.getTenantId();
+        this.intentRoutingEnabled = props.getIntentRouting().isEnabled();
     }
 
     /** 异步处理一条入站消息（控制器已 ack）。 */
@@ -53,7 +58,14 @@ public class FeishuMessageBridge {
         TenantContext.Tenant prev = TenantContext.captureRaw();
         try {
             TenantContext.set(new TenantContext.Tenant(tenantId, "feishu:" + nz(msg.openId()), Set.of("chat")));
-            String replyText = conversation.chat(msg.text(), nz(msg.openId()));
+            // 意图路由（默认关）：退款/投诉 → 起退款工作流并回执；其余 / 起单失败 → 走普通对话。
+            String replyText = null;
+            if (intentRoutingEnabled && FeishuIntent.classify(msg.text()) == FeishuIntent.Route.WORKFLOW) {
+                replyText = routeToWorkflowOrNull(msg);
+            }
+            if (replyText == null) {
+                replyText = conversation.chat(msg.text(), nz(msg.openId()));
+            }
             if (replyText != null && !replyText.isBlank()) {
                 reply.replyText(msg.openId(), replyText);
             }
@@ -62,6 +74,33 @@ public class FeishuMessageBridge {
         } finally {
             if (prev != null) TenantContext.set(prev); else TenantContext.clear();
         }
+    }
+
+    /**
+     * 起退款工作流并生成回执文案；起单失败返回 {@code null} 让上游降级为普通对话（不因工作流不可用而丢消息）。
+     * 挂起人工审批 → "已转人工审核（工单 …）"，终态由 workflow 终态事件经既有回推链送回；
+     * 低风险自动受理 → 直接回流程给出的答复。
+     */
+    private String routeToWorkflowOrNull(FeishuInboundMessage msg) {
+        try {
+            HttpWorkflowClient.StartResult res = workflow.startRefund(
+                    msg.text(), "feishu:" + nz(msg.openId()), msg.messageId());
+            if (HttpWorkflowClient.STATUS_WAITING.equals(res.status())) {
+                return "您的请求涉及退款/投诉，已转人工审核（工单 " + shortId(res.instanceId()) + "）。稍后为您答复。";
+            }
+            return res.reply() != null && !res.reply().isBlank()
+                    ? res.reply() : "已受理您的请求，稍后为您答复。";
+        } catch (Exception e) {
+            log.warn("feishu workflow start failed, fallback to chat messageId={}: {}", msg.messageId(), e.toString());
+            return null;
+        }
+    }
+
+    private static String shortId(String id) {
+        if (id == null || id.isBlank()) {
+            return "-";
+        }
+        return id.length() <= 8 ? id : id.substring(0, 8);
     }
 
     private static String nz(String s) {

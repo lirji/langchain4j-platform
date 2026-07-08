@@ -21,7 +21,7 @@ class HttpChannelMessageDispatcherTest {
     void keepsMessagesAcceptedWhenOutboundDisabled() {
         ChannelProperties properties = new ChannelProperties();
         properties.setOutboundEnabled(false);
-        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(new RestTemplate(), properties);
+        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(new RestTemplate(), properties, null);
 
         var result = dispatcher.dispatch("message-1", new ChannelMessageRequest("webhook", "http://callback.local/messages", "hello", Map.of()));
 
@@ -35,7 +35,7 @@ class HttpChannelMessageDispatcherTest {
         MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
         ChannelProperties properties = new ChannelProperties();
         properties.setOutboundEnabled(true);
-        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(restTemplate, properties);
+        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(restTemplate, properties, null);
 
         server.expect(once(), requestTo("http://callback.local/messages"))
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
@@ -59,7 +59,7 @@ class HttpChannelMessageDispatcherTest {
     void failsVoiceWhenProviderUrlMissing() {
         ChannelProperties properties = new ChannelProperties();
         properties.setOutboundEnabled(true);
-        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(new RestTemplate(), properties);
+        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(new RestTemplate(), properties, null);
 
         var result = dispatcher.dispatch("message-1", new ChannelMessageRequest("voice", "user-1", "hello", Map.of()));
 
@@ -74,7 +74,7 @@ class HttpChannelMessageDispatcherTest {
         ChannelProperties properties = new ChannelProperties();
         properties.setOutboundEnabled(true);
         properties.setVoiceProviderUrl("http://voice.local/calls");
-        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(restTemplate, properties);
+        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(restTemplate, properties, null);
 
         server.expect(once(), requestTo("http://voice.local/calls"))
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
@@ -101,7 +101,7 @@ class HttpChannelMessageDispatcherTest {
         ChannelProperties properties = new ChannelProperties();
         properties.setOutboundEnabled(true);
         properties.setVoiceProviderUrl("http://voice.local/default");
-        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(restTemplate, properties);
+        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(restTemplate, properties, null);
 
         server.expect(once(), requestTo("http://voice.local/override"))
                 .andRespond(withSuccess());
@@ -122,7 +122,7 @@ class HttpChannelMessageDispatcherTest {
         MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
         ChannelProperties properties = new ChannelProperties();
         properties.setOutboundEnabled(true);
-        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(restTemplate, properties);
+        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(restTemplate, properties, null);
 
         server.expect(once(), requestTo("http://feishu.local/webhook"))
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
@@ -146,15 +146,36 @@ class HttpChannelMessageDispatcherTest {
     }
 
     @Test
-    void failsFeishuWhenWebhookUrlMissing() {
+    void failsFeishuWhenNoWebhookAndNoReplyClient() {
         ChannelProperties properties = new ChannelProperties();
         properties.setOutboundEnabled(true);
-        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(new RestTemplate(), properties);
+        // 无群 webhook 且无飞书应用直发客户端（feishu 未启用）→ 无法投递
+        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(new RestTemplate(), properties, null);
 
         var result = dispatcher.dispatch("message-1", new ChannelMessageRequest("feishu", "chat-1", "hello", Map.of()));
 
         assertThat(result.status()).isEqualTo("FAILED");
-        assertThat(result.detail()).isEqualTo("feishu webhook URL is required");
+        assertThat(result.detail()).isEqualTo("feishu delivery requires webhookUrl or feishu app credentials");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void dispatchesFeishuTerminalReplyToOpenIdViaAppApi() {
+        ChannelProperties properties = new ChannelProperties();
+        properties.setOutboundEnabled(true);
+        // 工作流终态回推：chatId=feishu:ou_123 → target=ou_123，无 webhookUrl → 走应用 API 直发。
+        com.lrj.platform.channel.feishu.HttpFeishuReplyClient replyClient =
+                org.mockito.Mockito.mock(com.lrj.platform.channel.feishu.HttpFeishuReplyClient.class);
+        org.springframework.beans.factory.ObjectProvider<com.lrj.platform.channel.feishu.HttpFeishuReplyClient> provider =
+                org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+        org.mockito.Mockito.when(provider.getIfAvailable()).thenReturn(replyClient);
+        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(new RestTemplate(), properties, provider);
+
+        var result = dispatcher.dispatch("message-1",
+                new ChannelMessageRequest("feishu", "ou_123", "您的退款已通过审核。", Map.of()));
+
+        assertThat(result.status()).isEqualTo("SENT");
+        org.mockito.Mockito.verify(replyClient).replyText("ou_123", "您的退款已通过审核。");
     }
 
     @Test
@@ -165,7 +186,7 @@ class HttpChannelMessageDispatcherTest {
         properties.setOutboundEnabled(true);
         properties.setOutboundSignatureEnabled(true);
         properties.setOutboundSignatureSecret("secret");
-        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(restTemplate, properties);
+        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(restTemplate, properties, null);
 
         server.expect(once(), requestTo("http://callback.local/messages"))
                 .andExpect(header("X-Channel-Signature", "sha256=3fb17502c45341517023fca56038fdcba4b9592f1f1bc0b85ac51ebee3cf66be"))
@@ -183,7 +204,7 @@ class HttpChannelMessageDispatcherTest {
         ChannelProperties properties = new ChannelProperties();
         properties.setOutboundEnabled(true);
         properties.setOutboundSignatureEnabled(true);
-        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(new RestTemplate(), properties);
+        HttpChannelMessageDispatcher dispatcher = new HttpChannelMessageDispatcher(new RestTemplate(), properties, null);
 
         var result = dispatcher.dispatch("message-1", new ChannelMessageRequest("webhook", "http://callback.local/messages", "hello", Map.of()));
 

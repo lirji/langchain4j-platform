@@ -24,6 +24,22 @@
             <artifactId>langchain4j-open-ai</artifactId>
         </dependency>
 
+        <!--
+          分布式追踪桥（#1 OTel）：一处依赖惠及全部 6 个 gateway-client 消费服务（agent/analytics/
+          conversation/eval/vision/workflow）；edge-gateway/config-server 不依赖本模块故不受影响。
+          OTLP 默认 okhttp sender（HTTP/protobuf），不引 grpc —— 与固定的 grpc-bom:1.59.1 无冲突。
+          默认关：见 TracingDefaultsEnvironmentPostProcessor（management.tracing.enabled=false 兜底）。
+          版本由 Spring Boot 3.3.5 BOM 管理。
+        -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

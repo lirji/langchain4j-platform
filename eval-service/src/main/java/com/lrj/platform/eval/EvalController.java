@@ -7,6 +7,8 @@ import com.lrj.platform.protocol.eval.EvalDualRunRequest;
 import com.lrj.platform.protocol.eval.EvalRunReply;
 import com.lrj.platform.protocol.eval.EvalRunRequest;
 import com.lrj.platform.protocol.eval.EvalSuiteRunRequest;
+import com.lrj.platform.protocol.eval.RetrievalRunRequest;
+import com.lrj.platform.eval.retrieval.RetrievalEvaluator;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,17 +29,20 @@ public class EvalController {
     private final EvalReportWriter reportWriter;
     private final EvalProperties properties;
     private final EvalDualRunner dualRunner;
+    private final RetrievalEvaluator retrievalEvaluator;
 
     public EvalController(EvalRunner evalRunner,
                           EvalSuiteLoader suiteLoader,
                           EvalReportWriter reportWriter,
                           EvalProperties properties,
-                          EvalDualRunner dualRunner) {
+                          EvalDualRunner dualRunner,
+                          RetrievalEvaluator retrievalEvaluator) {
         this.evalRunner = evalRunner;
         this.suiteLoader = suiteLoader;
         this.reportWriter = reportWriter;
         this.properties = properties;
         this.dualRunner = dualRunner;
+        this.retrievalEvaluator = retrievalEvaluator;
     }
 
     @GetMapping("/eval/capabilities")
@@ -54,6 +59,19 @@ public class EvalController {
                         "gateStatus", "200 pass / 422 regression"),
                 "baselineSuites", "classpath:eval/baselines/*.json or app.eval.baseline-directory",
                 "oracleSnapshots", "classpath:eval/snapshots/*.json or app.eval.snapshot-directory");
+    }
+
+    /**
+     * 检索质量评测（Recall@k/Precision@k/MRR/Hit@k，不经 LLM）。逐 case 经 {@code /rag/query} 检索并算 IR 指标。
+     * 补 LLM-Judge passRate 未覆盖的召回层。端点常开。
+     */
+    @PostMapping("/eval/retrieval")
+    public ResponseEntity<?> retrieval(@RequestBody RetrievalRunRequest request) {
+        if (request == null || request.cases() == null || request.cases().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "cases are required"));
+        }
+        return ResponseEntity.ok(retrievalEvaluator.evaluate(
+                request.cases(), request.topK(), request.category(), request.targetBaseUrl()));
     }
 
     @PostMapping("/eval/run")

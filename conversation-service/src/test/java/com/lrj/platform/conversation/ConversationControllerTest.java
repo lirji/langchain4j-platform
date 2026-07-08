@@ -3,11 +3,15 @@ package com.lrj.platform.conversation;
 import com.lrj.platform.conversation.cache.HashSemanticCacheEmbedder;
 import com.lrj.platform.conversation.cache.InMemorySemanticCacheStore;
 import com.lrj.platform.conversation.cache.SemanticCache;
+import com.lrj.platform.conversation.grounding.NoopGroundingChecker;
 import com.lrj.platform.conversation.guardrail.ConversationGuardrail;
+import com.lrj.platform.conversation.history.NoopHistoryAwareQueryCompressor;
+import com.lrj.platform.conversation.prompt.ResolvedAssistantStyle;
 import com.lrj.platform.security.TenantContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -17,6 +21,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ConversationControllerTest {
+
+    private static final ResolvedAssistantStyle STYLE = new ResolvedAssistantStyle("中文", "简洁", "cite", "");
 
     @AfterEach
     void clearTenant() {
@@ -37,9 +43,10 @@ class ConversationControllerTest {
     void chatUsesAugmentedContextAndReturnsTenantMetadata() {
         Assistant assistant = mock(Assistant.class);
         RagPromptAugmenter augmenter = mock(RagPromptAugmenter.class);
-        when(augmenter.contextFor("hello")).thenReturn("context");
-        when(assistant.chat("acme::c1", "hello", "context")).thenReturn("reply");
-        ConversationController controller = new ConversationController(assistant, augmenter, disabledCache(), disabledGuardrail());
+        when(augmenter.contextWithHits("hello", null)).thenReturn(new RagPromptAugmenter.RagContext("context", List.of()));
+        when(assistant.chat("acme::c1", "中文", "简洁", "cite", "", "hello", "context")).thenReturn("reply");
+        ConversationController controller = new ConversationController(assistant, augmenter, disabledCache(), disabledGuardrail(),
+                new NoopHistoryAwareQueryCompressor(), new NoopGroundingChecker(), STYLE);
         TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
 
         Map<String, Object> response = controller.chat("c1", Map.of("message", "hello"));
@@ -49,18 +56,37 @@ class ConversationControllerTest {
                 .containsEntry("tenantId", "acme")
                 .containsEntry("userId", "alice");
         // 记忆键按 <tenantId>::<chatId> 组合；用户原始消息进记忆，RAG 来源经 context 注入
-        verify(assistant).chat("acme::c1", "hello", "context");
+        verify(assistant).chat("acme::c1", "中文", "简洁", "cite", "", "hello", "context");
+    }
+
+    @Test
+    void chatForwardsPerRequestCategoryToAugmenter() {
+        Assistant assistant = mock(Assistant.class);
+        RagPromptAugmenter augmenter = mock(RagPromptAugmenter.class);
+        when(augmenter.contextWithHits("hello", "policy"))
+                .thenReturn(new RagPromptAugmenter.RagContext("ctx", List.of()));
+        when(assistant.chat("acme::c1", "中文", "简洁", "cite", "", "hello", "ctx")).thenReturn("reply");
+        ConversationController controller = new ConversationController(assistant, augmenter, disabledCache(), disabledGuardrail(),
+                new NoopHistoryAwareQueryCompressor(), new NoopGroundingChecker(), STYLE);
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
+
+        Map<String, Object> response = controller.chat("c1", Map.of("message", "hello", "category", "policy"));
+
+        assertThat(response).containsEntry("reply", "reply");
+        // per-request category 透传进检索
+        verify(augmenter).contextWithHits("hello", "policy");
     }
 
     @Test
     void chatShortCircuitsRagAndLlmOnSemanticCacheHit() {
         Assistant assistant = mock(Assistant.class);
         RagPromptAugmenter augmenter = mock(RagPromptAugmenter.class);
-        when(augmenter.contextFor("hello")).thenReturn("context");
-        when(assistant.chat("acme::c1", "hello", "context")).thenReturn("first-reply");
+        when(augmenter.contextWithHits("hello", null)).thenReturn(new RagPromptAugmenter.RagContext("context", List.of()));
+        when(assistant.chat("acme::c1", "中文", "简洁", "cite", "", "hello", "context")).thenReturn("first-reply");
         SemanticCache cache = new SemanticCache(new HashSemanticCacheEmbedder(),
                 new InMemorySemanticCacheStore(1000), true, 0.95);
-        ConversationController controller = new ConversationController(assistant, augmenter, cache, disabledGuardrail());
+        ConversationController controller = new ConversationController(assistant, augmenter, cache, disabledGuardrail(),
+                new NoopHistoryAwareQueryCompressor(), new NoopGroundingChecker(), STYLE);
         TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
 
         Map<String, Object> first = controller.chat("c1", Map.of("message", "hello"));
@@ -69,19 +95,20 @@ class ConversationControllerTest {
         assertThat(first).containsEntry("reply", "first-reply");
         assertThat(second).containsEntry("reply", "first-reply");
         // 第二次命中缓存：RAG 增强与 LLM 各自只被调用了一次（第一次未命中时）。
-        verify(augmenter, org.mockito.Mockito.times(1)).contextFor("hello");
-        verify(assistant, org.mockito.Mockito.times(1)).chat("acme::c1", "hello", "context");
+        verify(augmenter, org.mockito.Mockito.times(1)).contextWithHits("hello", null);
+        verify(assistant, org.mockito.Mockito.times(1)).chat("acme::c1", "中文", "简洁", "cite", "", "hello", "context");
     }
 
     @Test
     void invalidateCache_clearsTenantBucketSoNextChatRecomputes() {
         Assistant assistant = mock(Assistant.class);
         RagPromptAugmenter augmenter = mock(RagPromptAugmenter.class);
-        when(augmenter.contextFor("hello")).thenReturn("ctx");
-        when(assistant.chat("acme::c1", "hello", "ctx")).thenReturn("r1", "r2");
+        when(augmenter.contextWithHits("hello", null)).thenReturn(new RagPromptAugmenter.RagContext("ctx", List.of()));
+        when(assistant.chat("acme::c1", "中文", "简洁", "cite", "", "hello", "ctx")).thenReturn("r1", "r2");
         SemanticCache cache = new SemanticCache(new HashSemanticCacheEmbedder(),
                 new InMemorySemanticCacheStore(1000), true, 0.95);
-        ConversationController controller = new ConversationController(assistant, augmenter, cache, disabledGuardrail());
+        ConversationController controller = new ConversationController(assistant, augmenter, cache, disabledGuardrail(),
+                new NoopHistoryAwareQueryCompressor(), new NoopGroundingChecker(), STYLE);
         TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
 
         controller.chat("c1", Map.of("message", "hello")); // 缓存 r1
@@ -99,11 +126,12 @@ class ConversationControllerTest {
     void invalidateCache_byQuestion_removesThatEntry() {
         Assistant assistant = mock(Assistant.class);
         RagPromptAugmenter augmenter = mock(RagPromptAugmenter.class);
-        when(augmenter.contextFor("hello")).thenReturn("ctx");
-        when(assistant.chat("acme::c1", "hello", "ctx")).thenReturn("r1");
+        when(augmenter.contextWithHits("hello", null)).thenReturn(new RagPromptAugmenter.RagContext("ctx", List.of()));
+        when(assistant.chat("acme::c1", "中文", "简洁", "cite", "", "hello", "ctx")).thenReturn("r1");
         SemanticCache cache = new SemanticCache(new HashSemanticCacheEmbedder(),
                 new InMemorySemanticCacheStore(1000), true, 0.95);
-        ConversationController controller = new ConversationController(assistant, augmenter, cache, disabledGuardrail());
+        ConversationController controller = new ConversationController(assistant, augmenter, cache, disabledGuardrail(),
+                new NoopHistoryAwareQueryCompressor(), new NoopGroundingChecker(), STYLE);
         TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
 
         controller.chat("c1", Map.of("message", "hello"));
@@ -117,7 +145,8 @@ class ConversationControllerTest {
     @Test
     void invalidateCache_disabledCache_returnsZeroCleared() {
         ConversationController controller = new ConversationController(
-                mock(Assistant.class), mock(RagPromptAugmenter.class), disabledCache(), disabledGuardrail());
+                mock(Assistant.class), mock(RagPromptAugmenter.class), disabledCache(), disabledGuardrail(),
+                new NoopHistoryAwareQueryCompressor(), new NoopGroundingChecker(), STYLE);
         TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
 
         assertThat(controller.invalidateCache(null))
@@ -129,7 +158,8 @@ class ConversationControllerTest {
         Assistant assistant = mock(Assistant.class);
         RagPromptAugmenter augmenter = mock(RagPromptAugmenter.class);
         ConversationController controller = new ConversationController(assistant, augmenter, disabledCache(),
-                new ConversationGuardrail(true, "block", false));
+                new ConversationGuardrail(true, "block", false), new NoopHistoryAwareQueryCompressor(),
+                new NoopGroundingChecker(), STYLE);
         TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
 
         Map<String, Object> res = controller.chat("c1",
@@ -145,10 +175,11 @@ class ConversationControllerTest {
     void chat_piiRedaction_masksReplyBeforeReturn() {
         Assistant assistant = mock(Assistant.class);
         RagPromptAugmenter augmenter = mock(RagPromptAugmenter.class);
-        when(augmenter.contextFor("hi")).thenReturn("");
-        when(assistant.chat("acme::c1", "hi", "")).thenReturn("邮箱 a@b.com 手机 13812345678");
+        when(augmenter.contextWithHits("hi", null)).thenReturn(new RagPromptAugmenter.RagContext("", List.of()));
+        when(assistant.chat("acme::c1", "中文", "简洁", "cite", "", "hi", "")).thenReturn("邮箱 a@b.com 手机 13812345678");
         ConversationController controller = new ConversationController(assistant, augmenter, disabledCache(),
-                new ConversationGuardrail(false, "block", true));
+                new ConversationGuardrail(false, "block", true), new NoopHistoryAwareQueryCompressor(),
+                new NoopGroundingChecker(), STYLE);
         TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
 
         Map<String, Object> res = controller.chat("c1", Map.of("message", "hi"));

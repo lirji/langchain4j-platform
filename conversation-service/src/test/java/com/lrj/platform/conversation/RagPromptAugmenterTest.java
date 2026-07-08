@@ -58,6 +58,26 @@ class RagPromptAugmenterTest {
         assertThat(client.request).isEqualTo(new KnowledgeQueryRequest("refund policy", 7, 0.4, "manual"));
     }
 
+    @Test
+    void perRequestCategoryOverridesConfiguredDefault() {
+        CapturingKnowledgeClient client = new CapturingKnowledgeClient();
+        RagPromptAugmenter augmenter = new RagPromptAugmenter(client, true, 5, 0.0, "manual", 4000);
+
+        augmenter.contextWithHits("退款怎么审批？", "policy");
+
+        assertThat(client.request).isEqualTo(new KnowledgeQueryRequest("退款怎么审批？", 5, 0.0, "policy"));
+    }
+
+    @Test
+    void blankPerRequestCategoryFallsBackToConfiguredDefault() {
+        CapturingKnowledgeClient client = new CapturingKnowledgeClient();
+        RagPromptAugmenter augmenter = new RagPromptAugmenter(client, true, 5, 0.0, "manual", 4000);
+
+        augmenter.contextWithHits("hi", "   ");
+
+        assertThat(client.request).isEqualTo(new KnowledgeQueryRequest("hi", 5, 0.0, "manual"));
+    }
+
     private static class CapturingKnowledgeClient implements KnowledgeClient {
         private KnowledgeQueryRequest request;
 

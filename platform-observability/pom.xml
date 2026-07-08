@@ -28,5 +28,42 @@
             <artifactId>jakarta.servlet-api</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!-- #1 OTel：GenAI chat span listener 的租户归因（TenantContext）。 -->
+        <dependency>
+            <groupId>com.lrj.platform</groupId>
+            <artifactId>platform-security</artifactId>
+        </dependency>
+        <!--
+          #1 OTel：编译 OtelChatModelListener 用。均 optional —— 只有同时带 micrometer-tracing +
+          langchain4j 的下游服务（即 gateway-client 消费方）才装配 listener；无这些类的服务（edge-gateway/
+          config-server 等）经 @ConditionalOnClass 跳过，零负担。版本由 BOM 管理。
+        -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- LLM 网关 TCP 健康探测（F5.4）：optional，仅在下游服务已引 actuator 时装配 GatewayHealthIndicator。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- #1 OTel：SimpleTracer 纯 POJO 断言 span，不连真 OTLP。 -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>

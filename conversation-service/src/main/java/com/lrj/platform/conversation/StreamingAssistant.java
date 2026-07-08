@@ -18,12 +18,12 @@ import dev.langchain4j.service.spring.AiService;
 @AiService
 public interface StreamingAssistant {
 
-    @SystemMessage("""
-            你是企业 AI 平台的对话助手。用简洁中文回答，1–2 句话答完，必要时再展开。
-            不知道就直说不知道，不要编造。
-            {{context}}
-            """)
+    @SystemMessage(Assistant.SYSTEM_PROMPT)
     TokenStream chat(@MemoryId String chatId,
+                     @V("language") String language,
+                     @V("tone") String tone,
+                     @V("citationPolicy") String citationPolicy,
+                     @V("extra") String extra,
                      @UserMessage String message,
                      @V("context") String context);
 }

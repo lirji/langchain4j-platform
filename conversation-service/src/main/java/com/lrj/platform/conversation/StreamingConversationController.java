@@ -1,6 +1,10 @@
 package com.lrj.platform.conversation;
 
+import com.lrj.platform.conversation.grounding.GroundingChecker;
+import com.lrj.platform.conversation.grounding.GroundingResult;
 import com.lrj.platform.conversation.guardrail.ConversationGuardrail;
+import com.lrj.platform.conversation.history.HistoryAwareQueryCompressor;
+import com.lrj.platform.conversation.prompt.ResolvedAssistantStyle;
 import com.lrj.platform.security.TenantContext;
 import dev.langchain4j.service.TokenStream;
 import org.slf4j.Logger;
@@ -30,13 +34,22 @@ public class StreamingConversationController {
     private final StreamingAssistant streamingAssistant;
     private final RagPromptAugmenter ragPromptAugmenter;
     private final ConversationGuardrail guardrail;
+    private final HistoryAwareQueryCompressor historyCompressor;
+    private final GroundingChecker groundingChecker;
+    private final ResolvedAssistantStyle style;
 
     public StreamingConversationController(StreamingAssistant streamingAssistant,
                                            RagPromptAugmenter ragPromptAugmenter,
-                                           ConversationGuardrail guardrail) {
+                                           ConversationGuardrail guardrail,
+                                           HistoryAwareQueryCompressor historyCompressor,
+                                           GroundingChecker groundingChecker,
+                                           ResolvedAssistantStyle style) {
         this.streamingAssistant = streamingAssistant;
         this.ragPromptAugmenter = ragPromptAugmenter;
         this.guardrail = guardrail;
+        this.historyCompressor = historyCompressor;
+        this.groundingChecker = groundingChecker;
+        this.style = style;
     }
 
     @PostMapping("/chat/stream")
@@ -58,15 +71,41 @@ public class StreamingConversationController {
             return emitter;
         }
         String effective = decision.message();
+        // per-request 类目（可空）：与 /chat 对称，非空时把检索限定到该 metadata.category 的文档。
+        String category = body.get("category");
         String memoryKey = tenant.tenantId() + "::" + chatId;
-        String context = ragPromptAugmenter.contextFor(effective);
+        // History-aware：追问经会话历史压缩为自包含检索 query（默认关时直通）；仅用于检索。
+        String retrievalQuery = historyCompressor.compress(memoryKey, effective);
+        RagPromptAugmenter.RagContext rag = ragPromptAugmenter.contextWithHits(retrievalQuery, category);
 
-        TokenStream stream = streamingAssistant.chat(memoryKey, effective, context);
-        stream.onPartialResponse(token -> safeSend(emitter, token))
-                .onCompleteResponse(response -> complete(emitter))
+        // 累积逐 token 答案，结束时对 RAG 来源做 grounding 校验；token 已逐个发出无法回收，
+        // 故 warn 以追加式 grounding-warning 事件补发（对齐单体）。默认关时 grounded → 不发。
+        StringBuilder answer = new StringBuilder();
+        TokenStream stream = streamingAssistant.chat(memoryKey, style.getLanguage(), style.getTone(),
+                style.getCitationPolicy(), style.getExtra(), effective, rag.context());
+        stream.onPartialResponse(token -> {
+                    if (token != null) {
+                        answer.append(token);
+                    }
+                    safeSend(emitter, token);
+                })
+                .onCompleteResponse(response -> completeWithGrounding(emitter, answer.toString(), rag))
                 .onError(error -> fail(emitter, error))
                 .start();
         return emitter;
+    }
+
+    private void completeWithGrounding(SseEmitter emitter, String answer, RagPromptAugmenter.RagContext rag) {
+        GroundingResult grounded = groundingChecker.verify(answer, rag.hits());
+        if (!grounded.grounded()) {
+            try {
+                emitter.send(SseEmitter.event().name("grounding-warning")
+                        .data(String.join("；", grounded.warnings())));
+            } catch (IOException | IllegalStateException ignored) {
+                // 客户端可能已断开，忽略
+            }
+        }
+        complete(emitter);
     }
 
     private static void safeSend(SseEmitter emitter, String token) {

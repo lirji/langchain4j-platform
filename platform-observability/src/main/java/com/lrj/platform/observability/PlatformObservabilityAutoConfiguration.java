@@ -1,5 +1,7 @@
 package com.lrj.platform.observability;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -28,6 +30,20 @@ public class PlatformObservabilityAutoConfiguration {
             reg.addUrlPatterns("/*");
             reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 10);
             return reg;
+        }
+    }
+
+    /**
+     * LLM 网关 TCP 健康探测（F5.4）：仅当下游服务已引 actuator（{@link HealthIndicator} 在 classpath）时装配。
+     * bean 名 {@code gateway} → {@code /actuator/health} 里出现 {@code "gateway"} 节点。
+     */
+    @Configuration
+    @ConditionalOnClass(HealthIndicator.class)
+    static class GatewayHealthConfig {
+        @Bean("gateway")
+        public GatewayHealthIndicator gatewayHealthIndicator(
+                @Value("${platform.gateway.base-url:}") String baseUrl) {
+            return new GatewayHealthIndicator(baseUrl);
         }
     }
 }

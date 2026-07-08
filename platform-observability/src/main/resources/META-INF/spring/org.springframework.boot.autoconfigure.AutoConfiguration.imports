@@ -1,1 +1,2 @@
 com.lrj.platform.observability.PlatformObservabilityAutoConfiguration
+com.lrj.platform.observability.otel.OtelTracingAutoConfiguration

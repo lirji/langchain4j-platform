@@ -40,6 +40,25 @@ public class FeishuConfig {
                 .build();
     }
 
+    /** 桥 → workflow：带租户/trace 转发器（铸发内部 JWT），rootUri 指向 workflow-service（意图路由用）。 */
+    @Bean
+    RestTemplate feishuWorkflowRestTemplate(RestTemplateBuilder builder,
+                                            OutboundTenantForwarder tenantForwarder,
+                                            OutboundTraceForwarder traceForwarder,
+                                            FeishuProperties props) {
+        return builder
+                .rootUri(props.getWorkflowBaseUrl())
+                .additionalInterceptors(tenantForwarder, traceForwarder)
+                .setConnectTimeout(props.getConnectTimeout())
+                .setReadTimeout(props.getReadTimeout())
+                .build();
+    }
+
+    @Bean
+    HttpWorkflowClient httpWorkflowClient(RestTemplate feishuWorkflowRestTemplate) {
+        return new HttpWorkflowClient(feishuWorkflowRestTemplate);
+    }
+
     /** 桥 → 飞书开放平台：普通外呼，不带内部转发器。 */
     @Bean
     RestTemplate feishuReplyRestTemplate(RestTemplateBuilder builder, FeishuProperties props) {
@@ -72,8 +91,9 @@ public class FeishuConfig {
     @Bean
     FeishuMessageBridge feishuMessageBridge(HttpConversationClient conversation,
                                             HttpFeishuReplyClient reply,
+                                            HttpWorkflowClient workflow,
                                             Executor feishuBridgeExecutor,
                                             FeishuProperties props) {
-        return new FeishuMessageBridge(conversation, reply, feishuBridgeExecutor, props);
+        return new FeishuMessageBridge(conversation, reply, workflow, feishuBridgeExecutor, props);
     }
 }

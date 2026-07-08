@@ -17,7 +17,7 @@ spring:
         - id: conversation
           uri: ${CONVERSATION_URI:http://localhost:8081}
           predicates:
-            - Path=/chat,/chat/**
+            - Path=/chat,/chat/**,/extract,/extract/**,/memory,/memory/**
         - id: workflow
           uri: ${WORKFLOW_URI:http://localhost:8082}
           predicates:
@@ -52,6 +52,10 @@ spring:
           uri: ${VISION_URI:http://localhost:8090}
           predicates:
             - Path=/vision,/vision/**
+        - id: voice
+          uri: ${VOICE_URI:http://localhost:8091}
+          predicates:
+            - Path=/voice,/voice/**
 
 # 边缘持有 api-key → 租户映射；换发内部 JWT 后下游只认 JWT。
 platform:
@@ -61,7 +65,7 @@ platform:
       dev-key-acme:
         tenant: acme
         user: alice
-        scopes: [chat, approve, agent, channel, eval, vision]
+        scopes: [chat, approve, agent, channel, eval, vision, voice]
       dev-key-globex:
         tenant: globex
         user: bob

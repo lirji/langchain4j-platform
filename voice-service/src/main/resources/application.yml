@@ -1,0 +1,54 @@
+server:
+  port: 8091
+
+spring:
+  application:
+    name: voice-service
+  # 集中配置（可选）：Config Server 不可达时不阻断启动，各 ${ENV:default} 兜底继续生效。
+  config:
+    import: "optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}"
+  servlet:
+    multipart:
+      max-file-size: ${VOICE_MAX_UPLOAD:25MB}
+      max-request-size: ${VOICE_MAX_UPLOAD:25MB}
+
+platform:
+  security:
+    jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
+    allow-api-key-fallback: true
+    api-keys:
+      dev-key-acme:
+        tenant: acme
+        user: alice
+        scopes: [chat, voice]
+
+app:
+  voice:
+    # 总开关。默认关 → voice 相关 Bean 全不装配，零依赖、零网络。
+    enabled: ${VOICE_ENABLED:false}
+    # ASR/TTS provider（目前仅 openai 兼容协议）。base-url 可指云 OpenAI / Azure / 本地 whisper+tts 网关。
+    provider: ${VOICE_PROVIDER:openai}
+    base-url: ${VOICE_BASE_URL:https://api.openai.com/v1}
+    api-key: ${VOICE_API_KEY:${OPENAI_API_KEY:}}
+    asr-model: ${VOICE_ASR_MODEL:whisper-1}
+    tts-model: ${VOICE_TTS_MODEL:tts-1}
+    tts-voice: ${VOICE_TTS_VOICE:alloy}
+    tts-format: ${VOICE_TTS_FORMAT:mp3}
+    language: ${VOICE_LANGUAGE:}
+    timeout-seconds: ${VOICE_TIMEOUT_SECONDS:30}
+    stream-sentence-min-chars: ${VOICE_STREAM_MIN_CHARS:8}
+    max-audio-bytes: ${VOICE_MAX_AUDIO_BYTES:26214400}
+    # 「大脑」= conversation-service（转写文本经此对话取回复）。
+    conversation-base-url: ${VOICE_CONVERSATION_BASE_URL:http://localhost:8081}
+    conversation-connect-timeout: ${VOICE_CONVERSATION_CONNECT_TIMEOUT:1s}
+    conversation-read-timeout: ${VOICE_CONVERSATION_READ_TIMEOUT:60s}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true

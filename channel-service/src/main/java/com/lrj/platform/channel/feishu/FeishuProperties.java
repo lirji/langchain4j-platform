@@ -38,6 +38,12 @@ public class FeishuProperties {
     /** conversation-service 基址（桥调 /chat）。 */
     private String conversationBaseUrl = "http://conversation-service:8081";
 
+    /** workflow-service 基址（意图路由命中时桥调 /workflow/refund/start）。 */
+    private String workflowBaseUrl = "http://workflow-service:8082";
+
+    /** 意图路由（退款/投诉 → 退款工作流）。默认关：命中也不起工单，行为等价纯对话桥。 */
+    private final IntentRouting intentRouting = new IntentRouting();
+
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
     public String getTenantId() { return tenantId; }
@@ -55,6 +61,17 @@ public class FeishuProperties {
     public void setReadTimeout(Duration readTimeout) { this.readTimeout = readTimeout; }
     public String getConversationBaseUrl() { return conversationBaseUrl; }
     public void setConversationBaseUrl(String conversationBaseUrl) { this.conversationBaseUrl = conversationBaseUrl; }
+    public String getWorkflowBaseUrl() { return workflowBaseUrl; }
+    public void setWorkflowBaseUrl(String workflowBaseUrl) { this.workflowBaseUrl = workflowBaseUrl; }
+    public IntentRouting getIntentRouting() { return intentRouting; }
+
+    /** 意图路由开关。默认关，开启后飞书入站消息先过 {@link FeishuIntent} 分类，退款/投诉分流到退款工作流。 */
+    public static class IntentRouting {
+        private boolean enabled = false;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    }
 
     public static class Reply {
         /** 是否回复。关时桥只收不回（便于先验证入站链路）。 */

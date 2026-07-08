@@ -135,6 +135,10 @@ app:
     contextual:
       enabled: ${RAG_CONTEXTUAL_ENABLED:false}
       max-doc-chars: ${RAG_CONTEXTUAL_MAX_DOC_CHARS:8000}
+    # 切分质量打点（F5.3，Micrometer，常开）：入库时记录 chunk 尺寸分布 + 碎块/超大块比例（按 strategy tag）。
+    metrics:
+      tiny-chars: ${RAG_METRICS_TINY_CHARS:50}
+      oversize-chars: ${RAG_METRICS_OVERSIZE_CHARS:2000}
     # 可选 RAG LLM 增强（rerank=llm / query-expansion / contextual / grounding）共用的网关模型，默认复用 platform.gateway.*
     llm:
       base-url: ${RAG_LLM_BASE_URL:${platform.gateway.base-url:http://localhost:4000/v1}}

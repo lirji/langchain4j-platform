@@ -52,6 +52,8 @@ public class DocumentService {
     // Contextual Retrieval 入库增强：默认 Noop（不改 chunk），仅 Spring @Autowired 路径按开关注入真实实现。
     // 非 final：字段初始化在终端构造器执行，各测试用委托构造器天然拿到 Noop，无需改测试。
     private ContextualEnricher contextualEnricher = new NoopContextualEnricher();
+    // 切分质量打点（F5.3）：默认 null（测试委托构造器天然拿到 null → 跳过），生产由 Spring @Autowired setter 注入。
+    private com.lrj.platform.knowledge.observability.ChunkMetrics chunkMetrics;
 
     @Autowired
     public DocumentService(EmbeddingStoreRouter storeRouter,
@@ -79,6 +81,12 @@ public class DocumentService {
     /** 注入自定义 Contextual 增强器（生产由 Spring @Autowired 按开关装配；也供测试/编程式覆盖）。 */
     public void setContextualEnricher(ContextualEnricher contextualEnricher) {
         this.contextualEnricher = contextualEnricher == null ? new NoopContextualEnricher() : contextualEnricher;
+    }
+
+    /** 注入切分质量打点（F5.3，生产由 Spring @Autowired；测试委托构造器天然为 null → 跳过打点）。 */
+    @Autowired(required = false)
+    public void setChunkMetrics(com.lrj.platform.knowledge.observability.ChunkMetrics chunkMetrics) {
+        this.chunkMetrics = chunkMetrics;
     }
 
     public DocumentService(EmbeddingStoreRouter storeRouter,
@@ -181,6 +189,10 @@ public class DocumentService {
         List<TextSegment> segments = splitter.split(doc);
         // Contextual Retrieval：入库前给每 chunk 加文档级上下文前缀再嵌入（默认关时为 no-op，原样返回）。
         segments = contextualEnricher.enrich(text, segments);
+        // 切分质量打点（F5.3）：记录最终入库形态的尺寸分布/碎块/超大块（默认注入，null 时跳过）。
+        if (chunkMetrics != null) {
+            chunkMetrics.record(splitterFactory.strategy(), 1, segments);
+        }
         List<Embedding> embeddings = embeddingModel.embedAll(segments).content();
         storeRouter.forTenant(tenantId, embeddingModel.dimension()).addAll(embeddings, segments);
         documentMirror.add(segments);

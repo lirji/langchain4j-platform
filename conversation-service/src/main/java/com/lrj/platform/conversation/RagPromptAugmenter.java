@@ -49,26 +49,38 @@ public class RagPromptAugmenter {
      * 未开启 / 无命中 / 空问题时返回空串——此时对话与无 RAG 完全一致。
      */
     public String contextFor(String message) {
-        String block = sourcesBlock(message);
-        return block == null ? "" : block;
+        return contextWithHits(message).context();
     }
 
     /**
-     * 检索并拼出 {@code [Knowledge sources]} 来源块；未开启 / 空问题 / 无有效命中时返回 {@code null}。
+     * 与 {@link #contextFor(String)} 相同的检索，但同时带回真正进入上下文块的结构化命中，
+     * 供 grounding 事后校验（F3.5）用答案 vs 来源核对。未开启 / 无命中时 {@code context=""、hits=[]}。
      */
-    private String sourcesBlock(String message) {
+    public RagContext contextWithHits(String message) {
+        return contextWithHits(message, null);
+    }
+
+    /**
+     * 同 {@link #contextWithHits(String)}，但支持 <strong>per-request 类目</strong>：{@code categoryOverride}
+     * 非空时限定检索到该 {@code metadata.category} 的文档（对齐单体 {@code /chat/category} 的 ThreadLocal 语义），
+     * 否则回退配置默认 {@code app.conversation.rag.category}。knowledge-service 已按 {@code KnowledgeQueryRequest.category}
+     * 过滤，故此处只需把有效类目透传下去。
+     */
+    public RagContext contextWithHits(String message, String categoryOverride) {
         if (!enabled || message == null || message.isBlank()) {
-            return null;
+            return RagContext.EMPTY;
         }
-        KnowledgeQueryReply reply = knowledgeClient.query(new KnowledgeQueryRequest(message, topK, minScore, category));
+        String effectiveCategory = categoryOverride == null || categoryOverride.isBlank() ? category : categoryOverride;
+        KnowledgeQueryReply reply = knowledgeClient.query(new KnowledgeQueryRequest(message, topK, minScore, effectiveCategory));
         List<KnowledgeHit> hits = reply.hits().stream()
                 .filter(hit -> hit.text() != null && !hit.text().isBlank())
                 .toList();
         if (hits.isEmpty()) {
-            return null;
+            return RagContext.EMPTY;
         }
         StringBuilder context = new StringBuilder();
         context.append("[Knowledge sources]\n");
+        List<KnowledgeHit> included = new java.util.ArrayList<>();
         int used = 0;
         for (KnowledgeHit hit : hits) {
             String sourceId = sourceId(hit);
@@ -79,15 +91,33 @@ public class RagPromptAugmenter {
                 break;
             }
             context.append(block);
+            included.add(hit);
             used += block.length();
         }
         if (used == 0) {
-            return null;
+            return RagContext.EMPTY;
         }
-        return context.toString();
+        return new RagContext(context.toString(), List.copyOf(included));
     }
 
-    private static String sourceId(KnowledgeHit hit) {
+    /**
+     * 检索并拼出 {@code [Knowledge sources]} 来源块；未开启 / 空问题 / 无有效命中时返回 {@code null}。
+     */
+    private String sourcesBlock(String message) {
+        RagContext rag = contextWithHits(message);
+        return rag.context().isEmpty() ? null : rag.context();
+    }
+
+    /**
+     * RAG 检索结果：注入系统提示的 {@code context} 文本块 + 真正进入该块的结构化命中 {@code hits}
+     * （已按 {@code max-context-chars} 截断）。
+     */
+    public record RagContext(String context, List<KnowledgeHit> hits) {
+        public static final RagContext EMPTY = new RagContext("", List.of());
+    }
+
+    /** 来源 id：{@code displayName#index}（与注入上下文块里 {@code <source id=...>} 一致，供 grounding 引用核对复用）。 */
+    public static String sourceId(KnowledgeHit hit) {
         String displayName = hit.displayName() == null || hit.displayName().isBlank() ? "doc" : hit.displayName();
         String index = hit.index() == null || hit.index().isBlank() ? "0" : hit.index();
         return displayName + "#" + index;

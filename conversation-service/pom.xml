@@ -27,6 +27,11 @@
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-spring-boot-starter</artifactId>
         </dependency>
+        <!-- MCP 驱动对话 /chat/mcp（app.conversation.mcp.enabled=true）；默认关不触达 -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-mcp</artifactId>
+        </dependency>
         <!-- 可选 Redis 语义缓存存储（app.conversation.semantic-cache.store=redis）；默认内存实现不触达 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

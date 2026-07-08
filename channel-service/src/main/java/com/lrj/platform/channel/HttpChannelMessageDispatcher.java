@@ -1,6 +1,8 @@
 package com.lrj.platform.channel;
 
+import com.lrj.platform.channel.feishu.HttpFeishuReplyClient;
 import com.lrj.platform.protocol.channel.ChannelMessageRequest;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -19,10 +21,14 @@ public class HttpChannelMessageDispatcher implements ChannelMessageDispatcher {
 
     private final RestTemplate channelRestTemplate;
     private final ChannelProperties properties;
+    /** 飞书应用 API 直发客户端；仅 app.channel.feishu.enabled=true 时存在（工作流终态回推原用户用）。软依赖，可缺。 */
+    private final ObjectProvider<HttpFeishuReplyClient> feishuReplyClient;
 
-    public HttpChannelMessageDispatcher(RestTemplate channelRestTemplate, ChannelProperties properties) {
+    public HttpChannelMessageDispatcher(RestTemplate channelRestTemplate, ChannelProperties properties,
+                                        ObjectProvider<HttpFeishuReplyClient> feishuReplyClient) {
         this.channelRestTemplate = channelRestTemplate;
         this.properties = properties;
+        this.feishuReplyClient = feishuReplyClient;
     }
 
     @Override
@@ -61,15 +67,24 @@ public class HttpChannelMessageDispatcher implements ChannelMessageDispatcher {
 
     private ChannelDeliveryResult dispatchFeishu(String messageId, ChannelMessageRequest request) {
         String url = deliveryUrl(request, "webhookUrl");
-        if (!httpUrl(url)) {
-            return ChannelDeliveryResult.failed("feishu webhook URL is required");
+        if (httpUrl(url)) {
+            // 群自定义机器人 webhook（原有：target/metadata 带 http(s) 地址）。
+            try {
+                channelRestTemplate.postForEntity(url, new HttpEntity<>(feishuPayload(request), feishuHeaders()), Void.class);
+                return ChannelDeliveryResult.sent("feishu delivered");
+            } catch (RestClientException ex) {
+                return ChannelDeliveryResult.failed(ex.getMessage());
+            }
         }
-        try {
-            channelRestTemplate.postForEntity(url, new HttpEntity<>(feishuPayload(request), feishuHeaders()), Void.class);
-            return ChannelDeliveryResult.sent("feishu delivered");
-        } catch (RestClientException ex) {
-            return ChannelDeliveryResult.failed(ex.getMessage());
+        // 无群 webhook：走飞书应用 API 直发给用户 open_id。工作流终态回推原发起人即走此路——
+        // chatId=feishu:<open_id> 已由 WorkflowTerminalKafkaListener.toCallback 解析为 target=open_id。
+        HttpFeishuReplyClient replyClient = feishuReplyClient == null ? null : feishuReplyClient.getIfAvailable();
+        String openId = request.target();
+        if (replyClient != null && openId != null && !openId.isBlank()) {
+            replyClient.replyText(openId.trim(), request.message());
+            return ChannelDeliveryResult.sent("feishu message dispatched to open_id");
         }
+        return ChannelDeliveryResult.failed("feishu delivery requires webhookUrl or feishu app credentials");
     }
 
     private ChannelDeliveryResult dispatchVoice(String messageId, ChannelMessageRequest request) {

@@ -39,6 +39,20 @@ management:
 
 app:
   conversation:
+    # 外置化对话助手风格（对齐单体 app.assistant）：系统提示的 language/tone/citation-policy/extra 挪到配置，
+    # 改 yml + 重启即可调，不改 Java。overrides 按 LiteLLM 逻辑模型名（platform.gateway.model-name）覆盖，
+    # 字段级 null 回退默认、空串清空。默认值等价现有系统提示行为。
+    assistant:
+      language: ${CONVERSATION_ASSISTANT_LANGUAGE:中文}
+      tone: ${CONVERSATION_ASSISTANT_TONE:简洁，1–2 句话答完，必要时再展开}
+      # citation-policy / extra 用代码内默认（互斥三档引用策略 / 空）；如需覆盖在此配置。
+      overrides: {}
+      #   deepseek-chat:            # key = platform.gateway.model-name（LiteLLM 逻辑模型名）
+      #     tone: "简洁，可更口语，中文表达自然"
+      #   claude-default:
+      #     tone: "分组事实时用 <fact>...</fact> 标签，Claude 对结构化标签更敏感"
+      #   qwen-small:
+      #     tone: "每句独立成段，避免长复合句；最多 3 句"
     rag:
       enabled: ${CONVERSATION_RAG_ENABLED:false}
       knowledge-base-url: ${KNOWLEDGE_BASE_URL:http://localhost:8084}
@@ -48,6 +62,12 @@ app:
       max-context-chars: ${CONVERSATION_RAG_MAX_CONTEXT_CHARS:4000}
       connect-timeout: ${CONVERSATION_RAG_CONNECT_TIMEOUT:1s}
       read-timeout: ${CONVERSATION_RAG_READ_TIMEOUT:3s}
+    # History-aware 检索（对齐单体 CompressingQueryTransformer）：用会话记忆历史把带指代的追问
+    # （「它跟 X 啥区别」）压缩为自包含检索 query 再检索；只影响送知识库的 query，用户消息原样进记忆。
+    # 默认关（开启后每轮 /chat 多一次 LLM 压缩调用）。
+    history-aware:
+      enabled: ${CONVERSATION_HISTORY_AWARE_ENABLED:false}
+      max-history-messages: ${CONVERSATION_HISTORY_AWARE_MAX_HISTORY_MESSAGES:10}
     # 多轮 Chat Memory（对齐单体 memory/）。默认开启、内存滑窗，零外部依赖；redis 档多副本共享 + 重启不丢。
     # window-mode: messages(最近 N 条) | tokens(近似 token 窗) | summary(旧消息 LLM 压缩为摘要，长对话保早期要点)
     memory:
@@ -57,6 +77,39 @@ app:
       max-tokens: ${CONVERSATION_MEMORY_MAX_TOKENS:2000}     # tokens 档用
       token-model: ${CONVERSATION_MEMORY_TOKEN_MODEL:gpt-4o-mini}  # tokens 档 tokenizer 依据
       redis-ttl: ${CONVERSATION_MEMORY_REDIS_TTL:P7D}        # redis 档会话 TTL（ISO-8601，如 P7D / PT12H）
+      # 长期记忆/用户画像（对齐单体 memory/profile）：跨会话抽取用户持久事实，对话前作为 context 新鲜注入。
+      # 端点 /chat/memory、GET/DELETE /memory/profile。默认关（开启后每轮多一次 temp=0 抽取）。
+      profile:
+        enabled: ${CONVERSATION_MEMORY_PROFILE_ENABLED:false}
+        store: ${CONVERSATION_MEMORY_PROFILE_STORE:in-memory}  # in-memory（redis 变体待补）
+        max-items: ${CONVERSATION_MEMORY_PROFILE_MAX_ITEMS:50}
+        recall-limit: ${CONVERSATION_MEMORY_PROFILE_RECALL_LIMIT:12}
+        async: ${CONVERSATION_MEMORY_PROFILE_ASYNC:true}
+    # Grounding 事后校验（对齐单体 ai/grounding，warn 模式）：答案 vs RAG 来源核对，
+    # Layer0 伪造引用（[doc=ID] 不在来源）+ Layer1 faithfulness 打分 < 阈值 → 在答案末尾追加可信度提示后缀
+    # （不改写、不拒答）。开启后每轮 RAG 回答多一次 temp=0 判官调用，故默认关。
+    grounding:
+      enabled: ${CONVERSATION_GROUNDING_ENABLED:false}
+      threshold: ${CONVERSATION_GROUNDING_THRESHOLD:0.7}
+    # LLM-as-Router（对齐单体 ai/routing）：分类 query（RAG/TOOL/CHAT）后分派——RAG 走检索、TOOL/CHAT 裸答。
+    # 端点 POST /chat/auto。开启后每轮多一次 temp=0 分类调用，故默认关。
+    router:
+      enabled: ${CONVERSATION_ROUTER_ENABLED:false}
+    # MCP 驱动对话（对齐单体 ai/mcp）：工具全部来自 MCP server。端点 POST /chat/mcp。默认关。
+    mcp:
+      enabled: ${CONVERSATION_MCP_ENABLED:false}
+      transport: ${CONVERSATION_MCP_TRANSPORT:stdio}   # stdio | http
+      log-events: ${CONVERSATION_MCP_LOG_EVENTS:true}
+      stdio:
+        command: ${CONVERSATION_MCP_STDIO_COMMAND:}    # 逗号分隔的进程命令，如 "npx,-y,@modelcontextprotocol/server-everything"
+      http:
+        url: ${CONVERSATION_MCP_HTTP_URL:http://localhost:3001/mcp}
+    # 视觉对话（对齐单体 ai/vision）：/chat/vision 把图片+问题委托给 vision-service（视觉能力已在那边）。默认关。
+    vision:
+      enabled: ${CONVERSATION_VISION_ENABLED:false}
+      vision-base-url: ${CONVERSATION_VISION_BASE_URL:http://localhost:8090}
+      connect-timeout: ${CONVERSATION_VISION_CONNECT_TIMEOUT:1s}
+      read-timeout: ${CONVERSATION_VISION_READ_TIMEOUT:60s}
     # 对话护栏（移植单体 PromptInjection/PII）。默认全关、零回归；生产建议开启（安全合规）。
     guardrail:
       injection:
