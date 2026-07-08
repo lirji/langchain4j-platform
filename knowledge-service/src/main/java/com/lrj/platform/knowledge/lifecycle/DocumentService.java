@@ -4,6 +4,7 @@ import com.lrj.platform.audit.AuditEventType;
 import com.lrj.platform.audit.AuditLogger;
 import com.lrj.platform.knowledge.DocumentMirror;
 import com.lrj.platform.knowledge.DocumentSplitterFactory;
+import com.lrj.platform.knowledge.cache.SemanticCacheInvalidator;
 import com.lrj.platform.knowledge.graph.GraphIngestor;
 import com.lrj.platform.knowledge.store.EmbeddingStoreRouter;
 import com.lrj.platform.knowledge.store.SingleEmbeddingStoreRouter;
@@ -45,6 +46,7 @@ public class DocumentService {
     private final DocumentRegistry registry;
     private final AuditLogger audit;
     private final GraphIngestor graphIngestor;
+    private final SemanticCacheInvalidator cacheInvalidator;
 
     @Autowired
     public DocumentService(EmbeddingStoreRouter storeRouter,
@@ -53,14 +55,16 @@ public class DocumentService {
                            DocumentSplitterFactory splitterFactory,
                            DocumentRegistry registry,
                            AuditLogger audit,
-                           ObjectProvider<GraphIngestor> graphIngestorProvider) {
+                           ObjectProvider<GraphIngestor> graphIngestorProvider,
+                           ObjectProvider<SemanticCacheInvalidator> cacheInvalidatorProvider) {
         this(storeRouter,
                 embeddingModel,
                 documentMirror,
                 splitterFactory,
                 registry,
                 audit,
-                graphIngestorProvider == null ? null : graphIngestorProvider.getIfAvailable());
+                graphIngestorProvider == null ? null : graphIngestorProvider.getIfAvailable(),
+                cacheInvalidatorProvider == null ? null : cacheInvalidatorProvider.getIfAvailable());
     }
 
     public DocumentService(EmbeddingStoreRouter storeRouter,
@@ -69,7 +73,8 @@ public class DocumentService {
                            DocumentSplitterFactory splitterFactory,
                            DocumentRegistry registry,
                            AuditLogger audit,
-                           GraphIngestor graphIngestor) {
+                           GraphIngestor graphIngestor,
+                           SemanticCacheInvalidator cacheInvalidator) {
         this.storeRouter = storeRouter;
         this.embeddingModel = embeddingModel;
         this.documentMirror = documentMirror;
@@ -77,6 +82,18 @@ public class DocumentService {
         this.registry = registry;
         this.audit = audit;
         this.graphIngestor = graphIngestor;
+        this.cacheInvalidator = cacheInvalidator;
+    }
+
+    /** 7 参 router 构造（不带缓存失效器）——向后兼容既有调用点。 */
+    public DocumentService(EmbeddingStoreRouter storeRouter,
+                           EmbeddingModel embeddingModel,
+                           DocumentMirror documentMirror,
+                           DocumentSplitterFactory splitterFactory,
+                           DocumentRegistry registry,
+                           AuditLogger audit,
+                           GraphIngestor graphIngestor) {
+        this(storeRouter, embeddingModel, documentMirror, splitterFactory, registry, audit, graphIngestor, null);
     }
 
     // ---- backward-compatible constructors: wrap a single store (metadata-filter isolation) ----
@@ -88,7 +105,7 @@ public class DocumentService {
                            DocumentRegistry registry,
                            AuditLogger audit) {
         this(new SingleEmbeddingStoreRouter(embeddingStore, embeddingModel.dimension()),
-                embeddingModel, documentMirror, splitterFactory, registry, audit, (GraphIngestor) null);
+                embeddingModel, documentMirror, splitterFactory, registry, audit, (GraphIngestor) null, null);
     }
 
     public DocumentService(EmbeddingStore<TextSegment> embeddingStore,
@@ -99,7 +116,19 @@ public class DocumentService {
                            AuditLogger audit,
                            GraphIngestor graphIngestor) {
         this(new SingleEmbeddingStoreRouter(embeddingStore, embeddingModel.dimension()),
-                embeddingModel, documentMirror, splitterFactory, registry, audit, graphIngestor);
+                embeddingModel, documentMirror, splitterFactory, registry, audit, graphIngestor, null);
+    }
+
+    public DocumentService(EmbeddingStore<TextSegment> embeddingStore,
+                           EmbeddingModel embeddingModel,
+                           DocumentMirror documentMirror,
+                           DocumentSplitterFactory splitterFactory,
+                           DocumentRegistry registry,
+                           AuditLogger audit,
+                           GraphIngestor graphIngestor,
+                           SemanticCacheInvalidator cacheInvalidator) {
+        this(new SingleEmbeddingStoreRouter(embeddingStore, embeddingModel.dimension()),
+                embeddingModel, documentMirror, splitterFactory, registry, audit, graphIngestor, cacheInvalidator);
     }
 
     public DocumentInfo upload(String displayName, String contentType, String text, String category) {
@@ -163,6 +192,7 @@ public class DocumentService {
                 "category", category == null ? "" : category));
         log.info("uploaded knowledge doc tenant={} docId={} name='{}' version={} segments={}",
                 tenantId, docId, displayName, nextVersion, segments.size());
+        invalidateSemanticCache();
         return info;
     }
 
@@ -187,7 +217,20 @@ public class DocumentService {
                 "displayName", info.get().displayName(),
                 "version", info.get().version()));
         log.info("deleted knowledge doc tenant={} docId={} name='{}'", tenantId, docId, info.get().displayName());
+        invalidateSemanticCache();
         return true;
+    }
+
+    /** 知识变更后失效当前租户语义缓存（松耦合、尽力而为；未配 / 关闭时为 no-op，异常吞掉不阻断）。 */
+    private void invalidateSemanticCache() {
+        if (cacheInvalidator == null) {
+            return;
+        }
+        try {
+            cacheInvalidator.invalidateCurrentTenant();
+        } catch (RuntimeException e) {
+            log.warn("semantic cache invalidation call failed (ignored): {}", e.toString());
+        }
     }
 
     private void deleteInternal(DocumentInfo info) {

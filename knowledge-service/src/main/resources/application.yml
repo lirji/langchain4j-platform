@@ -49,6 +49,13 @@ app:
         model-name: ${RAG_EMBEDDING_OLLAMA_MODEL:nomic-embed-text}
     registry:
       store: ${RAG_REGISTRY_STORE:redis}
+    # 文档 upload/delete 成功后，尽力而为地失效 conversation 侧 L1 语义缓存（做到「更新即新鲜」）。
+    # 默认关闭：关闭时用 Noop 实现，对 ingest 零影响。开启需 conversation 已开语义缓存才有意义。
+    cache-invalidation:
+      enabled: ${RAG_CACHE_INVALIDATION_ENABLED:false}
+      conversation-base-url: ${RAG_CACHE_INVALIDATION_CONVERSATION_URL:http://conversation-service:8081}
+      connect-timeout: ${RAG_CACHE_INVALIDATION_CONNECT_TIMEOUT:1s}
+      read-timeout: ${RAG_CACHE_INVALIDATION_READ_TIMEOUT:2s}
     image-text:
       provider: ${RAG_IMAGE_TEXT_PROVIDER:none}
       endpoint-url: ${RAG_IMAGE_TEXT_ENDPOINT_URL:http://localhost:8090/image-text}

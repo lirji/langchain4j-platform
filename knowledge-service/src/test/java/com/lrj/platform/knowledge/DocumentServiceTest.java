@@ -1,6 +1,7 @@
 package com.lrj.platform.knowledge;
 
 import com.lrj.platform.audit.AuditLogger;
+import com.lrj.platform.knowledge.cache.SemanticCacheInvalidator;
 import com.lrj.platform.knowledge.graph.GraphIngestor;
 import com.lrj.platform.knowledge.graph.InMemoryGraphStore;
 import com.lrj.platform.knowledge.graph.RuleBasedGraphExtractor;
@@ -122,6 +123,53 @@ class DocumentServiceTest {
 
         assertThat(graphEnabledService.delete(info.docId())).isTrue();
         assertThat(graphStore.size()).isZero();
+    }
+
+    @Test
+    void uploadAndDelete_invalidateSemanticCacheWhenConfigured() {
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("ingest")));
+        CountingInvalidator invalidator = new CountingInvalidator();
+        DocumentService svc = new DocumentService(
+                new InMemoryEmbeddingStore<>(),
+                new KnowledgeEmbeddingConfig.HashEmbeddingModel(),
+                new DocumentMirror(),
+                splitterFactory(),
+                new InMemoryDocumentRegistry(),
+                mock(AuditLogger.class),
+                (GraphIngestor) null,
+                invalidator);
+
+        DocumentInfo info = svc.upload("guide.md", "text/markdown", "hello", "manual");
+        assertThat(invalidator.calls).isEqualTo(1); // 上传后失效一次
+
+        assertThat(svc.delete(info.docId())).isTrue();
+        assertThat(invalidator.calls).isEqualTo(2); // 删除后再失效一次
+    }
+
+    @Test
+    void invalidatorThatThrows_doesNotBreakIngest() {
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("ingest")));
+        DocumentService svc = new DocumentService(
+                new InMemoryEmbeddingStore<>(),
+                new KnowledgeEmbeddingConfig.HashEmbeddingModel(),
+                new DocumentMirror(),
+                splitterFactory(),
+                new InMemoryDocumentRegistry(),
+                mock(AuditLogger.class),
+                (GraphIngestor) null,
+                () -> { throw new RuntimeException("conversation down"); });
+
+        // 失效器抛异常也不能影响上传结果（尽力而为）
+        DocumentInfo info = svc.upload("guide.md", "text/markdown", "hello", "manual");
+        assertThat(info.version()).isEqualTo(1);
+    }
+
+    static final class CountingInvalidator implements SemanticCacheInvalidator {
+        int calls = 0;
+        @Override
+        public void invalidateCurrentTenant() {
+            calls++;
+        }
     }
 
     private static DocumentSplitterFactory splitterFactory() {
