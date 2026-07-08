@@ -2,6 +2,7 @@ package com.lrj.platform.conversation;
 
 import com.lrj.platform.conversation.cache.SemanticCache;
 import com.lrj.platform.security.TenantContext;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -41,5 +42,24 @@ public class ConversationController {
                 "chatId", chatId,
                 "tenantId", tenant.tenantId(),
                 "userId", tenant.userId());
+    }
+
+    /**
+     * 失效当前租户的 L1 语义缓存——知识库更新后调用，避免 {@code /chat} 返回缓存里的旧答案。
+     * 租户取自内部 JWT（{@link TenantContext}），只能清自己的桶，无法影响别的租户。
+     *
+     * <p>不带 {@code question}：清空整租户桶（知识库整体更新用）。
+     * 带 {@code question}：只失效该原始问题（定向失效）。语义缓存关闭时为 no-op（清 0 条）。
+     */
+    @DeleteMapping("/chat/cache")
+    public Map<String, Object> invalidateCache(
+            @RequestParam(value = "question", required = false) String question) {
+        String tenantId = TenantContext.current().tenantId();
+        if (question != null && !question.isBlank()) {
+            boolean removed = semanticCache.invalidate(tenantId, question);
+            return Map.of("tenantId", tenantId, "scope", "question", "removed", removed);
+        }
+        int cleared = semanticCache.invalidateTenant(tenantId);
+        return Map.of("tenantId", tenantId, "scope", "tenant", "cleared", cleared);
     }
 }
