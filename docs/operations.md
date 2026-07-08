@@ -204,12 +204,27 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `RAG_VECTOR_STORE_PROVIDER` | `in-memory` | `in-memory` 或 `qdrant` |
+| `RAG_VECTOR_STORE_PROVIDER` | `in-memory` | `in-memory` \| `qdrant` \| `pgvector` \| `milvus` \| `chroma` \| `doris` |
 | `RAG_VECTOR_STORE_ISOLATION` | `collection-per-tenant` | `collection-per-tenant`（强隔离，每租户独立 collection）或 `shared`（单 store + metadata filter） |
+| `RAG_VECTOR_STORE_BASE_COLLECTION` | `knowledge_segments`（沿用 `QDRANT_COLLECTION_NAME`） | 所有 provider 通用的 collection/表基名，实际按租户拼成 `<base>_<tenant>` |
 | `QDRANT_HOST` / `QDRANT_PORT` | `localhost` / `6334` | Qdrant gRPC 地址（compose 内为 `qdrant:6334`） |
-| `QDRANT_COLLECTION_NAME` | `knowledge_segments` | collection 名 |
+| `QDRANT_COLLECTION_NAME` | `knowledge_segments` | collection 基名（`RAG_VECTOR_STORE_BASE_COLLECTION` 缺省时沿用它） |
 | `QDRANT_USE_TLS` / `QDRANT_API_KEY` | `false` / 空 | TLS 与鉴权 |
 | `QDRANT_TIMEOUT` / `QDRANT_HEALTH_TIMEOUT` | `10s` / `3s` | 超时 |
+| `RAG_PGVECTOR_HOST` / `_PORT` / `_DATABASE` | `localhost` / `5432` / `postgres` | pgvector 档 PostgreSQL 连接 |
+| `RAG_PGVECTOR_USER` / `_PASSWORD` | `postgres` / `postgres` | pgvector 档账号密码 |
+| `RAG_PGVECTOR_USE_INDEX` / `_INDEX_LIST_SIZE` | `true` / `100` | 是否建 IVFFlat 索引及其 list 大小 |
+| `RAG_PGVECTOR_SEARCH_MODE` | `VECTOR` | `VECTOR` 或 `HYBRID`（向量 + PG 全文，RRF 融合） |
+| `RAG_PGVECTOR_TEXT_SEARCH_CONFIG` / `_RRF_K` | `simple` / `60` | HYBRID 档全文配置与 RRF 常数 |
+| `RAG_MILVUS_HOST` / `_PORT` | `localhost` / `19530` | Milvus 连接 |
+| `RAG_MILVUS_USERNAME` / `_PASSWORD` | 空 / 空 | Milvus 账号密码（可选） |
+| `RAG_MILVUS_INDEX_TYPE` / `_METRIC_TYPE` | `FLAT` / `COSINE` | 索引类型（`FLAT` \| `IVF_FLAT` \| `HNSW`）与距离度量 |
+| `RAG_CHROMA_BASE_URL` | `http://localhost:8000` | Chroma HTTP 端点 |
+| `RAG_CHROMA_TENANT` / `_DATABASE` | 空 / 空 | Chroma tenant/database（可选） |
+| `RAG_DORIS_JDBC_URL` | `jdbc:mysql://localhost:9030/demo` | Doris FE 的 MySQL 协议地址（自研 JDBC 实现，HNSW ANN） |
+| `RAG_DORIS_USER` / `_PASSWORD` | `root` / 空 | Doris 账号密码 |
+| `RAG_DORIS_METRIC` | `cosine` | 距离度量（`cosine` \| `l2`） |
+| `RAG_DORIS_CREATE_TABLE` / `_BUCKETS` | `true` / `4` | 是否自动建表及分桶数 |
 | `RAG_REGISTRY_STORE` | `in-memory` | 文档 registry：`in-memory` 或 `redis` |
 
 ### Embedding
@@ -252,14 +267,27 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 
 > 无 Flyway/Liquibase：JDBC store 靠 `Jdbc*Store` 类里的 `CREATE TABLE IF NOT EXISTS` 自建表。
 
-### 图片多模态 ingestion（`RAG_IMAGE_TEXT_*`，默认关）
+### 图片多模态 embedding（CLIP，`RAG_MULTIMODAL_*`，默认关）
+
+原生 CLIP / jina-clip 多模态 embedding：图片直接向量化，存入**独立的 image collection**（基名 `knowledge_images`，
+每租户 `knowledge_images_<tenant>`，与文本集合 `knowledge_segments` 物理/维度隔离）。**默认关闭**，此时上传图片会返回
+明确 400（提示需开启此开关），不再静默转文字。
+
+> ⚠️ 破坏性变更：旧的「图 → 文字（caption/OCR）」路径（`RAG_IMAGE_TEXT_*` / `ImageTextProvider`）已整体移除，
+> 上传图片不再接受 `caption` / `ocrText` 字段。
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `RAG_IMAGE_TEXT_PROVIDER` | `none` | `none` 或 `http`（调外部视觉/OCR 补 caption/OCR） |
-| `RAG_IMAGE_TEXT_ENDPOINT_URL` | `http://localhost:8090/image-text` | HTTP provider 端点 |
-| `RAG_IMAGE_TEXT_CONNECT_TIMEOUT` / `_READ_TIMEOUT` | `2s` / `30s` | 超时 |
-| `RAG_IMAGE_TEXT_MAX_IMAGE_BYTES` | `10485760`（10MB） | 单图字节上限 |
+| `RAG_MULTIMODAL_ENABLED` | `false` | 图片多模态开关；关闭时上传图片返回 400 |
+| `RAG_MULTIMODAL_BASE_URL` | `http://localhost:8000/v1` | OpenAI 兼容 `/embeddings` 端点（指向 vLLM/TEI/云 jina） |
+| `RAG_MULTIMODAL_API_KEY` | 空 | 端点鉴权 key（可选） |
+| `RAG_MULTIMODAL_MODEL` | `jinaai/jina-clip-v2` | 多模态 embedding 模型 |
+| `RAG_MULTIMODAL_DIMENSION` | `1024` | 图片向量维度 |
+| `RAG_MULTIMODAL_BASE_COLLECTION` | `knowledge_images` | 图片 collection 基名（按租户拼 `<base>_<tenant>`） |
+| `RAG_MULTIMODAL_IMAGE_INPUT_FORMAT` | `data-uri` | 传给端点的图片格式（`data-uri` \| `base64`） |
+| `RAG_MULTIMODAL_TIMEOUT_SECONDS` / `_MAX_RETRIES` | `60` / `2` | 调用超时与重试 |
+| `RAG_MULTIMODAL_MAX_IMAGE_BYTES` | `10485760`（10MB） | 单图字节上限 |
+| `RAG_MULTIMODAL_TOP_K` / `_MIN_SCORE` | `5` / `0.0` | `/rag/image-search` 默认条数与最低分 |
 
 ---
 
@@ -480,7 +508,7 @@ curl -s http://localhost:8086/actuator/health   # async-task
 ### RAG 查询没有结果
 
 - 上传与查询用同一租户 key、同一 `category`。
-- `RAG_VECTOR_STORE_PROVIDER` 是否符合预期；Qdrant 档确认 `QDRANT_HOST` / `QDRANT_PORT` / collection。
+- `RAG_VECTOR_STORE_PROVIDER`（`in-memory` \| `qdrant` \| `pgvector` \| `milvus` \| `chroma` \| `doris`）是否符合预期；对应 provider 档确认其连接项（如 Qdrant 的 `QDRANT_HOST` / `QDRANT_PORT` / collection）。
 - `collection-per-tenant` 隔离下，跨租户不可见属正常。
 
 ### GraphRAG 没有图命中

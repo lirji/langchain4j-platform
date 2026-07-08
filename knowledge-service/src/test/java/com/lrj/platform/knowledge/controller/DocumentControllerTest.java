@@ -3,12 +3,11 @@ package com.lrj.platform.knowledge.controller;
 import com.lrj.platform.knowledge.lifecycle.DocumentInfo;
 import com.lrj.platform.knowledge.lifecycle.DocumentService;
 import com.lrj.platform.knowledge.lifecycle.DocumentTextExtractor;
-import com.lrj.platform.knowledge.lifecycle.ImageTextExtraction;
-import com.lrj.platform.knowledge.lifecycle.ImageTextProvider;
-import com.lrj.platform.knowledge.lifecycle.NoopImageTextProvider;
+import com.lrj.platform.knowledge.multimodal.MultimodalRetrievalService;
 import com.lrj.platform.security.TenantContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
@@ -18,6 +17,8 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -29,13 +30,21 @@ class DocumentControllerTest {
         TenantContext.clear();
     }
 
+    /** 构造一个返回给定多模态服务（可为 null，表示未开启）的 ObjectProvider。 */
+    @SuppressWarnings("unchecked")
+    private static ObjectProvider<MultimodalRetrievalService> multimodalProvider(MultimodalRetrievalService mm) {
+        ObjectProvider<MultimodalRetrievalService> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(mm);
+        return provider;
+    }
+
     @Test
     void uploadJson_withoutIngestScope_isForbidden() {
         TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
         DocumentController controller = new DocumentController(
                 mock(DocumentService.class),
                 mock(DocumentTextExtractor.class),
-                new NoopImageTextProvider());
+                multimodalProvider(null));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
                 () -> controller.uploadJson(Map.of("title", "a.md", "text", "hello")));
@@ -50,7 +59,7 @@ class DocumentControllerTest {
         DocumentInfo info = new DocumentInfo("d1", "acme", "a.md", "text/markdown",
                 5, 1, 1, Instant.now(), "manual");
         when(service.upload("a.md", "text/markdown", "hello", "manual")).thenReturn(info);
-        DocumentController controller = new DocumentController(service, mock(DocumentTextExtractor.class), new NoopImageTextProvider());
+        DocumentController controller = new DocumentController(service, mock(DocumentTextExtractor.class), multimodalProvider(null));
 
         var response = controller.uploadJson(Map.of(
                 "title", "a.md",
@@ -63,72 +72,45 @@ class DocumentControllerTest {
     }
 
     @Test
-    void uploadJsonImage_usesCaptionAndOcrAsIndexText() {
-        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat", "ingest")));
-        DocumentService service = mock(DocumentService.class);
-        DocumentInfo info = new DocumentInfo("img1", "acme", "chart.png", "image/png",
-                3, 1, 1, Instant.now(), "report");
-        when(service.upload("chart.png", "image/png",
-                "Image caption:\n退款趋势图\n\nImage OCR:\nMay refund 99",
-                "report",
-                3)).thenReturn(info);
-        DocumentController controller = new DocumentController(service, mock(DocumentTextExtractor.class), new NoopImageTextProvider());
-
-        var response = controller.uploadJson(Map.of(
-                "title", "chart.png",
-                "imageBase64", Base64.getEncoder().encodeToString(new byte[]{1, 2, 3}),
-                "contentType", "image/png",
-                "caption", "退款趋势图",
-                "ocrText", "May refund 99",
-                "category", "report"));
-
-        assertThat(response.getBody()).isEqualTo(info);
-        verify(service).upload("chart.png", "image/png",
-                "Image caption:\n退款趋势图\n\nImage OCR:\nMay refund 99",
-                "report",
-                3);
-    }
-
-    @Test
-    void uploadJsonImage_requiresCaptionOrOcrText() {
+    void uploadJsonImage_multimodalDisabled_returns400() {
         TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat", "ingest")));
         DocumentController controller = new DocumentController(
                 mock(DocumentService.class),
                 mock(DocumentTextExtractor.class),
-                new NoopImageTextProvider());
-
-        var response = controller.uploadJson(Map.of(
-                "title", "chart.png",
-                "imageBase64", Base64.getEncoder().encodeToString(new byte[]{1, 2, 3})));
-
-        assertThat(response.getStatusCode().value()).isEqualTo(400);
-        assertThat(response.getHeaders().getFirst("X-Error")).contains("caption or ocrText");
-    }
-
-    @Test
-    void uploadJsonImage_usesProviderCaptionAndOcrText() {
-        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat", "ingest")));
-        DocumentService service = mock(DocumentService.class);
-        ImageTextProvider provider = (filename, contentType, bytes) ->
-                new ImageTextExtraction("provider caption", "provider OCR");
-        DocumentInfo info = new DocumentInfo("img1", "acme", "chart.png", "image/png",
-                3, 1, 1, Instant.now(), "report");
-        when(service.upload("chart.png", "image/png",
-                "Image caption:\nprovider caption\n\nImage OCR:\nprovider OCR",
-                "report",
-                3)).thenReturn(info);
-        DocumentController controller = new DocumentController(service, mock(DocumentTextExtractor.class), provider);
+                multimodalProvider(null));
 
         var response = controller.uploadJson(Map.of(
                 "title", "chart.png",
                 "imageBase64", Base64.getEncoder().encodeToString(new byte[]{1, 2, 3}),
-                "contentType", "image/png",
-                "category", "report"));
+                "contentType", "image/png"));
 
-        assertThat(response.getBody()).isEqualTo(info);
-        verify(service).upload("chart.png", "image/png",
-                "Image caption:\nprovider caption\n\nImage OCR:\nprovider OCR",
-                "report",
-                3);
+        assertThat(response.getStatusCode().value()).isEqualTo(400);
+        assertThat(response.getHeaders().getFirst("X-Error")).contains("multimodal-embedding.enabled");
+    }
+
+    @Test
+    void uploadJsonImage_multimodalEnabled_ingestsAsImageVector() {
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat", "ingest")));
+        MultimodalRetrievalService mm = mock(MultimodalRetrievalService.class);
+        when(mm.ingestImage(any(byte[].class), eq("image/png"), eq("chart.png"))).thenReturn("img-1");
+        DocumentController controller = new DocumentController(
+                mock(DocumentService.class),
+                mock(DocumentTextExtractor.class),
+                multimodalProvider(mm));
+
+        var response = controller.uploadJson(Map.of(
+                "title", "chart.png",
+                "imageBase64", Base64.getEncoder().encodeToString(new byte[]{1, 2, 3}),
+                "contentType", "image/png"));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        assertThat(response.getBody()).isInstanceOf(Map.class);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> bodyMap = (Map<String, Object>) response.getBody();
+        assertThat(bodyMap)
+                .containsEntry("id", "img-1")
+                .containsEntry("fileName", "chart.png")
+                .containsEntry("type", "image");
+        verify(mm).ingestImage(any(byte[].class), eq("image/png"), eq("chart.png"));
     }
 }

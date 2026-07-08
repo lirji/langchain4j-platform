@@ -24,9 +24,12 @@ platform:
 app:
   rag:
     vector-store:
+      # provider: in-memory | qdrant（默认）| pgvector | milvus | chroma | doris
       provider: ${RAG_VECTOR_STORE_PROVIDER:qdrant}
-      # collection-per-tenant（默认，强隔离，每租户独立 collection/namespace）| shared（退回单 store + metadata filter）
+      # collection-per-tenant（默认，强隔离，每租户独立 collection/表/namespace）| shared（退回单 store + metadata filter，仅 in-memory/qdrant 支持）
       isolation: ${RAG_VECTOR_STORE_ISOLATION:collection-per-tenant}
+      # 各后端 collection/表 的基名，实际按 <base>_<tenant> 建；默认沿用 qdrant.collection-name 保持兼容
+      base-collection: ${RAG_VECTOR_STORE_BASE_COLLECTION:${QDRANT_COLLECTION_NAME:knowledge_segments}}
       qdrant:
         host: ${QDRANT_HOST:localhost}
         port: ${QDRANT_PORT:6334}
@@ -37,6 +40,40 @@ app:
         timeout: ${QDRANT_TIMEOUT:10s}
         health-timeout: ${QDRANT_HEALTH_TIMEOUT:3s}
         auto-create-payload-index: ${QDRANT_AUTO_CREATE_PAYLOAD_INDEX:true}
+      # PgVector（provider=pgvector 时生效）：每租户一张表 <base>_<tenant>，官方组件建表 + 索引
+      pgvector:
+        host: ${RAG_PGVECTOR_HOST:localhost}
+        port: ${RAG_PGVECTOR_PORT:5432}
+        database: ${RAG_PGVECTOR_DATABASE:postgres}
+        user: ${RAG_PGVECTOR_USER:postgres}
+        password: ${RAG_PGVECTOR_PASSWORD:postgres}
+        use-index: ${RAG_PGVECTOR_USE_INDEX:true}
+        index-list-size: ${RAG_PGVECTOR_INDEX_LIST_SIZE:100}
+        # VECTOR（纯向量）| HYBRID（向量 + PostgreSQL 全文，RRF 融合）
+        search-mode: ${RAG_PGVECTOR_SEARCH_MODE:VECTOR}
+        text-search-config: ${RAG_PGVECTOR_TEXT_SEARCH_CONFIG:simple}
+        rrf-k: ${RAG_PGVECTOR_RRF_K:60}
+      # Milvus（provider=milvus 时生效）：每租户一个 collection <base>_<tenant>
+      milvus:
+        host: ${RAG_MILVUS_HOST:localhost}
+        port: ${RAG_MILVUS_PORT:19530}
+        username: ${RAG_MILVUS_USERNAME:}
+        password: ${RAG_MILVUS_PASSWORD:}
+        index-type: ${RAG_MILVUS_INDEX_TYPE:FLAT}
+        metric-type: ${RAG_MILVUS_METRIC_TYPE:COSINE}
+      # Chroma（provider=chroma 时生效）：每租户一个 collection <base>_<tenant>，维度自动推导
+      chroma:
+        base-url: ${RAG_CHROMA_BASE_URL:http://localhost:8000}
+        tenant: ${RAG_CHROMA_TENANT:}
+        database: ${RAG_CHROMA_DATABASE:}
+      # Doris（provider=doris 时生效）：每租户一张表 <base>_<tenant>，自研 JDBC + HNSW ANN 索引
+      doris:
+        jdbc-url: ${RAG_DORIS_JDBC_URL:jdbc:mysql://localhost:9030/demo}
+        user: ${RAG_DORIS_USER:root}
+        password: ${RAG_DORIS_PASSWORD:}
+        metric: ${RAG_DORIS_METRIC:cosine}
+        create-table: ${RAG_DORIS_CREATE_TABLE:true}
+        buckets: ${RAG_DORIS_BUCKETS:4}
     embedding:
       provider: ${RAG_EMBEDDING_PROVIDER:hash}
       model-name: ${RAG_EMBEDDING_MODEL:embedding-default}
@@ -56,12 +93,21 @@ app:
       conversation-base-url: ${RAG_CACHE_INVALIDATION_CONVERSATION_URL:http://conversation-service:8081}
       connect-timeout: ${RAG_CACHE_INVALIDATION_CONNECT_TIMEOUT:1s}
       read-timeout: ${RAG_CACHE_INVALIDATION_READ_TIMEOUT:2s}
-    image-text:
-      provider: ${RAG_IMAGE_TEXT_PROVIDER:none}
-      endpoint-url: ${RAG_IMAGE_TEXT_ENDPOINT_URL:http://localhost:8090/image-text}
-      connect-timeout: ${RAG_IMAGE_TEXT_CONNECT_TIMEOUT:2s}
-      read-timeout: ${RAG_IMAGE_TEXT_READ_TIMEOUT:30s}
-      max-image-bytes: ${RAG_IMAGE_TEXT_MAX_IMAGE_BYTES:10485760}
+    # 原生图片多模态 embedding（CLIP / jina-clip）：图片直接向量化 + text→image 检索。
+    # 默认关闭（零依赖）；开启后 /rag/documents 传图片与 /rag/image 走此路径，图片向量存独立 image collection。
+    multimodal-embedding:
+      enabled: ${RAG_MULTIMODAL_ENABLED:false}
+      base-url: ${RAG_MULTIMODAL_BASE_URL:http://localhost:8000/v1}
+      api-key: ${RAG_MULTIMODAL_API_KEY:}
+      model-name: ${RAG_MULTIMODAL_MODEL:jinaai/jina-clip-v2}
+      dimension: ${RAG_MULTIMODAL_DIMENSION:1024}
+      base-collection: ${RAG_MULTIMODAL_BASE_COLLECTION:knowledge_images}
+      image-input-format: ${RAG_MULTIMODAL_IMAGE_INPUT_FORMAT:data-uri}
+      timeout-seconds: ${RAG_MULTIMODAL_TIMEOUT_SECONDS:60}
+      max-retries: ${RAG_MULTIMODAL_MAX_RETRIES:2}
+      max-image-bytes: ${RAG_MULTIMODAL_MAX_IMAGE_BYTES:10485760}
+      top-k: ${RAG_MULTIMODAL_TOP_K:5}
+      min-score: ${RAG_MULTIMODAL_MIN_SCORE:0.0}
     query:
       top-k: ${RAG_QUERY_TOP_K:5}
       min-score: ${RAG_QUERY_MIN_SCORE:0.0}

@@ -3,10 +3,10 @@ package com.lrj.platform.knowledge.controller;
 import com.lrj.platform.knowledge.lifecycle.DocumentInfo;
 import com.lrj.platform.knowledge.lifecycle.DocumentService;
 import com.lrj.platform.knowledge.lifecycle.DocumentTextExtractor;
-import com.lrj.platform.knowledge.lifecycle.ImageTextExtraction;
-import com.lrj.platform.knowledge.lifecycle.ImageTextProvider;
 import com.lrj.platform.knowledge.lifecycle.MultimodalIngestionText;
+import com.lrj.platform.knowledge.multimodal.MultimodalRetrievalService;
 import com.lrj.platform.security.TenantContext;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -27,51 +27,50 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * RAG 文档入口。<strong>文本</strong>走切块 + 文本 embedding 入 {@code knowledge_segments}；
+ * <strong>图片</strong>走原生 CLIP 多模态 embedding 入 {@code knowledge_images}（{@link MultimodalRetrievalService}），
+ * 不再做「图→文字→再 embed」。图片处理依赖 {@code app.rag.multimodal-embedding.enabled=true}，
+ * 未开启时上传图片返回明确错误。
+ */
 @RestController
 @RequestMapping("/rag/documents")
 public class DocumentController {
 
     private final DocumentService documents;
     private final DocumentTextExtractor extractor;
-    private final ImageTextProvider imageTextProvider;
+    private final ObjectProvider<MultimodalRetrievalService> multimodalProvider;
 
     public DocumentController(DocumentService documents,
                               DocumentTextExtractor extractor,
-                              ImageTextProvider imageTextProvider) {
+                              ObjectProvider<MultimodalRetrievalService> multimodalProvider) {
         this.documents = documents;
         this.extractor = extractor;
-        this.imageTextProvider = imageTextProvider;
+        this.multimodalProvider = multimodalProvider;
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<DocumentInfo> uploadFile(@RequestPart("file") MultipartFile file,
-                                                   @RequestParam(required = false) String category,
-                                                   @RequestParam(required = false) String caption,
-                                                   @RequestParam(required = false) String ocrText) throws IOException {
+    public ResponseEntity<?> uploadFile(@RequestPart("file") MultipartFile file,
+                                        @RequestParam(required = false) String category) throws IOException {
         requireIngest();
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().header("X-Error", "empty file").build();
         }
         String displayName = file.getOriginalFilename();
         String contentType = file.getContentType();
-        String text;
         try {
             if (MultimodalIngestionText.isImageContentType(contentType)) {
-                byte[] imageBytes = file.getBytes();
-                ImageTextExtraction extracted = imageTextProvider.extract(displayName, contentType, imageBytes);
-                text = multimodalText(null, caption, ocrText, extracted);
-                return ResponseEntity.ok(documents.upload(displayName, contentType, text, category, imageBytes.length));
-            } else {
-                text = extractor.extract(file.getInputStream(), displayName);
+                return ingestImage(displayName, contentType, file.getBytes());
             }
+            String text = extractor.extract(file.getInputStream(), displayName);
+            return ResponseEntity.ok(documents.upload(displayName, contentType, text, category, file.getSize()));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().header("X-Error", e.getMessage()).build();
         }
-        return ResponseEntity.ok(documents.upload(displayName, contentType, text, category, file.getSize()));
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<DocumentInfo> uploadJson(@RequestBody Map<String, String> body) {
+    public ResponseEntity<?> uploadJson(@RequestBody Map<String, String> body) {
         requireIngest();
         String title = body.get("title");
         String text = body.get("text");
@@ -84,9 +83,7 @@ public class DocumentController {
         if (imageBase64 != null && !imageBase64.isBlank()) {
             try {
                 byte[] imageBytes = MultimodalIngestionText.decodeBase64Image(imageBase64);
-                ImageTextExtraction extracted = imageTextProvider.extract(title, contentType, imageBytes);
-                String indexText = multimodalText(text, body.get("caption"), body.get("ocrText"), extracted);
-                return ResponseEntity.ok(documents.upload(title, contentType, indexText, category, imageBytes.length));
+                return ingestImage(title, contentType, imageBytes);
             } catch (IllegalArgumentException e) {
                 return ResponseEntity.badRequest().header("X-Error", e.getMessage()).build();
             }
@@ -118,27 +115,24 @@ public class DocumentController {
         return ResponseEntity.ok(Map.of("docId", docId, "deleted", true));
     }
 
+    /**
+     * 图片入库：原生 CLIP embed 进 image collection。多模态未开启（默认）时返回 400，
+     * 提示开启 {@code app.rag.multimodal-embedding.enabled=true}（不再静默转文字）。
+     */
+    private ResponseEntity<?> ingestImage(String fileName, String contentType, byte[] imageBytes) {
+        MultimodalRetrievalService multimodal = multimodalProvider.getIfAvailable();
+        if (multimodal == null) {
+            return ResponseEntity.badRequest().header("X-Error",
+                            "image ingestion requires app.rag.multimodal-embedding.enabled=true")
+                    .build();
+        }
+        String id = multimodal.ingestImage(imageBytes, contentType, fileName);
+        return ResponseEntity.ok(Map.of("id", id, "fileName", fileName == null ? "" : fileName, "type", "image"));
+    }
+
     private static void requireIngest() {
         if (!TenantContext.current().hasScope("ingest")) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ingest scope required");
         }
-    }
-
-    private static String multimodalText(String text, String caption, String ocrText, ImageTextExtraction extracted) {
-        String mergedCaption = join(caption, extracted == null ? null : extracted.caption());
-        String mergedOcrText = join(ocrText, extracted == null ? null : extracted.ocrText());
-        return MultimodalIngestionText.build(text, mergedCaption, mergedOcrText);
-    }
-
-    private static String join(String first, String second) {
-        boolean hasFirst = first != null && !first.isBlank();
-        boolean hasSecond = second != null && !second.isBlank();
-        if (hasFirst && hasSecond) {
-            return first.trim() + "\n" + second.trim();
-        }
-        if (hasFirst) {
-            return first.trim();
-        }
-        return hasSecond ? second.trim() : null;
     }
 }

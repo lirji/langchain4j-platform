@@ -72,9 +72,9 @@ Content-Type: application/json
 
 - 用途：上传知识库文档。需要 `ingest` scope。
 - 支持两种 content-type：
-  - `application/json`（`Map<String,String>`）：`title`（必填）、`text`、`contentType`（默认 `text/plain`，有 `imageBase64` 时默认 `image/png`）、`category`、图片可传 `imageBase64` + `caption` + `ocrText`。
-  - `multipart/form-data`：表单字段 `file`（必填）+ 可选 `category`、`caption`、`ocrText`。
-- 图片 ingestion：默认索引调用方传入的 `caption`/`ocrText`；配 `RAG_IMAGE_TEXT_PROVIDER=http` 时调外部视觉/OCR 服务补充。
+  - `application/json`（`Map<String,String>`）：`title`（必填）、`text`、`contentType`（默认 `text/plain`，有 `imageBase64` 时默认 `image/png`）、`category`、图片可传 `imageBase64`。
+  - `multipart/form-data`：表单字段 `file`（必填）+ 可选 `category`。
+- 图片 ingestion：`image/*` 文件或 `imageBase64` 走原生 CLIP 多模态 embedding（存入独立的 `knowledge_images_<tenant>` collection），需 `RAG_MULTIMODAL_ENABLED=true`（**默认关**，关闭时上传图片返回 400）。⚠️ 旧的 `caption`/`ocrText` 字段与 `RAG_IMAGE_TEXT_*` 图→文字路径已移除。
 - 响应：`DocumentInfo`。
 - 经网关：是。默认开启（向量库默认 `in-memory` + deterministic hash embedding）。
 
@@ -103,6 +103,20 @@ JSON 示例：
 
 - 用途：删除文档、向量与关联图谱。需要 `ingest` scope。响应 `{ docId, deleted }`。
 - 经网关：是。默认开启。
+
+### POST `/rag/image`
+
+- 用途：图片入库（原生 CLIP 多模态 embedding，向量存入独立的 `knowledge_images_<tenant>` collection）。需要 `ingest` scope。
+- 请求：`multipart/form-data`，表单字段 `image`（`image/*`，必填）。
+- 响应：`{ id, fileName, type: "image" }`。
+- 经网关：是。**默认关闭**，需 `RAG_MULTIMODAL_ENABLED=true`（关闭时返回 400）。
+
+### POST `/rag/image-search`
+
+- 用途：文本 query 跨模态检索图片。
+- 请求：`application/json` `{ query（必填）, topK?, minScore? }`（缺省用 `RAG_MULTIMODAL_TOP_K` / `RAG_MULTIMODAL_MIN_SCORE`）。
+- 响应：`{ query, results:[{ id, fileName, score }] }`。严格按当前租户隔离。
+- 经网关：是。**默认关闭**，需 `RAG_MULTIMODAL_ENABLED=true`。
 
 ### POST `/rag/query`（别名 `/knowledge/query`）
 

@@ -1,9 +1,8 @@
 package com.lrj.platform.knowledge.lifecycle;
 
-import java.util.ArrayList;
 import java.util.Base64;
-import java.util.List;
 
+/** 图片上传的小工具：判定图片 content-type、解码 base64（含 data-uri 前缀）。 */
 public final class MultimodalIngestionText {
 
     private MultimodalIngestionText() {}
@@ -29,23 +28,6 @@ public final class MultimodalIngestionText {
             return bytes;
         } catch (IllegalArgumentException ex) {
             throw new IllegalArgumentException("imageBase64 is not valid base64", ex);
-        }
-    }
-
-    public static String build(String text, String caption, String ocrText) {
-        List<String> sections = new ArrayList<>();
-        add(sections, "Text", text);
-        add(sections, "Image caption", caption);
-        add(sections, "Image OCR", ocrText);
-        if (sections.isEmpty()) {
-            throw new IllegalArgumentException("image caption or ocrText is required");
-        }
-        return String.join("\n\n", sections);
-    }
-
-    private static void add(List<String> sections, String label, String value) {
-        if (value != null && !value.isBlank()) {
-            sections.add(label + ":\n" + value.trim());
         }
     }
 }

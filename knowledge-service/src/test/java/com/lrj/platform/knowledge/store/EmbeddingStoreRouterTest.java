@@ -79,18 +79,18 @@ class EmbeddingStoreRouterTest {
 
     @Test
     void qdrantRouter_namesCollectionPerTenantAndSanitizes() {
-        assertThat(QdrantEmbeddingStoreRouter.collectionName("knowledge_segments", "acme"))
+        assertThat(ManagedEmbeddingStoreRouter.collectionName("knowledge_segments", "acme"))
                 .isEqualTo("knowledge_segments_acme");
-        assertThat(QdrantEmbeddingStoreRouter.collectionName("kb", "tenant/with:weird chars"))
+        assertThat(ManagedEmbeddingStoreRouter.collectionName("kb", "tenant/with:weird chars"))
                 .isEqualTo("kb_tenant_with_weird_chars");
-        assertThat(QdrantEmbeddingStoreRouter.collectionName("kb", " "))
+        assertThat(ManagedEmbeddingStoreRouter.collectionName("kb", " "))
                 .isEqualTo("kb_default");
     }
 
     @Test
     void qdrantRouter_createsCollectionLazilyThenReuses() {
         RecordingManager manager = new RecordingManager(java.util.OptionalInt.empty());
-        QdrantEmbeddingStoreRouter router = new QdrantEmbeddingStoreRouter(manager, "kb");
+        ManagedEmbeddingStoreRouter router = new ManagedEmbeddingStoreRouter(manager, "kb");
 
         router.forTenant("acme", 64);
         router.forTenant("acme", 64);
@@ -102,7 +102,7 @@ class EmbeddingStoreRouterTest {
     @Test
     void qdrantRouter_failsFastWhenExistingCollectionDimensionDiffers() {
         RecordingManager manager = new RecordingManager(java.util.OptionalInt.of(1536));
-        QdrantEmbeddingStoreRouter router = new QdrantEmbeddingStoreRouter(manager, "kb");
+        ManagedEmbeddingStoreRouter router = new ManagedEmbeddingStoreRouter(manager, "kb");
 
         assertThatThrownBy(() -> router.forTenant("acme", 64))
                 .isInstanceOf(DimensionMismatchException.class)
@@ -110,7 +110,7 @@ class EmbeddingStoreRouterTest {
         assertThat(manager.created).isEmpty();
     }
 
-    private static final class RecordingManager implements QdrantCollectionManager {
+    private static final class RecordingManager implements CollectionManager {
         private final java.util.OptionalInt existing;
         private final List<String> created = new java.util.ArrayList<>();
         private final List<String> built = new java.util.ArrayList<>();

@@ -21,11 +21,11 @@
 | 集中配置 | Spring Cloud Config Server，native（默认）/git 后端，`optional:` 接入不阻断启动 | `config-server`（:8888） | native 后端默认可用；git 需 `SPRING_PROFILES_ACTIVE=git` |
 | 事件总线 | EventPublisher SPI，Noop 默认 / Kafka 变体，幂等生产 + 消费去重（effective exactly-once） | `platform-eventbus` | `platform.eventbus.enabled=false`（默认 Noop） |
 | 对话 | `/chat` 入口，可选 RAG 上下文增强 | `/chat`（conversation :8081） | RAG 增强 `CONVERSATION_RAG_ENABLED=false` |
-| 语义缓存 L1 | 问题级 / 租户桶 / pre-RAG 语义缓存，命中即短路 RAG+LLM | `/chat` 内部旁路 | `CONVERSATION_SEMANTIC_CACHE_ENABLED=false` |
+| 语义缓存 L1 | 问题级 / 租户桶 / pre-RAG 语义缓存，命中即短路 RAG+LLM；含失效端点 | `/chat` 旁路、`DELETE /chat/cache` | `CONVERSATION_SEMANTIC_CACHE_ENABLED=false` |
 | 模型级联 | 便宜模型先答、低置信才升级强模型 | `/chat/cascade`（conversation） | `CHAT_CASCADE_ENABLED=false` |
 | 知识库 RAG | 文档上传、Tika 抽取、分块、向量 + keyword hybrid 检索、可配置排序权重 | `/rag/documents/**`、`/rag/query`（knowledge :8084） | 上传/查询常开；hybrid `RAG_HYBRID_ENABLED=true` |
 | 多租户隔离 | collection-per-tenant 强隔离（每租户独立 collection/namespace） | knowledge 向量库 | `RAG_VECTOR_STORE_ISOLATION=collection-per-tenant`（默认） |
-| 向量存储 | in-memory 默认；Qdrant 可选持久化 | knowledge | `RAG_VECTOR_STORE_PROVIDER=in-memory`（默认） |
+| 向量存储 | in-memory 默认；qdrant/pgvector/milvus/chroma/doris 可选，均 collection-per-tenant | knowledge | `RAG_VECTOR_STORE_PROVIDER=in-memory`（默认） |
 | Embedding | 确定性 hash（默认）/ OpenAI-compat（LiteLLM）/ Ollama | knowledge | `RAG_EMBEDDING_PROVIDER=hash`（默认） |
 | GraphRAG | 确定性三元组抽取、实体链接、邻居查询、可选融合到 `/rag/query` | `/rag/graph/query`、`/rag/graph/entities` | `RAG_GRAPH_ENABLED=false` |
 | 图谱持久化 | in-memory 或 JDBC/MySQL | knowledge | `RAG_GRAPH_STORE=in-memory`（默认） |
@@ -38,12 +38,100 @@
 | 反思 Agent | 单答案 answer→critique→improve 自省环，加权聚合达阈值即停 | `/agent/reflexive[/stream]` | 端点常开 |
 | Agent 工具 | 可选受限代码执行、MCP client、无头浏览器动作、视觉看图 | agent 动作注册表 | 全部默认关闭 |
 | 异步任务中心 | 通用任务状态、租户隔离、取消、SSE 断点续订、worker lease、webhook outbox | `/async/tasks/**`、`/async/webhook-outbox/dead`（async-task :8086） | 常开；JDBC 存储 `ASYNC_TASK_STORE=in-memory`（默认） |
-| 渠道接入 | 渠道能力、webhook/Feishu/voice 出站、async-task/workflow callback、入站事件、HMAC 签名、可选 Kafka event | `/channel/**`（channel :8087） | 出站/签名/Kafka event 全默认关 |
+| 渠道接入 | 渠道能力、webhook/飞书/钉钉/voice 出站、飞书&钉钉入站事件桥（→ /chat → 回复）、callback、HMAC 签名、可选 Kafka event | `/channel/**`（channel :8087） | 出站/签名/事件桥/Kafka 全默认关 |
 | 互操作（A2A/MCP） | 真 A2A JSON-RPC task 协议、agent-card、MCP tool surface、可选 live discovery | `/interop/**`、`/interop/a2a`、`/.well-known/agent-card.json`（interop :8088） | 常开；live discovery `INTEROP_DISCOVERY_ENABLED=false` |
 | 回归评测 | HTTP case/suite 执行、双跑门禁、contains/JSON-path/semantic/oracle 断言 | `/eval/**`（eval :8089） | 常开；judge/embedding 比较默认关 |
 | 多模态视觉 | 图片 caption/描述（多模态 ChatModel 经 LiteLLM），供 knowledge/agent 复用 | `/vision/caption`、`/vision/describe`（vision :8090） | `VISION_ENABLED=false`（默认整服务不装配） |
 | 审计与计量 | 审计日志、LLM audit listener、token budget、cost attribution | `platform-audit`、`platform-metering` | audit/budget 常开、cost 默认关 |
 | 可观测性 | trace id 生成与跨服务透传 | `platform-observability` | 常开 |
+
+## 技术栈总览（技术清单）
+
+覆盖整个项目用到的语言、框架、AI/数据/消息组件、协议与工具。版本以根 `pom.xml`（统一依赖管理）和 `deploy/docker-compose.yml` 为准。
+
+### 语言与运行时 / 构建
+- **Java 21**（`maven.compiler.release=21`），全模块统一。
+- **Maven** 多模块：父 `pom.xml`（`packaging=pom`）聚合 7 个共享库 + 11 个服务 + edge-gateway/config-server，统一版本管理。**无 Maven wrapper**，用系统 `mvn`。
+- **Spring Boot 3.3.5**（`spring-boot-starter-parent`）、**Spring Cloud 2023.0.3**。
+- 打包可执行 fat jar（`spring-boot-maven-plugin`）；Docker 镜像基于 `eclipse-temurin:21-jre`。
+- **刻意未用**：JPA/Hibernate/MyBatis、Flyway/Liquibase、Lombok、任何 linter/格式化/静态分析（风格靠约定）。
+
+### Web 与网关
+- **Spring Cloud Gateway**（WebFlux / Project Reactor，仅 `edge-gateway`）—— 唯一对外入口，路由表 + 全局过滤器（api-key→JWT、限流）。
+- **Spring MVC**（Servlet，`spring-boot-starter-web`）—— 所有下游服务的 `@RestController`。
+- 服务间调用用 `RestTemplate`（装 `OutboundTenantForwarder` + `OutboundTraceForwarder` 拦截器，铸发内部 JWT + 透传 traceId）。
+
+### AI / LLM
+- **LangChain4j 1.13.1**（`langchain4j-bom` 统一版本，`langchain4j-spring-boot-starter`）：声明式 `@AiService` / `AiServices.builder`、全局单个 `ChatModel` bean、`ChatModelListener` SPI（审计/计量/成本的挂载点）。
+- **LiteLLM**（外部，非 Java 模块）：统一 OpenAI 兼容 LLM 网关，provider 路由 / failover / 模型名映射集中在 `deploy/litellm/config.yaml` —— **Java 侧无任何 provider switch**。
+- 已接入的 LangChain4j provider/集成：`langchain4j-open-ai`（走 LiteLLM）、`langchain4j-ollama`、`langchain4j-anthropic`、`langchain4j-mcp`（1.13.1-beta23）、`langchain4j-document-parser-apache-tika`、`langchain4j-easy-rag`。
+- **本机 Ollama**（默认本地模型后端，如 `llama3.1`、embedding `nomic-embed-text`）；容器经 `host.docker.internal:11434` 访问。
+
+### RAG / 向量 / 知识图谱（`knowledge-service`）
+- 向量库集成：**Qdrant**（`langchain4j-qdrant`，推荐生产选项）、**in-memory**（默认零依赖）；另打包 **Milvus / Chroma / pgvector** 可选后端（gRPC 版本钉到 `1.59.1` 以兼容 Milvus + Qdrant 共存）。
+- Embedding：确定性 hash（默认）/ OpenAI 兼容（LiteLLM）/ Ollama（`nomic-embed-text`）。
+- 文档抽取：**Apache Tika**（PDF/Office/HTML/纯文本）；分块：Markdown header / parent-child / semantic。
+- **GraphRAG**：自研确定性三元组抽取 + 实体链接 + 邻居查询；存储 in-memory 或 JDBC/MySQL。
+
+### 工作流引擎
+- **Flowable**（`flowable-spring`，BPMN 2.0）—— `workflow-service` 退款审批流，自管其数据库表（同一 MySQL 数据源）。
+
+### 数据与存储
+- **MySQL 8.4**（`mysql-connector-j`）：Flowable / async-task / knowledge 图谱 / channel 去重等。**裸 `JdbcTemplate` 直连**，表结构靠 `Jdbc*Store` 里的 `CREATE TABLE IF NOT EXISTS` / `ALTER TABLE` 演进（无迁移工具），连接池 HikariCP（Spring Boot 默认）。JDBC 存储多为可选开启、默认内存。
+- **Redis 7**（`spring-boot-starter-data-redis`）：语义缓存 store、knowledge registry、事件去重等可选后端。
+- **Qdrant**：向量持久化。
+- **H2**（`test` scope）：DB 相关单测的内存库（无 Testcontainers）。
+
+### 消息 / 事件总线
+- **Apache Kafka 3.8.0**（`spring-kafka`）：`platform-eventbus` + workflow/async-task/channel。事务性 **outbox + relay** + 消费侧 eventId 幂等去重 = **effective exactly-once**。默认 Noop（`platform.eventbus.enabled=false`），零 Kafka 依赖。
+
+### 安全 / 鉴权
+- **JJWT 0.12.6**（`jjwt-api/impl/jackson`）：内部 JWT 签发/校验，**HS256（默认）或 RS256**。
+- 边缘 `X-Api-Key` → 内部 JWT（`X-Internal-Token`）换发；`TenantContext`（ThreadLocal）跨服务传播；自研 token-bucket 限流（`platform-security/ratelimit`）。
+- 渠道 webhook 自研验签：飞书 `SHA-256 + AES-256-CBC + verification token`、钉钉 `HmacSHA256(timestamp+"\n"+appSecret)`。
+
+### 配置中心
+- **Spring Cloud Config Server**（`config-server`）：native（打包 classpath）默认 / git 后端可选；各服务 `spring.config.import=optional:configserver:...` 接入，不可达不阻断启动。
+
+### 可观测 / 审计 / 计量
+- **Micrometer + Prometheus**（`spring-boot-starter-actuator`，`/actuator/prometheus`）；health/liveness/readiness 探针。
+- `platform-observability` traceId 生成 + 跨服务透传；`platform-audit` 审计日志 + LLM `ChatModelListener`；`platform-metering` 按租户 token budget + cost attribution（actuator `tokenbudget`/`cost` 端点）。
+
+### Agent 工具技术
+- **langchain4j-mcp**：agent 作 MCP client（`mcp_call`）。
+- **Playwright 1.47.0**（Chromium 无头浏览器）：`browser_*` 动作。
+- **JShell / 子进程**：`code_exec` 受限代码执行（中等隔离，非强沙箱）。
+- 多模态视觉：LangChain4j 多模态 `ChatModel`（vision-service，经 LiteLLM）。
+
+### 互操作 / 渠道协议
+- **A2A**（Agent-to-Agent，JSON-RPC over HTTP，task 协议）+ `/.well-known/agent-card.json`；**MCP**（Model Context Protocol）tool surface（interop）+ MCP client（agent）。
+- 渠道：**飞书**事件回调、**钉钉**机器人消息回调（+ 机器人发消息 API 回复）、通用 webhook / voice HTTP、Kafka channel events。
+
+### 测试
+- **JUnit 5 + Mockito + AssertJ**，`*Test` 同包；刻意纯 POJO 单测（不用 Spring context / `@SpringBootTest`）求速；DB 相关用内存 **H2**（无 Testcontainers）。
+
+### 部署
+- **Docker Compose**（`deploy/docker-compose.yml`，本地整网：LiteLLM + Redis + MySQL + Kafka + Qdrant + config-server + 各服务）；变体 `docker-compose.failover.yml` / `.oracle.yml`。
+- **Helm / Kubernetes**（`deploy/helm` 伞状 chart，生产路径：External Secrets、Service DNS、Config Server）。
+- 冒烟脚本：`smoke-qdrant-rag.sh`、`smoke-a2a.sh`、`smoke-nl2sql.sh`、`smoke-failover.sh`。
+
+### 各模块技术落点（速查）
+
+| 模块 | 端口 | 关键技术 |
+|---|---|---|
+| edge-gateway | 8080 | Spring Cloud Gateway (WebFlux) · JJWT · 限流 |
+| config-server | 8888 | Spring Cloud Config Server |
+| conversation | 8081 | LangChain4j · Redis（语义缓存） |
+| workflow | 8082 | Flowable BPMN · Kafka · MySQL |
+| analytics | 8083 | LangChain4j · MySQL（只读 NL2SQL） |
+| knowledge | 8084 | LangChain4j · Qdrant/Milvus/Chroma/pgvector · Tika · Ollama/OpenAI embed · MySQL（图谱）· Redis |
+| agent | 8085 | LangChain4j · langchain4j-mcp · Playwright |
+| async-task | 8086 | Kafka · MySQL · SSE |
+| channel | 8087 | Kafka · MySQL（去重）· 飞书/钉钉验签 |
+| interop | 8088 | A2A JSON-RPC · MCP surface |
+| eval | 8089 | HTTP 回归 · 可选 judge/embedding |
+| vision | 8090 | LangChain4j 多模态 ChatModel |
+| platform-\* | — | security(JJWT) · observability · gateway-client · protocol · audit · metering · eventbus(Kafka) |
 
 ## 平台基建
 
@@ -85,7 +173,8 @@
 `conversation-service`：
 
 - **`POST /chat`**：默认直接调用 LLM。开启 `CONVERSATION_RAG_ENABLED=true` 后先调 `knowledge-service` 的 `/rag/query`，把检索结果注入 prompt 再交给 LLM（`CONVERSATION_RAG_TOP_K`、`CONVERSATION_RAG_CATEGORY`、`CONVERSATION_RAG_MIN_SCORE` 等可调）。
-- **L1 语义缓存**（默认关，`CONVERSATION_SEMANTIC_CACHE_ENABLED=true` 开启）：应用侧、问题级、按租户分桶、在 RAG 之前。命中即短路 RAG+LLM 直接返回。相似度阈值 `CONVERSATION_SEMANTIC_CACHE_THRESHOLD`（默认 0.95），embedding provider `hash`（默认）/`openai`，store `in-memory`（默认）/`redis`。
+- **L1 语义缓存**（默认关，`CONVERSATION_SEMANTIC_CACHE_ENABLED=true` 开启）：应用侧、问题级、按租户分桶、在 RAG 之前。命中即短路 RAG+LLM 直接返回。相似度阈值 `CONVERSATION_SEMANTIC_CACHE_THRESHOLD`（默认 0.95），embedding provider `hash`（默认）/`openai`，store `in-memory`（默认）/`redis`（TTL `CONVERSATION_SEMANTIC_CACHE_REDIS_TTL`，默认 0=不过期）。
+- **`DELETE /chat/cache`** 语义缓存失效：清当前租户的缓存桶（带 `question` 参数则定向失效某问题）。租户取自内部 JWT，只能清自己的桶；语义缓存关闭时 no-op。知识库更新后调它可避免 `/chat` 返回缓存旧答案（也可由 knowledge-service 自动触发，见 §2）。
 - **`POST /chat/cascade`** 模型级联（默认关，`CHAT_CASCADE_ENABLED=true` 开启，端点仅在开启时装配）：便宜模型先答，低置信才升级强模型。`CHAT_CASCADE_CHEAP_MODEL` / `CHAT_CASCADE_STRONG_MODEL` 为 LiteLLM 里的逻辑模型名（留空退化为网关默认模型），置信门 `CHAT_CASCADE_CONFIDENCE_THRESHOLD`（默认 0.6），可选 `CHAT_CASCADE_SELF_RATING`。返回体含 `served=cheap|strong`。cascade 变体 ChatModel 由 `platform-gateway-client` 产出。
 - **`POST /conversation/workflow/reply`**、**`POST /conversation/workflow/ticket`**：给 workflow-service 用的回复生成 + 结构化工单抽取端点，让 workflow 经 HTTP 调用而不直连本地 ChatModel。
 
@@ -94,12 +183,13 @@
 `knowledge-service`（`/rag/**`）：
 
 - **文档 ingestion**：`POST /rag/documents`（JSON 文本或 multipart 文件）、`GET /rag/documents`、`GET /rag/documents/{docId}`、`DELETE /rag/documents/{docId}`。Apache Tika 抽取 PDF/Office/HTML/纯文本；支持 Markdown header、parent-child、semantic 等分块。
-- **多模态 ingestion**：上传图片可传 `imageBase64` + `caption`/`ocrText`（multipart 用同名表单字段）；也可设 `RAG_IMAGE_TEXT_PROVIDER=http` + `RAG_IMAGE_TEXT_ENDPOINT_URL` 接外部视觉/OCR provider（可指向 vision-service）补充 caption/OCR。系统只索引文本，不保存图片字节。默认 `none`。
+- **图片多模态 embedding（CLIP）**（默认关，`RAG_MULTIMODAL_ENABLED=true`）：图片走原生 CLIP / jina-clip 多模态 embedding，向量存入独立 image collection（`knowledge_images_<tenant>`，与文本集合隔离）。`POST /rag/image`（multipart `image`）入库、`POST /rag/image-search`（文本 query 跨模态检索图片）；通用 `POST /rag/documents` 传 `image/*` 或 `imageBase64` 也走多模态。默认关闭时上传图片返回 400。⚠️ 旧的「图 → 文字（caption/OCR）」路径（`RAG_IMAGE_TEXT_*`）已移除，不再接受 `caption`/`ocrText`。
 - **检索**：`POST /rag/query`（别名 `/knowledge/query`）融合 vector、keyword、可选 graph 命中；排序权重 `RAG_RANKING_VECTOR_WEIGHT` / `_KEYWORD_WEIGHT` / `_GRAPH_WEIGHT`。keyword hybrid 默认开（`RAG_HYBRID_ENABLED=true`）。
 - **多租户强隔离**：`RAG_VECTOR_STORE_ISOLATION=collection-per-tenant`（默认）—— 每租户独立 collection/namespace，EmbeddingStore/Model 按租户路由；可退回 `shared`（单 store + metadata filter）。
-- **向量存储**：`RAG_VECTOR_STORE_PROVIDER=in-memory`（默认）| `qdrant`（`QDRANT_HOST`/`QDRANT_PORT`/`QDRANT_COLLECTION_NAME`）。
+- **向量存储**：`RAG_VECTOR_STORE_PROVIDER=in-memory`（默认）| `qdrant`（`QDRANT_HOST`/`QDRANT_PORT`）| `pgvector`（`RAG_PGVECTOR_*`，含 `SEARCH_MODE=HYBRID` 向量+PG 全文 RRF）| `milvus`（`RAG_MILVUS_*`）| `chroma`（`RAG_CHROMA_*`）| `doris`（自研 JDBC + HNSW ANN，`RAG_DORIS_*`）。collection/表基名统一由 `RAG_VECTOR_STORE_BASE_COLLECTION`（默认 `knowledge_segments`）决定。
 - **Embedding provider**：`RAG_EMBEDDING_PROVIDER=hash`（默认，确定性本地）| `openai`（走 LiteLLM/OpenAI 兼容）| `ollama`（`RAG_EMBEDDING_OLLAMA_BASE_URL`、`RAG_EMBEDDING_OLLAMA_MODEL`，默认 `nomic-embed-text`）。含维度守卫、超时/重试参数。
 - **GraphRAG**（默认关，`RAG_GRAPH_ENABLED=true`）：`POST /rag/graph/query`（实体邻居查询）、`GET /rag/graph/entities`。确定性三元组抽取，受控格式 `subject|relation|object`（换行或分号分隔）；`RAG_GRAPH_INCLUDE_IN_QUERY` 决定是否融合进 `/rag/query`；关系白名单 `RAG_GRAPH_RELATION_WHITELIST`、别名 `RAG_GRAPH_ALIASES`、最大跳数 `RAG_GRAPH_MAX_HOPS`。图谱存储 `RAG_GRAPH_STORE=in-memory`（默认）| `jdbc`（MySQL）。
+- **语义缓存失效联动**（默认关，`RAG_CACHE_INVALIDATION_ENABLED=true`）：文档 `upload`/`delete` 成功后，尽力而为地调 conversation 的 `DELETE /chat/cache` 失效同租户语义缓存（松耦合、带内部 JWT 传播租户、失败只记日志不阻断 ingest），配合 §1 的失效端点实现「文档更新 → 缓存即新鲜」。默认 Noop 实现，零影响。
 
 ### 3. Agent 编排（五种模式）
 
@@ -151,7 +241,8 @@
 
 - `GET /channel/capabilities` 能力、`POST /channel/messages` 出站投递、`POST /channel/inbound` 入站事件。
 - callback 转渠道消息：`POST /channel/callbacks`、`POST /channel/callbacks/async-task`、`POST /channel/callbacks/workflow`。
-- 出站适配：webhook、Feishu webhook 机器人文本、voice HTTP provider。默认 `CHANNEL_OUTBOUND_ENABLED=false`。
+- 出站适配：webhook、飞书 webhook 机器人文本、钉钉机器人、voice HTTP provider。默认 `CHANNEL_OUTBOUND_ENABLED=false`。
+- **入站事件桥（飞书 / 钉钉）**（默认关，`FEISHU_*` / `DINGTALK_*` 开）：`POST /channel/feishu/events`、`POST /channel/dingtalk/events` 接收群内 @机器人 消息 → 验签（飞书 SHA-256+AES-256-CBC / 钉钉 HmacSHA256）+ 按 msgId 去重 → 设租户 → 调 conversation `/chat`（可带 RAG）→ 机器人回消息（飞书 im API / 钉钉发消息 API）。**钉钉侧含「知识库无命中 → 转人工 @人工客服」兜底闸门**（作答前先查 `/rag/query` 判命中，命中不足则转人工、不调 LLM）。edge-gateway 白名单放行这两个回调路径（免 api-key，靠渠道签名验真）。详见 `docs/dingtalk-guide.md`。
 - 签名：出站/入站 HMAC 签名校验默认关（`CHANNEL_OUTBOUND_SIGNATURE_ENABLED` / `CHANNEL_INBOUND_SIGNATURE_ENABLED`）。
 - 可选 Kafka channel event 发布（`CHANNEL_EVENTS_ENABLED=false`，topic `platform.channel.events`）；作为 platform-eventbus 生命周期事件消费方，去重存储 `CHANNEL_DEDUP_STORE=memory`（默认）| `jdbc`。
 
@@ -178,7 +269,7 @@
 
 - `POST /vision/caption`（别名 `/vision/describe`）：JSON（`imageBase64`）或 multipart 图片，返回 caption/描述。多模态 ChatModel 与文本共用同一 LiteLLM base-url，仅逻辑模型名不同（`VISION_MODEL`，如 gpt-4o-mini / qwen2.5-vl）。
 - 图片字节上限 `VISION_MAX_IMAGE_BYTES`（默认 10MB）、允许 MIME `VISION_ALLOWED_MIME`、caption 结果按内容 SHA-256 缓存（`VISION_CAPTION_CACHE_SIZE`）。vision token 计入 metering。
-- 供 knowledge-service（`RAG_IMAGE_TEXT_PROVIDER=http` 指向）和 agent-service（`browser_see`）复用。
+- 供 agent-service（`browser_see`）复用。
 
 ## 当前限制
 

@@ -8,18 +8,19 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**
- * 每租户一个 Qdrant collection（名 {@code <base>_<tenantId>}）的强隔离路由器。
+ * 通用「每租户一个 collection/表（名 {@code <base>_<tenantId>}）」强隔离路由器。
  *
  * <p>惰性建 collection（幂等）+ 维度守卫：若目标 collection 已按别的维度存在则 fail-fast。
- * 具体 Qdrant 交互委托给 {@link QdrantCollectionManager}（可注入 fake 做单测）。
+ * 具体后端交互委托给 {@link CollectionManager}，因此 Qdrant / PgVector / Milvus / Chroma / Doris
+ * 共用这一套路由逻辑（各自只提供一个 CollectionManager，可注入 fake 做单测）。
  */
-public class QdrantEmbeddingStoreRouter implements EmbeddingStoreRouter {
+public class ManagedEmbeddingStoreRouter implements EmbeddingStoreRouter {
 
-    private final QdrantCollectionManager manager;
+    private final CollectionManager manager;
     private final String baseCollection;
     private final ConcurrentMap<String, EmbeddingStore<TextSegment>> cache = new ConcurrentHashMap<>();
 
-    public QdrantEmbeddingStoreRouter(QdrantCollectionManager manager, String baseCollection) {
+    public ManagedEmbeddingStoreRouter(CollectionManager manager, String baseCollection) {
         this.manager = manager;
         this.baseCollection = baseCollection == null || baseCollection.isBlank() ? "knowledge_segments" : baseCollection;
     }
@@ -40,7 +41,7 @@ public class QdrantEmbeddingStoreRouter implements EmbeddingStoreRouter {
         });
     }
 
-    /** Qdrant collection 命名：base + 归一化后的租户 id（仅保留 [a-zA-Z0-9_-]）。 */
+    /** collection/表 命名：base + 归一化后的租户 id（仅保留 [a-zA-Z0-9_-]，其余替换为下划线）。 */
     static String collectionName(String base, String tenantId) {
         String safe = tenantId == null || tenantId.isBlank()
                 ? "default"

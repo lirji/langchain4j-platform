@@ -65,6 +65,28 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <!--
+              固定 gRPC 版本：langchain4j-milvus 传递依赖的 Milvus SDK 与 langchain4j-qdrant
+              各自要求不同的 gRPC 版本，混用会 NoClassDefFoundError。统一钉到 Milvus SDK 要求的
+              1.59.1（与冻结的单体一致），knowledge-service 同时装配 milvus + qdrant 才不崩。
+            -->
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-bom</artifactId>
+                <version>1.59.1</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!--
+              qdrant client 1.17.0 的 gRPC 桩需要 protobuf ≥3.25（MapFieldReflectionAccessor），
+              但 grpc-bom 1.59.1 传递的是 3.24.0 → createCollection 报 NoClassDefFoundError。
+              显式钉到 3.25.8（向后兼容 grpc 1.59.1 与 milvus SDK）。
+            -->
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java</artifactId>
+                <version>3.25.8</version>
+            </dependency>
             <dependency>
                 <groupId>dev.langchain4j</groupId>
                 <artifactId>langchain4j-mcp</artifactId>

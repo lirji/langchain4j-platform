@@ -106,7 +106,7 @@ docker compose -f deploy/docker-compose.yml config
 保持 commit 粒度和功能边界一致：
 
 ```text
-feat(knowledge): ingest image documents with caption OCR text
+feat(knowledge): ingest images via native CLIP multimodal embedding
 feat(agent): propagate async task cancellation
 docs(platform): add architecture and capability guides
 test(async-task): cover lease expiry reclaim

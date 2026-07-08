@@ -58,7 +58,7 @@ Implemented first slice:
 - `DocumentInfo`, `DocumentRegistry`, in-memory and Redis registry implementations.
 - `DocumentTextExtractor` based on Apache Tika.
 - `DocumentSplitterFactory`, configurable vector-store provider boundary, in-memory/Qdrant `EmbeddingStore`, deterministic hash `EmbeddingModel`, and configurable OpenAI-compatible embedding provider.
-- `DocumentService` and `DocumentController` upload/list/get/delete endpoints, including image ingestion via `imageBase64` or multipart image plus caller-provided caption/OCR index text or optional HTTP image-text provider output.
+- `DocumentService` and `DocumentController` upload/list/get/delete endpoints, including native CLIP/jina-clip multimodal image embedding via `imageBase64` or multipart image, stored in a dedicated per-tenant `knowledge_images` collection. The legacy image-to-text (caption/OCR) ingestion path and `ImageTextProvider` have been removed.
 - `KnowledgeQueryService` and `KnowledgeQueryController` with tenant/category filtering.
 - `KeywordSearchService` hybrid retrieval with a lightweight tokenizer, result de-duplication, hit `source` attribution, and configurable vector/keyword/graph ranking weights.
 - `knowledge.graph`: deterministic `subject|relation|object` extraction, in-memory or JDBC graph store behind `RAG_GRAPH_STORE`, token entity linker, document lifecycle synchronization, `/rag/graph/query` + `/rag/graph/entities`, and optional graph-hit fusion into `/rag/query` behind `RAG_GRAPH_ENABLED=true` / `RAG_GRAPH_INCLUDE_IN_QUERY=true`.
@@ -67,9 +67,10 @@ Implemented first slice:
 - `deploy/smoke-qdrant-rag.sh` for a minimal Qdrant-backed upload/query smoke.
 - Deterministic splitter, source-injection, registry, text-extraction, service, query, hybrid, graph, and controller tests.
 
-Deferred to the next slice:
+Migrated in a later slice:
 
-- Add vector-store production hardening and richer managed vision/OCR provider integrations for image ingestion.
+- Vector-store backends expanded to six providers behind `RAG_VECTOR_STORE_PROVIDER`: `in-memory` (default), `qdrant`, `pgvector` (with optional `HYBRID` vector + PG full-text RRF fusion), `milvus`, `chroma`, and a self-built JDBC `doris` implementation (HNSW ANN over the MySQL protocol). All go through collection-per-tenant strong isolation with a shared `RAG_VECTOR_STORE_BASE_COLLECTION` base name.
+- Image ingestion switched to native CLIP/jina-clip multimodal embedding (`RAG_MULTIMODAL_ENABLED`, off by default), with `/rag/image` upload and `/rag/image-search` cross-modal retrieval, images stored in a dedicated per-tenant `knowledge_images` collection. This replaces the old caption/OCR image-to-text path (`RAG_IMAGE_TEXT_*` / `ImageTextProvider`), which has been removed.
 - Optional Ollama/native embedding provider if LiteLLM is not used for embeddings.
 
 ## Current Code Step: Agent Service

@@ -1,7 +1,12 @@
 package com.lrj.platform.knowledge;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lrj.platform.knowledge.multimodal.MultimodalEmbeddingConfig;
+import com.lrj.platform.knowledge.multimodal.MultimodalRetrievalService;
+import com.lrj.platform.knowledge.store.CollectionManager;
 import com.lrj.platform.knowledge.store.EmbeddingStoreRouter;
 import com.lrj.platform.knowledge.store.InMemoryEmbeddingStoreRouter;
+import com.lrj.platform.knowledge.store.ManagedEmbeddingStoreRouter;
 import com.lrj.platform.knowledge.store.SingleEmbeddingStoreRouter;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.ollama.OllamaEmbeddingModel;
@@ -88,6 +93,37 @@ class KnowledgeEmbeddingConfigTest {
                 .run(context -> {
                     assertThat(context).hasSingleBean(EmbeddingStore.class);
                     assertThat(context.getBean(EmbeddingStore.class)).isInstanceOf(QdrantEmbeddingStore.class);
+                });
+    }
+
+    @Test
+    void newProviders_wireCollectionManagerAndManagedRouter() {
+        // pgvector / milvus / chroma / doris：各注册一个 CollectionManager，路由走通用 ManagedEmbeddingStoreRouter。
+        // 构造这些 manager bean 不建连（仅存参数/解析枚举），可在无外部服务时装配。
+        for (String provider : new String[]{"pgvector", "milvus", "chroma", "doris"}) {
+            contextRunner
+                    .withPropertyValues("app.rag.vector-store.provider=" + provider)
+                    .run(context -> {
+                        assertThat(context).hasSingleBean(CollectionManager.class);
+                        assertThat(context.getBean(EmbeddingStoreRouter.class))
+                                .isInstanceOf(ManagedEmbeddingStoreRouter.class);
+                    });
+        }
+    }
+
+    @Test
+    void multimodalEnabled_wiresSeparateImageRouter_andPrimaryTextRouterResolves() {
+        new ApplicationContextRunner()
+                .withUserConfiguration(KnowledgeEmbeddingConfig.class, MultimodalEmbeddingConfig.class)
+                .withBean(ObjectMapper.class)
+                .withPropertyValues("app.rag.multimodal-embedding.enabled=true")
+                .run(context -> {
+                    // 文本 + 图片两个 EmbeddingStoreRouter 共存；@Primary 让按类型注入解析到文本 router。
+                    assertThat(context.getBeansOfType(EmbeddingStoreRouter.class)).hasSize(2);
+                    assertThat(context.containsBean("imageEmbeddingStoreRouter")).isTrue();
+                    assertThat(context.getBean(EmbeddingStoreRouter.class))
+                            .isSameAs(context.getBean("embeddingStoreRouter"));
+                    assertThat(context).hasSingleBean(MultimodalRetrievalService.class);
                 });
     }
 }

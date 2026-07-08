@@ -52,6 +52,19 @@
             <artifactId>langchain4j-qdrant</artifactId>
             <version>1.13.1-beta23</version>
         </dependency>
+        <!-- 可选向量库后端（由 app.rag.vector-store.provider 开启，默认 in-memory 不加载） -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-pgvector</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-milvus</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-chroma</artifactId>
+        </dependency>
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-ollama</artifactId>

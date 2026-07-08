@@ -109,14 +109,15 @@
 **补齐总原则**：四者都做成 `DeepAgentService` 的**同级 sibling 编排器**（不塞进 ReAct 内部），复用 agent-service 已有的 `agentTaskExecutor` / `AgentDagCritic`+`Weights` 聚合 / `AgentTaskProgressSink`(SSE) / gateway `ChatModel` / 审计+计量 listener——**无需重搭骨架**。落地顺序按成本：chaining(S) → voting(S-M) → reflexion(S-M，复用 DAG critic，顺带把 `Weights`+`aggregate` 抽成共享小包消除三处重复) → cascade(M，需先定归属)。对齐单体端点 `/agent/chain`、`/agent/vote`、`/agent/reflexive[/stream]`。
 
 **三项加固设计**：
-- **`browser_see` 视觉**：截图链路已齐（`BrowserSession.screenshotBytes()` 已实现），缺的是视觉后端——单体 `ai/vision/*` 未迁。三选一（决策项）：① 内嵌 vision（端口单体 vision 包，多模态 ChatModel 经 gateway，M）② **复用 knowledge-service 已有的 `HttpImageTextProvider`**（agent POST 截图字节，最少新代码，S）③ 独立 vision 服务（重）。风险：LiteLLM 需配多模态模型；vision ChatModel 别撞 langchain4j `@AiService` 自动发现（单体靠"不注册成 Bean"绕开）；vision token 计入 metering。
+- **`browser_see` 视觉**：截图链路已齐（`BrowserSession.screenshotBytes()` 已实现），缺的是视觉后端——单体 `ai/vision/*` 未迁。三选一（决策项）：① 内嵌 vision（端口单体 vision 包，多模态 ChatModel 经 gateway，M）② **复用已有的独立 vision-service `/vision/caption`**（agent POST 截图字节，最少新代码，S）③ 独立 vision 服务（重）。风险：LiteLLM 需配多模态模型；vision ChatModel 别撞 langchain4j `@AiService` 自动发现（单体靠"不注册成 Bean"绕开）；vision token 计入 metering。
 - **`code_exec` 外部沙箱**：现为同 JVM JShell（`JShellRunner`，仅 denylist+超时+截断）。抽 `CodeSandbox` 接口保持 `CodeExecAction` 契约不变，换实现（决策项）：① 独立子进程（`ProcessBuilder` + `-Xmx`/空 cwd/进程 kill，M）② 一次性容器（`docker run --network=none --read-only --memory --pids-limit`，M-L）③ 远程 `sandbox-service`（最强隔离/可扩，L）。
 - **agent 经 A2A/interop 暴露**：interop-service 已代理部分 agent 能力（`platform.agent.run`/`run_async`/`dag.plan_run[_async]`）。补齐（决策项）：① 加 `dag.run`/任务态 `task.get/list/cancel` + 新模式映射（S）② `/.well-known/agent-card.json` 别名对齐 A2A 生态（S）③ 静态 registry 换 live discovery、真 A2A task 生命周期（M-L）。风险：interop→agent 的 JWT/租户透传；registry 与真实端点漂移。
 
 ### B8. knowledge-service 加固 — M-L（5-8 人日）
-**结论**：向量库生产加固（超时/重试/collection 自动建/payload 索引/**维度守卫**/health）+ vision/OCR provider 扩展 + native/Ollama embedding 接入，全部沿用「接口 + `@ConditionalOnProperty`，默认关」。
+**结论**：向量库生产加固（超时/重试/collection 自动建/payload 索引/**维度守卫**/health）+ 图片多模态 embedding + native/Ollama embedding 接入，全部沿用「接口 + `@ConditionalOnProperty`，默认关」。
+> **✅ 已落地（后续 slice）**：向量库后端扩到六种（`in-memory` 默认 / `qdrant` / `pgvector`（含 `HYBRID` 向量+PG 全文 RRF）/ `milvus` / `chroma` / 自研 JDBC `doris`），均 collection-per-tenant 强隔离 + 维度守卫；图片改走原生 **CLIP / jina-clip 多模态 embedding**（`RAG_MULTIMODAL_ENABLED`，默认关，`/rag/image`、`/rag/image-search`，独立 `knowledge_images` collection），**替换并移除了旧的图→文字 caption/OCR 路径**；native/Ollama embedding 已接入。
 **风险**：`EmbeddingStore`/`EmbeddingModel` 是全局单例，collection-per-tenant 强隔离需改按租户路由（牵动 DocumentService/KnowledgeQueryService，建议二期）；维度耦合是隐性生产事故源（换 provider 不重建 collection 静默坏数据，必须维度守卫兜住）。
-**决策**：多租户隔离（payload filter 先行 vs collection-per-tenant 二期）；维度不一致快速失败（推荐）vs 告警继续；vision 走 LiteLLM 多模态 vs 仅 HTTP provider；是否引入 native ONNX embedding（增大 jar）；是否新增 tess4j 本地 OCR。
+**决策**：多租户隔离（payload filter 先行 vs collection-per-tenant 二期）；维度不一致快速失败（推荐）vs 告警继续；图片走原生 CLIP 多模态 embedding（已定，替换旧 caption/OCR 图→文字路径）vs 仍转文字；是否引入 native ONNX embedding（增大 jar）。
 
 ### B9. workflow-service 加固 — M（3-5 人日）
 **结论**：用 platform-protocol 的 conversation 契约让 workflow 经 HTTP 调 conversation-service（reply 生成 + 结构化工单抽取），取代直连本地 ChatModel 的 `DefaultWorkflowAiClient` 兜底；终态通知默认从 local 翻到 async-task，逐步把 `WF_OUTBOX`/Dispatcher/Signer 降级为可选（默认关）直至移除。

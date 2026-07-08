@@ -94,9 +94,33 @@ curl -s -X POST 'http://localhost:8080/rag/query' \
   -d '{"query":"知识库文档","topK":3,"category":"manual"}'
 ```
 
-`knowledge-service` 默认使用 `RAG_VECTOR_STORE_PROVIDER=in-memory` 和本地 deterministic hash embedding，适合开发和单测。
+`knowledge-service` 默认使用 `RAG_VECTOR_STORE_PROVIDER=in-memory` 和本地 deterministic hash embedding，适合开发和单测。向量库 provider 可选 `in-memory`（默认）| `qdrant` | `pgvector` | `milvus` | `chroma` | `doris`，全部走 collection-per-tenant 强隔离，基名由 `RAG_VECTOR_STORE_BASE_COLLECTION`（默认 `knowledge_segments`）决定。
 `/rag/query` 会融合 vector、keyword 和可选 GraphRAG 命中，可通过 `RAG_RANKING_VECTOR_WEIGHT`、`RAG_RANKING_KEYWORD_WEIGHT`、`RAG_RANKING_GRAPH_WEIGHT` 调整排序权重。
-图片可以作为多模态文档上传：JSON 使用 `imageBase64` + `caption`/`ocrText`，multipart 图片使用同名表单字段；默认索引调用方提供的 caption/OCR 文本，不保存图片字节。也可以设置 `RAG_IMAGE_TEXT_PROVIDER=http` 和 `RAG_IMAGE_TEXT_ENDPOINT_URL`，让 knowledge-service 调外部视觉/OCR 服务补充 caption/OCR。
+
+图片走原生 CLIP 多模态 embedding：向量存入独立的 image collection（`knowledge_images_<tenant>`，与文本集合隔离），文本 query 可跨模态检索图片。默认关闭（`RAG_MULTIMODAL_ENABLED=false`），关闭时上传图片返回 400。
+
+> ⚠️ **破坏性变更**：旧的「图 → 文字（caption/OCR）」路径已移除，上传图片不再接受 `caption`/`ocrText` 字段，`RAG_IMAGE_TEXT_*` / `ImageTextProvider` 全部删除。
+
+```bash
+RAG_MULTIMODAL_ENABLED=true
+RAG_MULTIMODAL_BASE_URL=http://localhost:8000/v1     # OpenAI 兼容 /embeddings（vLLM/TEI/云 jina）
+RAG_MULTIMODAL_MODEL=jinaai/jina-clip-v2
+RAG_MULTIMODAL_DIMENSION=1024
+
+# 图片入库（multipart 字段名为 image；也可走 /rag/documents 传 image/* 或 imageBase64）
+curl -s -X POST 'http://localhost:8080/rag/image' \
+  -H 'X-Api-Key: dev-key-acme-ingest' \
+  -F 'image=@./screenshot.png'
+# 返回 {"id":"...","fileName":"screenshot.png","type":"image"}
+
+# 文本 query 跨模态检索图片
+curl -s -X POST 'http://localhost:8080/rag/image-search' \
+  -H 'X-Api-Key: dev-key-acme' \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"退款审批流程图","topK":5}'
+# 返回 {"query":"...","results":[{"id":"...","fileName":"screenshot.png","score":0.87}]}
+```
+
 需要走 LiteLLM/OpenAI-compatible embedding 时，可设置：
 
 ```bash

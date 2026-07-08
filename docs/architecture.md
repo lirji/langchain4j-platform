@@ -192,8 +192,8 @@ edge-gateway 自身也接入 config-server（`spring.config.import=optional:conf
 
 存储/传输/provider 几乎都是「一个接口 + 内存/Noop 默认实现 + 由属性开启的 Http/Kafka/Redis/Jdbc 变体」，默认零外部依赖：
 
-- 传输/发布：`EventPublisher`（Noop/Kafka）、`ChannelMessageDispatcher`、`ChannelEventPublisher`、`ImageTextProvider`（knowledge 图片 OCR/caption，内存/HTTP）。
-- 存储：`EmbeddingStore` / `EmbeddingModel`（in-memory hash / Qdrant / OpenAI-compat）、`GraphStore`（内存/JDBC）、`AsyncTaskStore`（内存/JDBC）、`ProcessedEventStore`（内存/JDBC）、`RateLimiterRegistry`（内存/Redis）、文档 registry（内存/Redis）。
+- 传输/发布：`EventPublisher`（Noop/Kafka）、`ChannelMessageDispatcher`、`ChannelEventPublisher`。
+- 存储：`EmbeddingStore` / `EmbeddingModel`（in-memory hash / qdrant / pgvector / milvus / chroma / doris；OpenAI-compat / Ollama embedding）、`MultimodalEmbeddingModel`（图片 CLIP，默认关）、`GraphStore`（内存/JDBC）、`AsyncTaskStore`（内存/JDBC）、`ProcessedEventStore`（内存/JDBC）、`RateLimiterRegistry`（内存/Redis）、文档 registry（内存/Redis）。
 - 持久化无 JPA/ORM、无 Flyway/Liquibase：裸 `JdbcTemplate` 直连 MySQL，表结构演进靠 `Jdbc*Store` 里的 `CREATE TABLE IF NOT EXISTS` / `ALTER TABLE ADD COLUMN` 字面量。JDBC 存储可选开启（`ASYNC_TASK_STORE=jdbc`、`RAG_GRAPH_STORE=jdbc` 等），默认内存。Flowable 在同一数据源自管其表。
 
 ## 典型调用链
@@ -259,10 +259,10 @@ async-task-service 终态更新 (JDBC 同事务写 ASYNC_TASK_LIFECYCLE_OUTBOX)
 Client
   -> edge-gateway /rag/documents
   -> knowledge-service
-     -> Tika 文本抽取 / 调用方 caption·OCR 文本组装 / 可选 HTTP image-text provider
+     -> Tika 文本抽取（文本文件）/ CLIP 多模态 embedding（图片，默认关）
      -> splitter
      -> embedding model
-     -> embedding store
+     -> embedding store（文本进 knowledge_segments，图片进 knowledge_images）
      -> document registry
      -> 可选 GraphRAG 三元组 ingestion
 ```
@@ -296,5 +296,5 @@ Phase E 已产出 Helm 伞状 chart（library chart 复用 Deployment/Service/HP
 - `INTERNAL_JWT_SECRET`（HS256 档）是全服务共享对称密钥，一处坏配置会引发全链 401；RS256 档可缩小轮转爆炸半径，但需配发 keypair。
 - channel 的 voice 已支持通用 HTTP provider，后续仍可接具体厂商 SDK。
 - GraphRAG 当前是确定性三元组，后续可接入 LLM/IE 抽取和图数据库。
-- 图片 ingestion 已支持可选 HTTP image-text provider，并有独立 vision-service；更完整托管视觉/OCR 仍可继续扩展。
+- 图片 ingestion 走原生 CLIP 多模态 embedding（默认关，`RAG_MULTIMODAL_ENABLED`），另有独立 vision-service 供 agent 复用；更完整托管视觉/多模态 embedding 仍可继续扩展。
 - interop 的 A2A `message/stream` 目前为轮询降级（conversation 无真流式），push 通知中继待接总线。

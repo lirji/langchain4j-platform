@@ -1,9 +1,14 @@
 package com.lrj.platform.knowledge;
 
+import com.lrj.platform.knowledge.store.ChromaCollectionManager;
+import com.lrj.platform.knowledge.store.CollectionManager;
+import com.lrj.platform.knowledge.store.DorisCollectionManager;
 import com.lrj.platform.knowledge.store.EmbeddingStoreRouter;
 import com.lrj.platform.knowledge.store.InMemoryEmbeddingStoreRouter;
+import com.lrj.platform.knowledge.store.ManagedEmbeddingStoreRouter;
+import com.lrj.platform.knowledge.store.MilvusCollectionManager;
+import com.lrj.platform.knowledge.store.PgVectorCollectionManager;
 import com.lrj.platform.knowledge.store.QdrantClientCollectionManager;
-import com.lrj.platform.knowledge.store.QdrantEmbeddingStoreRouter;
 import com.lrj.platform.knowledge.store.QdrantHealthIndicator;
 import com.lrj.platform.knowledge.store.SingleEmbeddingStoreRouter;
 import dev.langchain4j.data.embedding.Embedding;
@@ -25,6 +30,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.convert.DurationStyle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -88,30 +94,103 @@ public class KnowledgeEmbeddingConfig {
     }
 
     // ---------------------------------------------------------------------
+    // 各 provider 的 CollectionManager（collection/表-per-tenant 的后端交互，按 provider 条件装配）
+    // 新增后端只需在此加一个 @Bean CollectionManager，路由/维度守卫复用 ManagedEmbeddingStoreRouter。
+    // ---------------------------------------------------------------------
+
+    @Bean
+    @ConditionalOnProperty(name = "app.rag.vector-store.provider", havingValue = "qdrant")
+    public CollectionManager qdrantCollectionManager(
+            QdrantClient knowledgeQdrantClient,
+            @Value("${app.rag.vector-store.qdrant.payload-text-key:text}") String payloadTextKey,
+            @Value("${app.rag.vector-store.qdrant.auto-create-payload-index:true}") boolean autoCreatePayloadIndex,
+            @Value("${app.rag.vector-store.qdrant.timeout:10s}") String timeout) {
+        return new QdrantClientCollectionManager(
+                knowledgeQdrantClient, payloadTextKey, parseDuration(timeout), autoCreatePayloadIndex);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "app.rag.vector-store.provider", havingValue = "pgvector")
+    public CollectionManager pgVectorCollectionManager(
+            @Value("${app.rag.vector-store.pgvector.host:localhost}") String host,
+            @Value("${app.rag.vector-store.pgvector.port:5432}") int port,
+            @Value("${app.rag.vector-store.pgvector.database:postgres}") String database,
+            @Value("${app.rag.vector-store.pgvector.user:postgres}") String user,
+            @Value("${app.rag.vector-store.pgvector.password:postgres}") String password,
+            @Value("${app.rag.vector-store.pgvector.use-index:true}") boolean useIndex,
+            @Value("${app.rag.vector-store.pgvector.index-list-size:100}") int indexListSize,
+            @Value("${app.rag.vector-store.pgvector.search-mode:VECTOR}") String searchMode,
+            @Value("${app.rag.vector-store.pgvector.text-search-config:simple}") String textSearchConfig,
+            @Value("${app.rag.vector-store.pgvector.rrf-k:60}") int rrfK) {
+        log.info("Knowledge vector store provider: pgvector {}:{}/{} searchMode={}", host, port, database, searchMode);
+        return new PgVectorCollectionManager(host, port, database, user, password,
+                useIndex, indexListSize, searchMode, textSearchConfig, rrfK);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "app.rag.vector-store.provider", havingValue = "milvus")
+    public CollectionManager milvusCollectionManager(
+            @Value("${app.rag.vector-store.milvus.host:localhost}") String host,
+            @Value("${app.rag.vector-store.milvus.port:19530}") int port,
+            @Value("${app.rag.vector-store.milvus.username:}") String username,
+            @Value("${app.rag.vector-store.milvus.password:}") String password,
+            @Value("${app.rag.vector-store.milvus.index-type:FLAT}") String indexType,
+            @Value("${app.rag.vector-store.milvus.metric-type:COSINE}") String metricType) {
+        log.info("Knowledge vector store provider: milvus {}:{} indexType={} metricType={}",
+                host, port, indexType, metricType);
+        return new MilvusCollectionManager(host, port, username, password, indexType, metricType);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "app.rag.vector-store.provider", havingValue = "chroma")
+    public CollectionManager chromaCollectionManager(
+            @Value("${app.rag.vector-store.chroma.base-url:http://localhost:8000}") String baseUrl,
+            @Value("${app.rag.vector-store.chroma.tenant:}") String tenant,
+            @Value("${app.rag.vector-store.chroma.database:}") String database) {
+        log.info("Knowledge vector store provider: chroma baseUrl={}", baseUrl);
+        return new ChromaCollectionManager(baseUrl, tenant, database);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "app.rag.vector-store.provider", havingValue = "doris")
+    public CollectionManager dorisCollectionManager(
+            @Value("${app.rag.vector-store.doris.jdbc-url:jdbc:mysql://localhost:9030/demo}") String jdbcUrl,
+            @Value("${app.rag.vector-store.doris.user:root}") String user,
+            @Value("${app.rag.vector-store.doris.password:}") String password,
+            @Value("${app.rag.vector-store.doris.metric:cosine}") String metric,
+            @Value("${app.rag.vector-store.doris.create-table:true}") boolean createTable,
+            @Value("${app.rag.vector-store.doris.buckets:4}") int buckets) {
+        log.info("Knowledge vector store provider: doris url={} metric={}", jdbcUrl, metric);
+        return new DorisCollectionManager(jdbcUrl, user, password, metric, createTable, buckets);
+    }
+
+    // ---------------------------------------------------------------------
     // 按租户路由器（collection-per-tenant 强隔离，默认开启）
     // ---------------------------------------------------------------------
 
     @Bean
+    @Primary
     public EmbeddingStoreRouter embeddingStoreRouter(
             EmbeddingModel embeddingModel,
             ObjectProvider<EmbeddingStore<TextSegment>> baseStoreProvider,
-            ObjectProvider<QdrantClient> qdrantClientProvider,
+            ObjectProvider<CollectionManager> collectionManagerProvider,
             @Value("${app.rag.vector-store.provider:in-memory}") String provider,
             @Value("${app.rag.vector-store.isolation:collection-per-tenant}") String isolation,
-            @Value("${app.rag.vector-store.qdrant.collection-name:knowledge_segments}") String baseCollection,
-            @Value("${app.rag.vector-store.qdrant.payload-text-key:text}") String payloadTextKey,
-            @Value("${app.rag.vector-store.qdrant.auto-create-payload-index:true}") boolean autoCreatePayloadIndex,
-            @Value("${app.rag.vector-store.qdrant.timeout:10s}") String timeout) {
+            @Value("${app.rag.vector-store.base-collection:${app.rag.vector-store.qdrant.collection-name:knowledge_segments}}") String baseCollection) {
         boolean shared = "shared".equalsIgnoreCase(isolation);
         if (shared) {
-            log.info("Knowledge tenant isolation: shared (single store + metadata filter)");
-            return new SingleEmbeddingStoreRouter(baseStoreProvider.getObject(), embeddingModel.dimension());
+            EmbeddingStore<TextSegment> base = baseStoreProvider.getIfAvailable();
+            if (base == null) {
+                throw new IllegalStateException("shared 隔离仅支持 in-memory/qdrant provider；provider=" + provider
+                        + " 请改用 collection-per-tenant（默认）");
+            }
+            log.info("Knowledge tenant isolation: shared (single store + metadata filter, provider={})", provider);
+            return new SingleEmbeddingStoreRouter(base, embeddingModel.dimension());
         }
-        if ("qdrant".equalsIgnoreCase(provider)) {
-            log.info("Knowledge tenant isolation: collection-per-tenant (qdrant base collection={})", baseCollection);
-            QdrantClientCollectionManager manager = new QdrantClientCollectionManager(
-                    qdrantClientProvider.getObject(), payloadTextKey, parseDuration(timeout), autoCreatePayloadIndex);
-            return new QdrantEmbeddingStoreRouter(manager, baseCollection);
+        CollectionManager manager = collectionManagerProvider.getIfAvailable();
+        if (manager != null) {
+            log.info("Knowledge tenant isolation: collection-per-tenant (provider={} base={})", provider, baseCollection);
+            return new ManagedEmbeddingStoreRouter(manager, baseCollection);
         }
         log.info("Knowledge tenant isolation: collection-per-tenant (in-memory, one store per tenant)");
         return new InMemoryEmbeddingStoreRouter();
@@ -167,9 +246,11 @@ public class KnowledgeEmbeddingConfig {
             @Value("${app.rag.embedding.timeout:60s}") String timeout,
             @Value("${app.rag.embedding.max-retries:3}") int maxRetries,
             @Value("${app.rag.embedding.log-requests:false}") boolean logRequests,
-            @Value("${app.rag.embedding.log-responses:false}") boolean logResponses) {
+            @Value("${app.rag.embedding.log-responses:false}") boolean logResponses,
+            @Value("${app.rag.embedding.query-prefix:${RAG_EMBEDDING_QUERY_PREFIX:}}") String queryPrefix,
+            @Value("${app.rag.embedding.document-prefix:${RAG_EMBEDDING_DOCUMENT_PREFIX:}}") String documentPrefix) {
         log.info("Knowledge embedding provider: ollama model={} baseUrl={}", modelName, baseUrl);
-        return OllamaEmbeddingModel.builder()
+        EmbeddingModel model = OllamaEmbeddingModel.builder()
                 .baseUrl(baseUrl)
                 .modelName(modelName)
                 .timeout(parseDuration(timeout))
@@ -177,6 +258,21 @@ public class KnowledgeEmbeddingConfig {
                 .logRequests(logRequests)
                 .logResponses(logResponses)
                 .build();
+        return applyTaskPrefixes(model, queryPrefix, documentPrefix);
+    }
+
+    /**
+     * 若配置了查询/文档前缀（如 nomic 的 {@code search_query: } / {@code search_document: }），
+     * 包一层 {@link PrefixingEmbeddingModel}；都为空则原样返回，不影响 hash/无前缀场景。
+     */
+    private static EmbeddingModel applyTaskPrefixes(EmbeddingModel model, String queryPrefix, String documentPrefix) {
+        boolean hasPrefix = (queryPrefix != null && !queryPrefix.isEmpty())
+                || (documentPrefix != null && !documentPrefix.isEmpty());
+        if (!hasPrefix) {
+            return model;
+        }
+        log.info("Embedding task prefixes enabled: query='{}' document='{}'", queryPrefix, documentPrefix);
+        return new PrefixingEmbeddingModel(model, queryPrefix, documentPrefix);
     }
 
     private static Duration parseDuration(String value) {

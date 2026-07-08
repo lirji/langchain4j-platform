@@ -20,7 +20,7 @@ import java.util.OptionalInt;
  *
  * <p>所有网络调用带超时；建 payload 索引失败不阻断（仅告警）。此类不在单测中对真实 Qdrant 执行。
  */
-public class QdrantClientCollectionManager implements QdrantCollectionManager {
+public class QdrantClientCollectionManager implements CollectionManager {
 
     private static final Logger log = LoggerFactory.getLogger(QdrantClientCollectionManager.class);
 
