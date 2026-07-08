@@ -39,6 +39,25 @@ app:
     events-topic: ${CHANNEL_EVENTS_TOPIC:platform.channel.events}
     connect-timeout: ${CHANNEL_CONNECT_TIMEOUT:1s}
     read-timeout: ${CHANNEL_READ_TIMEOUT:10s}
+    # 钉钉知识库客服桥：默认关闭；开启后 /channel/dingtalk/events 接收企业内部机器人的消息回调，
+    # 先查知识库（无命中转人工），命中则调 conversation /chat（需其 CONVERSATION_RAG_ENABLED=true）再回群。
+    # 详见 docs/dingtalk-guide.md。
+    dingtalk:
+      enabled: ${DINGTALK_ENABLED:false}
+      tenant-id: ${DINGTALK_TENANT:default}          # 该钉钉企业绑定的平台租户
+      app-key: ${DINGTALK_APP_KEY:}                    # AppKey（robotCode + 验签 + 取 token）
+      app-secret: ${DINGTALK_APP_SECRET:}              # AppSecret
+      verify-signature: ${DINGTALK_VERIFY_SIGNATURE:true}
+      api-base-url: ${DINGTALK_API_BASE_URL:https://api.dingtalk.com}
+      rag-category: ${DINGTALK_RAG_CATEGORY:}          # 兜底闸门检索类目，留空=全部（建议与 CONVERSATION_RAG_CATEGORY 对齐）
+      rag-top-k: ${DINGTALK_RAG_TOP_K:5}
+      conversation-base-url: ${DINGTALK_CONVERSATION_BASE_URL:http://conversation-service:8081}
+      knowledge-base-url: ${DINGTALK_KNOWLEDGE_BASE_URL:http://knowledge-service:8084}
+      fallback:
+        min-hits: ${DINGTALK_FALLBACK_MIN_HITS:1}      # 命中数下限，低于则转人工
+        min-score: ${DINGTALK_FALLBACK_MIN_SCORE:0.5}  # 强命中相关性下限
+        message: ${DINGTALK_FALLBACK_MESSAGE:知识库暂未收录该问题，已为您转接人工客服，请稍候。}
+        human-agent-ids: ${DINGTALK_HUMAN_AGENT_IDS:}  # 转人工时 @ 的人工客服 userId，逗号分隔
 
 management:
   endpoints:

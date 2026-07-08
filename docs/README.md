@@ -17,6 +17,7 @@
 - [Agent 能力与编排指南](agent-guide.md)：深度 Agent(ReAct)、DAG、reflexion/voting/chaining、cascade 模型级联、各 ReAct 动作与开关。
 - [A2A 接入指南](a2a-guide.md)：agent-card 发现、`/interop/a2a` JSON-RPC task 协议、代理到 agent、live discovery。
 - [MCP 接入指南](mcp-guide.md)：agent 作 MCP client（`mcp_call`）与 interop 的 MCP tool surface。
+- [钉钉知识库客服接入指南](dingtalk-guide.md)：钉钉群 @机器人 → 查知识库 → 机器人回复；镜像飞书事件桥、机器人发消息 API 回复、无命中转人工兜底。
 - [事件总线与终态可靠投递(EOS)指南](eventbus-guide.md)：事务性 outbox + relay + 消费侧去重 = effective exactly-once（workflow/async-task 两侧）。
 - [部署指南](deployment-guide.md)：本地 docker-compose、k8s/Helm 伞状 chart、External Secrets、Service DNS、Config Server。
 

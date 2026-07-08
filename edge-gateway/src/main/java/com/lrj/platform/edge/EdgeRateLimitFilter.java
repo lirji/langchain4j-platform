@@ -87,6 +87,7 @@ public class EdgeRateLimitFilter implements GlobalFilter, Ordered {
         return path.startsWith("/actuator")
                 || path.startsWith("/.well-known")
                 || path.equals("/channel/feishu/events")
+                || path.equals("/channel/dingtalk/events")
                 || path.equals("/health");
     }
 

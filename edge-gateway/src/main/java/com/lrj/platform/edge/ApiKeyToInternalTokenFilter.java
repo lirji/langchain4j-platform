@@ -63,6 +63,8 @@ public class ApiKeyToInternalTokenFilter implements GlobalFilter, Ordered {
                 || path.startsWith("/.well-known")
                 // 飞书事件回调不带平台 api-key，靠飞书签名验真（见 channel-service FeishuInboundController）
                 || path.equals("/channel/feishu/events")
+                // 钉钉机器人消息回调不带平台 api-key，靠钉钉 timestamp/sign 验真（见 channel-service DingtalkInboundController）
+                || path.equals("/channel/dingtalk/events")
                 || path.equals("/health");
     }
 
