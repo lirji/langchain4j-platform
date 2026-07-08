@@ -1,0 +1,271 @@
+{
+  "info": {
+    "_postman_id": "1c4a0000-0001-4a2b-8c3d-la4jplatform01",
+    "name": "LangChain4j 平台 · 网关演示",
+    "description": "从 edge-gateway 直接调用的接口集合:RAG 知识库闭环 + /chat 对话 + /agent/run 智能体。\n\n**导入即用**:\n1. 集合变量已内置(见 Variables 标签页):\n   - `baseUrl` = http://127.0.0.1:18080 (网关当前实际端口;若从 docker-compose.yml 重启则改成 8080)\n   - `apiKey` = dev-key-acme-ingest (租户 acme,带 ingest scope,上传/删除必需)\n   - `docId` = 空,由「上传」请求的测试脚本自动写入,供「查单个/删除」复用\n2. **先跑一次「上传文本知识」**,`docId` 会自动保存,之后「查单个」「删除」直接能用。\n3. `/chat` 和 `/agent/run` 会真调大模型(Ollama llama3.1),耗时数秒~数十秒。**建议把 Postman 的请求超时调大**(Settings → General → Request timeout in ms 设为 0 或 180000)。\n\n对应文档:docs/rag-api-demo.md;一键脚本:deploy/rag-demo.sh。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:18080", "type": "string" },
+    { "key": "apiKey", "value": "dev-key-acme-ingest", "type": "string" },
+    { "key": "docId", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "0 · 鉴权",
+      "item": [
+        {
+          "name": "不带 key → 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/rag/documents",
+              "host": ["{{baseUrl}}"],
+              "path": ["rag", "documents"]
+            },
+            "description": "刻意不带 X-Api-Key。网关直接 401,证明鉴权生效。"
+          }
+        }
+      ]
+    },
+    {
+      "name": "1 · RAG 知识库",
+      "item": [
+        {
+          "name": "上传文本知识 (JSON)  ← 先跑这个",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// 自动把返回的 docId 存进集合变量,供后续「查单个/删除」复用",
+                  "try {",
+                  "  const j = pm.response.json();",
+                  "  if (j && j.docId) {",
+                  "    pm.collectionVariables.set('docId', j.docId);",
+                  "    console.log('已保存 docId =', j.docId);",
+                  "  }",
+                  "} catch (e) { console.log('非 JSON 响应,跳过'); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"退款政策.md\",\n  \"text\": \"退款政策：商品签收后 7 天内可申请无理由退款，退款将在审核通过后 3-5 个工作日原路退回。\",\n  \"category\": \"客服\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rag/documents",
+              "host": ["{{baseUrl}}"],
+              "path": ["rag", "documents"]
+            },
+            "description": "上传文本文档(需 ingest scope)。可选字段:imageBase64+contentType(传图)、caption/ocrText(图注/OCR)。返回 DocumentInfo,其 docId 会被测试脚本自动保存到集合变量 docId。"
+          }
+        },
+        {
+          "name": "上传文件 (multipart)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "  const j = pm.response.json();",
+                  "  if (j && j.docId) { pm.collectionVariables.set('docId', j.docId); }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": null, "description": "点右侧 Select Files 选一个 pdf/txt/md/图片" },
+                { "key": "category", "value": "客服", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rag/documents",
+              "host": ["{{baseUrl}}"],
+              "path": ["rag", "documents"]
+            },
+            "description": "上传文件(需 ingest scope)。注意:multipart 不要手动加 Content-Type,Postman 会自带 boundary。表单可选字段:category、caption、ocrText。"
+          }
+        },
+        {
+          "name": "列表",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rag/documents",
+              "host": ["{{baseUrl}}"],
+              "path": ["rag", "documents"]
+            },
+            "description": "列出当前租户(acme)的全部文档。"
+          }
+        },
+        {
+          "name": "语义检索 /rag/query",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"退款要几天到账\",\n  \"topK\": 3,\n  \"category\": \"客服\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rag/query",
+              "host": ["{{baseUrl}}"],
+              "path": ["rag", "query"]
+            },
+            "description": "混合检索(向量 + 关键词)。参数:query(必填)、topK(默认5)、minScore(默认0.0)、category(可选)。命中为空多半是 knowledge-service 重启后内存索引被清空,先重跑「上传」。"
+          }
+        },
+        {
+          "name": "查单个 /rag/documents/{{docId}}",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rag/documents/{{docId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["rag", "documents", "{{docId}}"]
+            },
+            "description": "docId 用「上传」自动保存的集合变量;也可手动在 Variables 里填。查不到返回 404。"
+          }
+        },
+        {
+          "name": "删除 /rag/documents/{{docId}}",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rag/documents/{{docId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["rag", "documents", "{{docId}}"]
+            },
+            "description": "删除(需 ingest scope)。返回 {\"deleted\":true,\"docId\":...};删不到返回 404。"
+          }
+        },
+        {
+          "name": "反例:无 ingest 上传 → 403",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Key", "value": "dev-key-acme" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"x.md\",\n  \"text\": \"y\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rag/documents",
+              "host": ["{{baseUrl}}"],
+              "path": ["rag", "documents"]
+            },
+            "description": "故意用没有 ingest scope 的 dev-key-acme(同租户)上传 → 403,印证 scope 授权生效。"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 · 对话与智能体 (走真实 LLM)",
+      "item": [
+        {
+          "name": "多轮对话 /chat",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"用一句话介绍你自己\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat?chatId=demo",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat"],
+              "query": [
+                { "key": "chatId", "value": "demo", "description": "多轮会话隔离键,默认 default" }
+              ]
+            },
+            "description": "对话入口。响应回显 tenantId/userId,直观验证租户身份从网关 JWT 透传到下游。可选服务端叠加 RAG 增强 + 语义缓存。需 chat scope。"
+          }
+        },
+        {
+          "name": "ReAct 智能体 /agent/run (单步收敛)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"goal\": \"用 current_time 工具查询 Asia/Shanghai 的当前时间，然后直接给出最终答案。\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/agent/run",
+              "host": ["{{baseUrl}}"],
+              "path": ["agent", "run"]
+            },
+            "description": "ReAct 智能体。steps[] 是可见推理轨迹(thought/action/observation),stopReason=DONE/LOOP/MAX_STEPS。请求体:goal(必填)、webhookUrl(可选)。\n\n⚠️ 多步推理耗时可达 1-2 分钟,先把 Postman 请求超时调大。本地小模型 llama3.1 有时不收敛(finalAnswer 空、stopReason=LOOP),多跑一两次或在 deploy/litellm/config.yaml 换更强模型。"
+          }
+        },
+        {
+          "name": "ReAct 智能体 /agent/run (自主检索知识库)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"goal\": \"请检索知识库回答：退款到账一般需要几天？\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/agent/run",
+              "host": ["{{baseUrl}}"],
+              "path": ["agent", "run"]
+            },
+            "description": "让智能体自主调 rag_search 命中你上传的「退款政策.md」。先确保已跑过「上传文本知识」。看点是 steps 里的 rag_search grounding,不纠结 finalAnswer 是否为空。"
+          }
+        }
+      ]
+    }
+  ]
+}

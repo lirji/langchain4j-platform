@@ -1,0 +1,27 @@
+# 语义 RAG 全量模式(override):knowledge-service 用持久化后端 + Ollama 语义 embedding。
+# 覆盖磁盘默认(默认是 in-memory + hash embedding)。当前本机运行态就等价于这份配置。
+#
+# 用法(叠加在基础 compose 上):
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.rag-full.yml up -d --no-deps knowledge-service
+#
+# 前置:宿主机 Ollama 已 `ollama pull nomic-embed-text`;redis / qdrant / mysql 已在跑。
+# 换 embedding = 换向量维度(hash 64 → nomic 768),切换后需删旧 Qdrant collection 并重新导入
+# (bash deploy/seed-kb.sh)。详见 docs/rag-api-demo.md §六。
+services:
+  knowledge-service:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # 容器内回连宿主机 Ollama
+    environment:
+      # 持久化后端(默认全 in-memory,重启即丢)
+      RAG_VECTOR_STORE_PROVIDER: qdrant        # 向量 → Qdrant(卷 qdrant-data)
+      RAG_REGISTRY_STORE: redis                # 文档登记 → Redis(rag:docs:<tenant>)
+      RAG_GRAPH_ENABLED: "true"                # 开 GraphRAG
+      RAG_GRAPH_STORE: jdbc                    # 三元组 → MySQL(knowledge_graph.RAG_GRAPH_TRIPLE)
+      RAG_GRAPH_INCLUDE_IN_QUERY: "true"
+      # 语义 embedding(默认是无语义的 hash)
+      RAG_EMBEDDING_PROVIDER: ollama
+      RAG_EMBEDDING_MODEL: nomic-embed-text    # 768 维,宿主机 Ollama
+      RAG_EMBEDDING_OLLAMA_BASE_URL: http://host.docker.internal:11434
+      # nomic 非对称任务前缀(尾部空格必须保留):对齐 query/document 向量空间,提升检索准确率
+      RAG_EMBEDDING_QUERY_PREFIX: "search_query: "
+      RAG_EMBEDDING_DOCUMENT_PREFIX: "search_document: "
