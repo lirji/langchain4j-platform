@@ -14,16 +14,17 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 @EnableConfigurationProperties(TokenBudgetProperties.class)
 public class PlatformMeteringAutoConfiguration {
 
+    // 默认持久化到 Redis（跨重启/多 pod 共享预算计数）；设 app.token-budget.store=in-memory 回退单 JVM。
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnProperty(name = "app.token-budget.store", havingValue = "in-memory", matchIfMissing = true)
+    @ConditionalOnProperty(name = "app.token-budget.store", havingValue = "in-memory")
     public TokenBudgetTracker inMemoryTokenBudgetTracker(TokenBudgetProperties props) {
         return new InMemoryTokenBudgetTracker(props);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnProperty(name = "app.token-budget.store", havingValue = "redis")
+    @ConditionalOnProperty(name = "app.token-budget.store", havingValue = "redis", matchIfMissing = true)
     public TokenBudgetTracker redisTokenBudgetTracker(StringRedisTemplate redis, TokenBudgetProperties props) {
         return new RedisTokenBudgetTracker(redis, props, props.getRedis().getKeyPrefix());
     }

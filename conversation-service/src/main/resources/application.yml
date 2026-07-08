@@ -50,7 +50,7 @@ app:
       enabled: ${CONVERSATION_SEMANTIC_CACHE_ENABLED:false}
       threshold: ${CONVERSATION_SEMANTIC_CACHE_THRESHOLD:0.95}
       max-entries-per-tenant: ${CONVERSATION_SEMANTIC_CACHE_MAX_ENTRIES:1000}
-      store: ${CONVERSATION_SEMANTIC_CACHE_STORE:in-memory}
+      store: ${CONVERSATION_SEMANTIC_CACHE_STORE:redis}
       embedding:
         provider: ${CONVERSATION_SEMANTIC_CACHE_EMBEDDING_PROVIDER:hash}
         model-name: ${CONVERSATION_SEMANTIC_CACHE_EMBEDDING_MODEL:embedding-default}
@@ -68,7 +68,7 @@ app:
       self-rating: ${CHAT_CASCADE_SELF_RATING:false}
   token-budget:
     enabled: true
-    store: in-memory
+    store: ${TOKEN_BUDGET_STORE:redis}
     timezone: Asia/Shanghai
   cost:
     enabled: false

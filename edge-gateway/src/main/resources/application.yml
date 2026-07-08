@@ -78,7 +78,7 @@ platform:
 app:
   rate-limit:
     enabled: true
-    store: in-memory
+    store: ${RATE_LIMIT_STORE:redis}
     defaults:
       chat: 60
       agent: 20

@@ -25,9 +25,10 @@ public class CostConfig {
     }
 
     // 复用 token-budget 的时区口径（同一日历日重置基准），避免成本/配额两个面板跨日时刻不一致
+    // 默认持久化到 Redis（跨重启/多 pod 共享成本计数）；设 app.cost.store=in-memory 回退单 JVM。
     @Bean
     @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
-            name = "app.cost.store", havingValue = "in-memory", matchIfMissing = true)
+            name = "app.cost.store", havingValue = "in-memory")
     public CostTracker inMemoryCostTracker(CostProperties props,
                                            @org.springframework.beans.factory.annotation.Value("${app.token-budget.timezone:}") String timezone) {
         return new InMemoryCostTracker(timezone, props.getCurrency());
@@ -35,7 +36,7 @@ public class CostConfig {
 
     @Bean
     @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
-            name = "app.cost.store", havingValue = "redis")
+            name = "app.cost.store", havingValue = "redis", matchIfMissing = true)
     public CostTracker redisCostTracker(CostProperties props,
                                         org.springframework.data.redis.core.StringRedisTemplate redis,
                                         @org.springframework.beans.factory.annotation.Value("${app.token-budget.timezone:}") String timezone) {
