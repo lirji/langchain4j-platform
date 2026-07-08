@@ -10,6 +10,7 @@ import com.lrj.platform.knowledge.lifecycle.DocumentRegistry;
 import com.lrj.platform.knowledge.lifecycle.DocumentService;
 import com.lrj.platform.knowledge.lifecycle.InMemoryDocumentRegistry;
 import com.lrj.platform.security.TenantContext;
+import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -162,6 +163,21 @@ class DocumentServiceTest {
         // 失效器抛异常也不能影响上传结果（尽力而为）
         DocumentInfo info = svc.upload("guide.md", "text/markdown", "hello", "manual");
         assertThat(info.version()).isEqualTo(1);
+    }
+
+    @Test
+    void contextualEnricher_prependsContextToStoredSegments() {
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("ingest")));
+        // 桩增强器：给每个 chunk 前缀 [CTX]，模拟 contextual retrieval 开启
+        service.setContextualEnricher((docText, segments) -> segments.stream()
+                .map(s -> TextSegment.from("[CTX] " + s.text(), s.metadata()))
+                .toList());
+
+        service.upload("guide.md", "text/markdown", "hello knowledge base", "manual");
+
+        // 入库前经 enrich，存进 mirror / 向量库的是加了前缀的 chunk
+        assertThat(mirror.all()).isNotEmpty();
+        assertThat(mirror.all()).allSatisfy(seg -> assertThat(seg.text()).startsWith("[CTX] "));
     }
 
     static final class CountingInvalidator implements SemanticCacheInvalidator {

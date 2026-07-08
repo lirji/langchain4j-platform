@@ -1,5 +1,6 @@
 package com.lrj.platform.knowledge.hybrid;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.HashSet;
@@ -7,7 +8,12 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * 默认分词器（零依赖）：字母/数字整词 + 中文 bigram。{@code app.rag.hybrid.tokenizer=hanlp} 时让位给
+ * {@link HanLpKeywordTokenizer}（中文分词更准）。
+ */
 @Component
+@ConditionalOnProperty(name = "app.rag.hybrid.tokenizer", havingValue = "simple", matchIfMissing = true)
 public class SimpleKeywordTokenizer implements KeywordTokenizer {
 
     private static final Pattern TOKEN = Pattern.compile("[\\p{IsAlphabetic}\\p{IsDigit}]+|[\\p{IsHan}]+");

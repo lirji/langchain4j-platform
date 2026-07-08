@@ -2,6 +2,10 @@ package com.lrj.platform.knowledge;
 
 import com.lrj.platform.knowledge.hybrid.KeywordSearchService;
 import com.lrj.platform.knowledge.graph.GraphSearchService;
+import com.lrj.platform.knowledge.query.NoopQueryExpander;
+import com.lrj.platform.knowledge.query.QueryExpander;
+import com.lrj.platform.knowledge.rerank.NoopReranker;
+import com.lrj.platform.knowledge.rerank.Reranker;
 import com.lrj.platform.knowledge.store.EmbeddingStoreRouter;
 import com.lrj.platform.knowledge.store.SingleEmbeddingStoreRouter;
 import com.lrj.platform.security.TenantContext;
@@ -46,6 +50,10 @@ public class KnowledgeQueryService {
     private final double vectorWeight;
     private final double keywordWeight;
     private final double graphWeight;
+    // 检索增强协作者：默认 Noop（不扩展 / 不 rerank），仅 Spring @Autowired 路径按开关注入真实实现。
+    // 非 final：字段初始化在终端（master）构造器执行，各测试用委托构造器天然拿到 Noop，无需改测试。
+    private QueryExpander queryExpander = new NoopQueryExpander();
+    private Reranker reranker = new NoopReranker();
 
     @Autowired
     public KnowledgeQueryService(EmbeddingStoreRouter storeRouter,
@@ -60,7 +68,9 @@ public class KnowledgeQueryService {
                                  @Value("${app.rag.graph.query-top-k:${app.rag.graph.max-triples:20}}") int graphTopK,
                                  @Value("${app.rag.ranking.vector-weight:1.0}") double vectorWeight,
                                  @Value("${app.rag.ranking.keyword-weight:1.0}") double keywordWeight,
-                                 @Value("${app.rag.ranking.graph-weight:1.0}") double graphWeight) {
+                                 @Value("${app.rag.ranking.graph-weight:1.0}") double graphWeight,
+                                 ObjectProvider<QueryExpander> queryExpanderProvider,
+                                 ObjectProvider<Reranker> rerankerProvider) {
         this(storeRouter,
                 embeddingModel,
                 keywordSearchService,
@@ -74,6 +84,12 @@ public class KnowledgeQueryService {
                 vectorWeight,
                 keywordWeight,
                 graphWeight);
+        if (queryExpanderProvider != null) {
+            this.queryExpander = queryExpanderProvider.getIfAvailable(NoopQueryExpander::new);
+        }
+        if (rerankerProvider != null) {
+            this.reranker = rerankerProvider.getIfAvailable(NoopReranker::new);
+        }
     }
 
     public KnowledgeQueryService(EmbeddingStore<TextSegment> embeddingStore,
@@ -192,26 +208,34 @@ public class KnowledgeQueryService {
             filter = Filter.and(filter, metadataKey("category").isEqualTo(category));
         }
 
-        Embedding queryEmbedding = embeddingModel.embed(query).content();
-        EmbeddingSearchRequest request = EmbeddingSearchRequest.builder()
-                .queryEmbedding(queryEmbedding)
-                .maxResults(limit)
-                .minScore(floor)
-                .filter(filter)
-                .build();
+        // rerank 开启时多召回一些候选（候选池 = topK × 放大倍数），给重排腾挪空间；关闭时 = topK。
+        int poolLimit = Math.max(limit, limit * Math.max(1, reranker.retrieveMultiplier()));
 
-        List<EmbeddingMatch<TextSegment>> matches = storeRouter
-                .forTenant(tenantId, embeddingModel.dimension())
-                .search(request)
-                .matches();
+        // 查询扩展：原 query + 若干变体，多路向量召回按 segmentKey 取 max 分融合（关闭时只有原 query，行为不变）。
         Map<String, Hit> merged = new LinkedHashMap<>();
-        for (EmbeddingMatch<TextSegment> match : matches) {
-            TextSegment segment = match.embedded();
-            Hit hit = toVectorHit(match, segment);
-            merged.put(segmentKey(segment, hit.id()), hit);
+        for (String variant : queryExpander.expand(query)) {
+            if (variant == null || variant.isBlank()) {
+                continue;
+            }
+            Embedding queryEmbedding = embeddingModel.embed(variant).content();
+            EmbeddingSearchRequest request = EmbeddingSearchRequest.builder()
+                    .queryEmbedding(queryEmbedding)
+                    .maxResults(poolLimit)
+                    .minScore(floor)
+                    .filter(filter)
+                    .build();
+            List<EmbeddingMatch<TextSegment>> matches = storeRouter
+                    .forTenant(tenantId, embeddingModel.dimension())
+                    .search(request)
+                    .matches();
+            for (EmbeddingMatch<TextSegment> match : matches) {
+                TextSegment segment = match.embedded();
+                Hit hit = toVectorHit(match, segment);
+                merged.merge(segmentKey(segment, hit.id()), hit, KnowledgeQueryService::keepHigher);
+            }
         }
         if (hybridEnabled) {
-            int keywordLimit = Math.max(limit, keywordTopK);
+            int keywordLimit = Math.max(poolLimit, keywordTopK);
             for (KeywordSearchService.KeywordHit keywordHit : keywordSearchService.search(query, keywordLimit, category)) {
                 Hit hit = toKeywordHit(keywordHit);
                 String key = segmentKey(keywordHit.segment(), hit.id());
@@ -219,18 +243,19 @@ public class KnowledgeQueryService {
             }
         }
         if (graphIncludedInQuery && graphSearchService != null) {
-            int graphLimit = Math.max(limit, graphTopK);
+            int graphLimit = Math.max(poolLimit, graphTopK);
             for (GraphSearchService.GraphHit graphHit : graphSearchService.query(query, null, graphLimit, category).hits()) {
                 Hit hit = toGraphHit(graphHit);
                 merged.putIfAbsent(hit.id(), hit);
             }
         }
-        List<Hit> hits = new ArrayList<>(merged.values()).stream()
+        // 候选按初始分降序，交给 reranker 重排并截断到 topK（Noop 时即取前 topK，等价原 .limit(limit)）。
+        List<Hit> candidates = new ArrayList<>(merged.values()).stream()
                 .sorted(Comparator.comparingDouble(KnowledgeQueryService::scoreOrZero).reversed())
-                .limit(limit)
                 .toList();
-        log.info("knowledge query tenant={} topK={} minScore={} category={} -> {} hits",
-                tenantId, limit, floor, category, hits.size());
+        List<Hit> hits = reranker.rerank(query, candidates, limit);
+        log.info("knowledge query tenant={} topK={} minScore={} category={} variants={} -> {} hits",
+                tenantId, limit, floor, category, merged.size(), hits.size());
         return new QueryResult(query, tenantId, hits);
     }
 
@@ -279,6 +304,21 @@ public class KnowledgeQueryService {
                 source.index(),
                 graphHit.text(),
                 "graph");
+    }
+
+    /** 查询扩展下同一 segment 被多个变体命中：保留分更高的那个。 */
+    private static Hit keepHigher(Hit a, Hit b) {
+        return scoreOrZero(a) >= scoreOrZero(b) ? a : b;
+    }
+
+    /** 测试注入自定义扩展器（生产由 Spring @Autowired 按开关装配）。 */
+    void setQueryExpander(QueryExpander queryExpander) {
+        this.queryExpander = queryExpander == null ? new NoopQueryExpander() : queryExpander;
+    }
+
+    /** 测试注入自定义重排器（生产由 Spring @Autowired 按开关装配）。 */
+    void setReranker(Reranker reranker) {
+        this.reranker = reranker == null ? new NoopReranker() : reranker;
     }
 
     private static Hit mergeHits(Hit vectorHit, Hit keywordHit) {

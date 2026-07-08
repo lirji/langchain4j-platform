@@ -118,6 +118,28 @@ app:
     hybrid:
       enabled: ${RAG_HYBRID_ENABLED:true}
       keyword-top-k: ${RAG_HYBRID_KEYWORD_TOP_K:${RAG_QUERY_TOP_K:5}}
+      tokenizer: ${RAG_HYBRID_TOKENIZER:simple}   # simple(零依赖) | hanlp(中文分词更准，需 hanlp 词典)
+    # 重排序：默认关。开启后按 type 二选一（llm=复用共享 temp=0 ChatModel 打分；jina=Jina reranker 云 API）
+    rerank:
+      enabled: ${RAG_RERANK_ENABLED:false}
+      type: ${RAG_RERANK_TYPE:llm}                # llm | jina
+      candidate-multiplier: ${RAG_RERANK_CANDIDATE_MULTIPLIER:3}
+      jina:
+        api-key: ${JINA_API_KEY:}
+        model-name: ${RAG_RERANK_JINA_MODEL:jina-reranker-v2-base-multilingual}
+    # 查询扩展：默认关。开启后用共享 temp=0 ChatModel 把 1 query 扩成 N 变体多路召回
+    query-expansion:
+      enabled: ${RAG_QUERY_EXPANSION_ENABLED:false}
+      max-variants: ${RAG_QUERY_EXPANSION_MAX_VARIANTS:4}
+    # Contextual Retrieval：默认关。开启后入库时逐 chunk 加文档级上下文前缀再嵌入（每 chunk 一次 LLM 调用）
+    contextual:
+      enabled: ${RAG_CONTEXTUAL_ENABLED:false}
+      max-doc-chars: ${RAG_CONTEXTUAL_MAX_DOC_CHARS:8000}
+    # 可选 RAG LLM 增强（rerank=llm / query-expansion / contextual / grounding）共用的网关模型，默认复用 platform.gateway.*
+    llm:
+      base-url: ${RAG_LLM_BASE_URL:${platform.gateway.base-url:http://localhost:4000/v1}}
+      api-key: ${RAG_LLM_API_KEY:${platform.gateway.api-key:sk-litellm-master}}
+      model-name: ${RAG_LLM_MODEL:${platform.gateway.model-name:chat-default}}
     graph:
       enabled: ${RAG_GRAPH_ENABLED:true}
       store: ${RAG_GRAPH_STORE:jdbc}

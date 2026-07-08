@@ -6,6 +6,8 @@ import com.lrj.platform.knowledge.DocumentMirror;
 import com.lrj.platform.knowledge.DocumentSplitterFactory;
 import com.lrj.platform.knowledge.cache.SemanticCacheInvalidator;
 import com.lrj.platform.knowledge.graph.GraphIngestor;
+import com.lrj.platform.knowledge.ingest.ContextualEnricher;
+import com.lrj.platform.knowledge.ingest.NoopContextualEnricher;
 import com.lrj.platform.knowledge.store.EmbeddingStoreRouter;
 import com.lrj.platform.knowledge.store.SingleEmbeddingStoreRouter;
 import com.lrj.platform.security.TenantContext;
@@ -47,6 +49,9 @@ public class DocumentService {
     private final AuditLogger audit;
     private final GraphIngestor graphIngestor;
     private final SemanticCacheInvalidator cacheInvalidator;
+    // Contextual Retrieval 入库增强：默认 Noop（不改 chunk），仅 Spring @Autowired 路径按开关注入真实实现。
+    // 非 final：字段初始化在终端构造器执行，各测试用委托构造器天然拿到 Noop，无需改测试。
+    private ContextualEnricher contextualEnricher = new NoopContextualEnricher();
 
     @Autowired
     public DocumentService(EmbeddingStoreRouter storeRouter,
@@ -56,7 +61,8 @@ public class DocumentService {
                            DocumentRegistry registry,
                            AuditLogger audit,
                            ObjectProvider<GraphIngestor> graphIngestorProvider,
-                           ObjectProvider<SemanticCacheInvalidator> cacheInvalidatorProvider) {
+                           ObjectProvider<SemanticCacheInvalidator> cacheInvalidatorProvider,
+                           ObjectProvider<ContextualEnricher> contextualEnricherProvider) {
         this(storeRouter,
                 embeddingModel,
                 documentMirror,
@@ -65,6 +71,14 @@ public class DocumentService {
                 audit,
                 graphIngestorProvider == null ? null : graphIngestorProvider.getIfAvailable(),
                 cacheInvalidatorProvider == null ? null : cacheInvalidatorProvider.getIfAvailable());
+        if (contextualEnricherProvider != null) {
+            this.contextualEnricher = contextualEnricherProvider.getIfAvailable(NoopContextualEnricher::new);
+        }
+    }
+
+    /** 注入自定义 Contextual 增强器（生产由 Spring @Autowired 按开关装配；也供测试/编程式覆盖）。 */
+    public void setContextualEnricher(ContextualEnricher contextualEnricher) {
+        this.contextualEnricher = contextualEnricher == null ? new NoopContextualEnricher() : contextualEnricher;
     }
 
     public DocumentService(EmbeddingStoreRouter storeRouter,
@@ -165,6 +179,8 @@ public class DocumentService {
 
         DocumentSplitter splitter = splitterFactory.create();
         List<TextSegment> segments = splitter.split(doc);
+        // Contextual Retrieval：入库前给每 chunk 加文档级上下文前缀再嵌入（默认关时为 no-op，原样返回）。
+        segments = contextualEnricher.enrich(text, segments);
         List<Embedding> embeddings = embeddingModel.embedAll(segments).content();
         storeRouter.forTenant(tenantId, embeddingModel.dimension()).addAll(embeddings, segments);
         documentMirror.add(segments);
