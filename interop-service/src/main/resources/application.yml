@@ -11,8 +11,11 @@ spring:
 app:
   interop:
     agent-base-url: ${AGENT_BASE_URL:http://localhost:8085}
+    conversation-base-url: ${CONVERSATION_BASE_URL:http://localhost:8081}
     connect-timeout: ${INTEROP_CONNECT_TIMEOUT:1s}
     read-timeout: ${INTEROP_READ_TIMEOUT:30s}
+    # A2A message/stream 代理 conversation /chat/stream 的读超时；须 > 流式 emitter 超时(130s 内)。
+    stream-read-timeout: ${INTEROP_STREAM_READ_TIMEOUT:120s}
     # live capability discovery：默认关（静态 registry，零下游依赖）。开启后懒加载 + TTL 拉取，
     # 下游不可达确定性回退静态默认。
     discovery-enabled: ${INTEROP_DISCOVERY_ENABLED:false}
@@ -21,6 +24,10 @@ app:
       agent-name: ${INTEROP_A2A_AGENT_NAME:langchain4j-platform}
       base-url: ${INTEROP_A2A_BASE_URL:http://localhost:8080}
       version: ${INTEROP_A2A_VERSION:0.1.0}
+      # A2A push 中继：agent 任务终态 webhook 回到 interop 自己，再按 A2A 信封回推客户端。
+      push-callback-base-url: ${INTEROP_A2A_PUSH_CALLBACK_BASE_URL:http://localhost:8088}
+      # 回推客户端时的 HMAC 签名密钥；空则不签名。生产建议配一个共享密钥供客户端校验回调真伪。
+      push-hmac-secret: ${INTEROP_A2A_PUSH_HMAC_SECRET:}
 
 platform:
   security:

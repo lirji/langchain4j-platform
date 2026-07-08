@@ -250,7 +250,7 @@
 
 `interop-service`（`/interop/**`）对外互操作面，内部仍走 typed-HTTP 代理到下游：
 
-- **A2A JSON-RPC**：`POST /interop/a2a` 单端点，真 task 协议，方法 `message/send`、`tasks/get`、`tasks/cancel`（代理到 agent-service，`message/stream` 以轮询降级）；`GET /.well-known/agent-card.json` A2A 生态 agent-card（edge-gateway 白名单放行）。
+- **A2A JSON-RPC**：`POST /interop/a2a` 单端点，真 task 协议，方法 `message/send`、`message/stream`（真 SSE：chat 代理 conversation `/chat/stream` token 流、research 代理 agent 任务流）、`tasks/get`、`tasks/cancel`、`tasks/pushNotificationConfig/set|get`；push 通知按 A2A Task 信封回推客户端（interop 侧中继，HMAC + `X-A2A-Notification-Token`）。`GET /.well-known/agent-card.json` A2A 生态 agent-card（edge-gateway 白名单放行）。
 - **agent-card / MCP surface**：`GET /interop/agent-card`、`GET /interop/a2a/agent-card`、`GET /interop/mcp/tools`、`GET /interop/mcp/tools/{toolName}`、`POST /interop/mcp/call`。
 - **live discovery**（默认关，`INTEROP_DISCOVERY_ENABLED=true`）：agent-card skills / MCP tools 从向下游动态发现（懒加载 + TTL `INTEROP_CAPABILITY_TTL`），下游不可达确定性回退静态默认。
 
@@ -274,7 +274,7 @@
 ## 当前限制
 
 - GraphRAG 抽取是确定性三元组格式，不是开放信息抽取。
-- A2A `message/stream` 目前用轮询代替真 SSE（buffered 降级）；push 通知中继待接总线。
+- A2A `message/stream` 已是真 SSE（chat 代理 conversation token 流、research 代理 agent 任务流）；push 通知按 A2A Task 信封由 interop 中继回推（默认经 agent webhook 触发，零外部依赖；push 配置存储默认内存、多副本需换 Redis/JDBC）。
 - 契约测试当前覆盖 knowledge/agent 两个 P0 provider（analytics/async-task 待补），网关 failover 为独立 smoke 脚本、不进默认 CI。
 - `code_exec` 子进程沙箱是中等隔离，非强隔离容器；生产对不可信输入应进一步收紧。
 - RS256、Config Server git 后端、vision 模型、Kafka EOS 等生产能力默认关闭或需填真实外部配置。

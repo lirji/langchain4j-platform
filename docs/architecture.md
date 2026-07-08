@@ -297,4 +297,4 @@ Phase E 已产出 Helm 伞状 chart（library chart 复用 Deployment/Service/HP
 - channel 的 voice 已支持通用 HTTP provider，后续仍可接具体厂商 SDK。
 - GraphRAG 当前是确定性三元组，后续可接入 LLM/IE 抽取和图数据库。
 - 图片 ingestion 走原生 CLIP 多模态 embedding（默认关，`RAG_MULTIMODAL_ENABLED`），另有独立 vision-service 供 agent 复用；更完整托管视觉/多模态 embedding 仍可继续扩展。
-- interop 的 A2A `message/stream` 目前为轮询降级（conversation 无真流式），push 通知中继待接总线。
+- interop 的 A2A `message/stream` 已是真 SSE：chat skill 代理 conversation `/chat/stream`（token 级）、deep-research skill 代理 agent `/agent/tasks/{id}/stream`（任务级），翻成 A2A `status-update`/`artifact-update` 帧。push 通知由 interop 侧 `A2aPushForwarder` 中继：agent 任务终态 webhook 回到 interop（`/interop/a2a/push-callback`），组成 A2A Task 信封回推客户端（HMAC + `X-A2A-Notification-Token`）。push 配置存储默认内存、单副本，多副本需换 Redis/JDBC。

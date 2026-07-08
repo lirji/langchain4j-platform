@@ -50,7 +50,7 @@ curl -s 'http://localhost:8080/.well-known/agent-card.json'
   "url": "http://localhost:8080/interop/a2a",
   "version": "0.1.0",
   "protocolVersion": "0.2.0",
-  "capabilities": { "streaming": false, "pushNotifications": false, "stateTransitionHistory": false },
+  "capabilities": { "streaming": true, "pushNotifications": true, "stateTransitionHistory": false },
   "defaultInputModes": ["text/plain"],
   "defaultOutputModes": ["text/plain"],
   "skills": [
@@ -83,7 +83,7 @@ curl -s 'http://localhost:8080/.well-known/agent-card.json'
 要点：
 
 - `url` 指向 JSON-RPC 单端点（由 `app.interop.a2a.base-url` + `/interop/a2a` 拼成，默认 `http://localhost:8080/interop/a2a`）。
-- `capabilities` 三个开关**当前恒为 `false`**（无 `message/stream` 流式、无原生 push、无状态历史）——不要据此调用不存在的流式方法。
+- `capabilities`：`streaming=true`（支持 `message/stream` 真 SSE）、`pushNotifications=true`（支持 A2A 信封 push 中继）、`stateTransitionHistory=false`（不保留状态历史）。
 - `securitySchemes.apiKey` 明确告诉客户端：用 `X-Api-Key` 请求头带上边缘 api-key。
 - `skills` 是**硬编码的两个**（`chat` / `deep-research`），与下面 live discovery（那影响的是 MCP 工具目录，不是这里的 skills）无关。
 
@@ -116,10 +116,12 @@ curl -s 'http://localhost:8080/interop/agent-card' -H 'X-Api-Key: dev-key-acme'
 | method | 语义 | 代理到 agent-service |
 |---|---|---|
 | `message/send` | 发一条消息，触发一次 agent 运行 | `chat` skill → `POST /agent/run`（同步）；`deep-research` skill → `POST /agent/run/async`（异步 Task） |
+| `message/stream` | 发一条消息并**真 SSE 流式**返回过程事件 | `chat` skill → 代理 conversation `/chat/stream`（token 级 artifact 流）；`deep-research` skill → 起异步任务 + 代理 agent `/agent/tasks/{id}/stream`（任务级状态流） |
 | `tasks/get` | 按 id 轮询任务状态 | `GET /agent/tasks/{id}` |
 | `tasks/cancel` | 取消未终态任务 | `DELETE /agent/tasks/{id}` |
+| `tasks/pushNotificationConfig/set` \| `/get` | 为某 task 登记 / 查询 push 回调配置 | interop 侧存储（`A2aPushNotificationStore`） |
 
-> 未列出的 method（如 `message/stream`）返回 `-32601 Method not found`。
+> `message/stream` 返回 `text/event-stream`（每帧是包着 A2A 事件的 JSON-RPC response）；其余方法返回 `application/json`。未列出的 method 返回 `-32601 Method not found`。
 
 ### 3.1 请求信封
 
@@ -186,7 +188,7 @@ curl -s 'http://localhost:8080/interop/agent-card' -H 'X-Api-Key: dev-key-acme'
 
 - **文本来源**：`message.parts` 里所有 `kind == "text"` 的 `text` 拼接。本实现只支持 `text` part（`Part.kind` 判别字段）。文本为空 → `-32602 Invalid params`。
 - **skill 选择**：`message.metadata.skill` 决定走哪个技能——`"deep-research"` 走异步 Task，其它（含缺省）都按 `chat` 同步处理。
-- **webhook**：`configuration.pushNotificationConfig.url` 会**原样透传**给 `agent-service /agent/run/async` 作为异步任务完成回调（仅 `deep-research` 路径用得上）。注意 agent card 的 `capabilities.pushNotifications=false`——这里只是把 url 透传成 agent 任务的 webhookUrl，不代表 A2A 原生 push 语义。
+- **push 回调**：`configuration.pushNotificationConfig`（`url` / `token` / `id`）仅 `deep-research` 路径用得上。**不再原样透传客户端 URL**：interop 把 agent 任务的 webhook 指向自己的 `/interop/a2a/push-callback`，任务终态时由 `A2aPushForwarder` 拉取任务、组成 **A2A Task 信封**回推你的 `url`，带 `X-A2A-Notification-Token`（回带你的 `token`）与可选 `X-Webhook-Signature`（HMAC，`INTEROP_A2A_PUSH_HMAC_SECRET` 配了才发）。详见 §5.4。
 - 其余字段（`blocking`、`acceptedOutputModes`、外层 `metadata`、`token`/`id` 等）当前被忽略。
 
 ### 4.2 chat（同步）
@@ -269,6 +271,45 @@ curl -s -X POST 'http://localhost:8080/interop/a2a' \
 }
 ```
 
+### 4.4 `message/stream`（真 SSE 流式）
+
+同一 `/interop/a2a` 端点，`method` 换成 `message/stream`，响应变为 `text/event-stream`。每个 SSE 帧体是一个 **JSON-RPC response**，`result` 里是 A2A 流式事件：
+
+- `status-update`（`kind=status-update`）：任务状态变化，`final=true` 标记最后一帧。
+- `artifact-update`（`kind=artifact-update`）：产出增量。`append=true` 表示追加到同一 `artifactId`（chat skill 逐 token）。
+
+两个 skill 的流式来源不同：
+
+- **chat**：代理 conversation `/chat/stream`，**token 级** artifact 流——`WORKING` → 逐 token `artifact-update(append=true)` → `COMPLETED(final=true)`。
+- **deep-research**：起异步任务后代理 agent `/agent/tasks/{id}/stream`，**任务级**状态流——`SUBMITTED` → `WORKING` → 终态 `artifact-update` + `COMPLETED/FAILED(final=true)`。
+
+```bash
+curl -N -X POST 'http://localhost:8080/interop/a2a' \
+  -H 'X-Api-Key: dev-key-acme' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": "s-1",
+    "method": "message/stream",
+    "params": { "message": {
+      "role": "user",
+      "parts": [ { "kind": "text", "text": "用三句话介绍 LangChain4j" } ],
+      "metadata": { "skill": "chat" }
+    } }
+  }'
+```
+
+流式帧示意（每行一个 `data:`）：
+
+```
+data: {"jsonrpc":"2.0","id":"s-1","result":{"taskId":"<id>","contextId":"<id>","status":{"state":"working","timestamp":"..."},"final":false,"kind":"status-update"}}
+data: {"jsonrpc":"2.0","id":"s-1","result":{"taskId":"<id>","contextId":"<id>","artifact":{"artifactId":"<aid>","name":"answer","parts":[{"kind":"text","text":"Lang"}]},"append":true,"lastChunk":false,"kind":"artifact-update"}}
+...
+data: {"jsonrpc":"2.0","id":"s-1","result":{"taskId":"<id>","contextId":"<id>","status":{"state":"completed","timestamp":"..."},"final":true,"kind":"status-update"}}
+```
+
+> 客户端断开连接后，interop 停止转发（上游 token 流无取消句柄，与 conversation `/chat/stream` 同语义）。SSE 读超时由 `INTEROP_STREAM_READ_TIMEOUT`（默认 120s）控制。
+
 ---
 
 ## 5. Task 生命周期与状态
@@ -342,6 +383,17 @@ curl -s -X POST 'http://localhost:8080/interop/a2a' \
   -d '{ "jsonrpc": "2.0", "id": 4, "method": "tasks/cancel", "params": { "id": "<taskId>" } }'
 ```
 
+### 5.4 push 通知（A2A 信封中继）
+
+`deep-research` 任务终态时，若登记过 `pushNotificationConfig`，interop 会把结果**主动回推**你的 `url`。链路：
+
+1. `message/send`（research）时 interop 把 agent 任务的 webhook 设成自己的 `/interop/a2a/push-callback`（内网直连，不经 edge-gateway），并按 `(tenantId, taskId)` 记下你的 push 配置；也可在 send 之后用 `tasks/pushNotificationConfig/set` 补登记。
+2. 任务终态 → agent 回调 interop → `A2aPushForwarder` 拉取任务、映射成 **A2A Task 信封**（`kind=task` + `artifacts`）POST 到你的 `url`。
+3. 请求头：`X-A2A-Notification-Token`（回带你 config 里的 `token`，供你校验回调真伪）、`X-Webhook-Event: a2a.task.finished`、`X-Webhook-Delivery: <uuid>`；配了 `INTEROP_A2A_PUSH_HMAC_SECRET` 时再带 `X-Webhook-Signature`（对 body 的 HMAC-SHA256 hex）。
+4. 投递失败按 `push-max-retries`（默认 2）线性退避重试；4xx 不重试。
+
+> 中继存储 `A2aPushNotificationStore` 默认内存、单副本、重启即丢（与 rate-limit / token-budget 同款演进：多副本换 Redis/JDBC，接口不变）。生产建议配 `INTEROP_A2A_PUSH_HMAC_SECRET` 让客户端能校验回调真伪。
+
 ---
 
 ## 6. Live capability discovery（MCP 工具目录）
@@ -362,8 +414,12 @@ live discovery 影响的是 **MCP 工具目录**（`/interop/mcp/tools`、平台
 | `app.interop.discovery-enabled` | `INTEROP_DISCOVERY_ENABLED` | `false` | live discovery 总开关（**默认关**） |
 | `app.interop.capability-ttl` | `INTEROP_CAPABILITY_TTL` | `60s` | discovery 缓存 TTL，过期触发懒刷新 |
 | `app.interop.agent-base-url` | `AGENT_BASE_URL` | `http://localhost:8085` | 代理到的 agent-service 基址 |
+| `app.interop.conversation-base-url` | `CONVERSATION_BASE_URL` | `http://localhost:8081` | `message/stream`（chat）代理的 conversation 基址 |
 | `app.interop.connect-timeout` | `INTEROP_CONNECT_TIMEOUT` | `1s` | 出站连接超时 |
 | `app.interop.read-timeout` | `INTEROP_READ_TIMEOUT` | `30s` | 出站读超时 |
+| `app.interop.stream-read-timeout` | `INTEROP_STREAM_READ_TIMEOUT` | `120s` | `message/stream` 代理 SSE 的读超时 |
+| `app.interop.a2a.push-callback-base-url` | `INTEROP_A2A_PUSH_CALLBACK_BASE_URL` | `http://localhost:8088` | push 中继回调基址（agent 任务 webhook 回到 interop 自己） |
+| `app.interop.a2a.push-hmac-secret` | `INTEROP_A2A_PUSH_HMAC_SECRET` | 空 | push 回推客户端时的 HMAC 签名密钥；空则不签名 |
 
 > `GET /agent/capabilities` 端点在 agent-service 侧仅当 agent 装配（`DeepAgentService` 存在）时才挂载（`@ConditionalOnBean(DeepAgentService.class)`），其声明的工具集与 interop 静态回退对齐。
 
@@ -398,7 +454,8 @@ live discovery 影响的是 **MCP 工具目录**（`/interop/mcp/tools`、平台
 | `/.well-known/agent-card.json` | GET | 免鉴权 | 真 A2A Agent Card 发现 |
 | `/interop/agent-card` | GET | 需鉴权 | 平台自有互操作卡 |
 | `/interop/a2a/agent-card` | GET | 需鉴权 | 平台自有互操作卡（别名） |
-| `/interop/a2a` | POST | 需鉴权 | A2A JSON-RPC 单端点（`message/send`、`tasks/get`、`tasks/cancel`） |
+| `/interop/a2a` | POST | 需鉴权 | A2A JSON-RPC 单端点（`message/send`、`message/stream`、`tasks/get`、`tasks/cancel`、`tasks/pushNotificationConfig/set\|get`） |
+| `/interop/a2a/push-callback` | POST | 内网直连 | A2A push 中继回调（agent 任务终态 webhook 回到 interop，非对外） |
 | `/interop/mcp/tools` | GET | 需鉴权 | MCP 工具目录（受 live discovery 影响） |
 | `/interop/mcp/tools/{toolName}` | GET | 需鉴权 | 单个 MCP 工具 descriptor |
 | `/interop/mcp/call` | POST | 需鉴权 | 调用 MCP 工具 |

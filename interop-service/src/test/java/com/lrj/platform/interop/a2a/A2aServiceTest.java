@@ -28,16 +28,19 @@ class A2aServiceTest {
     private RestTemplate restTemplate;
     private MockRestServiceServer server;
     private A2aService service;
+    private A2aPushNotificationStore pushStore;
 
     @BeforeEach
     void setUp() {
         restTemplate = new RestTemplateBuilder().rootUri("http://agent.local").build();
         server = MockRestServiceServer.bindTo(restTemplate).build();
+        pushStore = new A2aPushNotificationStore();
         service = new A2aService(
                 new HttpA2aAgentGateway(restTemplate),
                 new A2aTaskMapper(),
                 new InteropProperties(),
-                json);
+                json,
+                pushStore);
     }
 
     private JsonNode params(Object value) {
@@ -89,6 +92,59 @@ class A2aServiceTest {
         assertThat(task.id()).isEqualTo("task-1");
         assertThat(task.status().state()).isEqualTo(TaskState.SUBMITTED);
         server.verify();
+    }
+
+    @Test
+    void messageSendResearchWithPushConfigRegistersAndRoutesWebhookToInterop() {
+        server.expect(once(), requestTo("http://agent.local/agent/run/async"))
+                .andExpect(method(HttpMethod.POST))
+                // webhook 指向 interop 自己的回调（而非客户端 URL），终态由 forwarder 中继
+                .andExpect(org.springframework.test.web.client.match.MockRestRequestMatchers
+                        .jsonPath("$.webhookUrl").value("http://localhost:8088/interop/a2a/push-callback"))
+                .andRespond(withSuccess("""
+                        {"taskId":"task-9","tenantId":"acme","status":"PENDING"}
+                        """, MediaType.APPLICATION_JSON));
+
+        Map<String, Object> message = new java.util.LinkedHashMap<>();
+        message.put("role", "user");
+        message.put("parts", List.of(Map.of("kind", "text", "text", "do research")));
+        message.put("metadata", Map.of("skill", A2aService.SKILL_RESEARCH));
+        JsonNode params = params(Map.of(
+                "message", message,
+                "configuration", Map.of("pushNotificationConfig",
+                        Map.of("url", "https://client/hook", "token", "tok-1"))));
+
+        JsonRpcResponse response = service.dispatch("message/send", params, "1");
+
+        assertThat(response.error()).isNull();
+        // 客户端 push 配置按 (tenant, taskId) 登记；测试无租户 → anonymous
+        assertThat(pushStore.get("anonymous", "task-9")).isPresent();
+        assertThat(pushStore.get("anonymous", "task-9").get().url()).isEqualTo("https://client/hook");
+        server.verify();
+    }
+
+    @Test
+    void pushConfigSetThenGetRoundTrips() {
+        JsonRpcResponse set = service.dispatch("tasks/pushNotificationConfig/set",
+                params(Map.of("taskId", "t9",
+                        "pushNotificationConfig", Map.of("url", "https://c/h", "token", "tk"))), "1");
+        assertThat(set.error()).isNull();
+        assertThat(pushStore.get("anonymous", "t9")).isPresent();
+
+        JsonRpcResponse get = service.dispatch("tasks/pushNotificationConfig/get",
+                params(Map.of("id", "t9")), "2");
+        assertThat(get.error()).isNull();
+        assertThat(get.result()).isInstanceOf(TaskPushNotificationConfig.class);
+        TaskPushNotificationConfig cfg = (TaskPushNotificationConfig) get.result();
+        assertThat(cfg.pushNotificationConfig().url()).isEqualTo("https://c/h");
+    }
+
+    @Test
+    void pushConfigGetReturnsNotFoundWhenAbsent() {
+        JsonRpcResponse get = service.dispatch("tasks/pushNotificationConfig/get",
+                params(Map.of("id", "missing")), "1");
+        assertThat(get.result()).isNull();
+        assertThat(get.error().code()).isEqualTo(JsonRpcError.TASK_NOT_FOUND);
     }
 
     @Test

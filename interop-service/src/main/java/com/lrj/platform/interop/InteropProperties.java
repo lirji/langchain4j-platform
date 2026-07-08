@@ -9,8 +9,11 @@ import java.time.Duration;
 public class InteropProperties {
 
     private String agentBaseUrl = "http://localhost:8085";
+    private String conversationBaseUrl = "http://localhost:8081";
     private Duration connectTimeout = Duration.ofSeconds(1);
     private Duration readTimeout = Duration.ofSeconds(30);
+    /** conversation /chat/stream 代理的读超时；须大于 A2A 流式 emitter 超时，避免中途截断。 */
+    private Duration streamReadTimeout = Duration.ofSeconds(120);
 
     /**
      * live capability discovery 开关。默认关（false）—— 保持静态 registry 行为、零下游依赖，
@@ -33,6 +36,14 @@ public class InteropProperties {
         this.agentBaseUrl = agentBaseUrl;
     }
 
+    public String getConversationBaseUrl() {
+        return conversationBaseUrl;
+    }
+
+    public void setConversationBaseUrl(String conversationBaseUrl) {
+        this.conversationBaseUrl = conversationBaseUrl;
+    }
+
     public Duration getConnectTimeout() {
         return connectTimeout;
     }
@@ -47,6 +58,14 @@ public class InteropProperties {
 
     public void setReadTimeout(Duration readTimeout) {
         this.readTimeout = readTimeout;
+    }
+
+    public Duration getStreamReadTimeout() {
+        return streamReadTimeout;
+    }
+
+    public void setStreamReadTimeout(Duration streamReadTimeout) {
+        this.streamReadTimeout = streamReadTimeout;
     }
 
     public boolean isDiscoveryEnabled() {
@@ -83,6 +102,20 @@ public class InteropProperties {
         private String baseUrl = "http://localhost:8080";
         private String version = "0.1.0";
 
+        /** push 中继回调基址：agent 任务终态 webhook 回到 interop 自己（内网直连、不经 edge-gateway）。 */
+        private String pushCallbackBaseUrl = "http://localhost:8088";
+        /** A2A push 回推客户端时的 HMAC 签名密钥；空则不签名（{@code X-Webhook-Signature} 不发）。 */
+        private String pushHmacSecret = "";
+        private Duration pushConnectTimeout = Duration.ofSeconds(2);
+        private Duration pushReadTimeout = Duration.ofSeconds(10);
+        private int pushMaxRetries = 2;
+        private Duration pushBackoff = Duration.ofMillis(500);
+
+        /** 完整 push 回调 URL（供 message/send 作 agent 任务的 webhookUrl）。 */
+        public String getPushCallbackUrl() {
+            return pushCallbackBaseUrl + "/interop/a2a/push-callback";
+        }
+
         public String getAgentName() {
             return agentName;
         }
@@ -113,6 +146,54 @@ public class InteropProperties {
 
         public void setVersion(String version) {
             this.version = version;
+        }
+
+        public String getPushCallbackBaseUrl() {
+            return pushCallbackBaseUrl;
+        }
+
+        public void setPushCallbackBaseUrl(String pushCallbackBaseUrl) {
+            this.pushCallbackBaseUrl = pushCallbackBaseUrl;
+        }
+
+        public String getPushHmacSecret() {
+            return pushHmacSecret;
+        }
+
+        public void setPushHmacSecret(String pushHmacSecret) {
+            this.pushHmacSecret = pushHmacSecret;
+        }
+
+        public Duration getPushConnectTimeout() {
+            return pushConnectTimeout;
+        }
+
+        public void setPushConnectTimeout(Duration pushConnectTimeout) {
+            this.pushConnectTimeout = pushConnectTimeout;
+        }
+
+        public Duration getPushReadTimeout() {
+            return pushReadTimeout;
+        }
+
+        public void setPushReadTimeout(Duration pushReadTimeout) {
+            this.pushReadTimeout = pushReadTimeout;
+        }
+
+        public int getPushMaxRetries() {
+            return pushMaxRetries;
+        }
+
+        public void setPushMaxRetries(int pushMaxRetries) {
+            this.pushMaxRetries = pushMaxRetries;
+        }
+
+        public Duration getPushBackoff() {
+            return pushBackoff;
+        }
+
+        public void setPushBackoff(Duration pushBackoff) {
+            this.pushBackoff = pushBackoff;
         }
     }
 }

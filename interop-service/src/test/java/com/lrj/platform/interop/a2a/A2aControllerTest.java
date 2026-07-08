@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lrj.platform.interop.InteropProperties;
 import com.lrj.platform.protocol.agent.AgentTaskView;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.Map;
@@ -16,8 +17,14 @@ class A2aControllerTest {
     private final ObjectMapper json = new ObjectMapper();
 
     private A2aController controller(A2aAgentGateway gateway) {
-        A2aService service = new A2aService(gateway, new A2aTaskMapper(), new InteropProperties(), json);
-        return new A2aController(service);
+        A2aTaskMapper mapper = new A2aTaskMapper();
+        A2aService service = new A2aService(
+                gateway, mapper, new InteropProperties(), json, new A2aPushNotificationStore());
+        A2aStreamService streamService = new A2aStreamService(
+                (chatId, message, onToken, onDone, onError) -> onDone.run(),
+                (taskId, onUpdate, onDone, onError) -> onDone.run(),
+                gateway, mapper, json, Runnable::run);
+        return new A2aController(service, streamService, json);
     }
 
     @Test
@@ -40,7 +47,7 @@ class A2aControllerTest {
                         "role", "user",
                         "parts", List.of(Map.of("kind", "text", "text", "hello"))))));
 
-        JsonRpcResponse response = controller(gateway).handle(body);
+        JsonRpcResponse response = (JsonRpcResponse) controller(gateway).handle(body);
 
         assertThat(response.id()).isEqualTo(7L);
         assertThat(gateway.lastChat).isEqualTo("hello");
@@ -48,10 +55,41 @@ class A2aControllerTest {
     }
 
     @Test
+    void handleReturnsSseEmitterForMessageStream() {
+        var body = json.valueToTree(Map.of(
+                "jsonrpc", "2.0",
+                "id", 1,
+                "method", "message/stream",
+                "params", Map.of("message", Map.of(
+                        "role", "user",
+                        "parts", List.of(Map.of("kind", "text", "text", "hello"))))));
+
+        Object result = controller(new FakeGateway()).handle(body);
+
+        assertThat(result).isInstanceOf(SseEmitter.class);
+    }
+
+    @Test
+    void handleRejectsBlankMessageStream() {
+        var body = json.valueToTree(Map.of(
+                "jsonrpc", "2.0",
+                "id", 1,
+                "method", "message/stream",
+                "params", Map.of("message", Map.of(
+                        "role", "user",
+                        "parts", List.of(Map.of("kind", "text", "text", "   "))))));
+
+        Object result = controller(new FakeGateway()).handle(body);
+
+        assertThat(result).isInstanceOf(JsonRpcResponse.class);
+        assertThat(((JsonRpcResponse) result).error().code()).isEqualTo(JsonRpcError.INVALID_PARAMS);
+    }
+
+    @Test
     void handleRejectsMissingMethod() {
         var body = json.valueToTree(Map.of("jsonrpc", "2.0", "id", "abc"));
 
-        JsonRpcResponse response = controller(new FakeGateway()).handle(body);
+        JsonRpcResponse response = (JsonRpcResponse) controller(new FakeGateway()).handle(body);
 
         assertThat(response.id()).isEqualTo("abc");
         assertThat(response.error().code()).isEqualTo(JsonRpcError.INVALID_REQUEST);

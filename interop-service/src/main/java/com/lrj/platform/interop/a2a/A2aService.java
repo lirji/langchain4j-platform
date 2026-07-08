@@ -3,7 +3,9 @@ package com.lrj.platform.interop.a2a;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lrj.platform.interop.InteropProperties;
+import com.lrj.platform.interop.a2a.MessageSendParams.PushNotificationConfig;
 import com.lrj.platform.protocol.agent.AgentTaskView;
+import com.lrj.platform.security.TenantContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -33,15 +35,18 @@ public class A2aService {
     private final A2aTaskMapper mapper;
     private final InteropProperties props;
     private final ObjectMapper json;
+    private final A2aPushNotificationStore pushStore;
 
     public A2aService(A2aAgentGateway gateway,
                       A2aTaskMapper mapper,
                       InteropProperties props,
-                      ObjectMapper json) {
+                      ObjectMapper json,
+                      A2aPushNotificationStore pushStore) {
         this.gateway = gateway;
         this.mapper = mapper;
         this.props = props;
         this.json = json;
+        this.pushStore = pushStore;
     }
 
     /** 非流式方法分派。 */
@@ -51,6 +56,8 @@ public class A2aService {
                 case "message/send" -> handleMessageSend(params, id);
                 case "tasks/get" -> handleTaskGet(params, id);
                 case "tasks/cancel" -> handleTaskCancel(params, id);
+                case "tasks/pushNotificationConfig/set" -> handlePushConfigSet(params, id);
+                case "tasks/pushNotificationConfig/get" -> handlePushConfigGet(params, id);
                 default -> JsonRpcResponse.error(id, JsonRpcError.methodNotFound(method));
             };
         } catch (IllegalArgumentException e) {
@@ -78,12 +85,17 @@ public class A2aService {
         String text = msg.textContent();
 
         if (SKILL_RESEARCH.equals(skill)) {
-            // 异步：代理到 agent-service /agent/run/async，返回 A2A Task（submitted/working）
-            String webhookUrl = pushUrl(p);
-            AgentTaskView task = gateway.submitTask(text, webhookUrl);
+            // 异步：代理到 agent-service /agent/run/async，返回 A2A Task（submitted/working）。
+            // webhook 一律指向 interop 自己的 push 回调（而非客户端 URL）：终态由 A2aPushForwarder 按 A2A
+            // 信封中继。这样即便 push 配置晚于 send 通过 tasks/pushNotificationConfig/set 登记，也能生效。
+            AgentTaskView task = gateway.submitTask(text, props.getA2a().getPushCallbackUrl());
             if (task == null) {
                 return JsonRpcResponse.error(id, JsonRpcError.of(JsonRpcError.INTERNAL_ERROR,
                         "agent-service did not return a task"));
+            }
+            PushNotificationConfig push = pushConfig(p);
+            if (push != null && push.url() != null && !push.url().isBlank()) {
+                pushStore.put(TenantContext.current().tenantId(), task.taskId(), push);
             }
             return JsonRpcResponse.success(id, mapper.toA2aTask(task));
         }
@@ -153,7 +165,7 @@ public class A2aService {
                 props.getA2a().getBaseUrl() + "/interop/a2a",
                 props.getA2a().getVersion(),
                 "0.2.0",
-                new A2aAgentCard.Capabilities(false, false, false),
+                new A2aAgentCard.Capabilities(true, true, false),
                 text, text,
                 List.of(chat, research),
                 Map.of("apiKey", new A2aAgentCard.SecurityScheme(
@@ -172,12 +184,36 @@ public class A2aService {
         return SKILL_CHAT;
     }
 
-    private static String pushUrl(MessageSendParams p) {
-        if (p == null || p.configuration() == null || p.configuration().pushNotificationConfig() == null) {
+    // —— tasks/pushNotificationConfig/set|get（A2A 规范方法，登记/查询 push 回调配置）——
+
+    private JsonRpcResponse handlePushConfigSet(JsonNode params, Object id) {
+        TaskPushNotificationConfig p = parse(params, TaskPushNotificationConfig.class);
+        if (p == null || p.taskId() == null || p.taskId().isBlank()) {
+            throw new IllegalArgumentException("taskId is required");
+        }
+        PushNotificationConfig cfg = p.pushNotificationConfig();
+        if (cfg == null || cfg.url() == null || cfg.url().isBlank()) {
+            throw new IllegalArgumentException("pushNotificationConfig.url is required");
+        }
+        pushStore.put(TenantContext.current().tenantId(), p.taskId(), cfg);
+        return JsonRpcResponse.success(id, p);
+    }
+
+    private JsonRpcResponse handlePushConfigGet(JsonNode params, Object id) {
+        TaskQueryParams p = parse(params, TaskQueryParams.class);
+        if (p == null || p.id() == null) {
+            throw new IllegalArgumentException("id is required");
+        }
+        return pushStore.get(TenantContext.current().tenantId(), p.id())
+                .map(cfg -> JsonRpcResponse.success(id, new TaskPushNotificationConfig(p.id(), cfg)))
+                .orElseGet(() -> JsonRpcResponse.error(id, JsonRpcError.taskNotFound(p.id())));
+    }
+
+    private static PushNotificationConfig pushConfig(MessageSendParams p) {
+        if (p == null || p.configuration() == null) {
             return null;
         }
-        String url = p.configuration().pushNotificationConfig().url();
-        return (url != null && !url.isBlank()) ? url : null;
+        return p.configuration().pushNotificationConfig();
     }
 
     private static boolean isTerminal(String status) {

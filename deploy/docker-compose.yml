@@ -260,6 +260,9 @@ services:
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
       AGENT_BASE_URL: http://agent-service:8085
+      CONVERSATION_BASE_URL: http://conversation-service:8081
+      # A2A push 中继回调回到自身（容器内服务名）；agent 任务终态 webhook 打到这里再转发 A2A 客户端
+      INTEROP_A2A_PUSH_CALLBACK_BASE_URL: http://interop-service:8088
     depends_on:
       - agent-service
     ports:
