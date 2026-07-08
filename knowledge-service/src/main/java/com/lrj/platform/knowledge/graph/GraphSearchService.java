@@ -1,15 +1,18 @@
 package com.lrj.platform.knowledge.graph;
 
 import com.lrj.platform.security.TenantContext;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Set;
 
+// 与 GraphRagConfig（及其 GraphStore bean）同属性 gate，取代 @ConditionalOnBean(GraphStore)：
+// @ConditionalOnBean 用在组件扫描的 @Service 上对 @Bean 的注册顺序敏感、不可靠
+// （Spring 官方仅推荐用于自动配置类），曾导致 graph 开启时本 bean 偶发缺失、GraphController 装配失败、knowledge-service 启动失败。
 @Service
-@ConditionalOnBean(GraphStore.class)
+@ConditionalOnProperty(name = "app.rag.graph.enabled", havingValue = "true")
 public class GraphSearchService {
 
     private final GraphStore graphStore;

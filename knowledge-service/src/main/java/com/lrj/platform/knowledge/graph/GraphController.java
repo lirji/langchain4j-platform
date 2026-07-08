@@ -1,6 +1,6 @@
 package com.lrj.platform.knowledge.graph;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -12,7 +12,8 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/rag/graph")
-@ConditionalOnBean(GraphSearchService.class)
+// 与 GraphSearchService 同属性 gate，取代 @ConditionalOnBean（组件扫描下顺序不可靠，会随机启动失败）。
+@ConditionalOnProperty(name = "app.rag.graph.enabled", havingValue = "true")
 public class GraphController {
 
     private final GraphSearchService graphSearchService;
