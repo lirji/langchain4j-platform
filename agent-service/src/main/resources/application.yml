@@ -69,6 +69,12 @@ app:
     analytics:
       base-url: ${ANALYTICS_BASE_URL:http://localhost:8083}
       enabled: ${AGENT_ANALYTICS_ENABLED:true}
+    # 业务流程智能体（workflow-service）。默认关：不配则 refund_start/workflow_status/workflow_tasks 动作、
+    # /agent/process 端点、workflow RestTemplate/客户端都不装配。read-timeout 放宽——refund/start 同步跑两次 LLM。
+    workflow:
+      enabled: ${AGENT_WORKFLOW_ENABLED:false}
+      base-url: ${WORKFLOW_BASE_URL:http://localhost:8082}
+      read-timeout: ${AGENT_WORKFLOW_READ_TIMEOUT:60s}
     http:
       connect-timeout: ${AGENT_HTTP_CONNECT_TIMEOUT:1s}
       read-timeout: ${AGENT_HTTP_READ_TIMEOUT:5s}

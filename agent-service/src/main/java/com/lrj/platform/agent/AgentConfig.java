@@ -2,6 +2,7 @@ package com.lrj.platform.agent;
 
 import com.lrj.platform.observability.OutboundTraceForwarder;
 import com.lrj.platform.agent.analyst.DataAnalystPlanner;
+import com.lrj.platform.agent.process.ProcessPlanner;
 import com.lrj.platform.agent.chaining.ChainLink;
 import com.lrj.platform.agent.chaining.ChainingProperties;
 import com.lrj.platform.agent.dag.AgentDagCritic;
@@ -103,6 +104,14 @@ public class AgentConfig {
     }
 
     @Bean
+    @ConditionalOnProperty(name = "app.agent.workflow.enabled", havingValue = "true")
+    ProcessPlanner processPlanner(ChatModel chatModel) {
+        // 业务流程智能体专用 planner：把流程诉求拆成「发起→查询→汇报」子任务（人在环），喂给现有 DAG 引擎。
+        // 类级已门控 app.agent.enabled，这里补 workflow.enabled 单门控即等价于默认关双门控。
+        return AiServices.builder(ProcessPlanner.class).chatModel(chatModel).build();
+    }
+
+    @Bean
     AgentDagCritic agentDagCritic(ChatModel chatModel) {
         return AiServices.builder(AgentDagCritic.class).chatModel(chatModel).build();
     }
@@ -149,6 +158,22 @@ public class AgentConfig {
                                     @Value("${app.agent.vision.base-url:http://localhost:8090}") String baseUrl,
                                     @Value("${app.agent.http.connect-timeout:1s}") Duration connectTimeout,
                                     @Value("${app.agent.vision.read-timeout:60s}") Duration readTimeout) {
+        return serviceRestTemplate(builder, tenantForwarder, traceForwarder, baseUrl, connectTimeout, readTimeout);
+    }
+
+    /**
+     * workflow-service 客户端（业务流程智能体发起/查询退款审批）。读超时放宽到 60s——
+     * {@code /workflow/refund/start} 同步跑 assess/resolve 两次 LLM ServiceTask，比普通 REST 慢。
+     * 默认关（workflow.enabled）；类级已门控 agent.enabled。
+     */
+    @Bean
+    @ConditionalOnProperty(name = "app.agent.workflow.enabled", havingValue = "true")
+    RestTemplate workflowRestTemplate(RestTemplateBuilder builder,
+                                      OutboundTenantForwarder tenantForwarder,
+                                      OutboundTraceForwarder traceForwarder,
+                                      @Value("${app.agent.workflow.base-url:http://localhost:8082}") String baseUrl,
+                                      @Value("${app.agent.http.connect-timeout:1s}") Duration connectTimeout,
+                                      @Value("${app.agent.workflow.read-timeout:60s}") Duration readTimeout) {
         return serviceRestTemplate(builder, tenantForwarder, traceForwarder, baseUrl, connectTimeout, readTimeout);
     }
 

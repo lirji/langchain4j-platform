@@ -16,12 +16,14 @@
 | 深度 Agent（ReAct） | `POST /agent/run`、`/agent/run/async` + `/agent/tasks/**` | agent :8085 | 常开（`AGENT_ENABLED=true`） |
 | DAG 多 Agent | `POST /agent/dag/run`、`/agent/dag/plan-run`（各带 `/async`） | agent :8085 | 常开；replan 默认关 |
 | 数据分析智能体（DAG 特化） | `POST /agent/analyst/run`（+`/async`） | agent :8085 | 常开；需 analytics `NL2SQL_ENABLED=true` 才能真取数 |
+| 业务流程智能体（DAG 特化，人在环） | `POST /agent/process/run`（+`/async`） | agent :8085 | **默认关**（`AGENT_WORKFLOW_ENABLED=true`），需 workflow `WORKFLOW_ENABLED=true` |
 | Reflexion 自省 | `POST /agent/reflexive`、`/agent/reflexive/stream` | agent :8085 | 常开 |
 | Voting 投票共识 | `POST /agent/vote` | agent :8085 | 常开（n=3，majority） |
 | Prompt Chaining | `POST /agent/chain` | agent :8085 | 端点常开，但 `steps` 默认空需先配置 |
 | Model Cascade | `POST /chat/cascade` | conversation :8081 | 默认关（`CHAT_CASCADE_ENABLED=false`） |
 | 异步任务 + SSE | `/agent/run/async`、`/agent/dag/**/async`、`/agent/tasks/{id}/stream` | agent :8085 | 常开 |
 | 动作 rag_search / analytics_sql / schema_explore / current_time | ReAct 内部工具 | agent :8085 | 常开 |
+| 动作 refund_start / workflow_status / workflow_tasks | ReAct 内部工具 | agent :8085 | 默认关（`AGENT_WORKFLOW_ENABLED=false`） |
 | 动作 code_exec | ReAct 内部工具 | agent :8085 | 默认关（`AGENT_CODE_EXEC_ENABLED=false`） |
 | 动作 mcp_call | ReAct 内部工具 | agent :8085 | 默认关（`AGENT_MCP_ENABLED=false`） |
 | 动作 browser_open/click/click_xy/type/screenshot | ReAct 内部工具 | agent :8085 | 默认关（`AGENT_BROWSER_ENABLED=false`） |
@@ -182,6 +184,29 @@ curl -s -X POST 'http://localhost:8080/agent/analyst/run/async' \
 ```bash
 curl -s 'http://localhost:8080/analytics/schema/tables' -H 'X-Api-Key: dev-key-acme'
 curl -s 'http://localhost:8080/analytics/schema/tables/orders' -H 'X-Api-Key: dev-key-acme'
+```
+
+### 业务流程智能体（process）—— `/agent/process/run`（默认关）
+
+业务流程智能体也是 DAG 特化：专用 `ProcessPlanner` 把「帮我发起退款并跟进」这类诉求拆成「发起 → 查状态 → 如实汇报」子任务，worker 用 `refund_start` / `workflow_status` / `workflow_tasks` 动作驱动 workflow-service（`:8082`）。
+
+**人在环治理（load-bearing）**：
+- 智能体只能**发起 / 查询 / 汇报**，**绝不自动审批**——不提供 `workflow_complete` 动作；approve/reject 由具备 `approve` scope 的人走 `POST /workflow/tasks/{taskId}/complete`。
+- 高风险退款返回 `WAITING_APPROVAL`，`refund_start` 会如实标注「已转人工、尚未批准」；ProcessPlanner 的系统提示词硬性要求智能体不得声称已批准。
+- `refund_start` 经内部 JWT 透传调用方的租户与 `scope`，`workflow_tasks` 等审批相关调用天然受 `approve` 约束（无权限 → workflow-service 403 → 动作翻译成中文提示），智能体不越权。
+- 智能体只在**流程外**编排（发起/查询/汇报），不把推理塞进 Flowable 同步 ServiceTask（那会阻塞事务）；流程内的 assess/resolve LLM 决策由 workflow-service 自己承担。
+
+默认关（有副作用）：需 `AGENT_WORKFLOW_ENABLED=true`（agent 侧）+ `WORKFLOW_ENABLED=true`（workflow 侧，其 assess/resolve 还会调 conversation-service）。workflow 客户端读超时默认放宽到 60s（`refund/start` 同步跑两次 LLM ServiceTask）。
+
+```bash
+curl -s -X POST 'http://localhost:8080/agent/process/run' \
+  -H 'X-Api-Key: dev-key-acme' -H 'Content-Type: application/json' \
+  -d '{"goal":"客户张三要退订单 O123 的 5000 元，帮我发起并告诉我进展"}'
+
+# 异步变体：SSE 复用 /agent/tasks/{taskId}/stream
+curl -s -X POST 'http://localhost:8080/agent/process/run/async' \
+  -H 'X-Api-Key: dev-key-acme' -H 'Content-Type: application/json' \
+  -d '{"goal":"查一下有哪些待我审批的退款"}'
 ```
 
 ---
@@ -405,6 +430,26 @@ mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install
 
 - 依赖 `AnalyticsClient`（与 `analytics_sql` 共用；Http/Noop 兜底），只门控 `app.agent.enabled`。
 - 实际数据来自 analytics-service 的只读探表端点 `GET /analytics/schema/tables`、`GET /analytics/schema/tables/{table}`（受 `NL2SQL_ENABLED` 门控、只暴露白名单表结构，非白名单 404）。`NL2SQL_ENABLED=false` 时动作会被 Noop 兜底降级为「analytics action disabled」，不影响启动。
+
+---
+
+### 7.9 refund_start / workflow_status / workflow_tasks —— 业务流程（默认关）
+
+业务流程智能体的三个动作，双门控 `{app.agent.enabled, app.agent.workflow.enabled}` 默认关（有副作用，不进通用工具集，防误发起退款）。经带租户/trace 透传的 `workflowRestTemplate` 调 workflow-service（`:8082`）。
+
+| 动作 | 说明 | 权限 |
+|---|---|---|
+| `refund_start` | 发起退款审批流程，`actionInput`=用户诉求原文；返回 `COMPLETED`（自动受理）或 `WAITING_APPROVAL`（转人工，带 taskId） | 任意已认证 |
+| `workflow_status` | 查实例状态与最终答复，`actionInput`=instanceId | 任意已认证（租户隔离） |
+| `workflow_tasks` | 列本租户待审批任务 | 需 `approve` scope，无则 403 → 翻译成中文提示 |
+
+**不提供 `workflow_complete`（审批）动作**——审批是不可逆高风险操作，须由人在流程外完成。`AGENT_WORKFLOW_ENABLED=false` 时对应 `NoopWorkflowClient` 兜底降级为「workflow action disabled」，不影响启动。
+
+| 属性（`app.agent.workflow.*`） | 环境变量 | 默认 |
+|---|---|---|
+| `enabled` | `AGENT_WORKFLOW_ENABLED` | `false` |
+| `base-url` | `WORKFLOW_BASE_URL` | `http://localhost:8082` |
+| `read-timeout`（refund/start 同步跑两次 LLM，放宽） | `AGENT_WORKFLOW_READ_TIMEOUT` | `60s` |
 
 ---
 

@@ -35,7 +35,7 @@ client ──X-Api-Key──▶ edge-gateway (Spring Cloud Gateway)
 | `workflow-service` | 服务 | `/workflow/**` Flowable 退款审批流 + outbox |
 | `analytics-service` | 服务 | `/chat/sql`、`/analytics/sql` NL2SQL / ChatBI；`/analytics/schema/tables`(+`/{table}`) 按需探表（供数据分析智能体） |
 | `knowledge-service` | 服务 | `/rag/documents/**` 文档上传/列表/删除 + `/rag/query` 向量+keyword hybrid（可选 rerank / query-expansion / contextual / HanLP 分词）；`/rag/image*` CLIP 多模态；`/rag/graph/**` GraphRAG；`/rag/obsidian/import` Obsidian 导入 |
-| `agent-service` | 服务 | `/agent/run`(+`/async`) 深度 Agent 编排 + `/agent/tasks/**` SSE；`/agent/dag/**` 多 Agent DAG（含自动规划/重规划）；`/agent/analyst/run`(+`/async`) 数据分析智能体（DAG 编排：探表→取数→计算→解读）；`/agent/chain` 提示词链、`/agent/vote` 投票自一致、`/agent/reflexive`(+`/stream`) Reflexion 自反思；动作跨服务调用 knowledge / analytics / vision |
+| `agent-service` | 服务 | `/agent/run`(+`/async`) 深度 Agent 编排 + `/agent/tasks/**` SSE；`/agent/dag/**` 多 Agent DAG（含自动规划/重规划）；`/agent/analyst/run`(+`/async`) 数据分析智能体（DAG 编排：探表→取数→计算→解读）；`/agent/process/run`(+`/async`) 业务流程智能体（人在环，默认关）；`/agent/chain` 提示词链、`/agent/vote` 投票自一致、`/agent/reflexive`(+`/stream`) Reflexion 自反思；动作跨服务调用 knowledge / analytics / vision |
 | `async-task-service` | 服务 | `/async/tasks/**` 通用任务状态、SSE 断点续订、取消与 webhook 通知中心；后续 agent/workflow 会逐步切到该服务 |
 | `channel-service` | 服务 | `/channel/**` 渠道 ACL：webhook/Feishu/voice 出站、async-task/workflow callback、出入站签名校验；`/channel/dingtalk/events`·`/channel/feishu/events` 入站客服桥；可选 Kafka event |
 | `interop-service` | 服务 | `/interop/**` A2A（`message/send`、`message/stream` 真 SSE、push 通知中继 `/interop/a2a/push-callback`、`/.well-known/agent-card.json`）、MCP tool surface，并可代理 agent run/async/DAG 能力 |
@@ -424,6 +424,23 @@ curl -s 'http://localhost:8080/analytics/schema/tables/orders' -H 'X-Api-Key: de
 ```
 
 精确的跨行计算（占比 / 环比等）建议再开 `AGENT_CODE_EXEC_ENABLED=true`，否则计算子任务会退化为模型推理估算。
+
+### 业务流程智能体 —— `/agent/process/run`（默认关，人在环）
+
+业务流程智能体同样建在 DAG 编排上：专用 Planner 把「帮我发起退款并跟进」这类诉求拆成「发起 → 查状态 → 如实汇报」子任务，worker 调用 `refund_start`（发起退款审批流）、`workflow_status`（查实例）、`workflow_tasks`（列待办，需审批权限）动作驱动 workflow-service。**人在环治理**：智能体只发起 / 查询 / 汇报，高风险（`WAITING_APPROVAL`）会如实告知「需人工审批、尚未批准」；**不提供自动审批**——approve/reject 仍由具备 `approve` scope 的人走 `POST /workflow/tasks/{id}/complete`。智能体只在流程外编排，不进 Flowable 同步 ServiceTask。
+
+有副作用，默认关，需 workflow-service 与 agent 侧开关同时打开：
+
+```bash
+# workflow-service：WORKFLOW_ENABLED=true（其 assess/resolve 环节还会调 conversation-service）
+# agent-service：AGENT_WORKFLOW_ENABLED=true（workflow 客户端读超时默认放宽到 60s）
+curl -s -X POST 'http://localhost:8080/agent/process/run' \
+  -H 'X-Api-Key: dev-key-acme' \
+  -H 'Content-Type: application/json' \
+  -d '{"goal":"客户张三要退订单 O123 的 5000 元，帮我发起并告诉我进展"}'
+```
+
+`refund_start` 经内部 JWT 透传调用方的租户与 scope，因此 `workflow_tasks` 等审批相关操作天然受 `approve` scope 约束（无权限返回被翻译成中文提示），智能体不越权。
 
 除 ReAct / DAG 外，agent-service 还提供三种轻量编排模式：`/agent/chain` 提示词链式串联、`/agent/vote` 多候选投票取自一致答案、`/agent/reflexive`（及 `/agent/reflexive/stream` SSE）Reflexion 自我反思后重试：
 
