@@ -8,6 +8,8 @@ services:
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
+      # chat-default 主目标 = DeepSeek（云端，OpenAI 兼容）。key 取自宿主环境变量，不落盘。
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
     volumes:
       - ./litellm/config.yaml:/app/config.yaml:ro
     ports:
