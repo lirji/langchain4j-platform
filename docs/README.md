@@ -45,6 +45,7 @@
 - [成本归因与配额指南](平台工程/cost-attribution.md)：per-tenant USD 成本归因 + token 预算，redis 默认的分布式计数（水平扩容正确性）、`/actuator/{tokenbudget,cost}`。
 - [评测指南](平台工程/eval-guide.md)：eval-service `/eval/**` 回归客户端、检索召回评测（Recall@k/MRR/Hit@k）、baseline suite、对冻结单体双跑 oracle 门禁。
 - [部署指南](平台工程/deployment-guide.md)：本地 docker-compose、k8s/Helm 伞状 chart、External Secrets、Service DNS、Config Server。
+- [数据存储清单](参考/databases.md)：MySQL/Redis/Qdrant/Kafka/H2 的端口、账号密码、所属服务与落库开关；含可选向量库（pgvector/milvus/chroma/doris）。
 
 ## 当前定位
 
