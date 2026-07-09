@@ -9,8 +9,11 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -28,19 +31,34 @@ public class SchemaProvider {
     private static final Logger log = LoggerFactory.getLogger(SchemaProvider.class);
 
     private final String schemaText;
+    /** 内省成功的白名单表名（保持配置顺序），供探表端点「列表」用。 */
+    private final List<String> tableNames = new ArrayList<>();
+    /** 表名（小写）→ 该表字段块文本，供探表端点「按需 describe 单表」用。 */
+    private final Map<String, String> perTableBlock = new LinkedHashMap<>();
 
     public SchemaProvider(DataSource adminDataSource, Nl2SqlProperties props) {
+        // build() 顺带填充 tableNames / perTableBlock（字段初始化器已先于此运行）。
         this.schemaText = build(adminDataSource, props);
-        log.info("NL2SQL schema 内省完成，暴露 {} 张表", props.getAllowTables().size());
+        log.info("NL2SQL schema 内省完成，暴露 {} 张表", tableNames.size());
     }
 
     public String schemaText() {
         return schemaText;
     }
 
+    /** 当前可查询（内省成功的白名单）表名。 */
+    public List<String> tableNames() {
+        return List.copyOf(tableNames);
+    }
+
+    /** 单张表的字段块文本；非白名单/未内省到的表返回 {@code null}（探表端点据此 404）。 */
+    public String describe(String table) {
+        return table == null ? null : perTableBlock.get(table.toLowerCase(Locale.ROOT));
+    }
+
     private String build(DataSource ds, Nl2SqlProperties props) {
         JdbcTemplate jdbc = new JdbcTemplate(ds);
-        StringBuilder sb = new StringBuilder();
+        StringBuilder all = new StringBuilder();
         try (Connection conn = ds.getConnection()) {
             DatabaseMetaData meta = conn.getMetaData();
             for (String table : props.getAllowTables()) {
@@ -49,24 +67,30 @@ public class SchemaProvider {
                     log.warn("NL2SQL 白名单表 '{}' 内省不到列（不存在或大小写不匹配），schema 跳过", table);
                     continue;
                 }
-                sb.append("Table ").append(table).append('\n');
+                StringBuilder block = new StringBuilder();
+                block.append("Table ").append(table).append('\n');
                 Set<String> colNames = new LinkedHashSet<>();
                 for (String[] c : cols) colNames.add(c[0].toLowerCase());
                 for (String[] c : cols) {
-                    sb.append("  - ").append(c[0]).append(' ').append(c[1]);
+                    block.append("  - ").append(c[0]).append(' ').append(c[1]);
                     if (c[2] != null && !c[2].isBlank()) {
-                        sb.append("  -- ").append(c[2].trim());
+                        block.append("  -- ").append(c[2].trim());
                     }
-                    appendEnumValues(sb, jdbc, props, table, c[0], colNames);
-                    sb.append('\n');
+                    appendEnumValues(block, jdbc, props, table, c[0], colNames);
+                    block.append('\n');
                 }
-                sb.append('\n');
+                String blockText = block.toString().strip();
+                tableNames.add(table);
+                perTableBlock.put(table.toLowerCase(Locale.ROOT), blockText);
+                all.append(blockText).append("\n\n");
             }
         } catch (Exception e) {
             log.error("NL2SQL schema 内省失败，返回空 schema（端点会因此无法生成有效 SQL）", e);
+            tableNames.clear();
+            perTableBlock.clear();
             return "";
         }
-        return sb.toString().strip();
+        return all.toString().strip();
     }
 
     private List<String[]> columns(DatabaseMetaData meta, String table) throws Exception {

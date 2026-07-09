@@ -33,9 +33,9 @@ client ──X-Api-Key──▶ edge-gateway (Spring Cloud Gateway)
 | `platform-eventbus` | 共享库 | 跨服务事件总线抽象（内存默认，可选 Kafka）；channel 出入站事件走它 |
 | `conversation-service` | 服务 | `/chat`（可选 RAG 增强）+ `/chat/stream` SSE 流式 + `/chat/auto` 意图路由 + `/chat/vision` 视觉对话 + `/chat/mcp` MCP 工具对话 + `/chat/cascade` 级联模型 + `/chat/memory`·`/memory/profile` 长期画像 + `/extract` 结构化抽取；多轮记忆、PII/注入护栏可选开启 |
 | `workflow-service` | 服务 | `/workflow/**` Flowable 退款审批流 + outbox |
-| `analytics-service` | 服务 | `/chat/sql`、`/analytics/sql` NL2SQL / ChatBI |
+| `analytics-service` | 服务 | `/chat/sql`、`/analytics/sql` NL2SQL / ChatBI；`/analytics/schema/tables`(+`/{table}`) 按需探表（供数据分析智能体） |
 | `knowledge-service` | 服务 | `/rag/documents/**` 文档上传/列表/删除 + `/rag/query` 向量+keyword hybrid（可选 rerank / query-expansion / contextual / HanLP 分词）；`/rag/image*` CLIP 多模态；`/rag/graph/**` GraphRAG；`/rag/obsidian/import` Obsidian 导入 |
-| `agent-service` | 服务 | `/agent/run`(+`/async`) 深度 Agent 编排 + `/agent/tasks/**` SSE；`/agent/dag/**` 多 Agent DAG（含自动规划/重规划）；`/agent/chain` 提示词链、`/agent/vote` 投票自一致、`/agent/reflexive`(+`/stream`) Reflexion 自反思；动作跨服务调用 knowledge / analytics / vision |
+| `agent-service` | 服务 | `/agent/run`(+`/async`) 深度 Agent 编排 + `/agent/tasks/**` SSE；`/agent/dag/**` 多 Agent DAG（含自动规划/重规划）；`/agent/analyst/run`(+`/async`) 数据分析智能体（DAG 编排：探表→取数→计算→解读）；`/agent/chain` 提示词链、`/agent/vote` 投票自一致、`/agent/reflexive`(+`/stream`) Reflexion 自反思；动作跨服务调用 knowledge / analytics / vision |
 | `async-task-service` | 服务 | `/async/tasks/**` 通用任务状态、SSE 断点续订、取消与 webhook 通知中心；后续 agent/workflow 会逐步切到该服务 |
 | `channel-service` | 服务 | `/channel/**` 渠道 ACL：webhook/Feishu/voice 出站、async-task/workflow callback、出入站签名校验；`/channel/dingtalk/events`·`/channel/feishu/events` 入站客服桥；可选 Kafka event |
 | `interop-service` | 服务 | `/interop/**` A2A（`message/send`、`message/stream` 真 SSE、push 通知中继 `/interop/a2a/push-callback`、`/.well-known/agent-card.json`）、MCP tool surface，并可代理 agent run/async/DAG 能力 |
@@ -398,6 +398,32 @@ AGENT_DAG_REPLAN_MAX_REPLANS=1
 ```
 
 响应中的 `attempts[]` 会包含每轮 DAG 执行结果、`critique` 和聚合分；`acceptedByThreshold=false` 表示达到重规划上限后仍未过阈值。
+
+### 数据分析智能体 —— `/agent/analyst/run`
+
+数据分析智能体是 DAG 编排的一个「数据分析人设」入口：传一个自然语言数据问题，专用 Planner 把它拆成「探表 → 取数 → 计算 → 解读」子任务并行/依赖执行，最后综合成带 SQL 与数字依据的结论。它复用同一套 DAG 引擎（拓扑分层 / 并行 worker / synthesis / 可选 critic+replan），每个 worker 可调用 `schema_explore`（按需探表）、`analytics_sql`（只读取数）、`code_exec`（精确二次计算，默认关）动作。响应结构同 DAG（`levels` / `taskResults` / `synthesis` / `attempts`）。
+
+```bash
+# 前置：analytics-service 开 NL2SQL（NL2SQL_ENABLED=true），agent-service 常开
+curl -s -X POST 'http://localhost:8080/agent/analyst/run' \
+  -H 'X-Api-Key: dev-key-acme' \
+  -H 'Content-Type: application/json' \
+  -d '{"goal":"上月退款金额 top5 的客户是谁，各退多少，占总退款额多少？"}'
+
+# 异步变体（返回 taskId，SSE 复用 /agent/tasks/{taskId}/stream，可见 dag-planned/dag-worker-*/dag-synthesis-* 进度）
+curl -s -X POST 'http://localhost:8080/agent/analyst/run/async' \
+  -H 'X-Api-Key: dev-key-acme' -H 'Content-Type: application/json' \
+  -d '{"goal":"分析上月各状态退款金额分布"}'
+```
+
+要让智能体自主探索库结构（而不是只依赖 NL2SQL 静态注入的全量 schema），analytics-service 额外暴露两个只读探表端点（同受 `NL2SQL_ENABLED` 门控、只暴露白名单表结构，非白名单表 404）：
+
+```bash
+curl -s 'http://localhost:8080/analytics/schema/tables' -H 'X-Api-Key: dev-key-acme'
+curl -s 'http://localhost:8080/analytics/schema/tables/orders' -H 'X-Api-Key: dev-key-acme'
+```
+
+精确的跨行计算（占比 / 环比等）建议再开 `AGENT_CODE_EXEC_ENABLED=true`，否则计算子任务会退化为模型推理估算。
 
 除 ReAct / DAG 外，agent-service 还提供三种轻量编排模式：`/agent/chain` 提示词链式串联、`/agent/vote` 多候选投票取自一致答案、`/agent/reflexive`（及 `/agent/reflexive/stream` SSE）Reflexion 自我反思后重试：
 

@@ -2,11 +2,14 @@ package com.lrj.platform.agent.client;
 
 import com.lrj.platform.protocol.analytics.AnalyticsSqlReply;
 import com.lrj.platform.protocol.analytics.AnalyticsSqlRequest;
+import com.lrj.platform.protocol.analytics.AnalyticsTableSchemaReply;
+import com.lrj.platform.protocol.analytics.AnalyticsTablesReply;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
@@ -43,6 +46,35 @@ public class HttpAnalyticsClient implements AnalyticsClient {
         } catch (RestClientException ex) {
             log.warn("agent analytics query failed: {}", ex.toString());
             return new Result(question, null, 0, List.of(), null, false, ex.getMessage());
+        }
+    }
+
+    @Override
+    public TablesResult listTables() {
+        try {
+            AnalyticsTablesReply reply = restTemplate.getForObject(
+                    "/analytics/schema/tables", AnalyticsTablesReply.class);
+            return new TablesResult(reply == null ? List.of() : reply.tables(), null);
+        } catch (RestClientException ex) {
+            log.warn("agent list-tables failed: {}", ex.toString());
+            return new TablesResult(List.of(), ex.getMessage());
+        }
+    }
+
+    @Override
+    public TableSchemaResult describeTable(String table) {
+        try {
+            AnalyticsTableSchemaReply reply = restTemplate.getForObject(
+                    "/analytics/schema/tables/{table}", AnalyticsTableSchemaReply.class, table);
+            if (reply == null) {
+                return new TableSchemaResult(table, null, "empty schema response");
+            }
+            return new TableSchemaResult(reply.table(), reply.schema(), null);
+        } catch (HttpClientErrorException.NotFound ex) {
+            return new TableSchemaResult(table, null, "table not found or not allowed: " + table);
+        } catch (RestClientException ex) {
+            log.warn("agent describe-table failed: {}", ex.toString());
+            return new TableSchemaResult(table, null, ex.getMessage());
         }
     }
 }

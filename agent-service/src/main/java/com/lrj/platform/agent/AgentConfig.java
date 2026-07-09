@@ -1,6 +1,7 @@
 package com.lrj.platform.agent;
 
 import com.lrj.platform.observability.OutboundTraceForwarder;
+import com.lrj.platform.agent.analyst.DataAnalystPlanner;
 import com.lrj.platform.agent.chaining.ChainLink;
 import com.lrj.platform.agent.chaining.ChainingProperties;
 import com.lrj.platform.agent.dag.AgentDagCritic;
@@ -93,6 +94,12 @@ public class AgentConfig {
     @Bean
     AgentDagPlanner agentDagPlanner(ChatModel chatModel) {
         return AiServices.builder(AgentDagPlanner.class).chatModel(chatModel).build();
+    }
+
+    @Bean
+    DataAnalystPlanner dataAnalystPlanner(ChatModel chatModel) {
+        // 数据分析智能体专用 planner：把数据问题拆成「探表→取数→计算→解读」子任务，喂给现有 DAG 引擎。
+        return AiServices.builder(DataAnalystPlanner.class).chatModel(chatModel).build();
     }
 
     @Bean

@@ -14,9 +14,20 @@ import java.util.List;
 @ConditionalOnExpression("${app.agent.enabled:true} and !${app.agent.analytics.enabled:true}")
 public class NoopAnalyticsClient implements AnalyticsClient {
 
+    private static final String DISABLED = "analytics action disabled";
+
     @Override
     public Result ask(String question) {
-        return new Result(question, null, 0, List.of(), null, false,
-                "analytics action disabled");
+        return new Result(question, null, 0, List.of(), null, false, DISABLED);
+    }
+
+    @Override
+    public TablesResult listTables() {
+        return new TablesResult(List.of(), DISABLED);
+    }
+
+    @Override
+    public TableSchemaResult describeTable(String table) {
+        return new TableSchemaResult(table, null, DISABLED);
     }
 }

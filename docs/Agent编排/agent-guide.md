@@ -15,12 +15,13 @@
 |---|---|---|---|
 | 深度 Agent（ReAct） | `POST /agent/run`、`/agent/run/async` + `/agent/tasks/**` | agent :8085 | 常开（`AGENT_ENABLED=true`） |
 | DAG 多 Agent | `POST /agent/dag/run`、`/agent/dag/plan-run`（各带 `/async`） | agent :8085 | 常开；replan 默认关 |
+| 数据分析智能体（DAG 特化） | `POST /agent/analyst/run`（+`/async`） | agent :8085 | 常开；需 analytics `NL2SQL_ENABLED=true` 才能真取数 |
 | Reflexion 自省 | `POST /agent/reflexive`、`/agent/reflexive/stream` | agent :8085 | 常开 |
 | Voting 投票共识 | `POST /agent/vote` | agent :8085 | 常开（n=3，majority） |
 | Prompt Chaining | `POST /agent/chain` | agent :8085 | 端点常开，但 `steps` 默认空需先配置 |
 | Model Cascade | `POST /chat/cascade` | conversation :8081 | 默认关（`CHAT_CASCADE_ENABLED=false`） |
 | 异步任务 + SSE | `/agent/run/async`、`/agent/dag/**/async`、`/agent/tasks/{id}/stream` | agent :8085 | 常开 |
-| 动作 rag_search / analytics_sql / current_time | ReAct 内部工具 | agent :8085 | 常开 |
+| 动作 rag_search / analytics_sql / schema_explore / current_time | ReAct 内部工具 | agent :8085 | 常开 |
 | 动作 code_exec | ReAct 内部工具 | agent :8085 | 默认关（`AGENT_CODE_EXEC_ENABLED=false`） |
 | 动作 mcp_call | ReAct 内部工具 | agent :8085 | 默认关（`AGENT_MCP_ENABLED=false`） |
 | 动作 browser_open/click/click_xy/type/screenshot | ReAct 内部工具 | agent :8085 | 默认关（`AGENT_BROWSER_ENABLED=false`） |
@@ -154,6 +155,33 @@ curl -s -X POST 'http://localhost:8080/agent/dag/run' \
 curl -s -X POST 'http://localhost:8080/agent/dag/plan-run' \
   -H 'X-Api-Key: dev-key-acme' -H 'Content-Type: application/json' \
   -d '{"goal":"分析退款审批规则，并给出运营建议"}'
+```
+
+### 数据分析智能体（analyst）—— `/agent/analyst/run`
+
+数据分析智能体是 DAG 的一个「数据分析人设」入口：它不改 DAG 引擎，只是换用一个**数据分析专用 Planner**（`DataAnalystPlanner`），把自然语言数据问题拆成「探表 → 取数 → 计算 → 解读」子任务，再交给同一套 `AgentDagService`（拓扑分层 / 并行 worker / synthesis / 可选 critic+replan）执行。每个 DAG worker 都是一个能调 `schema_explore`（按需探表）、`analytics_sql`（只读取数）、`code_exec`（精确二次计算，默认关）的 ReAct agent。
+
+- 端点：`POST /agent/analyst/run`（同步）、`POST /agent/analyst/run/async`（异步，返回 `202` + `AgentAsyncTask`）。
+- 请求体：`{"goal":"..."}`（异步可带 `webhookUrl`）。响应结构同 DAG：`goal / levels / taskResults / synthesis / attempts / acceptedByThreshold`。
+- 前置：analytics-service 开 `NL2SQL_ENABLED=true`（否则取数动作会被 Noop 兜底降级）；精确跨行计算再开 `AGENT_CODE_EXEC_ENABLED=true`，否则计算子任务退化为模型推理估算。
+- 与直接 `/agent/dag/plan-run` 的区别：analyst 的 Planner 内置了「先探后取、明确工具用法、按维度而非实体拆解」的数据分析规则，省去在 goal 里手写这些约束。
+
+```bash
+curl -s -X POST 'http://localhost:8080/agent/analyst/run' \
+  -H 'X-Api-Key: dev-key-acme' -H 'Content-Type: application/json' \
+  -d '{"goal":"上月退款金额 top5 的客户是谁，各退多少，占总退款额多少？"}'
+
+# 异步：SSE 复用 /agent/tasks/{taskId}/stream，可见 dag-planned / dag-worker-* / dag-synthesis-* 阶段事件
+curl -s -X POST 'http://localhost:8080/agent/analyst/run/async' \
+  -H 'X-Api-Key: dev-key-acme' -H 'Content-Type: application/json' \
+  -d '{"goal":"分析上月各状态退款金额分布"}'
+```
+
+配套的按需探表端点由 analytics-service 提供（同受 `NL2SQL_ENABLED` 门控、只暴露白名单表结构，非白名单表 404）：
+
+```bash
+curl -s 'http://localhost:8080/analytics/schema/tables' -H 'X-Api-Key: dev-key-acme'
+curl -s 'http://localhost:8080/analytics/schema/tables/orders' -H 'X-Api-Key: dev-key-acme'
 ```
 
 ---
@@ -368,6 +396,15 @@ mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install
 | `enabled` | `AGENT_VISION_ENABLED` | `false` |
 | `base-url` | `VISION_BASE_URL` | `http://localhost:8090` |
 | `read-timeout`（视觉调用较慢，放宽） | `AGENT_VISION_READ_TIMEOUT` | `60s` |
+
+---
+
+### 7.8 schema_explore —— 按需探表（常开）
+
+让 Agent「先探后查」探索业务库结构：`actionInput` 留空=列出所有可查（白名单）表；填表名=查看该表字段、类型与枚举取值。据此再用 `analytics_sql` 取数，避免凭空猜列名/中文枚举。是数据分析智能体的关键动作，通用 `/agent/run` 也可用。
+
+- 依赖 `AnalyticsClient`（与 `analytics_sql` 共用；Http/Noop 兜底），只门控 `app.agent.enabled`。
+- 实际数据来自 analytics-service 的只读探表端点 `GET /analytics/schema/tables`、`GET /analytics/schema/tables/{table}`（受 `NL2SQL_ENABLED` 门控、只暴露白名单表结构，非白名单 404）。`NL2SQL_ENABLED=false` 时动作会被 Noop 兜底降级为「analytics action disabled」，不影响启动。
 
 ---
 

@@ -10,9 +10,13 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.springframework.http.HttpMethod.GET;
 import static org.springframework.http.HttpMethod.POST;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+
+import org.springframework.http.HttpStatus;
 
 class HttpAnalyticsClientTest {
 
@@ -72,5 +76,50 @@ class HttpAnalyticsClientTest {
         assertThat(result.rowCount()).isZero();
         assertThat(result.rows()).isEmpty();
         assertThat(result.guardBlocked()).isFalse();
+    }
+
+    @Test
+    void listTables_getsAndParsesTableNames() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
+        server.expect(requestTo("/analytics/schema/tables"))
+                .andExpect(method(GET))
+                .andRespond(withSuccess("{\"tables\":[\"orders\",\"customers\"]}", APPLICATION_JSON));
+
+        AnalyticsClient.TablesResult result = new HttpAnalyticsClient(restTemplate).listTables();
+
+        server.verify();
+        assertThat(result.tables()).containsExactly("orders", "customers");
+        assertThat(result.error()).isNull();
+    }
+
+    @Test
+    void describeTable_getsAndParsesSchema() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
+        server.expect(requestTo("/analytics/schema/tables/orders"))
+                .andExpect(method(GET))
+                .andRespond(withSuccess(
+                        "{\"table\":\"orders\",\"schema\":\"Table orders\\n  - id BIGINT\"}", APPLICATION_JSON));
+
+        AnalyticsClient.TableSchemaResult result = new HttpAnalyticsClient(restTemplate).describeTable("orders");
+
+        server.verify();
+        assertThat(result.table()).isEqualTo("orders");
+        assertThat(result.schema()).contains("Table orders");
+        assertThat(result.error()).isNull();
+    }
+
+    @Test
+    void describeTable_notFoundReturnsError() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
+        server.expect(requestTo("/analytics/schema/tables/secret"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        AnalyticsClient.TableSchemaResult result = new HttpAnalyticsClient(restTemplate).describeTable("secret");
+
+        assertThat(result.schema()).isNull();
+        assertThat(result.error()).contains("not found");
     }
 }
