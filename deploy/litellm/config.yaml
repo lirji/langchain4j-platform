@@ -7,6 +7,16 @@ model_list:
     litellm_params:
       model: deepseek/deepseek-chat
       api_key: os.environ/DEEPSEEK_API_KEY
+  # 多模态视觉模型：走本机 Ollama 的 OpenAI 兼容端点（/v1）。供 vision-service 的 app.vision.model-name（VISION_MODEL）引用。
+  # DeepSeek 不支持视觉，故 vision 单独走此逻辑名；与文本共用同一 base-url，仅逻辑模型名不同。
+  # 关键：走 openai/ provider 直连 Ollama /v1（透传 image_url base64），绕开 litellm 的 ollama/ 图片转换路径
+  # （该路径依赖 Pillow，litellm 官方镜像未装，用 ollama/ 会报 "ollama image conversion failed please run pip install Pillow"）。
+  # 换模型只改 model 里的名字（需先 `ollama pull <model>`，如 qwen2.5vl / llava；qwen2.5vl 中文看图更好），且本机 Ollama 在 :11434 运行。
+  - model_name: vision-default
+    litellm_params:
+      model: openai/qwen2.5vl
+      api_base: http://host.docker.internal:11434/v1
+      api_key: ollama          # Ollama 忽略鉴权，但 openai 客户端要求非空 key，占位即可
   # 其它 provider 示例（取消注释并配 key 即可切换/加 failover 目标）：
   # - model_name: chat-default
   #   litellm_params:

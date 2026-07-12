@@ -32,7 +32,7 @@ services:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: platform
     ports:
-      - "3306:3306"
+      - "${MYSQL_HOST_PORT:-3306}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
 
@@ -79,10 +79,22 @@ services:
       GATEWAY_BASE_URL: http://litellm:4000/v1
       GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
       GATEWAY_MODEL: chat-default
-      CONVERSATION_RAG_ENABLED: ${CONVERSATION_RAG_ENABLED:-false}
+      CONVERSATION_RAG_ENABLED: ${CONVERSATION_RAG_ENABLED:-true}
       KNOWLEDGE_BASE_URL: http://knowledge-service:8084
       CONVERSATION_RAG_TOP_K: ${CONVERSATION_RAG_TOP_K:-5}
       CONVERSATION_RAG_CATEGORY: ${CONVERSATION_RAG_CATEGORY:-}
+      # ── 能力展示：纯靠 DeepSeek 栈即可跑通的对话高级能力，默认打开（前端 catalog 对应 state=ready）──
+      CONVERSATION_ROUTER_ENABLED: ${CONVERSATION_ROUTER_ENABLED:-true}          # /chat/auto 意图路由
+      CHAT_CASCADE_ENABLED: ${CHAT_CASCADE_ENABLED:-true}                        # /chat/cascade 级联降级（cheap/strong 留空退化默认模型）
+      CONVERSATION_MEMORY_PROFILE_ENABLED: ${CONVERSATION_MEMORY_PROFILE_ENABLED:-true}  # /chat/memory + GET/DELETE /memory/profile 长期画像
+      # chat.vision：依赖 vision-service 启用且配了可路由的视觉模型（见下方 vision-service）；否则 /chat/vision 上游不可用
+      CONVERSATION_VISION_ENABLED: ${CONVERSATION_VISION_ENABLED:-true}
+      CONVERSATION_VISION_BASE_URL: http://vision-service:8090
+      # chat.mcp：需一个可达的 MCP server。开启但无 server 会在启动握手时失败拖垮本服务，故默认关。
+      # 启用：置 true 并把 URL 指向真实 MCP（streamable-http），如 http://host.docker.internal:3001/mcp
+      CONVERSATION_MCP_ENABLED: ${CONVERSATION_MCP_ENABLED:-false}
+      CONVERSATION_MCP_TRANSPORT: ${CONVERSATION_MCP_TRANSPORT:-http}
+      CONVERSATION_MCP_HTTP_URL: ${CONVERSATION_MCP_HTTP_URL:-http://host.docker.internal:3001/mcp}
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
@@ -163,6 +175,10 @@ services:
       RAG_GRAPH_DB_URL: jdbc:mysql://mysql:3306/knowledge_graph?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
       RAG_GRAPH_DB_USER: root
       RAG_GRAPH_DB_PASSWORD: root
+      # 图片 RAG（/rag/image、/rag/image-search）：装配 boot-safe，默认打开以在前端放行表单。
+      # 注意：实际图片向量化走 OpenAI 兼容的多模态 embedding 端点（RAG_MULTIMODAL_BASE_URL/MODEL），
+      # 未配真实端点时上传/检索会在调用期报错——能力已注册（前端 catalog=ready），functional 需自备端点。
+      RAG_MULTIMODAL_ENABLED: ${RAG_MULTIMODAL_ENABLED:-true}
       # 指向栈内 redis 容器：registry/semantic-cache/rate-limit/token-budget/cost 默认已持久化到 redis
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
@@ -188,6 +204,9 @@ services:
       AGENT_RAG_TOP_K: ${AGENT_RAG_TOP_K:-5}
       AGENT_RAG_CATEGORY: ${AGENT_RAG_CATEGORY:-}
       AGENT_ANALYTICS_ENABLED: ${AGENT_ANALYTICS_ENABLED:-true}
+      # /agent/process 业务流程智能体（人在环）→ workflow-service（已在栈内），默认打开
+      AGENT_WORKFLOW_ENABLED: ${AGENT_WORKFLOW_ENABLED:-true}
+      WORKFLOW_BASE_URL: http://workflow-service:8082
       AGENT_CODE_EXEC_ENABLED: ${AGENT_CODE_EXEC_ENABLED:-false}
       AGENT_BROWSER_ENABLED: ${AGENT_BROWSER_ENABLED:-false}
       AGENT_MCP_ENABLED: ${AGENT_MCP_ENABLED:-false}
@@ -212,6 +231,7 @@ services:
       - knowledge-service
       - analytics-service
       - async-task-service
+      - workflow-service
     ports:
       - "8085:8085"
 
@@ -234,6 +254,25 @@ services:
       - mysql
     ports:
       - "8086:8086"
+
+  auth-service:
+    build:
+      context: ../auth-service
+    environment:
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      SESSION_JWT_SECRET: ${SESSION_JWT_SECRET:-dev-only-session-secret-change-me-please-32b}
+      AUTH_STORE: ${AUTH_STORE:-jdbc}
+      AUTH_DB_URL: jdbc:mysql://mysql:3306/auth?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
+      AUTH_DB_USER: root
+      AUTH_DB_PASSWORD: root
+      AUTH_DEMO_PASSWORD: ${AUTH_DEMO_PASSWORD:-demo12345}
+      # 跨域直调网关时刷新 cookie 需 SameSite=None + Secure(HTTPS)；同源代理/同网可用 Lax。
+      AUTH_COOKIE_SAME_SITE: ${AUTH_COOKIE_SAME_SITE:-Lax}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+    depends_on:
+      - mysql
+    ports:
+      - "8092:8092"
 
   channel-service:
     build:
@@ -287,8 +326,11 @@ services:
     environment:
       GATEWAY_BASE_URL: http://litellm:4000/v1
       GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
-      VISION_ENABLED: ${VISION_ENABLED:-false}
-      VISION_MODEL: ${VISION_MODEL:-}
+      # 图像描述（/vision/**）：已默认开。VISION_MODEL 指向 litellm/config.yaml 里的多模态逻辑名 vision-default
+      # （→ 本机 Ollama 的 qwen2.5vl）。只置 enabled 而 VISION_MODEL 留空会 fail-fast 崩溃本服务，故二者需同时给到。
+      # chat.vision 也依赖此项。前置：本机 `ollama pull qwen2.5vl` 且 Ollama 在 :11434 运行（否则仅调用时报错，不影响启动）。
+      VISION_ENABLED: ${VISION_ENABLED:-true}
+      VISION_MODEL: ${VISION_MODEL:-vision-default}
       VISION_MAX_IMAGE_BYTES: ${VISION_MAX_IMAGE_BYTES:-10485760}
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
@@ -296,13 +338,16 @@ services:
     depends_on:
       - litellm
     ports:
-      - "8090:8090"
+      - "${VISION_HOST_PORT:-8090}:8090"
 
   voice-service:
     build:
       context: ../voice-service
     environment:
-      VOICE_ENABLED: ${VOICE_ENABLED:-false}
+      # 语音闭环（/voice/**）：装配 boot-safe（无 key 仅告警不崩），默认打开以在前端放行表单。
+      # 注意：ASR/TTS 实际走 VOICE_BASE_URL（默认云端 OpenAI），无 VOICE_API_KEY 时调用期 401——
+      # 能力已注册（前端 catalog=ready），functional 需自备 OpenAI 兼容 Key 或本地 whisper/tts 网关。
+      VOICE_ENABLED: ${VOICE_ENABLED:-true}
       VOICE_PROVIDER: ${VOICE_PROVIDER:-openai}
       VOICE_BASE_URL: ${VOICE_BASE_URL:-https://api.openai.com/v1}
       VOICE_API_KEY: ${VOICE_API_KEY:-${OPENAI_API_KEY:-}}
@@ -316,6 +361,16 @@ services:
       - conversation-service
     ports:
       - "8091:8091"
+
+  # 前后端分离：能力展示前端为独立静态站点（Vite 构建 → nginx），不属于后端 Maven 构建。
+  # 浏览器带 X-Api-Key 跨域直调 edge-gateway；VITE_EDGE_BASE_URL 在构建期烘焙为网关地址。
+  capability-showcase-frontend:
+    build:
+      context: ../capability-showcase-frontend
+      args:
+        VITE_EDGE_BASE_URL: ${SHOWCASE_EDGE_BASE_URL:-http://localhost:8080}
+    ports:
+      - "8093:80"
 
   edge-gateway:
     build:
@@ -332,7 +387,11 @@ services:
       EVAL_URI: http://eval-service:8089
       VISION_URI: http://vision-service:8090
       VOICE_URI: http://voice-service:8091
+      AUTH_URI: http://auth-service:8092
+      # 允许分离部署的展示前端跨域（含 compose 内 :8093 与本地 dev/preview 端口）。
+      GATEWAY_CORS_ORIGINS: ${GATEWAY_CORS_ORIGINS:-http://localhost:8093,http://localhost:5173,http://localhost:4173}
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      SESSION_JWT_SECRET: ${SESSION_JWT_SECRET:-dev-only-session-secret-change-me-please-32b}
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:
@@ -342,12 +401,13 @@ services:
       - knowledge-service
       - agent-service
       - async-task-service
+      - auth-service
       - channel-service
       - interop-service
       - vision-service
       - voice-service
     ports:
-      - "8080:8080"
+      - "${EDGE_HOST_PORT:-8080}:8080"
 
 volumes:
   mysql-data:
