@@ -1,0 +1,51 @@
+server:
+  port: 8092
+
+spring:
+  application:
+    name: auth-service
+  # 集中配置（可选）：Config Server 不可达时不阻断启动，各 ${ENV:default} 兜底继续生效。
+  config:
+    import: "optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}"
+
+platform:
+  security:
+    # 内部 JWT：/auth/me 走"内部 JWT → TenantContext"链路（edge 换发）；本地直连调试可留 fallback。
+    jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
+    allow-api-key-fallback: true
+    # 会话令牌：与 edge-gateway 共用同一密钥（edge 验签、auth 签发）。
+    session:
+      jwt-secret: ${SESSION_JWT_SECRET:dev-only-session-secret-change-me-please-32b}
+      access-ttl: ${SESSION_ACCESS_TTL:PT60M}
+      refresh-ttl: ${SESSION_REFRESH_TTL:P7D}
+
+app:
+  auth:
+    store: ${AUTH_STORE:in-memory}
+    demo-password: ${AUTH_DEMO_PASSWORD:demo12345}
+    cookie:
+      name: ${AUTH_COOKIE_NAME:refresh_token}
+      path: ${AUTH_COOKIE_PATH:/auth}
+      secure: ${AUTH_COOKIE_SECURE:false}
+      same-site: ${AUTH_COOKIE_SAME_SITE:Lax}
+      domain: ${AUTH_COOKIE_DOMAIN:}
+    throttle:
+      enabled: ${AUTH_THROTTLE_ENABLED:true}
+      max-attempts: ${AUTH_THROTTLE_MAX_ATTEMPTS:5}
+      window: ${AUTH_THROTTLE_WINDOW:PT1M}
+    datasource:
+      url: ${AUTH_DB_URL:jdbc:mysql://localhost:3306/auth?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}
+      username: ${AUTH_DB_USER:root}
+      password: ${AUTH_DB_PASSWORD:}
+      driver-class-name: ${AUTH_DB_DRIVER:com.mysql.cj.jdbc.Driver}
+      maximum-pool-size: ${AUTH_DB_MAX_POOL_SIZE:8}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true

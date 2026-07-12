@@ -35,7 +35,12 @@ public class ApiKeyToInternalTokenFilter implements GlobalFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String path = exchange.getRequest().getPath().value();
-        if (isOpen(path)) {
+        if (EdgeOpenPaths.isOpen(path)) {
+            return chain.filter(exchange);
+        }
+
+        // 已被 SessionBearerAuthFilter 用会话令牌换发内部 JWT（双模）：直接放行，不再要求 X-Api-Key。
+        if (exchange.getRequest().getHeaders().getFirst(props.getInternalHeader()) != null) {
             return chain.filter(exchange);
         }
 
@@ -56,16 +61,6 @@ public class ApiKeyToInternalTokenFilter implements GlobalFilter, Ordered {
                 .headers(h -> h.remove(props.getApiKeyHeader())) // 不把外部 api key 泄到内网
                 .build();
         return chain.filter(exchange.mutate().request(mutated).build());
-    }
-
-    private boolean isOpen(String path) {
-        return path.startsWith("/actuator")
-                || path.startsWith("/.well-known")
-                // 飞书事件回调不带平台 api-key，靠飞书签名验真（见 channel-service FeishuInboundController）
-                || path.equals("/channel/feishu/events")
-                // 钉钉机器人消息回调不带平台 api-key，靠钉钉 timestamp/sign 验真（见 channel-service DingtalkInboundController）
-                || path.equals("/channel/dingtalk/events")
-                || path.equals("/health");
     }
 
     @Override

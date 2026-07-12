@@ -9,7 +9,24 @@ spring:
     import: "optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}"
   cloud:
     gateway:
+      # 前后端分离：允许独立部署的能力展示前端（及其它可信前端）跨域调用业务能力。
+      # 生产务必用白名单具体来源，不要 *（X-Api-Key/Authorization 敏感）。
+      # allow-credentials=true（刷新令牌 httpOnly cookie 跨域必需）时，allowedHeaders 不能为 *、
+      # allowedOrigins 不能为 *，故显式列举。
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "${GATEWAY_CORS_ORIGINS:http://localhost:5173,http://localhost:4173,http://localhost:8093}"
+            allowedMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+            allowedHeaders: [Content-Type, Authorization, X-Api-Key, Accept, X-Trace-Id]
+            exposedHeaders: [X-Trace-Id]
+            allowCredentials: true
+            maxAge: 3600
       routes:
+        - id: auth
+          uri: ${AUTH_URI:http://localhost:8092}
+          predicates:
+            - Path=/auth,/auth/**
         - id: analytics
           uri: ${ANALYTICS_URI:http://localhost:8083}
           predicates:
@@ -61,11 +78,15 @@ spring:
 platform:
   security:
     jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
+    # 会话令牌：与 auth-service 共用同一密钥（auth 签发登录会话 JWT，edge 验签后换发内部 JWT）。
+    session:
+      jwt-secret: ${SESSION_JWT_SECRET:dev-only-session-secret-change-me-please-32b}
+      access-ttl: ${SESSION_ACCESS_TTL:PT60M}
     api-keys:
       dev-key-acme:
         tenant: acme
         user: alice
-        scopes: [chat, approve, agent, channel, eval, vision, voice]
+        scopes: [chat, ingest, approve, agent, channel, eval, vision, voice]
       dev-key-globex:
         tenant: globex
         user: bob

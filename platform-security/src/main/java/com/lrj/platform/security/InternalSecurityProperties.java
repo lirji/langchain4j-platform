@@ -22,6 +22,13 @@ public class InternalSecurityProperties {
     /** 内部 JWT 算法与非对称密钥配置（前缀 {@code platform.security.jwt.*}）。默认 HS256，沿用 {@link #jwtSecret}。 */
     private final Jwt jwt = new Jwt();
 
+    /**
+     * 面向终端用户的会话令牌配置（前缀 {@code platform.security.session.*}）。
+     * auth-service 用它签发登录后的会话访问 JWT，edge-gateway 用同一密钥验签后换发内部 JWT。
+     * 与 {@link #jwtSecret}（内部令牌密钥）刻意分离，缩小密钥轮转爆炸半径。
+     */
+    private final Session session = new Session();
+
     /** 内部 JWT 有效期（短时，仅覆盖一次跨服务调用链）。 */
     private Duration jwtTtl = Duration.ofMinutes(5);
 
@@ -43,6 +50,7 @@ public class InternalSecurityProperties {
     public String getJwtSecret() { return jwtSecret; }
     public void setJwtSecret(String jwtSecret) { this.jwtSecret = jwtSecret; }
     public Jwt getJwt() { return jwt; }
+    public Session getSession() { return session; }
     public Duration getJwtTtl() { return jwtTtl; }
     public void setJwtTtl(Duration jwtTtl) { this.jwtTtl = jwtTtl; }
     public String getInternalHeader() { return internalHeader; }
@@ -70,6 +78,28 @@ public class InternalSecurityProperties {
         public void setPrivateKey(String privateKey) { this.privateKey = privateKey; }
         public String getPublicKey() { return publicKey; }
         public void setPublicKey(String publicKey) { this.publicKey = publicKey; }
+    }
+
+    /**
+     * 会话令牌配置。前缀 {@code platform.security.session.*}。
+     *
+     * <p>{@link #jwtSecret} 为会话访问 JWT 的 HS256 密钥（≥32 字节）；{@link #accessTtl} 是访问令牌有效期
+     * （短时，前端内存持有）；{@link #refreshTtl} 是刷新令牌有效期（httpOnly cookie，支持静默续期）。
+     */
+    public static class Session {
+        /** 会话访问 JWT 的 HS256 密钥（≥32 字节）。生产走 env/Vault/K8s Secret，切勿硬编码。 */
+        private String jwtSecret = "dev-only-session-secret-change-me-please-32b";
+        /** 会话访问 JWT 有效期（前端内存持有；过期由刷新令牌静默续期）。 */
+        private Duration accessTtl = Duration.ofMinutes(60);
+        /** 刷新令牌有效期（httpOnly cookie；轮转续期）。 */
+        private Duration refreshTtl = Duration.ofDays(7);
+
+        public String getJwtSecret() { return jwtSecret; }
+        public void setJwtSecret(String jwtSecret) { this.jwtSecret = jwtSecret; }
+        public Duration getAccessTtl() { return accessTtl; }
+        public void setAccessTtl(Duration accessTtl) { this.accessTtl = accessTtl; }
+        public Duration getRefreshTtl() { return refreshTtl; }
+        public void setRefreshTtl(Duration refreshTtl) { this.refreshTtl = refreshTtl; }
     }
 
     public static class KeyBinding {

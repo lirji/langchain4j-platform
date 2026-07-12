@@ -42,7 +42,7 @@ public class EdgeRateLimitFilter implements GlobalFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String path = exchange.getRequest().getPath().value();
-        if (!props.isEnabled() || isOpen(path)) {
+        if (!props.isEnabled() || EdgeOpenPaths.isOpen(path)) {
             return chain.filter(exchange);
         }
 
@@ -81,14 +81,6 @@ public class EdgeRateLimitFilter implements GlobalFilter, Ordered {
         if (path.startsWith("/a2a")) return "a2a";
         if (path.startsWith("/chat") || path.startsWith("/extract")) return "chat";
         return "default";
-    }
-
-    private boolean isOpen(String path) {
-        return path.startsWith("/actuator")
-                || path.startsWith("/.well-known")
-                || path.equals("/channel/feishu/events")
-                || path.equals("/channel/dingtalk/events")
-                || path.equals("/health");
     }
 
     @Override

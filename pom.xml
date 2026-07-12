@@ -33,6 +33,7 @@
         <module>platform-eventbus</module>
         <!-- 服务 -->
         <module>config-server</module>
+        <module>auth-service</module>
         <module>conversation-service</module>
         <module>workflow-service</module>
         <module>analytics-service</module>
