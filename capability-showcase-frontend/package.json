@@ -1,0 +1,38 @@
+{
+  "name": "capability-showcase-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "能力展示与试用控制台（独立前端）。Vue3 + TS + Vite，前后端分离，direct mode 带 X-Api-Key 跨域直调 edge-gateway。",
+  "scripts": {
+    "gen:catalog": "node scripts/gen-catalog.mjs",
+    "predev": "npm run gen:catalog",
+    "dev": "vite",
+    "prebuild": "npm run gen:catalog",
+    "build": "vite build",
+    "type-check": "vue-tsc --noEmit",
+    "preview": "vite preview",
+    "pretest": "npm run gen:catalog",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "dompurify": "^3.4.12",
+    "marked": "^18.0.6",
+    "pinia": "^2.2.6",
+    "vue": "^3.5.13",
+    "vue-router": "^4.4.5"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.10.2",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/test-utils": "^2.4.6",
+    "js-yaml": "^4.1.0",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.3",
+    "vitest": "^2.1.8",
+    "vue-tsc": "^2.1.10"
+  }
+}

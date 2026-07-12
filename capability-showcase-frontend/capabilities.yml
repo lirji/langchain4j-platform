@@ -1,0 +1,1416 @@
+# 能力展示控制台 —— 能力清单（静态 manifest）
+# 由 CapabilityCatalogService 用 Jackson-YAML 解析为 CapabilityCatalog（枚举小写/kebab）。
+# 所有端点/入参均对照真实 controller 与 platform-protocol DTO 核验，未臆造。
+# 覆盖 9 个模块全部能力（P0 骨干+高级 + P1/P2 Workflow/Multimodal/Interop-Eval/Channel）。
+# 复杂/嵌套请求体（如 eval cases、dag tasks、mcp arguments）以 type:json 的原样 JSON 字段承载。
+version: "1"
+modules:
+  # ─────────────────────────── P0：对话 ───────────────────────────
+  - id: chat
+    title: 对话 Chat Console
+    description: 同步/流式对话与结构化抽取。conversation-service。
+    order: 1
+    priority: P0
+    service: conversation-service
+    standalone: high
+    capabilities:
+      - id: chat.sync
+        module: chat
+        title: 单轮对话
+        description: "POST /chat，返回 reply/chatId/tenantId/userId。内部 RAG增强/语义缓存/护栏均 flag 化，不影响基础调用。"
+        method: POST
+        path: /chat
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: chatId, in: query, type: string, required: false, label: 会话ID, defaultValue: "default", help: "记忆按 tenantId::chatId 隔离" }
+          - { name: message, in: body, type: text, required: true, label: 消息, placeholder: "你好，用一句话介绍这个平台" }
+          - { name: category, in: body, type: string, required: false, label: 类目(可选), help: "限定 RAG 检索到该 metadata.category 的文档" }
+        example: '{"message":"用一句话介绍这个平台"}'
+        requiredScopes: []
+        featureFlag: null
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+        tags: [core]
+      - id: chat.stream
+        module: chat
+        title: 流式对话 (SSE)
+        description: "POST /chat/stream，token 级 SSE。事件含 message/done/error/blocked/grounding-warning。"
+        method: POST
+        path: /chat/stream
+        requestKind: sse
+        responseKind: sse
+        params:
+          - { name: chatId, in: query, type: string, required: false, label: 会话ID, defaultValue: "default" }
+          - { name: message, in: body, type: text, required: true, label: 消息, placeholder: "帮我总结一下 RAG 的流程" }
+          - { name: category, in: body, type: string, required: false, label: 类目(可选) }
+        example: '{"message":"帮我总结一下 RAG 的流程"}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+        sseEvents: [message, done, error, blocked, grounding-warning]
+        tags: [core, sse]
+      - id: chat.extract
+        module: chat
+        title: 结构化抽取
+        description: "POST /extract?type=ticket，从文本抽取结构化对象。当前注册 ticket 类型。"
+        method: POST
+        path: /extract
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: type, in: query, type: string, required: false, label: 抽取类型, defaultValue: "ticket" }
+          - { name: text, in: body, type: text, required: true, label: 待抽取文本, placeholder: "用户反馈：登录页在手机上打不开，很急" }
+        example: '{"text":"用户反馈：登录页在手机上打不开，很急"}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: chat.auto
+        module: chat
+        title: 意图路由对话
+        description: "POST /chat/auto，LLM-as-Router 先分类再路由。未启用 router 返回禁用提示。"
+        method: POST
+        path: /chat/auto
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: chatId, in: query, type: string, required: false, label: 会话ID, defaultValue: "default" }
+          - { name: message, in: body, type: text, required: true, label: 消息, placeholder: "帮我查下退款政策" }
+          - { name: category, in: body, type: string, required: false, label: 类目(可选) }
+        example: '{"message":"帮我查下退款政策"}'
+        requiredScopes: []
+        featureFlag: app.conversation.router.enabled
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: chat.cascade
+        module: chat
+        title: 级联/降级对话
+        description: "POST /chat/cascade，便宜模型先答→置信门→升级强模型。需开启 app.chat.cascade.enabled。"
+        method: POST
+        path: /chat/cascade
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: message, in: body, type: text, required: true, label: 消息, placeholder: "解释一下量子纠缠" }
+        example: '{"message":"解释一下量子纠缠"}'
+        requiredScopes: []
+        featureFlag: app.chat.cascade.enabled
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: chat.mcp
+        module: chat
+        title: MCP 增强对话
+        description: "POST /chat/mcp，对话中调用 MCP 工具。需开启 app.conversation.mcp.enabled。"
+        method: POST
+        path: /chat/mcp
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: message, in: body, type: text, required: true, label: 消息, placeholder: "现在几点？" }
+        example: '{"message":"现在几点？"}'
+        requiredScopes: []
+        featureFlag: app.conversation.mcp.enabled
+        featureFlagDefault: false
+        riskLevel: safe
+        state: flag-off
+        executableByDefault: true
+      - id: chat.memory
+        module: chat
+        title: 长期记忆对话
+        description: "POST /chat/memory，带长期用户画像的对话。需开启 app.conversation.memory.profile.enabled。"
+        method: POST
+        path: /chat/memory
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: chatId, in: query, type: string, required: false, label: 会话ID, defaultValue: "default" }
+          - { name: message, in: body, type: text, required: true, label: 消息, placeholder: "记住我喜欢简洁的回答" }
+        example: '{"message":"记住我喜欢简洁的回答"}'
+        requiredScopes: []
+        featureFlag: app.conversation.memory.profile.enabled
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: memory.profile.get
+        module: chat
+        title: 查看长期画像
+        description: "GET /memory/profile，返回当前会话的长期用户画像。需开启 app.conversation.memory.profile.enabled。"
+        method: GET
+        path: /memory/profile
+        requestKind: none
+        responseKind: json
+        params:
+          - { name: chatId, in: query, type: string, required: false, label: 会话ID, defaultValue: "default" }
+        requiredScopes: []
+        featureFlag: app.conversation.memory.profile.enabled
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: memory.profile.clear
+        module: chat
+        title: 清除长期画像
+        description: "DELETE /memory/profile，清除当前会话的长期用户画像。"
+        method: DELETE
+        path: /memory/profile
+        requestKind: none
+        responseKind: json
+        params:
+          - { name: chatId, in: query, type: string, required: false, label: 会话ID, defaultValue: "default" }
+        requiredScopes: []
+        featureFlag: app.conversation.memory.profile.enabled
+        featureFlagDefault: true
+        riskLevel: caution
+        state: ready
+        executableByDefault: true
+      - id: chat.cache.clear
+        module: chat
+        title: 清语义缓存
+        description: "DELETE /chat/cache，按租户清空 L1 语义响应缓存。"
+        method: DELETE
+        path: /chat/cache
+        requestKind: none
+        responseKind: json
+        params: []
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: caution
+        state: ready
+        executableByDefault: true
+
+  # ─────────────────────────── P0：知识库 ───────────────────────────
+  - id: rag
+    title: 知识库 RAG Workspace
+    description: 文档入库与检索。knowledge-service。默认 HashEmbedding 内存库（确定性降级，非真实语义）。
+    order: 2
+    priority: P0
+    service: knowledge-service
+    standalone: high
+    capabilities:
+      - id: rag.query
+        module: rag
+        title: 知识检索
+        description: "POST /rag/query，KnowledgeQueryRequest。默认 HashEmbedding 内存库，接真实语义需配 qdrant/nomic。"
+        method: POST
+        path: /rag/query
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: query, in: body, type: text, required: true, label: 查询, placeholder: "退款政策是什么？" }
+          - { name: topK, in: body, type: integer, required: false, label: TopK, defaultValue: 5, min: 1, max: 50 }
+          - { name: minScore, in: body, type: number, required: false, label: 最低分, min: 0, max: 1 }
+          - { name: category, in: body, type: string, required: false, label: 类目 }
+        example: '{"query":"退款政策是什么？","topK":5}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready-degraded
+        executableByDefault: true
+        tags: [core]
+      - id: rag.upload.file
+        module: rag
+        title: 上传文档(文件)
+        description: "POST /rag/documents (multipart file)，需 ingest scope。"
+        method: POST
+        path: /rag/documents
+        requestKind: multipart
+        responseKind: json
+        params:
+          - { name: file, in: form-data, type: file, required: true, label: 文件, accept: ".txt,.md,.pdf" }
+        requiredScopes: [ingest]
+        featureFlagDefault: true
+        riskLevel: caution
+        state: scope-required
+        executableByDefault: true
+      - id: rag.upload.json
+        module: rag
+        title: 上传文档(JSON)
+        description: "POST /rag/documents (JSON title/text/category)，需 ingest scope。"
+        method: POST
+        path: /rag/documents
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: title, in: body, type: string, required: false, label: 标题 }
+          - { name: text, in: body, type: text, required: true, label: 正文 }
+          - { name: category, in: body, type: string, required: false, label: 类目 }
+        example: '{"title":"退款政策","text":"下单 7 天内可无理由退款……","category":"policy"}'
+        requiredScopes: [ingest]
+        featureFlagDefault: true
+        riskLevel: caution
+        state: scope-required
+        executableByDefault: true
+      - id: rag.documents.list
+        module: rag
+        title: 文档列表
+        description: "GET /rag/documents，列出当前租户文档。"
+        method: GET
+        path: /rag/documents
+        requestKind: none
+        responseKind: json
+        params: []
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: rag.documents.delete
+        module: rag
+        title: 删除文档
+        description: "DELETE /rag/documents/{docId}，删除单个文档。"
+        method: DELETE
+        path: /rag/documents/{docId}
+        requestKind: none
+        responseKind: json
+        params:
+          - { name: docId, in: path, type: string, required: true, label: 文档ID }
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: caution
+        state: ready
+        executableByDefault: true
+      - id: rag.documents.get
+        module: rag
+        title: 文档详情
+        description: "GET /rag/documents/{docId}，查看单个文档元数据。"
+        method: GET
+        path: /rag/documents/{docId}
+        requestKind: none
+        responseKind: json
+        params:
+          - { name: docId, in: path, type: string, required: true, label: 文档ID }
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: rag.obsidian.import
+        module: rag
+        title: Obsidian 导入
+        description: "POST /rag/obsidian/import (multipart file)，导入 Obsidian 笔记入库。"
+        method: POST
+        path: /rag/obsidian/import
+        requestKind: multipart
+        responseKind: json
+        params:
+          - { name: file, in: form-data, type: file, required: true, label: 笔记文件, accept: ".md,.zip" }
+          - { name: category, in: query, type: string, required: false, label: 类目(可选) }
+        requiredScopes: [ingest]
+        featureFlagDefault: true
+        riskLevel: caution
+        state: scope-required
+        executableByDefault: true
+      - id: rag.graph.query
+        module: rag
+        title: GraphRAG 查询
+        description: "POST /rag/graph/query，GraphQueryRequest（字段以后端 record 为准）。需开启 app.rag.graph.enabled。"
+        method: POST
+        path: /rag/graph/query
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: query, in: body, type: text, required: true, label: 查询, placeholder: "谁负责退款审批？" }
+        example: '{"query":"谁负责退款审批？"}'
+        requiredScopes: []
+        featureFlag: app.rag.graph.enabled
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: rag.graph.entities
+        module: rag
+        title: GraphRAG 实体
+        description: "GET /rag/graph/entities，按类目列出图谱实体。需开启 app.rag.graph.enabled。"
+        method: GET
+        path: /rag/graph/entities
+        requestKind: none
+        responseKind: json
+        params:
+          - { name: category, in: query, type: string, required: false, label: 类目(可选) }
+        requiredScopes: []
+        featureFlag: app.rag.graph.enabled
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+
+  # ─────────────────────────── P0：Agent ───────────────────────────
+  - id: agent
+    title: 智能体 Agent Lab
+    description: ReAct 目标执行与异步任务流。agent-service。（DAG/链/投票/反思等高级能力二期补表单。）
+    order: 3
+    priority: P0
+    service: agent-service
+    standalone: high
+    capabilities:
+      - id: agent.run
+        module: agent
+        title: 同步跑目标 (ReAct)
+        description: "POST /agent/run，AgentRunRequest(goal, webhookUrl)。"
+        method: POST
+        path: /agent/run
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: goal, in: body, type: text, required: true, label: 目标, placeholder: "查一下今天的日期并算出距离年底还有多少天" }
+          - { name: webhookUrl, in: body, type: string, required: false, label: 回调URL(可选) }
+        example: '{"goal":"查一下今天的日期并算出距离年底还有多少天"}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+        tags: [core]
+      - id: agent.run.async
+        module: agent
+        title: 异步跑目标
+        description: "POST /agent/run/async，返回 taskId，配合 /agent/tasks/{id}/stream 观测。"
+        method: POST
+        path: /agent/run/async
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: goal, in: body, type: text, required: true, label: 目标 }
+          - { name: webhookUrl, in: body, type: string, required: false, label: 回调URL(可选) }
+        example: '{"goal":"分三步总结这个平台的能力"}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: agent.tasks.list
+        module: agent
+        title: 我的 Agent 任务
+        description: "GET /agent/tasks，列出当前租户 Agent 任务。"
+        method: GET
+        path: /agent/tasks
+        requestKind: none
+        responseKind: json
+        params: []
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: agent.tasks.get
+        module: agent
+        title: Agent 任务详情
+        description: "GET /agent/tasks/{taskId}。"
+        method: GET
+        path: /agent/tasks/{taskId}
+        requestKind: none
+        responseKind: json
+        params:
+          - { name: taskId, in: path, type: string, required: true, label: 任务ID }
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: agent.tasks.stream
+        module: agent
+        title: Agent 任务流 (SSE)
+        description: "GET /agent/tasks/{taskId}/stream，SSE 观测执行步骤。"
+        method: GET
+        path: /agent/tasks/{taskId}/stream
+        requestKind: sse
+        responseKind: sse
+        params:
+          - { name: taskId, in: path, type: string, required: true, label: 任务ID }
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+        sseEvents: [message, done, error]
+        tags: [sse]
+      - id: agent.tasks.cancel
+        module: agent
+        title: 取消 Agent 任务
+        description: "DELETE /agent/tasks/{taskId}。"
+        method: DELETE
+        path: /agent/tasks/{taskId}
+        requestKind: none
+        responseKind: json
+        params:
+          - { name: taskId, in: path, type: string, required: true, label: 任务ID }
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: caution
+        state: ready
+        executableByDefault: true
+      - id: agent.dag.run
+        module: agent
+        title: 多 Agent DAG
+        description: "POST /agent/dag/run，AgentDagRunRequest(goal, tasks[], webhookUrl)。"
+        method: POST
+        path: /agent/dag/run
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: goal, in: body, type: text, required: false, label: 目标 }
+          - { name: tasks, in: body, type: json, required: false, label: "任务 DAG(JSON 数组)", placeholder: '[{"id":"t1","goal":"..."}]' }
+          - { name: webhookUrl, in: body, type: string, required: false, label: 回调URL(可选) }
+        example: '{"goal":"调研并总结平台能力"}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: agent.dag.plan-run
+        module: agent
+        title: DAG 自动规划执行
+        description: "POST /agent/dag/plan-run，由 goal 自动规划 DAG 再执行。"
+        method: POST
+        path: /agent/dag/plan-run
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: goal, in: body, type: text, required: true, label: 目标, placeholder: "对比三家云厂商的对象存储定价" }
+        example: '{"goal":"对比三家云厂商的对象存储定价"}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: agent.dag.run.async
+        module: agent
+        title: DAG 异步执行
+        description: "POST /agent/dag/run/async，返回 taskId，配合 /agent/tasks/{id}/stream。"
+        method: POST
+        path: /agent/dag/run/async
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: goal, in: body, type: text, required: false, label: 目标 }
+          - { name: tasks, in: body, type: json, required: false, label: "任务 DAG(JSON 数组)" }
+          - { name: webhookUrl, in: body, type: string, required: false, label: 回调URL(可选) }
+        example: '{"goal":"调研并总结平台能力"}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: agent.dag.plan-run.async
+        module: agent
+        title: DAG 规划异步执行
+        description: "POST /agent/dag/plan-run/async。"
+        method: POST
+        path: /agent/dag/plan-run/async
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: goal, in: body, type: text, required: true, label: 目标 }
+        example: '{"goal":"对比三家云厂商的对象存储定价"}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: agent.chain
+        module: agent
+        title: 链式编排
+        description: "POST /agent/chain，ChainRunRequest(input)。未配置 app.agent.chaining.steps 时返回 400。"
+        method: POST
+        path: /agent/chain
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: input, in: body, type: text, required: true, label: 输入, placeholder: "把这段话翻译成英文再总结" }
+        example: '{"input":"把这段话翻译成英文再总结"}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: agent.vote
+        module: agent
+        title: 投票编排
+        description: "POST /agent/vote，VoteRequest(question, n)。n 路采样投票取多数。"
+        method: POST
+        path: /agent/vote
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: question, in: body, type: text, required: true, label: 问题, placeholder: "17 是质数吗？" }
+          - { name: n, in: body, type: integer, required: false, label: 采样路数, defaultValue: 3, min: 1, max: 9 }
+        example: '{"question":"17 是质数吗？","n":3}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: agent.reflexive
+        module: agent
+        title: 反思编排
+        description: "POST /agent/reflexive，ReflexionRequest(question)。自我批判迭代。"
+        method: POST
+        path: /agent/reflexive
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: question, in: body, type: text, required: true, label: 问题, placeholder: "写一个判断回文的函数" }
+        example: '{"question":"写一个判断回文的函数"}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: agent.reflexive.stream
+        module: agent
+        title: 反思编排 (SSE)
+        description: "POST /agent/reflexive/stream，ReflexionRequest(question)，流式输出迭代过程。"
+        method: POST
+        path: /agent/reflexive/stream
+        requestKind: sse
+        responseKind: sse
+        params:
+          - { name: question, in: body, type: text, required: true, label: 问题, placeholder: "写一个判断回文的函数" }
+        example: '{"question":"写一个判断回文的函数"}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+        sseEvents: [message, done, error]
+        tags: [sse]
+      - id: agent.analyst.run
+        module: agent
+        title: 数据分析智能体
+        description: "POST /agent/analyst/run，自然语言问题→按需探表→分析（多 Agent DAG）。"
+        method: POST
+        path: /agent/analyst/run
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: question, in: body, type: text, required: true, label: 问题, placeholder: "各类目文档数量分布如何？" }
+        example: '{"question":"各类目文档数量分布如何？"}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: agent.analyst.run.async
+        module: agent
+        title: 数据分析智能体(异步)
+        description: "POST /agent/analyst/run/async。"
+        method: POST
+        path: /agent/analyst/run/async
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: question, in: body, type: text, required: true, label: 问题 }
+        example: '{"question":"各类目文档数量分布如何？"}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: agent.process.run
+        module: agent
+        title: 业务流程智能体
+        description: "POST /agent/process/run，人在环多 Agent 流程。需开启 app.agent.workflow.enabled。"
+        method: POST
+        path: /agent/process/run
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: message, in: body, type: text, required: true, label: 输入, placeholder: "发起一笔退款并走审批" }
+        example: '{"message":"发起一笔退款并走审批"}'
+        requiredScopes: []
+        featureFlag: app.agent.workflow.enabled
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: agent.process.run.async
+        module: agent
+        title: 业务流程智能体(异步)
+        description: "POST /agent/process/run/async。需开启 app.agent.workflow.enabled。"
+        method: POST
+        path: /agent/process/run/async
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: message, in: body, type: text, required: true, label: 输入 }
+        example: '{"message":"发起一笔退款并走审批"}'
+        requiredScopes: []
+        featureFlag: app.agent.workflow.enabled
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+
+  # ─────────────────────────── P0：异步任务 ───────────────────────────
+  - id: tasks
+    title: 异步任务 Async Monitor
+    description: 通用任务中心全生命周期：创建→lease→状态更新→SSE→死信。async-task-service。
+    order: 4
+    priority: P0
+    service: async-task-service
+    standalone: high
+    capabilities:
+      - id: async.create
+        module: tasks
+        title: 创建任务
+        description: "POST /async/tasks，AsyncTaskCreateRequest。重复 taskId 返回 409。"
+        method: POST
+        path: /async/tasks
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: taskId, in: body, type: string, required: false, label: "任务ID(可选,幂等)" }
+          - { name: kind, in: body, type: string, required: true, label: 任务类型, placeholder: "demo" }
+          - { name: input, in: body, type: json, required: false, label: 输入(JSON对象), placeholder: '{"foo":"bar"}' }
+          - { name: webhookUrl, in: body, type: string, required: false, label: 回调URL(可选) }
+        example: '{"kind":"demo","input":{"foo":"bar"}}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+        tags: [core]
+      - id: async.list
+        module: tasks
+        title: 我的任务列表
+        description: "GET /async/tasks，租户隔离。"
+        method: GET
+        path: /async/tasks
+        requestKind: none
+        responseKind: json
+        params: []
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: async.get
+        module: tasks
+        title: 任务详情
+        description: "GET /async/tasks/{taskId}。"
+        method: GET
+        path: /async/tasks/{taskId}
+        requestKind: none
+        responseKind: json
+        params:
+          - { name: taskId, in: path, type: string, required: true, label: 任务ID }
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: async.status.update
+        module: tasks
+        title: 更新任务状态
+        description: "PATCH /async/tasks/{taskId}/status。终态幂等；lease 冲突 409。"
+        method: PATCH
+        path: /async/tasks/{taskId}/status
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: taskId, in: path, type: string, required: true, label: 任务ID }
+          - { name: status, in: body, type: select, required: true, label: 状态, enumValues: [RUNNING, SUCCEEDED, FAILED, CANCELLED] }
+          - { name: result, in: body, type: json, required: false, label: 结果(JSON) }
+          - { name: error, in: body, type: string, required: false, label: 错误信息 }
+          - { name: workerId, in: body, type: string, required: false, label: WorkerID }
+        example: '{"status":"RUNNING"}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: caution
+        state: ready
+        executableByDefault: true
+      - id: async.lease
+        module: tasks
+        title: 租约
+        description: "POST /async/tasks/{taskId}/lease。lease 冲突演示。"
+        method: POST
+        path: /async/tasks/{taskId}/lease
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: taskId, in: path, type: string, required: true, label: 任务ID }
+          - { name: workerId, in: body, type: string, required: true, label: WorkerID, placeholder: "worker-1" }
+          - { name: leaseSeconds, in: body, type: integer, required: false, label: 租约秒数, defaultValue: 30 }
+        example: '{"workerId":"worker-1","leaseSeconds":30}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: caution
+        state: ready
+        executableByDefault: true
+      - id: async.cancel
+        module: tasks
+        title: 取消任务
+        description: "DELETE /async/tasks/{taskId}。终态不可取消。"
+        method: DELETE
+        path: /async/tasks/{taskId}
+        requestKind: none
+        responseKind: json
+        params:
+          - { name: taskId, in: path, type: string, required: true, label: 任务ID }
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: caution
+        state: ready
+        executableByDefault: true
+      - id: async.stream
+        module: tasks
+        title: 任务实时流 (SSE)
+        description: "GET /async/tasks/{taskId}/stream，支持 Last-Event-ID 断点续订。"
+        method: GET
+        path: /async/tasks/{taskId}/stream
+        requestKind: sse
+        responseKind: sse
+        params:
+          - { name: taskId, in: path, type: string, required: true, label: 任务ID }
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+        sseEvents: [message, done, error]
+        tags: [sse]
+      - id: async.deadletter
+        module: tasks
+        title: webhook 死信
+        description: "GET /async/webhook-outbox/dead，webhook 重试死信可观测性。"
+        method: GET
+        path: /async/webhook-outbox/dead
+        requestKind: none
+        responseKind: json
+        params: []
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+
+  # ─────────────────────────── P0：数据分析 ───────────────────────────
+  - id: analytics
+    title: 数据分析 Analytics Lab
+    description: schema 浏览与 NL2SQL 均默认可用（compose 默认 NL2SQL_ENABLED=true）。analytics-service。
+    order: 5
+    priority: P0
+    service: analytics-service
+    standalone: high
+    capabilities:
+      - id: analytics.schema.tables
+        module: analytics
+        title: 表清单
+        description: "GET /analytics/schema/tables。即使 nl2sql 关闭也可用。"
+        method: GET
+        path: /analytics/schema/tables
+        requestKind: none
+        responseKind: json
+        params: []
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+        tags: [core]
+      - id: analytics.schema.describe
+        module: analytics
+        title: 表结构详情
+        description: "GET /analytics/schema/tables/{table}。"
+        method: GET
+        path: /analytics/schema/tables/{table}
+        requestKind: none
+        responseKind: json
+        params:
+          - { name: table, in: path, type: string, required: true, label: 表名 }
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: analytics.sql
+        module: analytics
+        title: NL2SQL 查询
+        description: "POST /chat/sql，AnalyticsSqlRequest(question)。需开启 app.nl2sql.enabled。"
+        method: POST
+        path: /chat/sql
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: question, in: body, type: text, required: true, label: 自然语言问题, placeholder: "统计每个类目的文档数量" }
+        example: '{"question":"统计每个类目的文档数量"}'
+        requiredScopes: []
+        featureFlag: app.nl2sql.enabled
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+
+  # ─────────────────────── P1/P2：占位（拆分建议，能力二期补） ───────────────────────
+  - id: workflow
+    title: 工作流 Workflow Desk
+    description: "退款审批 BPMN（人在环）。workflow-service。审批操作需 approve scope；DELETE /workflow/data 为破坏性能力默认锁定。"
+    order: 6
+    priority: P1
+    service: workflow-service
+    standalone: medium
+    capabilities:
+      - id: workflow.refund.start
+        module: workflow
+        title: 发起退款流程
+        description: "POST /workflow/refund/start，启动退款审批 BPMN。返回 instanceId/status/taskId/deduplicated。"
+        method: POST
+        path: /workflow/refund/start
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: chatId, in: body, type: string, required: false, label: 会话ID }
+          - { name: message, in: body, type: text, required: false, label: 诉求描述, placeholder: "订单 A123 申请退款" }
+          - { name: dedupeId, in: body, type: string, required: false, label: 幂等ID(可选,防重放) }
+          - { name: webhookUrl, in: body, type: string, required: false, label: 回调URL(可选) }
+        example: '{"message":"订单 A123 申请退款","dedupeId":"req-001"}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: caution
+        state: ready
+        executableByDefault: true
+        tags: [core]
+      - id: workflow.tasks.list
+        module: workflow
+        title: 审批待办
+        description: "GET /workflow/tasks，列出待认领/处理的审批任务。需 approve scope。"
+        method: GET
+        path: /workflow/tasks
+        requestKind: none
+        responseKind: json
+        params: []
+        requiredScopes: [approve]
+        featureFlagDefault: true
+        riskLevel: safe
+        state: scope-required
+        executableByDefault: true
+      - id: workflow.tasks.claim
+        module: workflow
+        title: 认领任务
+        description: "POST /workflow/tasks/{taskId}/claim。需 approve scope。"
+        method: POST
+        path: /workflow/tasks/{taskId}/claim
+        requestKind: none
+        responseKind: json
+        params:
+          - { name: taskId, in: path, type: string, required: true, label: 任务ID }
+        requiredScopes: [approve]
+        featureFlagDefault: true
+        riskLevel: caution
+        state: scope-required
+        executableByDefault: true
+      - id: workflow.tasks.unclaim
+        module: workflow
+        title: 取消认领
+        description: "POST /workflow/tasks/{taskId}/unclaim。需 approve scope。"
+        method: POST
+        path: /workflow/tasks/{taskId}/unclaim
+        requestKind: none
+        responseKind: json
+        params:
+          - { name: taskId, in: path, type: string, required: true, label: 任务ID }
+        requiredScopes: [approve]
+        featureFlagDefault: true
+        riskLevel: caution
+        state: scope-required
+        executableByDefault: true
+      - id: workflow.tasks.complete
+        module: workflow
+        title: 完成审批
+        description: "POST /workflow/tasks/{taskId}/complete，body {approved, comment?}。需 approve scope。"
+        method: POST
+        path: /workflow/tasks/{taskId}/complete
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: taskId, in: path, type: string, required: true, label: 任务ID }
+          - { name: approved, in: body, type: boolean, required: true, label: 是否通过 }
+          - { name: comment, in: body, type: text, required: false, label: 审批意见(可选) }
+        example: '{"approved":true,"comment":"金额核对无误"}'
+        requiredScopes: [approve]
+        featureFlagDefault: true
+        riskLevel: caution
+        state: scope-required
+        executableByDefault: true
+      - id: workflow.instances.get
+        module: workflow
+        title: 实例详情
+        description: "GET /workflow/instances/{instanceId}，查询流程实例状态与 reply。"
+        method: GET
+        path: /workflow/instances/{instanceId}
+        requestKind: none
+        responseKind: json
+        params:
+          - { name: instanceId, in: path, type: string, required: true, label: 实例ID }
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: workflow.data.purge
+        module: workflow
+        title: 清理工作流数据 (危险)
+        description: "DELETE /workflow/data?chatId=...，破坏性合规删除。展示页默认锁定，仅预览/复制 curl。需 approve scope。"
+        method: DELETE
+        path: /workflow/data
+        requestKind: none
+        responseKind: json
+        params:
+          - { name: chatId, in: query, type: string, required: true, label: 会话ID }
+        requiredScopes: [approve]
+        featureFlagDefault: true
+        riskLevel: destructive
+        state: display-only
+        executableByDefault: false
+  - id: multimodal
+    title: 多模态 Multimodal Console
+    description: "图像描述(vision) + 语音闭环(voice) + 图文对话/图片检索。图像描述/图文对话已默认开启（走 LiteLLM 可路由的本机 Ollama 视觉模型 qwen2.5vl，需本机拉好模型并运行 :11434）。语音与图片检索也默认开启（装配 boot-safe，实际调用需自备 ASR/TTS Key 或多模态 embedding 端点）。首期文件上传，录音后续增强。"
+    order: 7
+    priority: P1
+    service: vision-service / voice-service
+    standalone: medium
+    capabilities:
+      - id: vision.caption.json
+        module: multimodal
+        title: 图像描述 (base64)
+        description: "POST /vision/caption，VisionCaptionRequest(imageBase64, mimeType, instruction)。需开启 app.vision.enabled。"
+        method: POST
+        path: /vision/caption
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: imageBase64, in: body, type: text, required: true, label: 图片 base64 }
+          - { name: mimeType, in: body, type: string, required: false, label: MIME 类型, placeholder: "image/png" }
+          - { name: instruction, in: body, type: text, required: false, label: 指令, placeholder: "描述这张图" }
+        requiredScopes: []
+        featureFlag: app.vision.enabled
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: vision.caption.file
+        module: multimodal
+        title: 图像描述 (文件)
+        description: "POST /vision/caption (multipart file + instruction)。需开启 app.vision.enabled。"
+        method: POST
+        path: /vision/caption
+        requestKind: multipart
+        responseKind: json
+        params:
+          - { name: file, in: form-data, type: file, required: true, label: 图片, accept: "image/*" }
+          - { name: instruction, in: form-data, type: text, required: false, label: 指令 }
+        requiredScopes: []
+        featureFlag: app.vision.enabled
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: chat.vision
+        module: multimodal
+        title: 图文对话
+        description: "POST /chat/vision (multipart image + query message)。需开启 app.conversation.vision.enabled。"
+        method: POST
+        path: /chat/vision
+        requestKind: multipart
+        responseKind: json
+        params:
+          - { name: image, in: form-data, type: file, required: true, label: 图片, accept: "image/*" }
+          - { name: message, in: query, type: text, required: false, label: 消息, placeholder: "这张图里有什么？" }
+        requiredScopes: []
+        featureFlag: app.conversation.vision.enabled
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: voice.transcribe
+        module: multimodal
+        title: 语音转写 (ASR)
+        description: "POST /voice/transcribe (multipart audio)。需开启 app.voice.enabled 及 ASR 提供方。"
+        method: POST
+        path: /voice/transcribe
+        requestKind: multipart
+        responseKind: json
+        params:
+          - { name: audio, in: form-data, type: file, required: true, label: 音频文件, accept: "audio/*" }
+        requiredScopes: []
+        featureFlag: app.voice.enabled
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: voice.chat
+        module: multimodal
+        title: 语音对话
+        description: "POST /voice/chat (multipart audio + query chatId)，ASR→对话→TTS。需开启 app.voice.enabled。"
+        method: POST
+        path: /voice/chat
+        requestKind: multipart
+        responseKind: json
+        params:
+          - { name: audio, in: form-data, type: file, required: true, label: 音频文件, accept: "audio/*" }
+          - { name: chatId, in: query, type: string, required: false, label: 会话ID, defaultValue: "default" }
+        requiredScopes: []
+        featureFlag: app.voice.enabled
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: voice.chat.stream
+        module: multimodal
+        title: 语音对话 (流式)
+        description: "POST /voice/chat/stream (multipart audio + SSE)，半流式分句 TTS。需开启 app.voice.enabled。"
+        method: POST
+        path: /voice/chat/stream
+        requestKind: multipart-sse
+        responseKind: sse
+        params:
+          - { name: audio, in: form-data, type: file, required: true, label: 音频文件, accept: "audio/*" }
+          - { name: chatId, in: query, type: string, required: false, label: 会话ID, defaultValue: "default" }
+        requiredScopes: []
+        featureFlag: app.voice.enabled
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+        sseEvents: [message, done, error]
+        tags: [sse]
+      - id: rag.image.ingest
+        module: multimodal
+        title: 图片入库
+        description: "POST /rag/image (multipart image)。需开启 app.rag.multimodal-embedding.enabled，且 ingest scope。"
+        method: POST
+        path: /rag/image
+        requestKind: multipart
+        responseKind: json
+        params:
+          - { name: image, in: form-data, type: file, required: true, label: 图片, accept: "image/*" }
+        requiredScopes: [ingest]
+        featureFlag: app.rag.multimodal-embedding.enabled
+        featureFlagDefault: true
+        riskLevel: caution
+        state: ready
+        executableByDefault: true
+      - id: rag.image.search
+        module: multimodal
+        title: 图片检索
+        description: "POST /rag/image-search，SearchRequest（字段以后端 record 为准）。需开启 app.rag.multimodal-embedding.enabled。"
+        method: POST
+        path: /rag/image-search
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: query, in: body, type: text, required: true, label: 查询, placeholder: "红色的运动鞋" }
+        example: '{"query":"红色的运动鞋"}'
+        requiredScopes: []
+        featureFlag: app.rag.multimodal-embedding.enabled
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+  - id: interop-eval
+    title: 互操作与评测 Interop & Eval Tools
+    description: "MCP/A2A 协议消费 + 检索/回归评测。interop-service / eval-service。"
+    order: 8
+    priority: P2
+    service: interop-service / eval-service
+    standalone: high
+    capabilities:
+      - id: interop.agent-card
+        module: interop-eval
+        title: Agent Card
+        description: "GET /interop/agent-card，平台自身的能力名片。"
+        method: GET
+        path: /interop/agent-card
+        requestKind: none
+        responseKind: json
+        params: []
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: interop.a2a.agent-card
+        module: interop-eval
+        title: A2A Agent Card
+        description: "GET /interop/a2a/agent-card，A2A 协议名片。"
+        method: GET
+        path: /interop/a2a/agent-card
+        requestKind: none
+        responseKind: json
+        params: []
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: interop.mcp.tools
+        module: interop-eval
+        title: MCP 工具列表
+        description: "GET /interop/mcp/tools，列出平台暴露的 MCP 工具。"
+        method: GET
+        path: /interop/mcp/tools
+        requestKind: none
+        responseKind: json
+        params: []
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+        tags: [core]
+      - id: interop.mcp.tool
+        module: interop-eval
+        title: MCP 工具详情
+        description: "GET /interop/mcp/tools/{toolName}。"
+        method: GET
+        path: /interop/mcp/tools/{toolName}
+        requestKind: none
+        responseKind: json
+        params:
+          - { name: toolName, in: path, type: string, required: true, label: 工具名, placeholder: "platform.ping" }
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: interop.mcp.call
+        module: interop-eval
+        title: MCP 工具调用
+        description: "POST /interop/mcp/call，McpToolCallRequest(tool, arguments)。"
+        method: POST
+        path: /interop/mcp/call
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: tool, in: body, type: string, required: true, label: 工具名, placeholder: "platform.ping" }
+          - { name: arguments, in: body, type: json, required: false, label: "参数(JSON 对象)", placeholder: '{}' }
+        example: '{"tool":"platform.ping","arguments":{}}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: interop.a2a.call
+        module: interop-eval
+        title: A2A JSON-RPC
+        description: "POST /interop/a2a，JSON-RPC（message/send、message/stream 等）。字段以 A2A record 为准，此处为占位模板。"
+        method: POST
+        path: /interop/a2a
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: jsonrpc, in: body, type: string, required: true, label: jsonrpc, defaultValue: "2.0" }
+          - { name: id, in: body, type: string, required: false, label: id, defaultValue: "1" }
+          - { name: method, in: body, type: string, required: true, label: method, placeholder: "message/send" }
+          - { name: params, in: body, type: json, required: false, label: "params(JSON，待核验)", placeholder: '{}' }
+        example: '{"jsonrpc":"2.0","id":"1","method":"message/send","params":{}}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: eval.capabilities
+        module: interop-eval
+        title: 评测能力发现
+        description: "GET /eval/capabilities。"
+        method: GET
+        path: /eval/capabilities
+        requestKind: none
+        responseKind: json
+        params: []
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: eval.retrieval
+        module: interop-eval
+        title: 检索评测
+        description: "POST /eval/retrieval，RetrievalRunRequest(cases[], topK, category)。Recall@k/MRR/Hit@k。"
+        method: POST
+        path: /eval/retrieval
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: cases, in: body, type: json, required: true, label: "用例(JSON 数组)", placeholder: '[{"query":"退款","expectedDocIds":["d1"]}]' }
+          - { name: topK, in: body, type: integer, required: false, label: TopK, defaultValue: 5 }
+          - { name: category, in: body, type: string, required: false, label: 类目(可选) }
+        example: '{"cases":[{"query":"退款政策","expectedDocIds":[]}],"topK":5}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: eval.run
+        module: interop-eval
+        title: 端到端评测
+        description: "POST /eval/run，EvalRunRequest(targetBaseUrl, cases[])。"
+        method: POST
+        path: /eval/run
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: targetBaseUrl, in: body, type: string, required: false, label: 目标 base URL }
+          - { name: cases, in: body, type: json, required: true, label: "用例(JSON 数组)" }
+        example: '{"cases":[{"input":"你好","assert":"reply"}]}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: eval.suite.run
+        module: interop-eval
+        title: 运行评测套件
+        description: "POST /eval/suites/{suiteName}/run，EvalSuiteRunRequest(targetBaseUrl)。"
+        method: POST
+        path: /eval/suites/{suiteName}/run
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: suiteName, in: path, type: string, required: true, label: 套件名, placeholder: "baseline" }
+          - { name: targetBaseUrl, in: body, type: string, required: false, label: 目标 base URL }
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: eval.dual-run
+        module: interop-eval
+        title: 双跑对比 (oracle vs candidate)
+        description: "POST /eval/dual-run，EvalDualRunRequest。HTTP 恒 200（信息化门禁明细）。"
+        method: POST
+        path: /eval/dual-run
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: suiteName, in: body, type: string, required: false, label: 套件名 }
+          - { name: candidateBaseUrl, in: body, type: string, required: false, label: candidate base URL }
+          - { name: oracleBaseUrl, in: body, type: string, required: false, label: oracle base URL }
+          - { name: oracleSnapshot, in: body, type: string, required: false, label: oracle 快照 }
+          - { name: runs, in: body, type: integer, required: false, label: 跑数 }
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+      - id: eval.gate
+        module: interop-eval
+        title: CI 门禁 (gate)
+        description: "POST /eval/gate，回归则返回 HTTP 422（供 CI fail），body 为门禁明细。422 是业务门禁结果，非网络错误。"
+        method: POST
+        path: /eval/gate
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: suiteName, in: body, type: string, required: false, label: 套件名 }
+          - { name: candidateBaseUrl, in: body, type: string, required: false, label: candidate base URL }
+          - { name: oracleBaseUrl, in: body, type: string, required: false, label: oracle base URL }
+          - { name: oracleSnapshot, in: body, type: string, required: false, label: oracle 快照 }
+          - { name: runs, in: body, type: integer, required: false, label: 跑数 }
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+  - id: channel
+    title: 渠道 Channel Console
+    description: "出站投递 + 回调桥。channel-service。/channel/messages 有真实外部副作用，默认锁定。"
+    order: 9
+    priority: P2
+    service: channel-service
+    standalone: high
+    capabilities:
+      - id: channel.capabilities
+        module: channel
+        title: 渠道能力发现
+        description: "GET /channel/capabilities，列出已配置的出站渠道。"
+        method: GET
+        path: /channel/capabilities
+        requestKind: none
+        responseKind: json
+        params: []
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
+        tags: [core]
+      - id: channel.messages.send
+        module: channel
+        title: 出站投递 (危险)
+        description: "POST /channel/messages，ChannelMessageRequest(channel,target,message,metadata)。真实外部投递，展示页默认锁定。"
+        method: POST
+        path: /channel/messages
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: channel, in: body, type: string, required: true, label: 渠道, placeholder: "dingtalk" }
+          - { name: target, in: body, type: string, required: true, label: 目标, placeholder: "群/用户 ID" }
+          - { name: message, in: body, type: text, required: true, label: 消息内容 }
+          - { name: metadata, in: body, type: json, required: false, label: "元数据(JSON)", placeholder: '{}' }
+        example: '{"channel":"dingtalk","target":"chat-123","message":"你好"}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: destructive
+        state: display-only
+        executableByDefault: false
+      - id: channel.callbacks.async-task
+        module: channel
+        title: 异步任务回调
+        description: "POST /channel/callbacks/async-task，经 header 传任务状态（演示 header 注入）。body 为任意 payload。"
+        method: POST
+        path: /channel/callbacks/async-task
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: X-Async-Task-Id, in: header, type: string, required: false, label: 任务ID(header) }
+          - { name: X-Async-Task-Status, in: header, type: string, required: false, label: 任务状态(header), placeholder: "SUCCEEDED" }
+        example: '{}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: caution
+        state: ready
+        executableByDefault: true
+      - id: channel.callbacks.workflow
+        module: channel
+        title: 工作流回调
+        description: "POST /channel/callbacks/workflow，经 header 传实例状态。body 为任意 payload。"
+        method: POST
+        path: /channel/callbacks/workflow
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: X-Workflow-Instance-Id, in: header, type: string, required: false, label: 实例ID(header) }
+          - { name: X-Workflow-Status, in: header, type: string, required: false, label: 实例状态(header) }
+        example: '{}'
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: caution
+        state: ready
+        executableByDefault: true
+      - id: channel.inbound
+        module: channel
+        title: 入站事件
+        description: "POST /channel/inbound，ChannelInboundEvent（字段以后端为准）+ 可选 X-Channel-Signature header（仅 inboundSignatureEnabled=true 时校验）。"
+        method: POST
+        path: /channel/inbound
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: X-Channel-Signature, in: header, type: string, required: false, label: 签名(可选 header) }
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: caution
+        state: ready
+        executableByDefault: true

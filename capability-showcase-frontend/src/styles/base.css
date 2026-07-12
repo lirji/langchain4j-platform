@@ -1,0 +1,327 @@
+/* 基础重置与全局排版（在 tokens.css 之后引入）。 */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: 1.55;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+input,
+textarea,
+select,
+button {
+  font-family: inherit;
+}
+
+code,
+pre,
+kbd {
+  font-family: var(--font-mono);
+}
+
+/* 统一焦点环：仅键盘可见（:focus-visible） */
+:focus-visible {
+  outline: var(--ring-w) solid var(--ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* 滚动条美化：渐变 thumb，hover 提亮为主色；Firefox 用 scrollbar-color */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--border-strong), var(--border));
+  border-radius: var(--radius-pill);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--primary), var(--primary-hover));
+  background-clip: content-box;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  line-height: 1.4;
+}
+
+/* 全局表单控件基样式（供 fields/* 复用，跨 scoped 边界） */
+.form-control {
+  width: 100%;
+  min-height: var(--control-h);
+  padding: 0 var(--control-px);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  font-size: var(--fs-base);
+  transition: border-color var(--dur), box-shadow var(--dur);
+}
+.form-control::placeholder {
+  color: var(--text-subtle);
+}
+.form-control:hover {
+  border-color: var(--text-subtle);
+}
+.form-control:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-border);
+}
+textarea.form-control {
+  min-height: 84px;
+  padding: var(--space-2) var(--control-px);
+  resize: vertical;
+  line-height: 1.5;
+}
+.form-control--mono {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+}
+.field--error .form-control {
+  border-color: var(--danger);
+}
+
+/* 通用按钮 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--control-h);
+  padding: 0 var(--control-px);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease),
+    filter var(--dur) var(--ease), transform var(--dur-fast) var(--ease-spring);
+}
+.btn:hover:not(:disabled) {
+  background: var(--surface-3);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.985);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.btn--primary {
+  color: var(--primary-fg);
+  background: var(--gradient-primary);
+  border-color: transparent;
+  box-shadow: var(--glow-primary);
+}
+.btn--primary:hover:not(:disabled) {
+  background: var(--gradient-primary);
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+.btn--stream {
+  color: var(--primary-fg);
+  background: var(--gradient-accent);
+  border-color: transparent;
+  box-shadow: var(--glow-stream);
+}
+.btn--stream:hover:not(:disabled) {
+  background: var(--gradient-accent);
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+.btn--danger {
+  color: var(--primary-fg);
+  background: var(--danger);
+  border-color: transparent;
+  box-shadow: var(--glow-danger);
+}
+.btn--danger:hover:not(:disabled) {
+  background: var(--danger);
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+.btn--ghost {
+  background: transparent;
+  border-color: var(--border-strong);
+  box-shadow: none;
+}
+.btn--ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+/* 小尺寸变体：紧凑工具按钮（模块级操作 / 抽屉内动作） */
+.btn--sm {
+  min-height: var(--control-h-sm);
+  padding: 0 var(--space-2);
+  font-size: var(--fs-xs);
+}
+/* 加载态：隐藏文字，居中转圈 spinner（不改变尺寸/布局） */
+.btn--loading {
+  color: transparent !important;
+  pointer-events: none;
+  position: relative;
+}
+.btn--loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 15px;
+  height: 15px;
+  margin: -8px 0 0 -8px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--primary-fg) 35%, transparent);
+  border-top-color: var(--primary-fg);
+  animation: spin 0.7s linear infinite;
+}
+
+/* 全局复用动画：转圈（spinner / loading）与骨架微光 */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* 骨架屏工具类：半透明实底 + 掠过高光（仅 transform 动画） */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* reduced-motion 降级：去除过渡/动画 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* 玻璃模糊降档，降低移动/低性能设备负担 */
+  :root {
+    --glass-blur: 6px;
+    --glass-blur-strong: 8px;
+  }
+}
+
+/* ── 商业化升级 · 批1：版式与页容器工具类 ── */
+
+/* 小标签（eyebrow）：分组标题 / 模块头小节题 */
+.eyebrow {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-caps);
+  color: var(--text-subtle);
+}
+
+/* 页容器：统一最大宽度 + 页边距（随断点收窄） */
+.page {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--page-py) var(--page-px);
+}
+.page--wide {
+  max-width: var(--content-max-wide);
+}
+
+@media (max-width: 1023px) {
+  :root {
+    --page-px: var(--space-5);
+  }
+}
+@media (max-width: 640px) {
+  :root {
+    --page-px: var(--space-4);
+    --page-py: var(--space-5);
+  }
+}

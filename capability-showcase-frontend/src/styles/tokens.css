@@ -1,0 +1,325 @@
+/*
+ * 设计令牌（Design Tokens）—— 克制技术风：冷调 slate + 技术蓝，流式态独立青色。
+ * 浅/深双主题对等（WCAG AA 对比度）。主题由 ui store 在 <html data-theme> 上切换；
+ * @media (prefers-color-scheme) 仅作 JS 未就绪前的首屏兜底。
+ */
+
+:root {
+  /* 间距 / 圆角 / 阴影 / 字号（主题无关） */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-8: 48px;
+
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace;
+
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-base: 14px;
+  --fs-md: 15px;
+  --fs-lg: 18px;
+  --fs-xl: 22px;
+  --fs-2xl: 28px;
+
+  --header-h: 56px;
+  --sidenav-w: 288px;
+
+  --ring-w: 2px;
+  /* 动效时长 / 缓动（主题无关）——保留现有 --ease，新增语义化梯度 */
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 320ms;
+  --dur: var(--dur-base);
+  --ease: cubic-bezier(0.2, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --glass-blur: 14px;
+  --glass-blur-strong: 20px;
+
+  /* ── 浅色主题（默认） ── */
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --surface-3: #e8edf5;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+
+  --text: #0f172a;
+  --text-muted: #475569;
+  --text-subtle: #64748b;
+
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-fg: #ffffff;
+  --primary-soft: #eff6ff;
+  --primary-border: #bfdbfe;
+
+  --stream: #0e7490;
+  --stream-strong: #0891b2;
+  --stream-soft: #ecfeff;
+  --stream-border: #a5f3fc;
+
+  --success: #15803d;
+  --success-soft: #f0fdf4;
+  --success-border: #bbf7d0;
+
+  --warning: #b45309;
+  --warning-soft: #fffbeb;
+  --warning-border: #fde68a;
+
+  --danger: #b91c1c;
+  --danger-soft: #fef2f2;
+  --danger-border: #fecaca;
+
+  --neutral: #475569;
+  --neutral-soft: #f1f5f9;
+  --neutral-border: #cbd5e1;
+
+  --info: #4338ca;
+  --info-soft: #eef2ff;
+
+  /* ── 毛玻璃 / 渐变 / 光晕（浅色） ── */
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-bg-strong: rgba(255, 255, 255, 0.86);
+  --glass-border: rgba(15, 23, 42, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.9);
+
+  --gradient-app: radial-gradient(1100px 620px at 12% -8%, #eaf1ff 0%, rgba(234, 241, 255, 0) 60%),
+    radial-gradient(980px 680px at 108% 6%, #e8f7fb 0%, rgba(232, 247, 251, 0) 55%),
+    linear-gradient(180deg, #f6f8fd 0%, #eef2fa 100%);
+  /* 深化浅色主按钮渐变，确保白字全程 ≥ AA 4.5:1（#3b82f6 上白字仅 ~3.9:1）。 */
+  --gradient-primary: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  --gradient-accent: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+  --gradient-text: linear-gradient(120deg, #1e3a8a 0%, #2563eb 46%, #0891b2 100%);
+
+  --aurora-1: rgba(37, 99, 235, 0.1);
+  --aurora-2: rgba(8, 145, 178, 0.08);
+
+  --glow-primary: 0 0 0 1px rgba(37, 99, 235, 0.12), 0 8px 24px -8px rgba(37, 99, 235, 0.35);
+  --glow-stream: 0 0 0 1px rgba(8, 145, 178, 0.16), 0 8px 26px -8px rgba(8, 145, 178, 0.38);
+  --glow-danger: 0 0 0 1px rgba(185, 28, 28, 0.14), 0 6px 20px -8px rgba(185, 28, 28, 0.3);
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 1px rgba(15, 23, 42, 0.04);
+  --shadow: 0 2px 6px -2px rgba(15, 23, 42, 0.08), 0 8px 24px -8px rgba(15, 23, 42, 0.14);
+  --shadow-lg: 0 8px 20px -6px rgba(15, 23, 42, 0.16), 0 24px 48px -12px rgba(15, 23, 42, 0.22);
+  --shadow-glass: inset 0 1px 0 var(--glass-highlight), 0 2px 6px -2px rgba(15, 23, 42, 0.08),
+    0 12px 28px -12px rgba(15, 23, 42, 0.16);
+
+  --code-bg: rgba(241, 245, 249, 0.72);
+  --code-border: var(--border);
+
+  --ring: var(--primary);
+
+  color-scheme: light;
+}
+
+/* 深色主题：显式 data-theme="dark" 优先 */
+:root[data-theme='dark'] {
+  --bg: #0a0f1c;
+  --surface: #0f1729;
+  --surface-2: #172033;
+  --surface-3: #1e293b;
+  --border: #1e293b;
+  --border-strong: #334155;
+
+  --text: #e6edf7;
+  --text-muted: #a3b1c6;
+  --text-subtle: #7c8aa3;
+
+  --primary: #60a5fa;
+  --primary-hover: #93c5fd;
+  --primary-fg: #071018;
+  --primary-soft: #13233f;
+  --primary-border: #1e3a5f;
+
+  --stream: #67e8f9;
+  --stream-strong: #22d3ee;
+  --stream-soft: #0a2b34;
+  --stream-border: #155e6b;
+
+  --success: #4ade80;
+  --success-soft: #0e2a1a;
+  --success-border: #1a5334;
+
+  --warning: #fbbf24;
+  --warning-soft: #2c210a;
+  --warning-border: #5a4413;
+
+  --danger: #f87171;
+  --danger-soft: #2c1113;
+  --danger-border: #5a2124;
+
+  --neutral: #94a3b8;
+  --neutral-soft: #172033;
+  --neutral-border: #334155;
+
+  --info: #a5b4fc;
+  --info-soft: #1a1f3d;
+
+  /* ── 毛玻璃 / 渐变 / 光晕（深色） ── */
+  --glass-bg: rgba(17, 25, 43, 0.62);
+  --glass-bg-strong: rgba(15, 23, 41, 0.82);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.06);
+
+  --gradient-app: radial-gradient(1100px 620px at 12% -8%, #10203f 0%, rgba(16, 32, 63, 0) 60%),
+    radial-gradient(980px 680px at 108% 6%, #0a2a34 0%, rgba(10, 42, 52, 0) 55%),
+    linear-gradient(180deg, #0a0f1c 0%, #070b14 100%);
+  --gradient-primary: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  --gradient-accent: linear-gradient(135deg, #22d3ee 0%, #38bdf8 100%);
+  --gradient-text: linear-gradient(120deg, #93c5fd 0%, #60a5fa 46%, #67e8f9 100%);
+
+  --aurora-1: rgba(56, 120, 255, 0.16);
+  --aurora-2: rgba(34, 211, 238, 0.12);
+
+  --glow-primary: 0 0 0 1px rgba(96, 165, 250, 0.24), 0 8px 28px -8px rgba(96, 165, 250, 0.45);
+  --glow-stream: 0 0 0 1px rgba(34, 211, 238, 0.28), 0 0 28px -6px rgba(34, 211, 238, 0.5);
+  --glow-danger: 0 0 0 1px rgba(248, 113, 113, 0.22), 0 6px 22px -8px rgba(248, 113, 113, 0.4);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.45), 0 12px 30px -10px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 28px -8px rgba(0, 0, 0, 0.55), 0 28px 60px -16px rgba(0, 0, 0, 0.65);
+  --shadow-glass: inset 0 1px 0 var(--glass-highlight), 0 2px 8px -2px rgba(0, 0, 0, 0.45),
+    0 16px 40px -14px rgba(0, 0, 0, 0.6);
+
+  --code-bg: rgba(9, 14, 26, 0.66);
+  --code-border: rgba(255, 255, 255, 0.06);
+
+  --ring: var(--primary);
+
+  color-scheme: dark;
+}
+
+/* 首屏兜底：JS 未设 data-theme 且系统偏好深色 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']):not([data-theme='dark']) {
+    --bg: #0a0f1c;
+    --surface: #0f1729;
+    --surface-2: #172033;
+    --surface-3: #1e293b;
+    --border: #1e293b;
+    --border-strong: #334155;
+    --text: #e6edf7;
+    --text-muted: #a3b1c6;
+    --text-subtle: #7c8aa3;
+    --primary: #60a5fa;
+    --primary-fg: #071018;
+    --primary-soft: #13233f;
+    --stream: #67e8f9;
+    --stream-strong: #22d3ee;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --danger: #f87171;
+    --neutral: #94a3b8;
+    --glass-bg: rgba(17, 25, 43, 0.62);
+    --glass-bg-strong: rgba(15, 23, 41, 0.82);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --gradient-app: radial-gradient(1100px 620px at 12% -8%, #10203f 0%, rgba(16, 32, 63, 0) 60%),
+      radial-gradient(980px 680px at 108% 6%, #0a2a34 0%, rgba(10, 42, 52, 0) 55%),
+      linear-gradient(180deg, #0a0f1c 0%, #070b14 100%);
+    --code-bg: rgba(9, 14, 26, 0.66);
+    color-scheme: dark;
+  }
+}
+
+/*
+ * backdrop-filter 不支持时的兜底：把玻璃面 / 代码面回退成不透明实底，
+ * 避免透出背景导致对比不足（浅/深各一份，含首屏兜底）。
+ */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --glass-bg: var(--surface);
+    --glass-bg-strong: var(--surface);
+    --code-bg: var(--surface-2);
+  }
+  :root[data-theme='dark'] {
+    --glass-bg: var(--surface);
+    --glass-bg-strong: var(--surface);
+    --code-bg: var(--surface-2);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']):not([data-theme='dark']) {
+      --glass-bg: var(--surface);
+      --glass-bg-strong: var(--surface);
+      --code-bg: var(--surface-2);
+    }
+  }
+}
+
+/*
+ * ── 商业化升级 · 批1：布局基座扩展令牌（主题无关，纯追加，不改旧值） ──
+ * 间距补位 / 排版梯度 / 布局尺度 / z 梯度 / 密度（comfortable 默认，compact 覆盖）。
+ */
+:root {
+  /* 间距补位 */
+  --space-0-5: 2px;
+  --space-7: 40px;
+  --space-10: 64px;
+
+  /* 排版梯度 */
+  --fs-display: 34px;
+  --lh-tight: 1.25;
+  --lh-snug: 1.4;
+  --lh-base: 1.55;
+  --lh-relaxed: 1.65;
+  --ls-tight: -0.011em;
+  --ls-snug: -0.006em;
+  --ls-caps: 0.08em;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /* 布局尺度 */
+  /* 全站页容器统一宽度：所有模块页（含专用视图）都对齐到此值，避免各自硬编码导致漂移。 */
+  --content-max: 1320px;
+  --content-max-wide: 1320px;
+  --content-narrow: 1000px;
+  --page-px: var(--space-6);
+  --page-py: var(--space-6);
+  /* 能力/模块卡片网格的统一最小列宽（auto-fill 的 minmax 基准），收敛各模块卡片宽度。 */
+  --card-min: 300px;
+  --section-gap: var(--space-7);
+
+  /* z 梯度：统一叠放次序（header < scrim < drawer < popover < cmdk < toast < skip） */
+  --z-header: 20;
+  --z-scrim: 30;
+  --z-drawer: 40;
+  --z-popover: 60;
+  --z-cmdk: 80;
+  --z-toast: 90;
+  --z-skip: 100;
+
+  /* 密度（默认舒适） */
+  --control-h: 36px;
+  --control-h-sm: 30px;
+  --control-px: 12px;
+  --row-py: 8px;
+  --field-gap: var(--space-4);
+  --section-py: var(--space-5);
+  --card-pad: var(--space-4);
+  /* 运行器请求表单的统一最大宽度：所有字段（含多行/文件/JSON）都收敛到此宽度、靠左，
+     使每个能力页的表单等宽一致，短表单也不会被拉满整卡。 */
+  --form-max: 520px;
+}
+
+/* 紧凑密度：由 ui store 写入 <html data-density='compact'> */
+:root[data-density='compact'] {
+  --control-h: 30px;
+  --control-h-sm: 26px;
+  --control-px: 10px;
+  --row-py: 5px;
+  --field-gap: var(--space-3);
+  --section-py: var(--space-4);
+  --card-pad: var(--space-3);
+}
