@@ -45,6 +45,8 @@
 - [成本归因与配额指南](平台工程/cost-attribution.md)：per-tenant USD 成本归因 + token 预算，redis 默认的分布式计数（水平扩容正确性）、`/actuator/{tokenbudget,cost}`。
 - [评测指南](平台工程/eval-guide.md)：eval-service `/eval/**` 回归客户端、检索召回评测（Recall@k/MRR/Hit@k）、baseline suite、对冻结单体双跑 oracle 门禁。
 - [部署指南](平台工程/deployment-guide.md)：本地 docker-compose、k8s/Helm 伞状 chart、External Secrets、Service DNS、Config Server。
+- [能力展示与试用控制台](平台工程/能力展示控制台.md)：前后端分离的独立前端 `capability-showcase-frontend/`（Vue3 静态 SPA，可独立部署）；direct mode 带 X-Api-Key 跨域直调业务能力、能力五态诚实呈现、catalog 静态数据驱动；后端仅 edge-gateway 加 CORS。
+- [能力前端模块拆分建议](平台工程/能力前端模块拆分建议.md)：平台能力 → 可独立拆出的前端模块（Chat/RAG/Agent/Async/Analytics/Workflow/Multimodal/Interop-Eval/Channel）的边界、优先级与拆分性。
 - [数据存储清单](参考/databases.md)：MySQL/Redis/Qdrant/Kafka/H2 的端口、账号密码、所属服务与落库开关；含可选向量库（pgvector/milvus/chroma/doris）。
 
 ## 当前定位
