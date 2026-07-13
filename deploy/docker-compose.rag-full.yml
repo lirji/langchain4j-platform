@@ -1,5 +1,6 @@
 # 语义 RAG 全量模式(override):knowledge-service 用持久化后端 + Ollama 语义 embedding。
-# 覆盖磁盘默认(默认是 in-memory + hash embedding)。当前本机运行态就等价于这份配置。
+# 【注意】nomic 语义 embedding + qdrant/redis/jdbc 持久化现已并入基础 docker-compose.yml 默认，本 override 已冗余；
+#         保留仅为兼容既有文档/脚本的显式分层用法。基础栈默认即等价于这份配置。
 #
 # 用法(叠加在基础 compose 上):
 #   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.rag-full.yml up -d --no-deps knowledge-service
@@ -25,3 +26,6 @@ services:
       # nomic 非对称任务前缀(尾部空格必须保留):对齐 query/document 向量空间,提升检索准确率
       RAG_EMBEDDING_QUERY_PREFIX: "search_query: "
       RAG_EMBEDDING_DOCUMENT_PREFIX: "search_document: "
+      # 混合检索关键词半边用 HanLP 中文分词(默认 simple=bigram);仅影响 keyword/graph 分支,不碰向量。
+      # 依赖已在 knowledge-service/pom.xml(portable 内置词典)。重启会清空内存 DocumentMirror,需重灌填充。
+      RAG_HYBRID_TOKENIZER: hanlp

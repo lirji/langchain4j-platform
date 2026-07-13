@@ -1,0 +1,56 @@
+# ES 全文混排 override（es-hybrid-rerank）。
+# 【注意】ES/Kibana 与 ES 混排现已并入基础 docker-compose.yml 默认开启，本 override 对标准栈已冗余；
+#         保留仅为：冒烟脚本 smoke-es-hybrid-rag.sh 的显式分层、或想在非默认 compose 组合里单独叠加 ES。
+# 叠加在基础 compose 之上，起一个带中文分析器(smartcn)的 Elasticsearch，并让 knowledge-service 开启 ES 混排 + RRF。
+#
+# 用法（在语义 embedding 之上再开 ES）：
+#   docker compose -f deploy/docker-compose.yml \
+#                  -f deploy/docker-compose.rag-full.yml \
+#                  -f deploy/docker-compose.es.yml \
+#                  up -d --build elasticsearch knowledge-service
+#
+# 开启后需重灌文档以填充 ES 索引（向量在 qdrant 不受影响）：bash deploy/seed-kb.sh
+# 关闭回滚：去掉本 override 重启 knowledge-service 即回到 向量 + 内存关键词（RAG_ES_ENABLED 默认 false）。
+services:
+  elasticsearch:
+    build: ./es
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  # Kibana：浏览/查询 ES 数据的官方 Web UI（Discover 看文档、Dev Tools 跑 DSL）。
+  # http://localhost:5601 → Dev Tools 里跑： GET knowledge_segments_text/_search
+  # 较重(~1G+ RAM)，仅 --es 时起；不需要可 docker compose stop kibana。
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.3
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      SERVER_PUBLICBASEURL: http://localhost:5601
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  knowledge-service:
+    environment:
+      RAG_ES_ENABLED: "true"
+      RAG_ES_URIS: http://elasticsearch:9200
+      RAG_ES_ANALYZER: smartcn        # 中文分析器（镜像已装 analysis-smartcn）
+      RAG_FUSION_STRATEGY: rrf         # ES 开启默认即 rrf；此处显式固化，免疫 BM25/余弦量纲差
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+volumes:
+  es-data:

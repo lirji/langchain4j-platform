@@ -4,15 +4,23 @@
 # 上传后打印每篇的 segmentCount(= chunk 数),再跑几条检索验证跨文档命中。
 #
 # 用法：
-#   bash deploy/seed-kb.sh            # 导入 + 检索验证
+#   bash deploy/seed-kb.sh            # 导入到租户 acme + 检索验证
 #   bash deploy/seed-kb.sh --purge    # 先删除这些同名文档再重新导入(干净演示)
+#   bash deploy/seed-kb.sh --public   # 导入到公共/共享库(全租户可读),需 public-ingest 的 api-key
 #   BASE_URL=http://127.0.0.1:8080 bash deploy/seed-kb.sh
 #
-# 依赖：curl + python3。说明见 docs/对话与检索/rag-api-demo.md。
+# 注意：--public 灌入后，各租户要能查到还需 knowledge-service 开启 RAG_PUBLIC_ENABLED=true。
+# 依赖：curl + python3。说明见 docs/对话与检索/rag-api-demo.md、docs/平台工程/rbac-and-public-kb.md。
 set -euo pipefail
 
+PUBLIC=0
+[[ "${1:-}" == "--public" ]] && PUBLIC=1
+# 公共库写入需 public-ingest scope；dev-key-acme 已具备（dev-key-acme-ingest 仅 ingest，不能写公共库）。
+DEFAULT_KEY="dev-key-acme-ingest"
+[[ "$PUBLIC" == "1" ]] && DEFAULT_KEY="dev-key-acme"
+
 BASE_URL="${BASE_URL:-http://127.0.0.1:18080}"
-API_KEY="${API_KEY:-dev-key-acme-ingest}"
+API_KEY="${API_KEY:-$DEFAULT_KEY}"
 DOC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/sample-docs" && pwd)"
 PURGE=0
 [[ "${1:-}" == "--purge" ]] && PURGE=1
@@ -39,12 +47,15 @@ print("  (清理完成)")
 PY
 fi
 
-hr "导入示例知识库(multipart 上传，服务端自动 chunk + embed)"
+VIS_ARGS=()
+[[ "$PUBLIC" == "1" ]] && VIS_ARGS=(-F "visibility=public")
+hr "导入示例知识库(multipart 上传，服务端自动 chunk + embed)$([[ "$PUBLIC" == "1" ]] && echo ' [公共/共享库]')"
 for f in "$DOC_DIR"/*.md; do
   resp="$(curl -fsS -X POST "$BASE_URL/rag/documents" \
     -H "X-Api-Key: $API_KEY" \
     -F "file=@$f;type=text/markdown" \
-    -F "category=客服")"
+    -F "category=客服" \
+    "${VIS_ARGS[@]}")"
   RESP="$resp" python3 - <<'PY'
 import json, os
 d = json.loads(os.environ["RESP"])

@@ -121,6 +121,17 @@ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out jwt-private.pe
 openssl pkey -in jwt-private.pem -pubout -out jwt-public.pem
 ```
 
+## 会话 JWT 与 auth-service（登录 / RBAC）
+
+登录会话 JWT 由 auth-service 签发、edge-gateway 验签后换发内部 JWT。其密钥 `SESSION_JWT_SECRET` 放**第三个** Secret
+`auth-session-jwt`，**只** envFrom 注入 `auth-service` 与 `edge-gateway`（`secrets.sessionJwt`）——绝不注入其它下游（下游只认内部 JWT）。验证只有这两个 Deployment 引用：
+
+```bash
+helm template platform deploy/helm/platform | grep -c auth-session-jwt   # 期望 2 处 envFrom 引用（auth + edge）+ 1 处 Secret 定义
+```
+
+RBAC 相关 env 在 `services.auth-service.env`，**生产默认全关**分阶段灰度（`AUTH_RBAC_ENABLED=false`、`AUTH_RBAC_ADMIN_WRITES_ENABLED=false`、`AUTH_SEED_ENABLED=false`），开启前须设 `AUTH_RBAC_BOOTSTRAP_ADMIN_USERS` 真实名单并确认迁移完成。详见 `docs/平台工程/rbac-and-public-kb.md`。
+
 api-key→租户 目录以 Secret（`edge-gateway-apikeys`）卷挂载到 `/etc/platform/apikeys/apikeys.yaml`，
 gateway 用 `SPRING_CONFIG_IMPORT` 追加 `optional:file:` 导入，避免把 api-key 目录烤进镜像。
 

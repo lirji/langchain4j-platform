@@ -90,6 +90,8 @@ config:
   EVAL_URI: "http://eval-service:8089"
   VISION_URI: "http://vision-service:8090"
   VOICE_URI: "http://voice-service:8091"
+  # 登录/RBAC 服务（edge-gateway 路由 /auth/** 到此）。
+  AUTH_URI: "http://auth-service:8092"
 
   # --- eval 客户端目标（打自己的边缘网关） ---
   EVAL_TARGET_BASE_URL: "http://edge-gateway:8080"
@@ -127,6 +129,17 @@ config:
   RAG_GRAPH_QUERY_TOP_K: "20"
   RAG_GRAPH_DB_URL: "jdbc:mysql://mysql:3306/knowledge_graph?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true"
   RAG_GRAPH_DB_USER: "root"
+  # --- ES 全文混排（es-hybrid-rerank，默认开）。需外部 ES（装中文分析器插件 smartcn/analysis-ik），
+  #     由 externalInfra.elasticsearch 提供 DNS。ES 不可达时惰性连接 + 查询降级，不阻断启动/查询。
+  #     不想用：置 RAG_ES_ENABLED=false 且 externalInfra.elasticsearch.enabled=false。
+  #     注：Kibana 是 dev 可视化工具（仅 docker-compose 内含），不进 prod chart。 ---
+  RAG_ES_ENABLED: "true"
+  RAG_ES_URIS: "http://elasticsearch:9200"
+  RAG_ES_INDEX_NAME: "knowledge_segments_text"
+  RAG_ES_ANALYZER: "smartcn"
+  RAG_FUSION_STRATEGY: "rrf"       # ES 开启显式固化 rrf；留空亦会取有效默认（ES 开→rrf，关→weighted_max）
+  RAG_FUSION_RRF_K: "60"
+  RAG_RANKING_ES_WEIGHT: "1.0"
 
   # --- conversation（可选 RAG 增强） ---
   CONVERSATION_RAG_ENABLED: "false"
@@ -210,6 +223,8 @@ secrets:
     NL2SQL_DB_ADMIN_PASSWORD: "change-me"
     ASYNC_TASK_DB_PASSWORD: "change-me"
     RAG_GRAPH_DB_PASSWORD: "change-me"
+    # auth-service 账号库口令（AUTH_STORE=jdbc 时）。
+    AUTH_DB_PASSWORD: "change-me"
     # workflow outbox HMAC 签名密钥。
     WORKFLOW_OUTBOX_HMAC_SECRET: "dev-secret-change-me"
     # channel 出站签名密钥（CHANNEL_OUTBOUND_SIGNATURE_ENABLED=true 时用）。
@@ -224,6 +239,12 @@ secrets:
       -----BEGIN PRIVATE KEY-----
       REPLACE_WITH_RS256_PRIVATE_KEY_VIA_EXTERNAL_SECRETS
       -----END PRIVATE KEY-----
+
+  # --- 会话 JWT 密钥：auth-session-jwt（仅 auth-service 与 edge-gateway envFrom） ---
+  # auth 用它签发登录会话 JWT、edge 用它验签后换发内部 JWT。**绝不注入其它下游**（下游只认内部 JWT）。
+  # 必须 >=32 字节。生产经 ESO 从 Vault 注入。
+  sessionJwt:
+    SESSION_JWT_SECRET: "dev-only-session-secret-change-me-please-32b"
 
   # --- edge-gateway api-key→租户 目录（Secret 卷挂载为 yaml，SPRING_CONFIG_IMPORT 追加导入） ---
   # 占位与 edge-gateway/application.yml 一致；生产从 Vault 注入真实目录。
@@ -278,6 +299,11 @@ externalInfra:
   litellm:
     enabled: true
     externalName: litellm.external.example.com
+  # ES 全文混排默认开（config.RAG_ES_ENABLED=true）→ knowledge-service 解析 http://elasticsearch:9200。
+  # 生产替换为真实 ES 集群 FQDN；不用 ES 时置 enabled=false 且 config.RAG_ES_ENABLED=false。
+  elasticsearch:
+    enabled: true
+    externalName: elasticsearch.external.example.com
 
 # -----------------------------------------------------------------------------
 # edge-gateway 对外暴露：Ingress（默认）或直接把 services.edge-gateway.service.type 设为 LoadBalancer
@@ -315,9 +341,10 @@ services:
     service:
       # 默认 ClusterIP + 走 Ingress；也可直接改 LoadBalancer（并设 ingress.enabled=false）。
       type: ClusterIP
-    # 额外挂 gateway 私钥 Secret（下游不挂 → RS256 私钥隔离）。
+    # 额外挂 gateway 私钥 Secret（下游不挂 → RS256 私钥隔离）+ 会话密钥（验签会话 Bearer 换发内部 JWT）。
     envFrom:
       - secret: edge-gateway-jwt
+      - secret: auth-session-jwt
     env:
       # 覆盖 spring.config.import：叠加配置中心 + 卷内 api-key 目录（Secret 挂载）。
       - name: SPRING_CONFIG_IMPORT
@@ -403,6 +430,34 @@ services:
   voice-service:
     port: 8091
     replicaCount: 1
+
+  # -------- 登录 / RBAC --------
+  auth-service:
+    port: 8092
+    replicaCount: 1
+    # 会话签名密钥仅注入 auth 与 edge（下游不挂）。
+    envFrom:
+      - secret: auth-session-jwt
+    env:
+      - name: AUTH_STORE
+        value: "jdbc"
+      - name: AUTH_DB_URL
+        value: "jdbc:mysql://mysql:3306/auth?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&nullCatalogMeansCurrent=true"
+      - name: AUTH_DB_USER
+        value: "root"
+      # RBAC 默认关（生产分阶段灰度）：先 expand 部署建表/迁移，稳定后再开 enabled、再开 admin-writes。
+      # 开启前必须设置真实 bootstrap-admin 名单并确认迁移 COMPLETE。
+      - name: AUTH_RBAC_ENABLED
+        value: "false"
+      - name: AUTH_RBAC_ADMIN_WRITES_ENABLED
+        value: "false"
+      - name: AUTH_RBAC_BOOTSTRAP_ADMIN_USERS
+        value: ""
+      - name: AUTH_REGISTRATION_ENABLED
+        value: "false"
+      # 生产不自动灌 demo 账号：首个用户走受控 SQL / 一次性流程。
+      - name: AUTH_SEED_ENABLED
+        value: "false"
 
   # eval-service 是回归测试客户端，不是常驻业务服务。默认副本 0（不常驻）；
   # 需要跑评测时临时 `--set services.eval-service.replicaCount=1` 或改造成 Job/CronJob 按需触发。

@@ -12,9 +12,13 @@
 #   start-dev.sh —— 前端 = vite dev(:5173, 有 HMR)，日常改前端时用。
 #
 # 用法：
-#   ./start-all.sh            # 构建并起【全部服务(含前端 nginx + 基础设施)】—— 首次/改动后用
-#   ./start-all.sh --no-build # 不重新构建，直接用已有镜像拉起(快)
+#   ./start-all.sh            # mvn package + 构建并起【全部服务(含前端 nginx + 基础设施)】—— 首次/改动后用
+#   ./start-all.sh --no-build # 不打包不重建，直接用已有镜像拉起(快)
 #   ./start-all.sh --recreate # 强制重建容器(--force-recreate)，确保 compose 里的能力开关生效
+#   ./start-all.sh --es       # (已弃用) ES 全文混排 + nomic 现已默认；本开关保留为兼容 no-op
+#
+# 默认栈已含 Elasticsearch(smartcn)+Kibana，knowledge-service 默认 nomic 语义 embedding。
+# 前置：宿主机 `ollama pull nomic-embed-text`（缺则 RAG 入库/检索报错）。零依赖回退：export RAG_EMBEDDING_PROVIDER=hash RAG_ES_ENABLED=false。
 #
 # 可用环境变量覆盖端口：EDGE_HOST_PORT(默认 18080) / VISION_HOST_PORT / MYSQL_HOST_PORT
 #
@@ -35,6 +39,7 @@ for arg in "$@"; do
   case "$arg" in
     --no-build) BUILD_FLAG="" ;;
     --recreate) RECREATE_FLAG="--force-recreate" ;;
+    --es)       echo "ℹ  --es 已弃用：ES 全文混排 + nomic 现为默认（见 docker-compose.yml），无需再加。" ;;
     -h|--help)  grep -E '^#( |$)' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "未知参数: $arg（可用: --no-build, --recreate）"; exit 2 ;;
   esac
@@ -50,6 +55,13 @@ echo "▶ 全 docker 拉起【前端 nginx + 后端 + 基础设施】"
 echo "  端口: gateway=${EDGE_HOST_PORT} vision=${VISION_HOST_PORT} mysql=${MYSQL_HOST_PORT} frontend=8093"
 echo "  前端网关基址(构建期): ${SHOWCASE_EDGE_BASE_URL}"
 echo
+
+# ── 改了后端代码必须先打 jar：各服务 Dockerfile 是 COPY target/*.jar，--build 只重建镜像不打包。
+#    默认走 --build，故默认前置一次全量 package；--no-build 时跳过（直接用已有镜像）。──
+if [ -n "$BUILD_FLAG" ]; then
+  echo "▶ mvn -DskipTests package（构建前置，避免镜像装旧 jar）"
+  ( cd .. && mvn -DskipTests package )
+fi
 
 # ── 拉起全部服务（不排除任何 service，含前端与基础设施）──
 # shellcheck disable=SC2086

@@ -1,5 +1,7 @@
-# 本地整网：LiteLLM(AI 网关) + Redis + MySQL + Kafka + edge-gateway + conversation-service + workflow-service
-# 用法见 deploy/README.md。基础设施(litellm/redis/mysql/kafka)先起，应用服务需先 `mvn -DskipTests package`。
+# 本地整网：LiteLLM(AI 网关) + Redis + MySQL + Kafka + Qdrant + Elasticsearch/Kibana + 各服务。
+# 用法见 deploy/README.md。基础设施(litellm/redis/mysql/kafka/qdrant/elasticsearch/kibana)先起，应用服务需先 `mvn -DskipTests package`。
+# 注意：knowledge-service 默认走 nomic 语义 embedding（宿主机 Ollama）+ ES 全文混排(RRF)，
+#       前置 `ollama pull nomic-embed-text`；要零依赖可设 RAG_EMBEDDING_PROVIDER=hash / RAG_ES_ENABLED=false。
 name: langchain4j-platform
 
 services:
@@ -58,6 +60,37 @@ services:
       - "6334:6334"
     volumes:
       - qdrant-data:/qdrant/storage
+
+  # Elasticsearch（默认开启，ES 全文混排 + RRF）。自建镜像装 analysis-smartcn 中文分析器。
+  # knowledge-service 用自建 EsGateway，故其 application.yml 已排除 Spring 的 ES 自动配置/健康指示器。
+  elasticsearch:
+    build: ./es
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  # Kibana：浏览/查询 ES 数据的官方 Web UI（http://localhost:5601 → Dev Tools 跑 DSL）。
+  # 较重(~1G+ RAM)；不需要可 `docker compose stop kibana`（不影响 ES 混排）。
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.3
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      SERVER_PUBLICBASEURL: http://localhost:5601
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
 
   # 集中配置分发（可选）。默认 native 后端（读打包进 jar 的 config/ 目录），无需 git。
   # 刻意不作为其它服务的 depends_on 阻塞条件：各服务用 optional import，server 不在也照常启动。
@@ -152,17 +185,34 @@ services:
   knowledge-service:
     build:
       context: ../knowledge-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # 容器内回连宿主机 Ollama（nomic embedding）
     environment:
       GATEWAY_BASE_URL: http://litellm:4000/v1
       GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
-      RAG_EMBEDDING_PROVIDER: ${RAG_EMBEDDING_PROVIDER:-hash}
-      RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-embedding-default}
+      # 语义 embedding 默认走宿主机 Ollama 的 nomic-embed-text（768 维）。
+      # 前置：宿主机已 `ollama pull nomic-embed-text`。要零依赖 hash（无语义）：设 RAG_EMBEDDING_PROVIDER=hash。
+      RAG_EMBEDDING_PROVIDER: ${RAG_EMBEDDING_PROVIDER:-ollama}
+      RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-nomic-embed-text}
+      RAG_EMBEDDING_OLLAMA_BASE_URL: ${RAG_EMBEDDING_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      # nomic 非对称任务前缀（尾部空格必须保留）：对齐 query/document 向量空间，提升检索准确率
+      RAG_EMBEDDING_QUERY_PREFIX: "search_query: "
+      RAG_EMBEDDING_DOCUMENT_PREFIX: "search_document: "
       RAG_VECTOR_STORE_PROVIDER: ${RAG_VECTOR_STORE_PROVIDER:-qdrant}
       QDRANT_HOST: qdrant
       QDRANT_PORT: 6334
       QDRANT_COLLECTION_NAME: knowledge_segments
       RAG_REGISTRY_STORE: ${RAG_REGISTRY_STORE:-redis}
+      # 公共/共享知识库（默认关闭）：开启后查询在隔离查各自租户基础上并入 __public__ 公共分区。
+      RAG_PUBLIC_ENABLED: ${RAG_PUBLIC_ENABLED:-false}
       RAG_HYBRID_ENABLED: ${RAG_HYBRID_ENABLED:-true}
+      # 混合检索关键词半边用 HanLP 中文分词（默认 simple=bigram），仅影响 keyword/graph 分支，不碰向量。
+      RAG_HYBRID_TOKENIZER: ${RAG_HYBRID_TOKENIZER:-hanlp}
+      # ── ES 全文混排（默认开启）：BM25 关键词分支并入混合检索，多源 RRF 融合 ──
+      RAG_ES_ENABLED: ${RAG_ES_ENABLED:-true}
+      RAG_ES_URIS: ${RAG_ES_URIS:-http://elasticsearch:9200}
+      RAG_ES_ANALYZER: ${RAG_ES_ANALYZER:-smartcn}      # 中文分析器（镜像已装 analysis-smartcn）
+      RAG_FUSION_STRATEGY: ${RAG_FUSION_STRATEGY:-rrf}   # 免疫 BM25/余弦量纲差；留空亦会因 ES 开启取有效默认 rrf
       RAG_RANKING_VECTOR_WEIGHT: ${RAG_RANKING_VECTOR_WEIGHT:-1.0}
       RAG_RANKING_KEYWORD_WEIGHT: ${RAG_RANKING_KEYWORD_WEIGHT:-1.0}
       RAG_RANKING_GRAPH_WEIGHT: ${RAG_RANKING_GRAPH_WEIGHT:-1.0}
@@ -184,9 +234,14 @@ services:
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:
-      - mysql
-      - redis
-      - qdrant
+      mysql:
+        condition: service_started
+      redis:
+        condition: service_started
+      qdrant:
+        condition: service_started
+      elasticsearch:
+        condition: service_healthy   # 等 ES 就绪再起，避免首次入库 index create 撞 ES 未起
     ports:
       - "8084:8084"
 
@@ -266,6 +321,12 @@ services:
       AUTH_DB_USER: root
       AUTH_DB_PASSWORD: root
       AUTH_DEMO_PASSWORD: ${AUTH_DEMO_PASSWORD:-demo12345}
+      # RBAC（demo 直接开：登录展开角色 scopes、管理写开放）。alice 挂 admin 角色 → 含 role-admin。
+      # 生产应默认 false 分阶段灰度，并显式配置真实 bootstrap-admin 名单。
+      AUTH_RBAC_ENABLED: ${AUTH_RBAC_ENABLED:-true}
+      AUTH_RBAC_ADMIN_WRITES_ENABLED: ${AUTH_RBAC_ADMIN_WRITES_ENABLED:-true}
+      AUTH_RBAC_BOOTSTRAP_ADMIN_USERS: ${AUTH_RBAC_BOOTSTRAP_ADMIN_USERS:-alice}
+      AUTH_REGISTRATION_ENABLED: ${AUTH_REGISTRATION_ENABLED:-false}
       # 跨域直调网关时刷新 cookie 需 SameSite=None + Secure(HTTPS)；同源代理/同网可用 Lax。
       AUTH_COOKIE_SAME_SITE: ${AUTH_COOKIE_SAME_SITE:-Lax}
       AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
@@ -363,12 +424,19 @@ services:
       - "8091:8091"
 
   # 前后端分离：能力展示前端为独立静态站点（Vite 构建 → nginx），不属于后端 Maven 构建。
-  # 浏览器带 X-Api-Key 跨域直调 edge-gateway；VITE_EDGE_BASE_URL 在构建期烘焙为网关地址。
+  # 浏览器带 X-Api-Key / 登录会话跨域直调 edge-gateway；VITE_* 在构建期烘焙。
   capability-showcase-frontend:
     build:
       context: ../capability-showcase-frontend
       args:
         VITE_EDGE_BASE_URL: ${SHOWCASE_EDGE_BASE_URL:-http://localhost:8080}
+        # VITE_AUTH_BASE_URL 留空：/auth/* 走 nginx 同源反代到网关（第一方 httpOnly cookie，SameSite=Lax，无需跨域）。
+        # RBAC 控制台 kill switch（默认开；真正可用仍受 role-admin scope / 运行时 /rag/config 约束）。
+        VITE_RBAC_CONSOLE_ENABLED: ${SHOWCASE_RBAC_CONSOLE_ENABLED:-true}
+        VITE_SHARED_KB_UI_ENABLED: ${SHOWCASE_SHARED_KB_UI_ENABLED:-true}
+        # demo 一键登录：本地演示可开并注入口令；生产置 false / 留空口令，产物即不含明文口令。
+        VITE_DEMO_LOGIN_ENABLED: ${SHOWCASE_DEMO_LOGIN_ENABLED:-true}
+        VITE_DEMO_PASSWORD: ${SHOWCASE_DEMO_PASSWORD:-demo12345}
     ports:
       - "8093:80"
 
@@ -413,3 +481,4 @@ volumes:
   mysql-data:
   qdrant-data:
   redis-data:
+  es-data:

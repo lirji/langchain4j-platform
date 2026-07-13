@@ -13,7 +13,12 @@
 # 用法：
 #   ./start-local.sh          # 重启【后端应用服务】(基础设施保持运行) —— 日常最常用
 #   ./start-local.sh --all    # 连基础设施(mysql/redis/kafka/qdrant/litellm)一起重启
-#   ./start-local.sh --build  # 需要时重新构建镜像后再起（会跳过无 Dockerfile 的服务由 compose 处理）
+#   ./start-local.sh --build  # 先 mvn package 再重建镜像后起（改了后端代码用；不加会装旧 jar）
+#   ./start-local.sh --es     # (已弃用) ES 全文混排 + nomic 现已默认开启；本开关保留为兼容 no-op
+#
+# 默认栈已含 Elasticsearch(smartcn)+Kibana，且 knowledge-service 默认走 nomic 语义 embedding。
+# 前置：宿主机 `ollama pull nomic-embed-text`（缺则 RAG 入库/检索报错，不影响其余能力）。
+# 要退回零依赖：export RAG_EMBEDDING_PROVIDER=hash RAG_ES_ENABLED=false 后再跑。
 #
 # 可用环境变量覆盖端口：EDGE_HOST_PORT / VISION_HOST_PORT / MYSQL_HOST_PORT
 #
@@ -32,6 +37,7 @@ for arg in "$@"; do
   case "$arg" in
     --all)   SCOPE="all" ;;
     --build) BUILD_FLAG="--build" ;;
+    --es)    echo "ℹ  --es 已弃用：ES 全文混排 + nomic 现为默认（见 docker-compose.yml），无需再加。" ;;
     *) echo "未知参数: $arg（可用: --all, --build）"; exit 2 ;;
   esac
 done
@@ -44,7 +50,8 @@ if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
 fi
 
 FRONTEND="capability-showcase-frontend"
-INFRA="mysql|redis|kafka|qdrant|litellm"
+# elasticsearch / kibana 现为默认基础设施：--app 时保持运行，--all 才连同重建。
+INFRA="mysql|redis|kafka|qdrant|litellm|elasticsearch|kibana"
 
 ALL_SERVICES="$(docker compose config --services)"
 if [ "$SCOPE" = "all" ]; then
@@ -58,6 +65,13 @@ TARGET_LINE="$(echo "$TARGET" | tr '\n' ' ')"
 echo "  端口: gateway=${EDGE_HOST_PORT} vision=${VISION_HOST_PORT} mysql=${MYSQL_HOST_PORT}"
 echo "  目标: ${TARGET_LINE}"
 echo
+
+# ── 改了后端代码必须先打 jar：各服务 Dockerfile 是 COPY target/*.jar，--build 只重建镜像不打包，
+#    不先 package 会把旧 jar 装进镜像（跑旧代码）。故 --build 前置一次全量 package。──
+if [ "$BUILD_FLAG" = "--build" ]; then
+  echo "▶ mvn -DskipTests package（--build 前置，避免镜像装旧 jar）"
+  ( cd .. && mvn -DskipTests package )
+fi
 
 # ── 重建并启动（--force-recreate 确保应用当前 compose 配置 = 真正重启一遍）──
 # shellcheck disable=SC2086
@@ -96,6 +110,9 @@ cat <<EOF
                    → http://localhost:5173  (.env.local 已指向 :${EDGE_HOST_PORT})
   • 用法           前端登录（或顶栏填 API Key）→ 对话/流式/意图路由 即可用
                    (vision / mcp 仍默认关，需外部依赖)
+  • RAG 检索       默认 nomic 语义 embedding + ES(smartcn) 全文混排 + RRF
+                   Kibana http://localhost:5601 · ES http://localhost:9200
+                   前置 ollama pull nomic-embed-text；首次 ES 需 --all --build 构建镜像
   • 查看日志       docker compose logs -f conversation-service
 ════════════════════════════════════════════════════════════
 EOF

@@ -14,7 +14,8 @@
 # 用法：
 #   ./start-dev.sh              # 起后端 docker(应用服务) + 前端 dev(:5173)  —— 日常最常用
 #   ./start-dev.sh --all        # 连基础设施一起重启后端，再起前端 dev
-#   ./start-dev.sh --build      # 重新构建后端镜像后再起，再起前端 dev
+#   ./start-dev.sh --build      # 先 mvn package 再重建后端镜像后起，再起前端 dev
+#   ./start-dev.sh --es         # (已弃用) ES 全文混排 + nomic 现为后端默认；本开关保留为兼容 no-op
 #   ./start-dev.sh --front-only # 后端已在跑，只起前端 dev
 #   ./start-dev.sh --back-only  # 只起/重启后端 docker（等价于 start-local.sh）
 #
@@ -39,12 +40,12 @@ RUN_FRONTEND=1
 BACKEND_ARGS=()
 for arg in "$@"; do
   case "$arg" in
-    --all|--build)          BACKEND_ARGS+=("$arg") ;;
+    --all|--build|--es)     BACKEND_ARGS+=("$arg") ;;
     --front-only|--frontend-only) RUN_BACKEND=0 ;;
     --back-only|--backend-only)   RUN_FRONTEND=0 ;;
     -h|--help)
       grep -E '^#( |$)' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *) echo "未知参数: $arg（可用: --all, --build, --front-only, --back-only）"; exit 2 ;;
+    *) echo "未知参数: $arg（可用: --all, --build, --es, --front-only, --back-only）"; exit 2 ;;
   esac
 done
 
