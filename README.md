@@ -60,7 +60,7 @@ client ──X-Api-Key──▶ edge-gateway (Spring Cloud Gateway)
 - Agent 与编排：[Agent](docs/Agent编排/agent-guide.md) · [工作流](docs/Agent编排/workflow-guide.md) · [Code Interpreter](docs/Agent编排/code-exec.md)
 - 多模态与语音：[视觉](docs/多模态语音/vision-guide.md) · [语音](docs/多模态语音/voice-guide.md)
 - 互操作与渠道：[A2A](docs/互操作渠道/a2a-guide.md) · [MCP](docs/互操作渠道/mcp-guide.md) · [钉钉桥](docs/互操作渠道/dingtalk-guide.md)
-- 平台工程：[事件总线](docs/平台工程/eventbus-guide.md) · [可观测性](docs/平台工程/observability-guide.md) · [成本归因](docs/平台工程/cost-attribution.md) · [评测](docs/平台工程/eval-guide.md)
+- 平台工程：[RBAC与登录](docs/平台工程/rbac-and-public-kb.md) · [事件总线](docs/平台工程/eventbus-guide.md) · [可观测性](docs/平台工程/observability-guide.md) · [成本归因](docs/平台工程/cost-attribution.md) · [评测](docs/平台工程/eval-guide.md)
 - [迁移路线图](docs/迁移/migration-roadmap.md)
 
 ## 本地跑（Phase 0）
