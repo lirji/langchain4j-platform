@@ -37,7 +37,7 @@ class DingtalkMessageBridgeTest {
     }
 
     private static KnowledgeHit hit(double score, String text) {
-        return new KnowledgeHit("id", score, "doc", "guide.md", "客服", "0", text, "hybrid");
+        return new KnowledgeHit("id", score, "doc", "guide.md", "客服", "0", text, "hybrid", "tenant");
     }
 
     private static KnowledgeQueryReply reply(KnowledgeHit... hits) {

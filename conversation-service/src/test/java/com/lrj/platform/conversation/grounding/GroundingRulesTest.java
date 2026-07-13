@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class GroundingRulesTest {
 
     private static KnowledgeHit hit(String displayName, String index, String text) {
-        return new KnowledgeHit("id", 0.9, "doc", displayName, "cat", index, text, "hybrid");
+        return new KnowledgeHit("id", 0.9, "doc", displayName, "cat", index, text, "hybrid", "tenant");
     }
 
     @Test

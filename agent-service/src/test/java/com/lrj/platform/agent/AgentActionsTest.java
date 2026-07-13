@@ -22,7 +22,7 @@ class AgentActionsTest {
                         request.query(),
                         "acme",
                         List.of(new KnowledgeHit("h1", 0.9, "d1", "guide.md", "manual", "3",
-                                "退款审批需要主管确认。", "hybrid"))),
+                                "退款审批需要主管确认。", "hybrid", "tenant"))),
                 5,
                 0.0,
                 "manual");

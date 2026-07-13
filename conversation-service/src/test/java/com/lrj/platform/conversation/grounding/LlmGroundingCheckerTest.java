@@ -15,7 +15,7 @@ class LlmGroundingCheckerTest {
     private static final double THRESHOLD = 0.7;
 
     private static KnowledgeHit hit(String displayName, String index, String text) {
-        return new KnowledgeHit("id", 0.9, "doc", displayName, "cat", index, text, "hybrid");
+        return new KnowledgeHit("id", 0.9, "doc", displayName, "cat", index, text, "hybrid", "tenant");
     }
 
     private static final List<KnowledgeHit> SOURCES = List.of(hit("guide.md", "2", "退款政策需主管审批。"));

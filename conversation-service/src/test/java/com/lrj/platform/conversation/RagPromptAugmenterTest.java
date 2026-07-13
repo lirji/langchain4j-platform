@@ -37,7 +37,8 @@ class RagPromptAugmenterTest {
                         "manual",
                         "2",
                         "退款政策需要主管审批。",
-                        "hybrid")));
+                        "hybrid",
+                        "tenant")));
         RagPromptAugmenter augmenter = new RagPromptAugmenter(client, true, 3, 0.2, "manual", 4000);
 
         String prompt = augmenter.augment("退款怎么审批？");
