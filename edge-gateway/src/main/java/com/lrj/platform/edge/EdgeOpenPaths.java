@@ -18,10 +18,13 @@ final class EdgeOpenPaths {
         return path.startsWith("/actuator")
                 || path.startsWith("/.well-known")
                 || path.equals("/health")
-                // 登录/刷新/登出：用户尚无会话令牌，凭 cookie 或账号密码，不经边缘鉴权。
+                // 登录/注册/刷新/登出：用户尚无会话令牌，凭 cookie 或账号密码，不经边缘鉴权。
                 || path.equals("/auth/login")
+                || path.equals("/auth/register")
                 || path.equals("/auth/refresh")
                 || path.equals("/auth/logout")
+                // 公开最小配置（注册开关/密码长度）：未登录前端渲染登录/注册页前拉取，非敏感。
+                || path.equals("/auth/public-config")
                 // 飞书事件回调不带平台 api-key，靠飞书签名验真（见 channel-service FeishuInboundController）
                 || path.equals("/channel/feishu/events")
                 // 钉钉机器人消息回调不带平台 api-key，靠钉钉 timestamp/sign 验真（见 channel-service DingtalkInboundController）

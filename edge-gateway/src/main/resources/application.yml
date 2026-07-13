@@ -18,8 +18,10 @@ spring:
           '[/**]':
             allowedOrigins: "${GATEWAY_CORS_ORIGINS:http://localhost:5173,http://localhost:4173,http://localhost:8093}"
             allowedMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
-            allowedHeaders: [Content-Type, Authorization, X-Api-Key, Accept, X-Trace-Id]
-            exposedHeaders: [X-Trace-Id]
+            # If-Match：RBAC 管理写（PATCH/PUT）的乐观锁版本头，跨域预检必须放行。
+            allowedHeaders: [Content-Type, Authorization, X-Api-Key, Accept, X-Trace-Id, If-Match]
+            # X-Total-Count/ETag：管理端分页总数与资源版本，须暴露给浏览器读取。
+            exposedHeaders: [X-Trace-Id, X-Total-Count, ETag]
             allowCredentials: true
             maxAge: 3600
       routes:
@@ -86,6 +88,8 @@ platform:
       dev-key-acme:
         tenant: acme
         user: alice
+        # RBAC 不给既有 api-key 静默增权：保持基线 scopes。管理面（role-admin）/公共库写（public-ingest）
+        # 统一走"登录会话 → 角色展开"路径，不挂在 api-key 上。
         scopes: [chat, ingest, approve, agent, channel, eval, vision, voice]
       dev-key-globex:
         tenant: globex
