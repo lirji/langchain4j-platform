@@ -23,10 +23,16 @@ class AuthServiceTest {
     void setUp() {
         hasher = new PasswordHasher();
         props = new AuthProperties();
+        props.getRbac().setEnabled(true);   // 测 RBAC-on 行为（角色展开进有效 scopes）
         userStore = new InMemoryUserAccountStore(hasher, props);
         sessionStore = new InMemoryRefreshSessionStore();
         issuer = new SessionTokenIssuer(new InternalSecurityProperties());
-        service = new AuthService(userStore, sessionStore, hasher, issuer, new LoginThrottle(props));
+        RoleService roleService = new RoleService(new InMemoryRoleStore());
+        RegistrationRuleEngine rules = new RegistrationRuleEngine(props);
+        service = new AuthService(userStore, sessionStore, hasher, issuer,
+                new LoginThrottle(props), roleService, rules,
+                new PasswordPolicy(props), new RegistrationThrottle(props),
+                new InMemoryRbacMutationExecutor(), props);
     }
 
     @Test
@@ -46,6 +52,13 @@ class AuthServiceTest {
     }
 
     @Test
+    void loginExpandsRoleScopesIntoEffectiveScopes() {
+        // alice 挂 admin 角色 → 有效 scopes 含只来自角色展开的 role-admin / public-ingest。
+        AuthResult r = service.login("alice", "demo12345", "k");
+        assertThat(r.user().scopes()).contains("role-admin", "public-ingest");
+    }
+
+    @Test
     void wrongPasswordAndUnknownUserBothReturn401() {
         assertThatThrownBy(() -> service.login("alice", "nope", "k1"))
                 .isInstanceOfSatisfying(AuthException.class, e -> assertThat(e.status()).isEqualTo(401));
@@ -57,7 +70,11 @@ class AuthServiceTest {
     void disabledAccountReturns403() {
         UserAccountStore disabled = username -> Optional.of(
                 new UserAccount("dan", hasher.hash("pw"), "acme", "dan", java.util.Set.of("chat"), false));
-        AuthService svc = new AuthService(disabled, sessionStore, hasher, issuer, new LoginThrottle(props));
+        AuthService svc = new AuthService(disabled, sessionStore, hasher, issuer,
+                new LoginThrottle(props), new RoleService(new InMemoryRoleStore()),
+                new RegistrationRuleEngine(props),
+                new PasswordPolicy(props), new RegistrationThrottle(props),
+                new InMemoryRbacMutationExecutor(), props);
         assertThatThrownBy(() -> svc.login("dan", "pw", "k"))
                 .isInstanceOfSatisfying(AuthException.class, e -> assertThat(e.status()).isEqualTo(403));
     }

@@ -32,4 +32,22 @@ public class InMemoryRefreshSessionStore implements RefreshSessionStore {
         byHash.computeIfPresent(tokenHash, (h, s) ->
                 new RefreshSession(s.tokenHash(), s.username(), s.createdAt(), s.expiresAt(), true));
     }
+
+    @Override
+    public void revokeByUsername(String username) {
+        if (username == null || username.isBlank()) {
+            return;
+        }
+        byHash.replaceAll((h, s) -> username.equals(s.username()) && !s.revoked()
+                ? new RefreshSession(s.tokenHash(), s.username(), s.createdAt(), s.expiresAt(), true)
+                : s);
+    }
+
+    @Override
+    public void deleteByUsername(String username) {
+        if (username == null || username.isBlank()) {
+            return;
+        }
+        byHash.values().removeIf(s -> username.equals(s.username()));
+    }
 }

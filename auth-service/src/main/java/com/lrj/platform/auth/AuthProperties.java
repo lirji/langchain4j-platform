@@ -3,6 +3,8 @@ package com.lrj.platform.auth;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * auth-service 行为配置。前缀 {@code app.auth.*}。
@@ -21,6 +23,11 @@ public class AuthProperties {
 
     private final Cookie cookie = new Cookie();
     private final Throttle throttle = new Throttle();
+    private final Registration registration = new Registration();
+    private final Rbac rbac = new Rbac();
+    private final Seed seed = new Seed();
+    private final PasswordPolicy passwordPolicy = new PasswordPolicy();
+    private final ClientIp clientIp = new ClientIp();
 
     public String getStore() { return store; }
     public void setStore(String store) { this.store = store; }
@@ -28,6 +35,56 @@ public class AuthProperties {
     public void setDemoPassword(String demoPassword) { this.demoPassword = demoPassword; }
     public Cookie getCookie() { return cookie; }
     public Throttle getThrottle() { return throttle; }
+    public Registration getRegistration() { return registration; }
+    public Rbac getRbac() { return rbac; }
+    public Seed getSeed() { return seed; }
+    public PasswordPolicy getPasswordPolicy() { return passwordPolicy; }
+    public ClientIp getClientIp() { return clientIp; }
+
+    /**
+     * RBAC 开关（默认关闭）。{@code enabled=false} 时登录只用直配 scopes（角色不展开），行为回到
+     * 加 RBAC 之前；灰度时可先只读（{@code adminWritesEnabled=false}）验证登录与 admin GET，稳定后再开写。
+     * {@code bootstrapAdminUsers} 是迁移/种子时应确保拥有 admin 角色的用户名单（生产必须显式配置）。
+     */
+    public static class Rbac {
+        private boolean enabled = false;
+        private boolean adminWritesEnabled = false;
+        private List<String> bootstrapAdminUsers = new ArrayList<>();
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public boolean isAdminWritesEnabled() { return adminWritesEnabled; }
+        public void setAdminWritesEnabled(boolean adminWritesEnabled) { this.adminWritesEnabled = adminWritesEnabled; }
+        public List<String> getBootstrapAdminUsers() { return bootstrapAdminUsers; }
+        public void setBootstrapAdminUsers(List<String> bootstrapAdminUsers) { this.bootstrapAdminUsers = bootstrapAdminUsers; }
+    }
+
+    /** 种子开关：{@code false} 时空库不自动灌 demo 账号/角色（生产库应走受控 SQL 建首个用户）。 */
+    public static class Seed {
+        private boolean enabled = true;
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    }
+
+    /** 密码策略：注册、admin 建户、改密共用。默认最短 6（与既有校验一致），生产可提升。 */
+    public static class PasswordPolicy {
+        private int minLength = 6;
+        private int maxLength = 128;
+        public int getMinLength() { return minLength; }
+        public void setMinLength(int minLength) { this.minLength = minLength; }
+        public int getMaxLength() { return maxLength; }
+        public void setMaxLength(int maxLength) { this.maxLength = maxLength; }
+    }
+
+    /**
+     * 客户端 IP 解析。默认只取 {@code remoteAddr}；仅当 Ingress/edge 已覆盖（而非透传）外部
+     * {@code X-Forwarded-For} 时才可开 {@code trustForwardedFor}，否则调用者能伪造 XFF 轮换限流 key。
+     */
+    public static class ClientIp {
+        private boolean trustForwardedFor = false;
+        public boolean isTrustForwardedFor() { return trustForwardedFor; }
+        public void setTrustForwardedFor(boolean trustForwardedFor) { this.trustForwardedFor = trustForwardedFor; }
+    }
 
     /** 刷新令牌 cookie 属性。跨域直调时须 {@code same-site=None} + {@code secure=true}；dev 走同源代理可用 {@code Lax}。 */
     public static class Cookie {
@@ -65,5 +122,64 @@ public class AuthProperties {
         public void setMaxAttempts(int maxAttempts) { this.maxAttempts = maxAttempts; }
         public Duration getWindow() { return window; }
         public void setWindow(Duration window) { this.window = window; }
+    }
+
+    /**
+     * 自助注册。默认**关闭**（生产按需开启）。开启后 {@code POST /auth/register} 建号并派默认角色；
+     * {@code rules} 按邮箱域自动映射到租户+角色（命中优先，否则用 default-tenant/default-role）。
+     */
+    public static class Registration {
+        private boolean enabled = false;
+        /** 未命中任何规则时的默认租户。 */
+        private String defaultTenant = "public";
+        /** 未命中任何规则时授予的默认角色。 */
+        private String defaultRole = "viewer";
+        private List<Rule> rules = new ArrayList<>();
+        private final RegistrationThrottle throttle = new RegistrationThrottle();
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public String getDefaultTenant() { return defaultTenant; }
+        public void setDefaultTenant(String defaultTenant) { this.defaultTenant = defaultTenant; }
+        public String getDefaultRole() { return defaultRole; }
+        public void setDefaultRole(String defaultRole) { this.defaultRole = defaultRole; }
+        public List<Rule> getRules() { return rules; }
+        public void setRules(List<Rule> rules) { this.rules = rules; }
+        public RegistrationThrottle getThrottle() { return throttle; }
+
+        /**
+         * 按客户端 IP 的注册节流（区别于登录节流的 username+IP，且成功/失败都计数，避免换 username 绕过）。
+         * {@code maxKeys} 给内存计数表设容量上限，防止随机 IP 撑爆内存。
+         */
+        public static class RegistrationThrottle {
+            private boolean enabled = true;
+            private int maxAttempts = 10;
+            private Duration window = Duration.ofMinutes(10);
+            private int maxKeys = 10000;
+
+            public boolean isEnabled() { return enabled; }
+            public void setEnabled(boolean enabled) { this.enabled = enabled; }
+            public int getMaxAttempts() { return maxAttempts; }
+            public void setMaxAttempts(int maxAttempts) { this.maxAttempts = maxAttempts; }
+            public Duration getWindow() { return window; }
+            public void setWindow(Duration window) { this.window = window; }
+            public int getMaxKeys() { return maxKeys; }
+            public void setMaxKeys(int maxKeys) { this.maxKeys = maxKeys; }
+        }
+
+        /** 一条注册映射规则：邮箱域 → 租户 + 角色集。 */
+        public static class Rule {
+            /** 匹配的邮箱域，如 {@code acme.com}（匹配用户名 {@code xxx@acme.com}）。 */
+            private String emailDomain;
+            private String tenant;
+            private List<String> roles = new ArrayList<>();
+
+            public String getEmailDomain() { return emailDomain; }
+            public void setEmailDomain(String emailDomain) { this.emailDomain = emailDomain; }
+            public String getTenant() { return tenant; }
+            public void setTenant(String tenant) { this.tenant = tenant; }
+            public List<String> getRoles() { return roles; }
+            public void setRoles(List<String> roles) { this.roles = roles; }
+        }
     }
 }

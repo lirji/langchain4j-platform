@@ -6,6 +6,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import javax.sql.DataSource;
 
@@ -30,5 +32,15 @@ public class AuthJdbcConfig {
         config.setMaximumPoolSize(properties.getMaximumPoolSize());
         config.setPoolName("auth");
         return new HikariDataSource(config);
+    }
+
+    /**
+     * auth 数据源专用事务管理器。{@code RbacMutationExecutor}（jdbc 变体）用它把用户/角色/关系表/
+     * refresh session 的复合写包进单个事务；各 {@code Jdbc*Store} 的 JdbcTemplate 共用同一 DataSource，
+     * 因而自动加入该事务，实现跨 store 原子提交/回滚。
+     */
+    @Bean
+    PlatformTransactionManager authTransactionManager(DataSource authDataSource) {
+        return new DataSourceTransactionManager(authDataSource);
     }
 }

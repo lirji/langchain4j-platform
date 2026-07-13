@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * 登录编排：密码校验 → 签发会话访问 JWT + 建刷新会话；刷新令牌轮转（撤旧建新）实现静默续期；登出撤销。
@@ -25,17 +26,35 @@ public class AuthService {
     private final PasswordHasher passwordHasher;
     private final SessionTokenIssuer issuer;
     private final LoginThrottle throttle;
+    private final RoleService roleService;
+    private final RegistrationRuleEngine registrationRules;
+    private final PasswordPolicy passwordPolicy;
+    private final RegistrationThrottle registrationThrottle;
+    private final RbacMutationExecutor mutationExecutor;
+    private final AuthProperties props;
 
     public AuthService(UserAccountStore userStore,
                        RefreshSessionStore sessionStore,
                        PasswordHasher passwordHasher,
                        SessionTokenIssuer issuer,
-                       LoginThrottle throttle) {
+                       LoginThrottle throttle,
+                       RoleService roleService,
+                       RegistrationRuleEngine registrationRules,
+                       PasswordPolicy passwordPolicy,
+                       RegistrationThrottle registrationThrottle,
+                       RbacMutationExecutor mutationExecutor,
+                       AuthProperties props) {
         this.userStore = userStore;
         this.sessionStore = sessionStore;
         this.passwordHasher = passwordHasher;
         this.issuer = issuer;
         this.throttle = throttle;
+        this.roleService = roleService;
+        this.registrationRules = registrationRules;
+        this.passwordPolicy = passwordPolicy;
+        this.registrationThrottle = registrationThrottle;
+        this.mutationExecutor = mutationExecutor;
+        this.props = props;
     }
 
     /** 账号密码登录。{@code throttleKey} = 用户名|客户端IP，用于爆破节流。 */
@@ -91,8 +110,42 @@ public class AuthService {
         sessionStore.revoke(issuer.hashRefreshToken(rawRefreshToken));
     }
 
+    /**
+     * 自助注册（三条分配路径之一）：按规则映射到租户 + 默认/规则角色，原子建号后直接登录。
+     * 须同时开 {@code rbac.enabled} 与 {@code registration.enabled}（否则在 direct-only 灰度态会
+     * 建出无有效 scopes 的 role-only 死账号）。{@code clientIp} 用于按 IP 的注册节流（成功/失败都计数）。
+     * 建号 + 建刷新会话在 {@code mutationExecutor} 内同事务完成（JDBC）。
+     */
+    public AuthResult register(String username, String password, String clientIp) {
+        if (!props.getRbac().isEnabled() || !props.getRegistration().isEnabled()) {
+            throw new AuthException(403, "registration_disabled", "自助注册未开启");
+        }
+        registrationThrottle.checkAndRecord(clientIp);
+        passwordPolicy.validate(password);
+        if (username == null || username.isBlank()) {
+            throw new AuthException(400, "invalid_registration", "用户名不能为空");
+        }
+        RegistrationRuleEngine.Assignment a = registrationRules.resolve(username);
+        roleService.requireRolesExist(a.roles());
+        // BCrypt 哈希在锁/事务外完成（CPU 密集，不占临界区）。
+        String hash = passwordHasher.hash(password);
+        UserAccount user = new UserAccount(
+                username.trim(), hash, a.tenant(), username.trim(), Set.of(), a.roles(), true);
+        return mutationExecutor.execute(() -> {
+            if (!userStore.createIfAbsent(user)) {
+                throw new AuthException(409, "username_taken", "用户名已被占用");
+            }
+            log.info("register ok user={} tenant={} roles={}", user.username(), user.tenant(), user.roles());
+            return issueFor(user);
+        });
+    }
+
     private AuthResult issueFor(UserAccount user) {
-        String accessToken = issuer.mintAccessToken(user);
+        // RBAC 关闭时只用直配 scopes（灰度态不展开角色，现有用户 direct scopes 保底）。
+        Set<String> effective = props.getRbac().isEnabled()
+                ? roleService.effectiveScopes(user)
+                : new java.util.LinkedHashSet<>(user.scopes());
+        String accessToken = issuer.mintAccessToken(user, effective);
         String rawRefresh = issuer.generateRefreshToken();
         Instant now = Instant.now();
         sessionStore.create(new RefreshSession(
@@ -101,7 +154,7 @@ public class AuthService {
                 now,
                 now.plus(issuer.refreshTtl()),
                 false));
-        UserView view = new UserView(user.username(), user.tenant(), new ArrayList<>(user.scopes()));
+        UserView view = new UserView(user.username(), user.tenant(), new ArrayList<>(effective));
         return new AuthResult(accessToken, issuer.accessTtlSeconds(), rawRefresh, view);
     }
 }

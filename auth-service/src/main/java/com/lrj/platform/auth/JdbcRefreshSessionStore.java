@@ -68,6 +68,20 @@ public class JdbcRefreshSessionStore implements RefreshSessionStore {
         jdbc.update("UPDATE AUTH_SESSION SET REVOKED=TRUE WHERE TOKEN_HASH=?", tokenHash);
     }
 
+    @Override
+    public void revokeByUsername(String username) {
+        if (username != null && !username.isBlank()) {
+            jdbc.update("UPDATE AUTH_SESSION SET REVOKED=TRUE WHERE USERNAME=? AND REVOKED=FALSE", username);
+        }
+    }
+
+    @Override
+    public void deleteByUsername(String username) {
+        if (username != null && !username.isBlank()) {
+            jdbc.update("DELETE FROM AUTH_SESSION WHERE USERNAME=?", username);
+        }
+    }
+
     private RefreshSession mapSession(ResultSet rs, int rowNum) throws SQLException {
         return new RefreshSession(
                 rs.getString("TOKEN_HASH"),

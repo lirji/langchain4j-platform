@@ -12,6 +12,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.Set;
 
 /**
  * 会话令牌签发：
@@ -37,9 +38,17 @@ public class SessionTokenIssuer {
         this.accessTokens = new InternalToken(s.getJwtSecret(), s.getAccessTtl());
     }
 
-    /** 用账号身份签发会话访问 JWT（sub=tenant / uid=userId / scopes）。 */
+    /** 用账号身份签发会话访问 JWT（sub=tenant / uid=userId / scopes=账号直配 scopes）。 */
     public String mintAccessToken(UserAccount user) {
-        return accessTokens.mint(new TenantContext.Tenant(user.tenant(), user.userId(), user.scopes()));
+        return mintAccessToken(user, user.scopes());
+    }
+
+    /**
+     * 用账号身份 + 指定的**有效 scopes** 签发会话访问 JWT。RBAC 下由 {@code AuthService} 传入
+     * {@code RoleService.effectiveScopes(user)}（角色展开 ∪ 直配），签进 JWT 的 scopes claim。
+     */
+    public String mintAccessToken(UserAccount user, Set<String> effectiveScopes) {
+        return accessTokens.mint(new TenantContext.Tenant(user.tenant(), user.userId(), effectiveScopes));
     }
 
     /** 生成新的刷新令牌原串（放进 cookie，服务端不留明文）。 */

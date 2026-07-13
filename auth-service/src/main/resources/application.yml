@@ -23,6 +23,22 @@ app:
   auth:
     store: ${AUTH_STORE:in-memory}
     demo-password: ${AUTH_DEMO_PASSWORD:demo12345}
+    # RBAC 总开关（默认关闭，登录只用直配 scopes）。admin-writes 独立灰度：只读先开、写后开。
+    # bootstrap-admin-users：迁移/种子时确保拥有 admin 角色的用户名（生产必须显式配置真实名单）。
+    rbac:
+      enabled: ${AUTH_RBAC_ENABLED:false}
+      admin-writes-enabled: ${AUTH_RBAC_ADMIN_WRITES_ENABLED:false}
+      bootstrap-admin-users: ${AUTH_RBAC_BOOTSTRAP_ADMIN_USERS:alice}
+    # 种子开关：false 时空库不自动灌 demo 账号/角色（生产库走受控 SQL 建首个用户）。
+    seed:
+      enabled: ${AUTH_SEED_ENABLED:true}
+    # 密码策略（注册/建户/改密共用）。默认最短 6 与既有一致；生产可提升。
+    password-policy:
+      min-length: ${AUTH_PASSWORD_MIN_LENGTH:6}
+      max-length: ${AUTH_PASSWORD_MAX_LENGTH:128}
+    # 客户端 IP：默认只取 remoteAddr；仅当 edge/Ingress 已覆盖外部 XFF 时才可开 trust-forwarded-for。
+    client-ip:
+      trust-forwarded-for: ${AUTH_TRUST_FORWARDED_FOR:false}
     cookie:
       name: ${AUTH_COOKIE_NAME:refresh_token}
       path: ${AUTH_COOKIE_PATH:/auth}
@@ -33,6 +49,20 @@ app:
       enabled: ${AUTH_THROTTLE_ENABLED:true}
       max-attempts: ${AUTH_THROTTLE_MAX_ATTEMPTS:5}
       window: ${AUTH_THROTTLE_WINDOW:PT1M}
+    # 自助注册（默认关闭）。开启后 POST /auth/register 建号；rules 按邮箱域自动映射租户+角色，
+    # 未命中用 default-tenant/default-role。示例规则可按需增删。
+    registration:
+      enabled: ${AUTH_REGISTRATION_ENABLED:false}
+      default-tenant: ${AUTH_REGISTRATION_DEFAULT_TENANT:public}
+      default-role: ${AUTH_REGISTRATION_DEFAULT_ROLE:viewer}
+      # 按 IP 的注册节流（成功/失败都计数，避免换 username 绕过；maxKeys 防随机 IP 撑爆内存）。
+      throttle:
+        enabled: ${AUTH_REGISTRATION_THROTTLE_ENABLED:true}
+        max-attempts: ${AUTH_REGISTRATION_MAX_ATTEMPTS:10}
+        window: ${AUTH_REGISTRATION_WINDOW:PT10M}
+        max-keys: ${AUTH_REGISTRATION_MAX_KEYS:10000}
+      # 域→租户+角色的自动映射规则：默认不内置（示例域曾在通用配置里，生产误开注册会错误授权）。
+      # 需要时在部署专用 yaml / config-server 配置 app.auth.registration.rules，或用 default-tenant/role 兜底。
     datasource:
       url: ${AUTH_DB_URL:jdbc:mysql://localhost:3306/auth?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}
       username: ${AUTH_DB_USER:root}

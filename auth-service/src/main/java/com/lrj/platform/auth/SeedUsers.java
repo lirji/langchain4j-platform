@@ -15,12 +15,15 @@ final class SeedUsers {
 
     static List<UserAccount> defaults(PasswordHasher hasher, String demoPassword) {
         String hash = hasher.hash(demoPassword);
+        // 保留直配 scopes 作兜底，同时挂 RBAC 角色（登录时角色展开 ∪ 直配 = 有效 scopes）。
+        // alice 挂 admin 角色 → 额外获得 role-admin / public-ingest 两个新 scope。
         return List.of(
                 new UserAccount("alice", hash, "acme", "alice",
-                        Set.of("chat", "ingest", "approve", "agent", "channel", "eval", "vision", "voice"), true),
+                        Set.of("chat", "ingest", "approve", "agent", "channel", "eval", "vision", "voice"),
+                        Set.of("admin"), true),
                 new UserAccount("bob", hash, "globex", "bob",
-                        Set.of("chat"), true),
+                        Set.of("chat"), Set.of("viewer"), true),
                 new UserAccount("analyst-a", hash, "tenantA", "analyst-a",
-                        Set.of("chat", "analytics"), true));
+                        Set.of("chat", "analytics"), Set.of("analyst"), true));
     }
 }

@@ -30,10 +30,16 @@ class AuthControllerTest {
     void setUp() {
         PasswordHasher hasher = new PasswordHasher();
         props = new AuthProperties();
+        props.getRbac().setEnabled(true);
         InMemoryUserAccountStore userStore = new InMemoryUserAccountStore(hasher, props);
         InMemoryRefreshSessionStore sessionStore = new InMemoryRefreshSessionStore();
         issuer = new SessionTokenIssuer(new InternalSecurityProperties());
-        service = new AuthService(userStore, sessionStore, hasher, issuer, new LoginThrottle(props));
+        RoleService roleService = new RoleService(new InMemoryRoleStore());
+        RegistrationRuleEngine rules = new RegistrationRuleEngine(props);
+        service = new AuthService(userStore, sessionStore, hasher, issuer,
+                new LoginThrottle(props), roleService, rules,
+                new PasswordPolicy(props), new RegistrationThrottle(props),
+                new InMemoryRbacMutationExecutor(), props);
         controller = new AuthController(service, issuer, props);
     }
 
@@ -108,6 +114,23 @@ class AuthControllerTest {
         // 未设置 TenantContext → ANONYMOUS
         assertThatThrownBy(() -> controller.me())
                 .isInstanceOfSatisfying(AuthException.class, e -> assertThat(e.status()).isEqualTo(401));
+    }
+
+    @Test
+    void publicConfig_registrationDisabledByDefault_exposesPasswordPolicy() {
+        // 默认 registration 关闭（即便 rbac 已开）→ registrationEnabled=false，且只回非敏感项
+        var cfg = controller.publicConfig();
+        assertThat(cfg.registrationEnabled()).isFalse();
+        assertThat(cfg.passwordMinLength()).isEqualTo(6);
+        assertThat(cfg.passwordMaxLength()).isEqualTo(128);
+    }
+
+    @Test
+    void publicConfig_enabledOnlyWhenRbacAndRegistrationBothOn() {
+        props.getRegistration().setEnabled(true);   // rbac 已在 setUp 开启
+        assertThat(controller.publicConfig().registrationEnabled()).isTrue();
+        props.getRbac().setEnabled(false);
+        assertThat(controller.publicConfig().registrationEnabled()).isFalse();
     }
 
     private static String firstCookie(ResponseEntity<?> resp) {
