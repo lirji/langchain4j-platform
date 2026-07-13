@@ -38,7 +38,8 @@ Contract.make {
                                 category   : "manual",
                                 index      : "0",
                                 text       : "Refunds are processed within 7 days.",
-                                source     : "vector"
+                                source     : "vector",
+                                visibility : "tenant"
                         ]
                 ]
         )

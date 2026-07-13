@@ -4,13 +4,20 @@ import com.lrj.platform.knowledge.KnowledgeQueryService;
 import com.lrj.platform.protocol.knowledge.KnowledgeHit;
 import com.lrj.platform.protocol.knowledge.KnowledgeQueryReply;
 import com.lrj.platform.protocol.knowledge.KnowledgeQueryRequest;
+import com.lrj.platform.protocol.knowledge.KnowledgeRuntimeView;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class KnowledgeQueryController {
+
+    /** {@code GET /rag/config} 合同版本，前端能力协商用。 */
+    private static final int CONFIG_CONTRACT_VERSION = 1;
+    /** 共享库当前不支持图片入库（仅文本），前端据此禁用共享图片入口。 */
+    private static final boolean SHARED_IMAGES_SUPPORTED = false;
 
     private final KnowledgeQueryService queryService;
 
@@ -32,6 +39,18 @@ public class KnowledgeQueryController {
         }
     }
 
+    /**
+     * 运行时共享库状态（需认证——由边缘内部 JWT 关口把守，无需额外 scope）。前端据此决定是否展示
+     * 共享库 tab / 共享图片入口。
+     */
+    @GetMapping("/rag/config")
+    public KnowledgeRuntimeView config() {
+        return new KnowledgeRuntimeView(
+                CONFIG_CONTRACT_VERSION,
+                queryService.publicKbEnabled(),
+                SHARED_IMAGES_SUPPORTED);
+    }
+
     private static KnowledgeQueryReply toReply(KnowledgeQueryService.QueryResult result) {
         return new KnowledgeQueryReply(
                 result.query(),
@@ -45,7 +64,13 @@ public class KnowledgeQueryController {
                                 hit.category(),
                                 hit.index(),
                                 hit.text(),
-                                hit.source()))
+                                hit.source(),
+                                visibilityOf(hit)))
                         .toList());
+    }
+
+    /** shared → {@code "public"}（共享库保留分区），否则 {@code "tenant"}（当前租户）。 */
+    private static String visibilityOf(KnowledgeQueryService.Hit hit) {
+        return hit.shared() ? "public" : "tenant";
     }
 }

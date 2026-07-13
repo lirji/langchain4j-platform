@@ -6,10 +6,13 @@ import com.lrj.platform.knowledge.DocumentMirror;
 import com.lrj.platform.knowledge.DocumentSplitterFactory;
 import com.lrj.platform.knowledge.cache.SemanticCacheInvalidator;
 import com.lrj.platform.knowledge.graph.GraphIngestor;
+import com.lrj.platform.knowledge.es.NoopSegmentIndexer;
+import com.lrj.platform.knowledge.es.SegmentIndexer;
 import com.lrj.platform.knowledge.ingest.ContextualEnricher;
 import com.lrj.platform.knowledge.ingest.NoopContextualEnricher;
 import com.lrj.platform.knowledge.store.EmbeddingStoreRouter;
 import com.lrj.platform.knowledge.store.SingleEmbeddingStoreRouter;
+import com.lrj.platform.knowledge.PublicKb;
 import com.lrj.platform.security.TenantContext;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.DocumentSplitter;
@@ -54,6 +57,8 @@ public class DocumentService {
     private ContextualEnricher contextualEnricher = new NoopContextualEnricher();
     // 切分质量打点（F5.3）：默认 null（测试委托构造器天然拿到 null → 跳过），生产由 Spring @Autowired setter 注入。
     private com.lrj.platform.knowledge.observability.ChunkMetrics chunkMetrics;
+    // ES 全文索引器（es-hybrid-rerank）：默认 Noop（测试与 ES 关闭时零副作用），生产由 Spring @Autowired setter 注入。
+    private SegmentIndexer segmentIndexer = new NoopSegmentIndexer();
 
     @Autowired
     public DocumentService(EmbeddingStoreRouter storeRouter,
@@ -87,6 +92,14 @@ public class DocumentService {
     @Autowired(required = false)
     public void setChunkMetrics(com.lrj.platform.knowledge.observability.ChunkMetrics chunkMetrics) {
         this.chunkMetrics = chunkMetrics;
+    }
+
+    /** 注入 ES 索引器（es-hybrid-rerank，生产由 Spring @Autowired；测试保持默认 Noop）。 */
+    @Autowired(required = false)
+    public void setSegmentIndexer(SegmentIndexer segmentIndexer) {
+        if (segmentIndexer != null) {
+            this.segmentIndexer = segmentIndexer;
+        }
     }
 
     public DocumentService(EmbeddingStoreRouter storeRouter,
@@ -158,13 +171,22 @@ public class DocumentService {
     }
 
     public DocumentInfo upload(String displayName, String contentType, String text, String category, long sourceSizeBytes) {
+        return upload(displayName, contentType, text, category, sourceSizeBytes, false);
+    }
+
+    /**
+     * @param shared true 时写入公共/共享库保留分区（tenantId={@link PublicKb#TENANT_ID}）而非调用方租户；
+     *               需 public-ingest scope（由 controller 关口把守）。四个 sink 均从该 tenantId 派生隔离。
+     */
+    public DocumentInfo upload(String displayName, String contentType, String text, String category,
+                               long sourceSizeBytes, boolean shared) {
         if (displayName == null || displayName.isBlank()) {
             throw new IllegalArgumentException("displayName is required");
         }
         if (text == null || text.isEmpty()) {
             throw new IllegalArgumentException("text is empty");
         }
-        String tenantId = TenantContext.current().tenantId();
+        String tenantId = shared ? PublicKb.TENANT_ID : TenantContext.current().tenantId();
         String docId = computeDocId(tenantId, displayName);
 
         int nextVersion = registry.get(tenantId, docId)
@@ -196,6 +218,8 @@ public class DocumentService {
         List<Embedding> embeddings = embeddingModel.embedAll(segments).content();
         storeRouter.forTenant(tenantId, embeddingModel.dimension()).addAll(embeddings, segments);
         documentMirror.add(segments);
+        // ES 全文索引（es-hybrid-rerank）：与向量写入同一批最终 chunk；默认 Noop，失败按 fail-fast/best-effort 由索引器处理。
+        segmentIndexer.index(segments);
         if (graphIngestor != null) {
             graphIngestor.ingest(segments);
         }
@@ -225,15 +249,33 @@ public class DocumentService {
     }
 
     public List<DocumentInfo> list() {
-        return registry.list(TenantContext.current().tenantId());
+        return list(false);
+    }
+
+    /**
+     * @param shared true 时列共享库保留分区（tenantId={@link PublicKb#TENANT_ID}）的文档元数据，
+     *               而非调用方租户；共享元数据读取不需特殊 scope（由 controller 关口决定）。
+     */
+    public List<DocumentInfo> list(boolean shared) {
+        return registry.list(partition(shared));
     }
 
     public Optional<DocumentInfo> get(String docId) {
-        return registry.get(TenantContext.current().tenantId(), docId);
+        return get(docId, false);
+    }
+
+    /** @param shared true 时读共享库保留分区的单文档元数据。 */
+    public Optional<DocumentInfo> get(String docId, boolean shared) {
+        return registry.get(partition(shared), docId);
     }
 
     public boolean delete(String docId) {
-        String tenantId = TenantContext.current().tenantId();
+        return delete(docId, false);
+    }
+
+    /** @param shared true 时删共享库保留分区文档（各 sink 从该 tenantId 派生）；scope 关口由 controller 把守。 */
+    public boolean delete(String docId, boolean shared) {
+        String tenantId = partition(shared);
         Optional<DocumentInfo> info = registry.get(tenantId, docId);
         if (info.isEmpty()) {
             return false;
@@ -275,9 +317,15 @@ public class DocumentService {
                 seg.metadata() != null
                         && Objects.equals(info.tenantId(), seg.metadata().getString("tenantId"))
                         && Objects.equals(info.docId(), seg.metadata().getString("docId")));
+        segmentIndexer.deleteByDoc(info.tenantId(), info.docId());
         if (graphIngestor != null) {
             graphIngestor.removeBySourcePrefix(info.tenantId(), info.displayName() + "#");
         }
+    }
+
+    /** 目标分区：共享库固定为保留 tenantId，否则当前租户。 */
+    private static String partition(boolean shared) {
+        return shared ? PublicKb.TENANT_ID : TenantContext.current().tenantId();
     }
 
     static String computeDocId(String tenantId, String displayName) {

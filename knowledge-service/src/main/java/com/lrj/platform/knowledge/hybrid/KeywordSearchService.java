@@ -5,6 +5,7 @@ import com.lrj.platform.security.TenantContext;
 import dev.langchain4j.data.segment.TextSegment;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -22,13 +23,24 @@ public class KeywordSearchService {
     }
 
     public List<KeywordHit> search(String query, int maxResults, String category) {
+        return search(query, maxResults, category, null);
+    }
+
+    /**
+     * @param publicTenantId 公共/共享库保留分区；非空时在隔离查当前租户分区的基础上并入该分区（读取不破坏隔离）。
+     */
+    public List<KeywordHit> search(String query, int maxResults, String category, String publicTenantId) {
         Set<String> queryTokens = tokenizer.tokenize(query);
         if (queryTokens.isEmpty() || maxResults <= 0) {
             return List.of();
         }
         String tenantId = TenantContext.current().tenantId();
         // Strong isolation: read only the current tenant's partition, never the global list.
-        return documentMirror.all(tenantId).stream()
+        List<TextSegment> pool = new ArrayList<>(documentMirror.all(tenantId));
+        if (publicTenantId != null && !publicTenantId.isBlank() && !publicTenantId.equals(tenantId)) {
+            pool.addAll(documentMirror.all(publicTenantId));
+        }
+        return pool.stream()
                 .filter(segment -> matchesCategory(segment, category))
                 .map(segment -> toHit(segment, queryTokens))
                 .filter(hit -> hit.score() > 0.0)

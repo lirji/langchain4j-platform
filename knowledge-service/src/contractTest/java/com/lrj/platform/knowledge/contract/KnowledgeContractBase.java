@@ -29,7 +29,7 @@ public abstract class KnowledgeContractBase {
 
         var hit = new KnowledgeQueryService.Hit(
                 "doc-1#0", 0.87, "doc-1", "Refund Manual", "manual", "0",
-                "Refunds are processed within 7 days.", "vector");
+                "Refunds are processed within 7 days.", "vector", false);
         var result = new KnowledgeQueryService.QueryResult("refund policy", "acme", List.of(hit));
         when(service.query(eq("refund policy"), eq(3), eq(0.2), eq("manual"))).thenReturn(result);
 

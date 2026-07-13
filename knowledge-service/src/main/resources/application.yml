@@ -7,6 +7,12 @@ spring:
   # 集中配置（可选）：Config Server 不可达时不阻断启动，各 ${ENV:default} 兜底继续生效。
   config:
     import: "optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}"
+  # es-hybrid-rerank：引入 elasticsearch-java 会触发 Spring Boot 自动建一个指向 localhost:9200 的 ES 客户端 +
+  # 健康指示器（即使 ES 关闭也会 ping → readiness DOWN）。本服务用自建 EsGateway，故排除这些自动配置。
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchRestClientAutoConfiguration
+      - org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchClientAutoConfiguration
 
 platform:
   gateway:
@@ -23,6 +29,12 @@ platform:
 
 app:
   rag:
+    # 公共/共享知识库：一个所有租户可读的保留分区（tenantId=__public__）。开启后查询在隔离查
+    # 各自租户的基础上并入公共分区命中；写公共库需 public-ingest scope（见 DocumentController）。
+    # 默认关闭 —— 关闭时行为与引入该特性前完全一致（向后兼容）。
+    public:
+      enabled: ${RAG_PUBLIC_ENABLED:false}
+      tenant-id: ${RAG_PUBLIC_TENANT_ID:__public__}
     vector-store:
       # provider: in-memory | qdrant（默认）| pgvector | milvus | chroma | doris
       provider: ${RAG_VECTOR_STORE_PROVIDER:qdrant}
@@ -115,10 +127,33 @@ app:
       vector-weight: ${RAG_RANKING_VECTOR_WEIGHT:1.0}
       keyword-weight: ${RAG_RANKING_KEYWORD_WEIGHT:1.0}
       graph-weight: ${RAG_RANKING_GRAPH_WEIGHT:1.0}
+      es-weight: ${RAG_RANKING_ES_WEIGHT:1.0}
     hybrid:
       enabled: ${RAG_HYBRID_ENABLED:true}
       keyword-top-k: ${RAG_HYBRID_KEYWORD_TOP_K:${RAG_QUERY_TOP_K:5}}
       tokenizer: ${RAG_HYBRID_TOKENIZER:simple}   # simple(零依赖) | hanlp(中文分词更准，需 hanlp 词典)
+    # 多源融合策略（es-hybrid-rerank）：weighted_max（ES 关闭默认，保持现状）| rrf（ES 开启有效默认，免疫 BM25/余弦量纲差）。
+    # strategy 留空时由代码取有效默认：ES 开启→rrf，ES 关闭→weighted_max。
+    fusion:
+      strategy: ${RAG_FUSION_STRATEGY:}
+      rrf-k: ${RAG_FUSION_RRF_K:60}
+    # ES 全文混排（默认开）。未部署/不可达 ES 也不影响启动：RestClient 惰性连接、索引惰性创建、
+    # ES 自动配置已排除；查询期 ES 源失败降级返回空（其余源照常）。要彻底关闭设 RAG_ES_ENABLED=false。
+    # 开启需 ES 装中文分析器插件（smartcn / analysis-ik）。
+    es:
+      enabled: ${RAG_ES_ENABLED:true}
+      index-enabled: ${RAG_ES_INDEX_ENABLED:true}
+      query-enabled: ${RAG_ES_QUERY_ENABLED:true}
+      uris: ${RAG_ES_URIS:http://localhost:9200}
+      username: ${RAG_ES_USERNAME:}
+      password: ${RAG_ES_PASSWORD:}
+      api-key: ${RAG_ES_API_KEY:}
+      index-name: ${RAG_ES_INDEX_NAME:knowledge_segments_text}
+      analyzer: ${RAG_ES_ANALYZER:smartcn}   # 中文分析器；不可用 standard（按单字切，BM25 召回弱）
+      normalize-score: ${RAG_ES_NORMALIZE_SCORE:true}   # weighted_max 下把 BM25 归一到 [0,1]；rrf 下忽略
+      fail-fast: ${RAG_ES_FAIL_FAST:false}   # 写失败：false=best-effort(默认) / true=让上传失败
+      connect-timeout-ms: ${RAG_ES_CONNECT_TIMEOUT_MS:2000}
+      socket-timeout-ms: ${RAG_ES_SOCKET_TIMEOUT_MS:5000}
     # 重排序：默认关。开启后按 type 二选一（llm=复用共享 temp=0 ChatModel 打分；jina=Jina reranker 云 API）
     rerank:
       enabled: ${RAG_RERANK_ENABLED:false}
@@ -171,3 +206,7 @@ management:
     health:
       probes:
         enabled: true
+  # es-hybrid-rerank：不用 Spring 自动配置的 ES 客户端，关掉其自带 ES 健康指示器（否则 ping localhost:9200 → DOWN）。
+  health:
+    elasticsearch:
+      enabled: false

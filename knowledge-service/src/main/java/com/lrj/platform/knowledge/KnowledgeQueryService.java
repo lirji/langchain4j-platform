@@ -6,16 +6,20 @@ import com.lrj.platform.knowledge.query.NoopQueryExpander;
 import com.lrj.platform.knowledge.query.QueryExpander;
 import com.lrj.platform.knowledge.rerank.NoopReranker;
 import com.lrj.platform.knowledge.rerank.Reranker;
+import com.lrj.platform.knowledge.search.FusionStrategy;
+import com.lrj.platform.knowledge.search.GraphRetrievalSource;
+import com.lrj.platform.knowledge.search.HybridFusionService;
+import com.lrj.platform.knowledge.search.InMemoryKeywordRetrievalSource;
+import com.lrj.platform.knowledge.search.RetrievalHit;
+import com.lrj.platform.knowledge.search.RetrievalRequest;
+import com.lrj.platform.knowledge.search.RetrievalSource;
+import com.lrj.platform.knowledge.search.VectorRetrievalSource;
 import com.lrj.platform.knowledge.store.EmbeddingStoreRouter;
 import com.lrj.platform.knowledge.store.SingleEmbeddingStoreRouter;
 import com.lrj.platform.security.TenantContext;
-import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.store.embedding.EmbeddingMatch;
-import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
 import dev.langchain4j.store.embedding.EmbeddingStore;
-import dev.langchain4j.store.embedding.filter.Filter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -24,14 +28,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 
-import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metadataKey;
-
+/**
+ * 检索编排器（es-hybrid-rerank 重构后）。职责：校验 → topK/minScore → 查询扩展 → 收集各启用
+ * {@link RetrievalSource}（向量 / 内存关键词 / ES / 图谱）的命中 → {@link HybridFusionService} 融合 →
+ * {@link Reranker} 重排。ES 关闭时源列表与融合语义（weighted_max）与重构前逐字等价。
+ */
 @Service
 public class KnowledgeQueryService {
 
@@ -50,10 +53,24 @@ public class KnowledgeQueryService {
     private final double vectorWeight;
     private final double keywordWeight;
     private final double graphWeight;
-    // 检索增强协作者：默认 Noop（不扩展 / 不 rerank），仅 Spring @Autowired 路径按开关注入真实实现。
-    // 非 final：字段初始化在终端（master）构造器执行，各测试用委托构造器天然拿到 Noop，无需改测试。
+
+    // 内部检索源：由现有协作者在终端构造器构建，测试构造器天然拿到默认三源，无需改测试。
+    private final RetrievalSource vectorSource;
+    private final RetrievalSource keywordSource;
+    private final RetrievalSource graphSource;
+
+    // 检索增强协作者：默认 Noop / 空扩展源 / weighted_max，仅 Spring @Autowired 路径按开关注入真实实现。
     private QueryExpander queryExpander = new NoopQueryExpander();
     private Reranker reranker = new NoopReranker();
+    private HybridFusionService fusion = new HybridFusionService();
+    // 额外源（ES 等 Spring 装配的 RetrievalSource bean），插在关键词与图谱之间。
+    private List<RetrievalSource> extraSources = List.of();
+    private FusionStrategy fusionStrategy = FusionStrategy.WEIGHTED_MAX;
+    private int rrfK = 60;
+    // 公共/共享库（默认关闭 → 行为与引入前完全一致）。开启时查询在隔离查各自租户的基础上，
+    // 把保留公共分区 publicKbTenantId 的命中也并入（读取不破坏隔离）。
+    private boolean publicKbEnabled = false;
+    private String publicKbTenantId = PublicKb.TENANT_ID;
 
     @Autowired
     public KnowledgeQueryService(EmbeddingStoreRouter storeRouter,
@@ -70,7 +87,15 @@ public class KnowledgeQueryService {
                                  @Value("${app.rag.ranking.keyword-weight:1.0}") double keywordWeight,
                                  @Value("${app.rag.ranking.graph-weight:1.0}") double graphWeight,
                                  ObjectProvider<QueryExpander> queryExpanderProvider,
-                                 ObjectProvider<Reranker> rerankerProvider) {
+                                 ObjectProvider<Reranker> rerankerProvider,
+                                 ObjectProvider<HybridFusionService> fusionProvider,
+                                 ObjectProvider<RetrievalSource> retrievalSourceProvider,
+                                 @Value("${app.rag.fusion.strategy:}") String fusionStrategyProp,
+                                 @Value("${app.rag.fusion.rrf-k:60}") int rrfK,
+                                 @Value("${app.rag.es.enabled:false}") boolean esEnabled,
+                                 @Value("${app.rag.es.query-enabled:true}") boolean esQueryEnabled,
+                                 @Value("${app.rag.public.enabled:false}") boolean publicKbEnabled,
+                                 @Value("${app.rag.public.tenant-id:__public__}") String publicKbTenantId) {
         this(storeRouter,
                 embeddingModel,
                 keywordSearchService,
@@ -89,6 +114,17 @@ public class KnowledgeQueryService {
         }
         if (rerankerProvider != null) {
             this.reranker = rerankerProvider.getIfAvailable(NoopReranker::new);
+        }
+        if (fusionProvider != null) {
+            this.fusion = fusionProvider.getIfAvailable(HybridFusionService::new);
+        }
+        this.extraSources = retrievalSourceProvider == null ? List.of() : retrievalSourceProvider.orderedStream().toList();
+        this.rrfK = rrfK;
+        // 有效默认（#5）：只有 ES 真正参与查询（enabled 且 query-enabled）才翻 RRF；只写不查/关闭时保持 weighted_max。
+        this.fusionStrategy = FusionStrategy.effectiveDefault(fusionStrategyProp, esEnabled, esQueryEnabled);
+        this.publicKbEnabled = publicKbEnabled;
+        if (publicKbTenantId != null && !publicKbTenantId.isBlank()) {
+            this.publicKbTenantId = publicKbTenantId;
         }
     }
 
@@ -193,6 +229,11 @@ public class KnowledgeQueryService {
         this.vectorWeight = normalizeWeight(vectorWeight);
         this.keywordWeight = normalizeWeight(keywordWeight);
         this.graphWeight = normalizeWeight(graphWeight);
+        this.vectorSource = new VectorRetrievalSource(this.storeRouter, this.embeddingModel, this.vectorWeight);
+        this.keywordSource = new InMemoryKeywordRetrievalSource(
+                this.keywordSearchService, this.keywordWeight, this.keywordTopK, this.hybridEnabled);
+        this.graphSource = new GraphRetrievalSource(
+                this.graphSearchService, this.graphWeight, this.graphTopK, this.graphIncludedInQuery);
     }
 
     public QueryResult query(String query, Integer topK, Double minScore, String category) {
@@ -203,112 +244,46 @@ public class KnowledgeQueryService {
         int limit = topK != null && topK > 0 ? topK : defaultTopK;
         double floor = minScore != null && minScore >= 0 ? minScore : defaultMinScore;
 
-        Filter filter = metadataKey("tenantId").isEqualTo(tenantId);
-        if (category != null && !category.isBlank()) {
-            filter = Filter.and(filter, metadataKey("category").isEqualTo(category));
-        }
-
         // rerank 开启时多召回一些候选（候选池 = topK × 放大倍数），给重排腾挪空间；关闭时 = topK。
         int poolLimit = Math.max(limit, limit * Math.max(1, reranker.retrieveMultiplier()));
 
-        // 查询扩展：原 query + 若干变体，多路向量召回按 segmentKey 取 max 分融合（关闭时只有原 query，行为不变）。
-        Map<String, Hit> merged = new LinkedHashMap<>();
+        // 查询扩展：原 query + 若干变体；关闭时只有原 query，行为不变。
+        List<String> variants = new ArrayList<>();
         for (String variant : queryExpander.expand(query)) {
-            if (variant == null || variant.isBlank()) {
-                continue;
-            }
-            Embedding queryEmbedding = embeddingModel.embed(variant).content();
-            EmbeddingSearchRequest request = EmbeddingSearchRequest.builder()
-                    .queryEmbedding(queryEmbedding)
-                    .maxResults(poolLimit)
-                    .minScore(floor)
-                    .filter(filter)
-                    .build();
-            List<EmbeddingMatch<TextSegment>> matches = storeRouter
-                    .forTenant(tenantId, embeddingModel.dimension())
-                    .search(request)
-                    .matches();
-            for (EmbeddingMatch<TextSegment> match : matches) {
-                TextSegment segment = match.embedded();
-                Hit hit = toVectorHit(match, segment);
-                merged.merge(segmentKey(segment, hit.id()), hit, KnowledgeQueryService::keepHigher);
+            if (variant != null && !variant.isBlank()) {
+                variants.add(variant);
             }
         }
-        if (hybridEnabled) {
-            int keywordLimit = Math.max(poolLimit, keywordTopK);
-            for (KeywordSearchService.KeywordHit keywordHit : keywordSearchService.search(query, keywordLimit, category)) {
-                Hit hit = toKeywordHit(keywordHit);
-                String key = segmentKey(keywordHit.segment(), hit.id());
-                merged.merge(key, hit, KnowledgeQueryService::mergeHits);
+        if (variants.isEmpty()) {
+            variants.add(query);
+        }
+
+        // 公共库开启且调用方不是公共分区本身时，把公共租户带下去，各源据此并入公共命中。
+        String reqPublicTenant = (publicKbEnabled && publicKbTenantId != null
+                && !publicKbTenantId.equals(tenantId)) ? publicKbTenantId : null;
+        RetrievalRequest request = new RetrievalRequest(
+                query, variants, tenantId, category, poolLimit, floor, reqPublicTenant);
+
+        // 顺序敏感（weighted_max）：向量 → 关键词 → ES/额外源 → 图谱，复刻原合并顺序。
+        List<List<RetrievalHit>> groups = new ArrayList<>();
+        groups.add(vectorSource.retrieve(request));
+        if (keywordSource.enabled()) {
+            groups.add(keywordSource.retrieve(request));
+        }
+        for (RetrievalSource extra : extraSources) {
+            if (extra.enabled()) {
+                groups.add(extra.retrieve(request));
             }
         }
-        if (graphIncludedInQuery && graphSearchService != null) {
-            int graphLimit = Math.max(poolLimit, graphTopK);
-            for (GraphSearchService.GraphHit graphHit : graphSearchService.query(query, null, graphLimit, category).hits()) {
-                Hit hit = toGraphHit(graphHit);
-                merged.putIfAbsent(hit.id(), hit);
-            }
+        if (graphSource.enabled()) {
+            groups.add(graphSource.retrieve(request));
         }
-        // 候选按初始分降序，交给 reranker 重排并截断到 topK（Noop 时即取前 topK，等价原 .limit(limit)）。
-        List<Hit> candidates = new ArrayList<>(merged.values()).stream()
-                .sorted(Comparator.comparingDouble(KnowledgeQueryService::scoreOrZero).reversed())
-                .toList();
+
+        List<Hit> candidates = fusion.fuse(groups, fusionStrategy, rrfK);
         List<Hit> hits = reranker.rerank(query, candidates, limit);
-        log.info("knowledge query tenant={} topK={} minScore={} category={} variants={} -> {} hits",
-                tenantId, limit, floor, category, merged.size(), hits.size());
+        log.info("knowledge query tenant={} topK={} minScore={} category={} strategy={} variants={} -> {} hits",
+                tenantId, limit, floor, category, fusionStrategy, variants.size(), hits.size());
         return new QueryResult(query, tenantId, hits);
-    }
-
-    private Hit toVectorHit(EmbeddingMatch<TextSegment> match, TextSegment segment) {
-        double score = weighted(match.score(), vectorWeight);
-        if (segment == null || segment.metadata() == null) {
-            return new Hit(match.embeddingId(), score, null, null, null, null, null, "vector");
-        }
-        return new Hit(
-                match.embeddingId(),
-                score,
-                segment.metadata().getString("docId"),
-                segment.metadata().getString("displayName"),
-                segment.metadata().getString("category"),
-                segment.metadata().getString("index"),
-                segment.text(),
-                "vector");
-    }
-
-    private Hit toKeywordHit(KeywordSearchService.KeywordHit keywordHit) {
-        TextSegment segment = keywordHit.segment();
-        String key = segmentKey(segment, "keyword");
-        double score = weighted(keywordHit.score(), keywordWeight);
-        if (segment == null || segment.metadata() == null) {
-            return new Hit("keyword:" + key, score, null, null, null, null, null, "keyword");
-        }
-        return new Hit(
-                "keyword:" + key,
-                score,
-                segment.metadata().getString("docId"),
-                segment.metadata().getString("displayName"),
-                segment.metadata().getString("category"),
-                segment.metadata().getString("index"),
-                segment.text(),
-                "keyword");
-    }
-
-    private Hit toGraphHit(GraphSearchService.GraphHit graphHit) {
-        SourceParts source = SourceParts.from(graphHit.sourceId());
-        return new Hit(
-                "graph:" + graphHit.sourceId() + ":" + graphHit.subject() + ":" + graphHit.relation() + ":" + graphHit.object(),
-                weighted(0.75, graphWeight),
-                null,
-                source.displayName(),
-                graphHit.category(),
-                source.index(),
-                graphHit.text(),
-                "graph");
-    }
-
-    /** 查询扩展下同一 segment 被多个变体命中：保留分更高的那个。 */
-    private static Hit keepHigher(Hit a, Hit b) {
-        return scoreOrZero(a) >= scoreOrZero(b) ? a : b;
     }
 
     /** 测试注入自定义扩展器（生产由 Spring @Autowired 按开关装配）。 */
@@ -316,41 +291,29 @@ public class KnowledgeQueryService {
         this.queryExpander = queryExpander == null ? new NoopQueryExpander() : queryExpander;
     }
 
+    /** 测试注入公共库开关（生产由 @Autowired 构造器按 app.rag.public.* 装配）。 */
+    void setPublicKb(boolean enabled, String tenantId) {
+        this.publicKbEnabled = enabled;
+        if (tenantId != null && !tenantId.isBlank()) {
+            this.publicKbTenantId = tenantId;
+        }
+    }
+
     /** 测试注入自定义重排器（生产由 Spring @Autowired 按开关装配）。 */
     void setReranker(Reranker reranker) {
         this.reranker = reranker == null ? new NoopReranker() : reranker;
     }
 
-    private static Hit mergeHits(Hit vectorHit, Hit keywordHit) {
-        return new Hit(
-                vectorHit.id(),
-                Math.max(scoreOrZero(vectorHit), scoreOrZero(keywordHit)),
-                firstNonNull(vectorHit.docId(), keywordHit.docId()),
-                firstNonNull(vectorHit.displayName(), keywordHit.displayName()),
-                firstNonNull(vectorHit.category(), keywordHit.category()),
-                firstNonNull(vectorHit.index(), keywordHit.index()),
-                firstNonNull(vectorHit.text(), keywordHit.text()),
-                "hybrid");
+    /** 测试注入额外检索源（如 ES 源的 fake）。 */
+    void setExtraSources(List<RetrievalSource> sources) {
+        this.extraSources = sources == null ? List.of() : List.copyOf(sources);
     }
 
-    private static String segmentKey(TextSegment segment, String fallback) {
-        if (segment == null || segment.metadata() == null) {
-            return fallback;
+    /** 测试选择融合策略。 */
+    void setFusionStrategy(FusionStrategy strategy) {
+        if (strategy != null) {
+            this.fusionStrategy = strategy;
         }
-        String docId = segment.metadata().getString("docId");
-        String index = segment.metadata().getString("index");
-        if (docId != null && index != null) {
-            return docId + "#" + index;
-        }
-        return Objects.toString(docId, "segment") + "#" + Objects.hashCode(segment.text());
-    }
-
-    private static double scoreOrZero(Hit hit) {
-        return hit.score() == null ? 0.0 : hit.score();
-    }
-
-    private static double weighted(double score, double weight) {
-        return score * weight;
     }
 
     private static double normalizeWeight(double weight) {
@@ -360,25 +323,17 @@ public class KnowledgeQueryService {
         return weight;
     }
 
-    private static String firstNonNull(String left, String right) {
-        return left != null ? left : right;
-    }
-
-    private record SourceParts(String displayName, String index) {
-        static SourceParts from(String sourceId) {
-            if (sourceId == null || sourceId.isBlank()) {
-                return new SourceParts(null, null);
-            }
-            int sep = sourceId.lastIndexOf('#');
-            if (sep < 0 || sep == sourceId.length() - 1) {
-                return new SourceParts(sourceId, null);
-            }
-            return new SourceParts(sourceId.substring(0, sep), sourceId.substring(sep + 1));
-        }
+    /** 共享/公共库读并入是否开启（供 {@code GET /rag/config} 只读回显运行时状态）。 */
+    public boolean publicKbEnabled() {
+        return publicKbEnabled;
     }
 
     public record QueryResult(String query, String tenantId, List<Hit> hits) {}
 
+    /**
+     * 融合/重排后的单条命中。{@code shared} 为末尾加法字段：true=命中来自共享库保留分区 {@code __public__}，
+     * false=来自当前租户。经 {@code KnowledgeQueryController.toReply} 映射为 {@code KnowledgeHit.visibility}。
+     */
     public record Hit(String id, Double score, String docId, String displayName,
-                      String category, String index, String text, String source) {}
+                      String category, String index, String text, String source, boolean shared) {}
 }

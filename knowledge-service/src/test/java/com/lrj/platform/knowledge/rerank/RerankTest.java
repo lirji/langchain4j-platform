@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RerankTest {
 
     private static Hit hit(String id, double score, String text) {
-        return new Hit(id, score, "doc", "doc.md", null, "0", text, "vector");
+        return new Hit(id, score, "doc", "doc.md", null, "0", text, "vector", false);
     }
 
     @Test

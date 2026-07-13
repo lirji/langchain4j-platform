@@ -51,8 +51,10 @@ public class DocumentController {
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> uploadFile(@RequestPart("file") MultipartFile file,
-                                        @RequestParam(required = false) String category) throws IOException {
-        requireIngest();
+                                        @RequestParam(required = false) String category,
+                                        @RequestParam(required = false) String visibility) throws IOException {
+        boolean shared = isPublic(visibility);
+        requireWrite(shared);
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().header("X-Error", "empty file").build();
         }
@@ -60,18 +62,31 @@ public class DocumentController {
         String contentType = file.getContentType();
         try {
             if (MultimodalIngestionText.isImageContentType(contentType)) {
+                if (shared) {
+                    return ResponseEntity.badRequest().header("X-Error", "public image ingestion not supported").build();
+                }
                 return ingestImage(displayName, contentType, file.getBytes());
             }
             String text = extractor.extract(file.getInputStream(), displayName);
-            return ResponseEntity.ok(documents.upload(displayName, contentType, text, category, file.getSize()));
+            return ResponseEntity.ok(shared
+                    ? documents.upload(displayName, contentType, text, category, file.getSize(), true)
+                    : documents.upload(displayName, contentType, text, category, file.getSize()));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().header("X-Error", e.getMessage()).build();
         }
     }
 
+    /** 便捷重载（POJO 测试用；可见性仅取 body.visibility）。生产入口是下面带 query 回退的 @PostMapping 版本。 */
+    public ResponseEntity<?> uploadJson(Map<String, String> body) {
+        return uploadJson(body, null);
+    }
+
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> uploadJson(@RequestBody Map<String, String> body) {
-        requireIngest();
+    public ResponseEntity<?> uploadJson(@RequestBody Map<String, String> body,
+                                        @RequestParam(required = false) String visibility) {
+        // 可见性优先取 body.visibility，其次 query ?visibility=（供前端"共享上传"专用 cap 用路径 query 表达）。
+        boolean shared = isPublic(body.get("visibility") != null ? body.get("visibility") : visibility);
+        requireWrite(shared);
         String title = body.get("title");
         String text = body.get("text");
         String imageBase64 = body.get("imageBase64");
@@ -81,6 +96,9 @@ public class DocumentController {
             return ResponseEntity.badRequest().header("X-Error", "title is required").build();
         }
         if (imageBase64 != null && !imageBase64.isBlank()) {
+            if (shared) {
+                return ResponseEntity.badRequest().header("X-Error", "public image ingestion not supported").build();
+            }
             try {
                 byte[] imageBytes = MultimodalIngestionText.decodeBase64Image(imageBase64);
                 return ingestImage(title, contentType, imageBytes);
@@ -91,24 +109,38 @@ public class DocumentController {
         if (text == null) {
             return ResponseEntity.badRequest().header("X-Error", "text is required").build();
         }
-        return ResponseEntity.ok(documents.upload(title, contentType, text, category));
+        return ResponseEntity.ok(shared
+                ? documents.upload(title, contentType, text, category, -1, true)
+                : documents.upload(title, contentType, text, category));
     }
 
+    /**
+     * 列文档元数据。{@code visibility=public|shared} 列共享库保留分区（普通登录用户即可读，无需特殊 scope）；
+     * 缺省 {@code tenant} 列当前租户（向后兼容）。响应里 {@link DocumentInfo#tenantId()} 为 {@code __public__}
+     * 即共享文档，前端据此映射 visibility。
+     */
     @GetMapping
-    public List<DocumentInfo> list() {
-        return documents.list();
+    public List<DocumentInfo> list(@RequestParam(required = false) String visibility) {
+        return documents.list(isPublic(visibility));
     }
 
     @GetMapping("/{docId}")
-    public ResponseEntity<DocumentInfo> get(@PathVariable String docId) {
-        Optional<DocumentInfo> info = documents.get(docId);
+    public ResponseEntity<DocumentInfo> get(@PathVariable String docId,
+                                            @RequestParam(required = false) String visibility) {
+        Optional<DocumentInfo> info = documents.get(docId, isPublic(visibility));
         return info.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    /**
+     * 删文档。{@code visibility=public|shared} 删共享库文档，需 {@code public-ingest} scope（沿用上传侧
+     * {@code requireWrite(shared)} 关口）；缺省 {@code tenant} 删当前租户文档，需 {@code ingest}。
+     */
     @DeleteMapping("/{docId}")
-    public ResponseEntity<Map<String, Object>> delete(@PathVariable String docId) {
-        requireIngest();
-        boolean removed = documents.delete(docId);
+    public ResponseEntity<Map<String, Object>> delete(@PathVariable String docId,
+                                                      @RequestParam(required = false) String visibility) {
+        boolean shared = isPublic(visibility);
+        requireWrite(shared);
+        boolean removed = documents.delete(docId, shared);
         if (!removed) {
             return ResponseEntity.notFound().build();
         }
@@ -134,5 +166,20 @@ public class DocumentController {
         if (!TenantContext.current().hasScope("ingest")) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ingest scope required");
         }
+    }
+
+    /** 写公共/共享库需要专用 public-ingest scope；普通租户写沿用 ingest。 */
+    private static void requireWrite(boolean shared) {
+        if (shared) {
+            if (!TenantContext.current().hasScope("public-ingest")) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "public-ingest scope required");
+            }
+        } else {
+            requireIngest();
+        }
+    }
+
+    private static boolean isPublic(String visibility) {
+        return "public".equalsIgnoreCase(visibility) || "shared".equalsIgnoreCase(visibility);
     }
 }
