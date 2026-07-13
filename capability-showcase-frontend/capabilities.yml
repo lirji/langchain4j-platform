@@ -220,8 +220,8 @@ modules:
         tags: [core]
       - id: rag.upload.file
         module: rag
-        title: 上传文档(文件)
-        description: "POST /rag/documents (multipart file)，需 ingest scope。"
+        title: 上传文档(文件·当前租户)
+        description: "POST /rag/documents (multipart file)，写当前租户库，需 ingest scope。"
         method: POST
         path: /rag/documents
         requestKind: multipart
@@ -233,10 +233,25 @@ modules:
         riskLevel: caution
         state: scope-required
         executableByDefault: true
+      - id: rag.upload.file.shared
+        module: rag
+        title: 上传文档(文件·共享库)
+        description: "POST /rag/documents?visibility=public，写共享库（全租户可检索），需 public-ingest scope。"
+        method: POST
+        path: /rag/documents?visibility=public
+        requestKind: multipart
+        responseKind: json
+        params:
+          - { name: file, in: form-data, type: file, required: true, label: 文件, accept: ".txt,.md,.pdf" }
+        requiredScopes: [public-ingest]
+        featureFlagDefault: true
+        riskLevel: caution
+        state: scope-required
+        executableByDefault: true
       - id: rag.upload.json
         module: rag
-        title: 上传文档(JSON)
-        description: "POST /rag/documents (JSON title/text/category)，需 ingest scope。"
+        title: 上传文档(JSON·当前租户)
+        description: "POST /rag/documents (JSON title/text/category)，写当前租户库，需 ingest scope。"
         method: POST
         path: /rag/documents
         requestKind: json
@@ -247,6 +262,24 @@ modules:
           - { name: category, in: body, type: string, required: false, label: 类目 }
         example: '{"title":"退款政策","text":"下单 7 天内可无理由退款……","category":"policy"}'
         requiredScopes: [ingest]
+        featureFlagDefault: true
+        riskLevel: caution
+        state: scope-required
+        executableByDefault: true
+      - id: rag.upload.json.shared
+        module: rag
+        title: 上传文档(JSON·共享库)
+        description: "POST /rag/documents?visibility=public (JSON title/text/category)，写共享库（全租户可检索），需 public-ingest scope。"
+        method: POST
+        path: /rag/documents?visibility=public
+        requestKind: json
+        responseKind: json
+        params:
+          - { name: title, in: body, type: string, required: false, label: 标题 }
+          - { name: text, in: body, type: text, required: true, label: 正文 }
+          - { name: category, in: body, type: string, required: false, label: 类目 }
+        example: '{"title":"全租户公告","text":"共享知识库示例文本……","category":"policy"}'
+        requiredScopes: [public-ingest]
         featureFlagDefault: true
         riskLevel: caution
         state: scope-required

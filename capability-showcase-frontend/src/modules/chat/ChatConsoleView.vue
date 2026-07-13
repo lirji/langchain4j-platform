@@ -74,7 +74,7 @@ const run = useCapabilityRun(() => activeCap.value as Capability)
 
 const activeGate = computed(() =>
   activeCap.value
-    ? executionGate(activeCap.value, { hasApiKey: session.hasCredential })
+    ? executionGate(activeCap.value, { ...session.permissionContext() })
     : { allowed: false, reason: '当前无可用对话能力。' },
 )
 
@@ -296,7 +296,7 @@ const isMemoryMode = computed(() => modeId.value === 'chat.memory')
 async function loadProfile(): Promise<void> {
   const cap = memGetCap.value
   if (!cap) return
-  const gate = executionGate(cap, { hasApiKey: session.hasCredential })
+  const gate = executionGate(cap, { ...session.permissionContext() })
   if (!gate.allowed) {
     memError.value = gate.reason ?? '当前不可执行。'
     return
@@ -320,7 +320,7 @@ async function loadProfile(): Promise<void> {
 async function clearProfile(): Promise<void> {
   const cap = memClearCap.value
   if (!cap) return
-  const gate = executionGate(cap, { hasApiKey: session.hasCredential })
+  const gate = executionGate(cap, { ...session.permissionContext() })
   if (!gate.allowed) {
     memError.value = gate.reason ?? '当前不可执行。'
     return

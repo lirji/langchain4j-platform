@@ -9,13 +9,16 @@
  *
  * 深链（capId 存在）沿用通用 CapabilityRunner。执行统一经 executionGate + runCapability。
  */
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useCatalogStore } from '../../stores/catalog'
 import { useSessionStore } from '../../stores/session'
 import { runCapability } from '../../api/client'
 import { humanizeError } from '../../api/errors'
 import { executionGate } from '../../utils/gate'
 import { highlightSegments } from '../../utils/highlight'
+import { SHARED_KB_UI_ENABLED } from '../../config'
+import { deleteDocument, fetchRagConfig, getDocument, listDocuments } from '../../api/knowledge'
+import type { DocumentInfo, KnowledgeRuntimeView, Visibility } from '../../types/knowledge'
 import type { Capability } from '../../types/catalog'
 import type { FormValues } from '../../utils/validation'
 import CapabilityRunner from '../../components/capability/CapabilityRunner.vue'
@@ -45,10 +48,17 @@ const obsidianCap = computed(() => catalog.capabilityById('rag.obsidian.import')
 const graphQueryCap = computed(() => catalog.capabilityById('rag.graph.query'))
 const graphEntitiesCap = computed(() => catalog.capabilityById('rag.graph.entities'))
 
-const uploadRunners = computed<Capability[]>(() =>
-  [uploadFileCap.value, uploadJsonCap.value, obsidianCap.value].filter(
-    (c): c is Capability => !!c,
-  ),
+const uploadFileSharedCap = computed(() => catalog.capabilityById('rag.upload.file.shared'))
+const uploadJsonSharedCap = computed(() => catalog.capabilityById('rag.upload.json.shared'))
+/** 租户库入库（file/json/obsidian，需 ingest）——始终可用。 */
+const tenantUploadRunners = computed<Capability[]>(() =>
+  [uploadFileCap.value, uploadJsonCap.value, obsidianCap.value].filter((c): c is Capability => !!c),
+)
+/** 共享库入库（需 public-ingest）——仅在 SHARED_KB_UI 开 + 运行时 publicEnabled 时出现（sharedTabEnabled）。 */
+const sharedUploadRunners = computed<Capability[]>(() =>
+  sharedTabEnabled.value
+    ? [uploadFileSharedCap.value, uploadJsonSharedCap.value].filter((c): c is Capability => !!c)
+    : [],
 )
 const graphRunners = computed<Capability[]>(() =>
   [graphQueryCap.value, graphEntitiesCap.value].filter((c): c is Capability => !!c),
@@ -80,7 +90,7 @@ async function callCap(
   values: FormValues,
 ): Promise<{ data?: unknown; error?: string }> {
   if (!cap) return { error: '能力不在目录中。' }
-  const gate = executionGate(cap, { hasApiKey: session.hasCredential, confirmed: false })
+  const gate = executionGate(cap, { ...session.permissionContext(), confirmed: false })
   if (!gate.allowed) return { error: gate.reason ?? '当前不可执行。' }
   try {
     const res = await runCapability(cap, values, session.runContext())
@@ -90,13 +100,31 @@ async function callCap(
   }
 }
 
-// ── 文档库 ──
-interface DocItem {
-  docId?: string
-  title?: string
-  category?: string
+// ── 知识运行时配置 + 可见性分区（租户库 / 共享库）──
+const ragConfig = ref<KnowledgeRuntimeView | null>(null)
+const visibility = ref<Visibility>('tenant')
+/** 共享 tab 双控：构建开关 SHARED_KB_UI_ENABLED && 运行时 rag-config.publicEnabled。 */
+const sharedTabEnabled = computed(
+  () => SHARED_KB_UI_ENABLED && ragConfig.value?.publicEnabled === true,
+)
+/** 共享图片入库是否受支持（后端权威；false 时共享图片入口禁用 + 说明）。 */
+const sharedImagesSupported = computed(() => ragConfig.value?.sharedImagesSupported === true)
+/** 构建开关已开、但后端明确关闭共享分区时给出说明（区别于"未探测"）。 */
+const sharedDisabledNote = computed(
+  () => SHARED_KB_UI_ENABLED && ragConfig.value != null && ragConfig.value.publicEnabled === false,
+)
+
+async function probeRagConfig(): Promise<void> {
+  if (!session.hasCredential) return
+  try {
+    ragConfig.value = await fetchRagConfig(session.runContext())
+  } catch {
+    ragConfig.value = null // 探测失败：共享分区保持隐藏（fail-closed）
+  }
 }
-const docs = ref<DocItem[]>([])
+
+// ── 文档库（改用强类型 DocumentInfo，按 tab 可见性请求）──
+const docs = ref<DocumentInfo[]>([])
 const docsLoaded = ref(false)
 const docsBusy = ref(false)
 const docsError = ref<string | null>(null)
@@ -107,75 +135,116 @@ const detailData = ref<unknown>(null)
 const detailBusy = ref(false)
 const detailError = ref<string | null>(null)
 const busyKey = ref<string | null>(null)
+// 乱序保护：快速切换 tab / 连点详情时，慢请求后到不得覆盖新结果（否则会把共享文档误标成租户，或详情张冠李戴）。
+let docsSeq = 0
+let detailSeq = 0
 
-function parseDocs(data: unknown): DocItem[] {
-  const arr = firstArray(data, ['documents', 'items', 'data', 'results']) ?? []
-  return arr.map((item): DocItem => {
-    if (item && typeof item === 'object') {
-      const o = item as Record<string, unknown>
-      return {
-        docId: asStr(o.docId) ?? asStr(o.id) ?? asStr(o.documentId),
-        title: asStr(o.title) ?? asStr(o.name) ?? asStr(o.filename),
-        category: asStr(o.category),
-      }
-    }
-    return { title: String(item) }
-  })
+function fmtBytes(n: number): string {
+  if (!Number.isFinite(n)) return '—'
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / 1024 / 1024).toFixed(1)} MB`
+}
+function fmtDate(iso: string): string {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString()
 }
 
 async function loadDocs(): Promise<void> {
+  if (!session.hasCredential) return
+  const my = ++docsSeq
+  const reqVis = visibility.value // 与本次请求绑定的可见性
   docsBusy.value = true
   docsError.value = null
   docsNote.value = null
-  const { data, error } = await callCap(listCap.value, {})
-  docsBusy.value = false
-  docsLoaded.value = true
-  if (error) {
-    docsError.value = error
-    return
+  try {
+    const result = await listDocuments(reqVis, session.runContext())
+    if (my !== docsSeq) return // 已被更新的请求取代 → 丢弃陈旧结果，绝不覆盖新 tab
+    docs.value = result
+    docsLoaded.value = true
+    if (!result.length) {
+      docsNote.value =
+        reqVis === 'public' ? '共享知识库暂无文档。' : '当前租户下暂无文档。上传后可在此管理与检索。'
+    }
+  } catch (e) {
+    if (my !== docsSeq) return
+    docsError.value = humanizeError(e)
+    docsLoaded.value = true
+  } finally {
+    if (my === docsSeq) docsBusy.value = false
   }
-  docs.value = parseDocs(data)
-  if (!docs.value.length) docsNote.value = '当前租户下暂无文档。上传后可在此管理与检索。'
+}
+
+/** 切换可见性 tab：清空当前列表/详情并按新 tab 重新拉取。 */
+async function switchTab(v: Visibility): Promise<void> {
+  if (v === visibility.value) return
+  visibility.value = v
+  docs.value = []
+  docsLoaded.value = false
+  detailDocId.value = null
+  detailData.value = null
+  pendingDelete.value = null
+  await loadDocs()
 }
 
 async function viewDetail(docId: string): Promise<void> {
+  const my = ++detailSeq
+  const reqVis = visibility.value
   detailDocId.value = docId
   detailData.value = null
   detailError.value = null
   detailBusy.value = true
   busyKey.value = `get:${docId}`
-  const { data, error } = await callCap(getCap.value, { docId })
-  detailBusy.value = false
-  busyKey.value = null
-  if (error) {
-    detailError.value = error
-    return
+  try {
+    const data = await getDocument(docId, reqVis, session.runContext())
+    if (my !== detailSeq) return // 已被更新的详情请求取代 → 丢弃，避免张冠李戴
+    detailData.value = data
+  } catch (e) {
+    if (my !== detailSeq) return
+    detailError.value = humanizeError(e)
+  } finally {
+    if (my === detailSeq) {
+      detailBusy.value = false
+      busyKey.value = null
+    }
   }
-  detailData.value = data ?? null
 }
 
 async function confirmDelete(docId: string): Promise<void> {
   busyKey.value = `del:${docId}`
   docsError.value = null
-  const { error } = await callCap(deleteCap.value, { docId })
-  busyKey.value = null
-  pendingDelete.value = null
-  if (error) {
-    docsError.value = error
-    return
+  try {
+    // 删共享需 public-ingest（后端 403 兜底并翻译为人话）。
+    await deleteDocument(docId, visibility.value, session.runContext())
+    if (detailDocId.value === docId) {
+      detailDocId.value = null
+      detailData.value = null
+    }
+    docsNote.value = `文档 ${docId} 已删除。`
+    await loadDocs()
+  } catch (e) {
+    docsError.value = humanizeError(e)
+  } finally {
+    busyKey.value = null
+    pendingDelete.value = null
   }
-  if (detailDocId.value === docId) {
-    detailDocId.value = null
-    detailData.value = null
-  }
-  docsNote.value = `文档 ${docId} 已删除。`
-  await loadDocs()
 }
 
 function onUploaded(): void {
-  // 入库成功后刷新文档库（若已加载过 / 已填 Key）。
+  // 入库成功后刷新文档库（若已填凭证）。
   if (session.hasCredential) void loadDocs()
 }
+
+// 启动时探测 rag 配置；凭证到位后再探一次（登录/填 Key 后共享分区才能出现）。
+onMounted(() => {
+  void probeRagConfig()
+})
+watch(
+  () => session.hasCredential,
+  (has) => {
+    if (has) void probeRagConfig()
+  },
+)
 
 // ── 检索台 ──
 interface Hit {
@@ -183,6 +252,8 @@ interface Hit {
   docId?: string
   category?: string
   text?: string
+  /** 服务端权威 visibility（KnowledgeHit.visibility）；前端不靠 docId/名称推断。 */
+  visibility?: Visibility
   raw: unknown
 }
 const query = ref('')
@@ -194,11 +265,10 @@ const searchError = ref<string | null>(null)
 const searchResult = ref<unknown>(null)
 const searched = ref(false)
 
-const queryGate = computed(() =>
-  queryCap.value
-    ? executionGate(queryCap.value, { hasApiKey: session.hasCredential })
-    : { allowed: false, reason: '未找到检索能力。' },
-)
+const queryGate = computed(() => {
+  if (!queryCap.value) return { allowed: false, reason: '未找到检索能力。' }
+  return executionGate(queryCap.value, { ...session.permissionContext() })
+})
 const canSearch = computed(
   () => queryGate.value.allowed && !searchBusy.value && query.value.trim().length > 0,
 )
@@ -215,6 +285,7 @@ function parseHits(data: unknown): Hit[] | null {
           docId: asStr(o.docId) ?? asStr(o.documentId) ?? asStr(o.id),
           category: asStr(o.category),
           text: asStr(o.text) ?? asStr(o.content) ?? asStr(o.snippet) ?? asStr(o.chunk),
+          visibility: o.visibility === 'public' || o.visibility === 'tenant' ? o.visibility : undefined,
           raw: item,
         }
       }
@@ -256,6 +327,7 @@ const ingestScopeHint = computed(() => {
   const scopes = uploadFileCap.value?.requiredScopes ?? []
   return scopes.length ? scopes.join(' / ') : 'ingest'
 })
+// 入库可见性现由每个上传表单的「可见性」字段承载（随请求发送），不再用外部选择器，避免双重控件失真。
 </script>
 
 <template>
@@ -306,23 +378,59 @@ const ingestScopeHint = computed(() => {
             <InfoNote v-else-if="docsNote" tone="success">{{ docsNote }}</InfoNote>
           </template>
 
+          <!-- 可见性分区 tabs：租户库 / 共享库（共享仅 sharedTabEnabled 时出现） -->
+          <div class="rag__tabs" role="tablist" aria-label="文档库可见性">
+            <button
+              type="button"
+              role="tab"
+              class="rag__tab"
+              :class="{ active: visibility === 'tenant' }"
+              :aria-selected="visibility === 'tenant'"
+              @click="switchTab('tenant')"
+            >
+              我的租户库
+            </button>
+            <button
+              v-if="sharedTabEnabled"
+              type="button"
+              role="tab"
+              class="rag__tab"
+              :class="{ active: visibility === 'public' }"
+              :aria-selected="visibility === 'public'"
+              @click="switchTab('public')"
+            >
+              共享知识库
+            </button>
+          </div>
+          <InfoNote v-if="sharedDisabledNote" tone="neutral" class="rag__tabs-note">
+            共享知识库当前未开放（服务端 <code>publicEnabled=false</code>），仅显示当前租户文档。
+          </InfoNote>
+
           <ul v-if="docs.length" class="rag__doclist">
-            <li v-for="(d, i) in docs" :key="d.docId ?? i" class="rag__doc">
+            <li v-for="d in docs" :key="d.docId" class="rag__doc">
               <div class="rag__doc-main">
-                <strong class="rag__doc-title">{{ d.title ?? '(无标题)' }}</strong>
+                <strong class="rag__doc-title">{{ d.displayName || '(无标题)' }}</strong>
                 <div class="rag__doc-meta">
+                  <span class="rag__vis" :data-vis="visibility">
+                    {{ visibility === 'public' ? '共享' : '租户' }}
+                  </span>
                   <span v-if="d.category" class="rag__cat">{{ d.category }}</span>
-                  <code v-if="d.docId" class="rag__id">{{ d.docId }}</code>
-                  <span v-else class="rag__muted">无 ID</span>
+                  <code class="rag__id">{{ d.docId }}</code>
+                </div>
+                <div class="rag__doc-sub">
+                  <span title="片段数">🧩 {{ d.segmentCount }} 段</span>
+                  <span title="大小">· {{ fmtBytes(d.sizeBytes) }}</span>
+                  <span title="版本">· v{{ d.version }}</span>
+                  <span title="上传时间">· {{ fmtDate(d.uploadedAt) }}</span>
                 </div>
               </div>
-              <div v-if="d.docId" class="rag__doc-actions">
+              <div class="rag__doc-actions">
                 <button
                   v-if="getCap"
                   type="button"
                   class="btn btn--ghost btn--sm"
                   :disabled="busyKey === `get:${d.docId}`"
-                  @click="viewDetail(d.docId!)"
+                  @click="viewDetail(d.docId)"
                 >
                   {{ busyKey === `get:${d.docId}` ? '…' : '详情' }}
                 </button>
@@ -332,7 +440,7 @@ const ingestScopeHint = computed(() => {
                       type="button"
                       class="btn btn--danger btn--sm"
                       :disabled="busyKey === `del:${d.docId}`"
-                      @click="confirmDelete(d.docId!)"
+                      @click="confirmDelete(d.docId)"
                     >
                       {{ busyKey === `del:${d.docId}` ? '删除中…' : '确认删除' }}
                     </button>
@@ -344,9 +452,10 @@ const ingestScopeHint = computed(() => {
                     v-else
                     type="button"
                     class="btn btn--ghost btn--sm rag__del"
-                    @click="pendingDelete = d.docId ?? null"
+                    :title="visibility === 'public' ? '删除共享文档需 public-ingest scope' : '删除文档'"
+                    @click="pendingDelete = d.docId"
                   >
-                    删除
+                    {{ visibility === 'public' ? '删除 ⚠' : '删除' }}
                   </button>
                 </template>
               </div>
@@ -450,6 +559,10 @@ const ingestScopeHint = computed(() => {
                   </span>
                   <code v-if="h.docId" class="rag__id">{{ h.docId }}</code>
                   <span v-if="h.category" class="rag__cat">{{ h.category }}</span>
+                  <!-- 命中来源 visibility 徽章：只读服务端 hit.visibility，绝不推断 -->
+                  <span v-if="h.visibility" class="rag__vis" :data-vis="h.visibility">
+                    {{ h.visibility === 'public' ? '共享' : '租户' }}
+                  </span>
                 </div>
                 <p v-if="h.text" class="rag__hit-text"><span
                     v-for="(s, si) in segmentsFor(h.text)"
@@ -482,26 +595,39 @@ const ingestScopeHint = computed(() => {
       </div>
     </div>
 
-    <!-- 文档入库（file / json / obsidian，需 ingest scope） -->
+    <!-- 文档入库（租户库 file/json/obsidian 需 ingest；共享库另有专用入口需 public-ingest） -->
     <WorkbenchSection
-      v-if="uploadRunners.length"
+      v-if="tenantUploadRunners.length || sharedUploadRunners.length"
       title="文档入库"
-      subtitle="上传文档到知识库以供检索。入库为 caution 操作，需 ingest scope。"
+      subtitle="上传文档到知识库以供检索。入库为 caution 操作。"
       collapsible
       :default-open="false"
     >
       <template #notice>
         <InfoNote tone="warning">
-          入库能力需 <strong>{{ ingestScopeHint }}</strong> scope；若当前 API Key 不具备，将返回 403（已翻译为人话提示）。成功入库后文档库自动刷新。
+          租户库入库需 <strong>{{ ingestScopeHint }}</strong> scope；若当前凭证不具备，将返回 403（已翻译为人话提示）。成功入库后文档库自动刷新。
+        </InfoNote>
+        <InfoNote v-if="sharedTabEnabled" tone="neutral">
+          「<strong>共享库</strong>」入库写公共分区，将对<strong>所有租户</strong>检索可见，需 <code>public-ingest</code> scope（与租户库入口分开）。<span v-if="!sharedImagesSupported">共享图片入库暂不支持，仅文本 / JSON。</span>
         </InfoNote>
       </template>
       <div class="rag__runners">
+        <p class="rag__uplabel">当前租户库</p>
         <CapabilityRunner
-          v-for="c in uploadRunners"
+          v-for="c in tenantUploadRunners"
           :key="c.id"
           :cap="c"
           @result="onUploaded"
         />
+        <template v-if="sharedUploadRunners.length">
+          <p class="rag__uplabel rag__uplabel--shared">共享知识库（全租户可检索 · 需 public-ingest）</p>
+          <CapabilityRunner
+            v-for="c in sharedUploadRunners"
+            :key="c.id"
+            :cap="c"
+            @result="onUploaded"
+          />
+        </template>
       </div>
     </WorkbenchSection>
 
@@ -548,12 +674,98 @@ const ingestScopeHint = computed(() => {
   color: var(--text-subtle);
 }
 
+/* 可见性 tabs（分段控件） */
+.rag__tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  margin-bottom: var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.rag__tab {
+  padding: 5px 12px;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.rag__tab:hover {
+  color: var(--text);
+}
+.rag__tab.active {
+  color: var(--primary);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--primary-border);
+}
+.rag__tabs-note {
+  margin-bottom: var(--space-3);
+}
+/* visibility 徽章：租户=primary、共享=stream（图标+文字双标，AA） */
+.rag__vis {
+  font-size: var(--fs-xs);
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+}
+.rag__vis[data-vis='tenant'] {
+  color: var(--primary);
+  background: var(--primary-soft);
+  border: 1px solid var(--primary-border);
+}
+.rag__vis[data-vis='public'] {
+  color: var(--stream);
+  background: var(--stream-soft);
+  border: 1px solid var(--stream-border);
+}
+
 /* 文档库 */
 .rag__doclist {
   list-style: none;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+.rag__doc-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  font-size: var(--fs-xs);
+  color: var(--text-subtle);
+}
+
+/* 入库可见性选择 */
+.rag__upvis {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.rag__upvis-label {
+  color: var(--text-subtle);
+}
+.rag__radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+.rag__confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.rag__shared-imgoff {
+  display: inline-block;
+  margin-left: 4px;
 }
 .rag__doc {
   display: flex;
@@ -714,6 +926,15 @@ const ingestScopeHint = computed(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
+}
+.rag__uplabel {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--text-muted);
+}
+.rag__uplabel--shared {
+  color: var(--stream, var(--primary));
 }
 
 @media (max-width: 1023px) {

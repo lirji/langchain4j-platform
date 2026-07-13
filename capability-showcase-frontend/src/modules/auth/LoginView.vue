@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, nextTick, ref } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { useCatalogStore } from '../../stores/catalog'
 import { ApiError, humanizeError } from '../../api/errors'
 import { sanitizeRedirect } from '../../router'
+import { DEMO_LOGIN_ENABLED } from '../../config'
 
 const auth = useAuthStore()
 const catalog = useCatalogStore()
@@ -13,6 +14,7 @@ const route = useRoute()
 
 const username = ref('')
 const password = ref('')
+const passwordEl = ref<HTMLInputElement | null>(null)
 const showPassword = ref(false)
 const submitting = ref(false)
 const pending = ref<string | null>(null) // 正在一键登录的演示账号
@@ -20,8 +22,14 @@ const errorMsg = ref('')
 
 const busy = computed(() => submitting.value || pending.value !== null)
 
-/** 演示账号（密码统一 demo12345），镜像后端 api-key 绑定。 */
-const DEMO_PASSWORD = 'demo12345'
+/**
+ * 一键登录口令：仅从构建期注入的 VITE_DEMO_PASSWORD 读取——源码绝不内置任何明文口令。
+ * 为空（生产默认）时优雅降级：演示账号仅预填用户名并聚焦密码框，由用户手动输入。
+ */
+const DEMO_PASSWORD: string = import.meta.env.VITE_DEMO_PASSWORD ?? ''
+/** 是否显示"去注册"入口：仅当后端 public-config 明确开放注册时（fail-closed）。 */
+const showRegister = computed(() => auth.publicConfig?.registrationEnabled === true)
+
 const DEMO = [
   { username: 'alice', icon: '👑', label: '全权限', tenant: 'acme', desc: '全部能力 · chat/rag/agent/…', color: 'linear-gradient(135deg,#2d6cdf,#4f6ff0)', tag: '#2d6cdf', tagBg: '#e8f0ff' },
   { username: 'bob', icon: '💬', label: '只读对话', tenant: 'globex', desc: '仅对话 chat', color: 'linear-gradient(135deg,#06b6d4,#22d3ee)', tag: '#0891b2', tagBg: '#e0f7fb' },
@@ -69,6 +77,14 @@ async function submit(): Promise<void> {
 
 async function demoLogin(u: string): Promise<void> {
   if (busy.value) return
+  errorMsg.value = ''
+  username.value = u
+  // 无注入口令（生产默认）→ 优雅降级：仅预填用户名并聚焦密码框，由用户手动输入后自行提交。
+  if (!DEMO_PASSWORD) {
+    await nextTick()
+    passwordEl.value?.focus()
+    return
+  }
   pending.value = u
   try {
     await doLogin(u, DEMO_PASSWORD)
@@ -116,7 +132,7 @@ async function demoLogin(u: string): Promise<void> {
           </div>
 
           <h1 class="lp-title">登录</h1>
-          <p class="lp-subtitle">内部试用台 · 用演示账号登录即可体验全部能力</p>
+          <p class="lp-subtitle">内部试用台 · 登录后即可体验全部能力</p>
 
           <div v-if="errorMsg" class="lp-error" role="alert">
             <span aria-hidden="true">⚠️</span><span>{{ errorMsg }}</span>
@@ -146,6 +162,7 @@ async function demoLogin(u: string): Promise<void> {
                 <span class="lp-input-ico" aria-hidden="true">🔒</span>
                 <input
                   id="login-password"
+                  ref="passwordEl"
                   v-model="password"
                   class="lp-input lp-input--pw"
                   :type="showPassword ? 'text' : 'password'"
@@ -170,34 +187,47 @@ async function demoLogin(u: string): Promise<void> {
             </button>
           </form>
 
-          <div class="lp-divider"><span>或用演示账号一键登录</span></div>
+          <!-- 演示账号卡：仅 DEMO_LOGIN_ENABLED 时渲染；口令由部署注入，源码不内置明文。 -->
+          <template v-if="DEMO_LOGIN_ENABLED">
+            <div class="lp-divider"><span>或用演示账号快速登录</span></div>
 
-          <div class="lp-demos">
-            <button
-              v-for="u in DEMO"
-              :key="u.username"
-              type="button"
-              class="lp-demo"
-              :disabled="busy"
-              :style="{ opacity: pending && pending !== u.username ? 0.45 : 1 }"
-              :aria-label="`使用演示账号 ${u.username}（${u.label}）登录`"
-              @click="demoLogin(u.username)"
-            >
-              <span class="lp-avatar" :style="{ background: u.color }">
-                {{ pending === u.username ? '⏳' : u.icon }}
-              </span>
-              <span class="lp-demo-main">
-                <span class="lp-demo-name">
-                  {{ u.username }}
-                  <span class="lp-tag" :style="{ color: u.tag, background: u.tagBg }">{{ u.label }}</span>
+            <div class="lp-demos">
+              <button
+                v-for="u in DEMO"
+                :key="u.username"
+                type="button"
+                class="lp-demo"
+                :disabled="busy"
+                :style="{ opacity: pending && pending !== u.username ? 0.45 : 1 }"
+                :aria-label="`使用演示账号 ${u.username}（${u.label}）登录`"
+                @click="demoLogin(u.username)"
+              >
+                <span class="lp-avatar" :style="{ background: u.color }">
+                  {{ pending === u.username ? '⏳' : u.icon }}
                 </span>
-                <span class="lp-demo-desc">{{ u.desc }} · 租户 {{ u.tenant }}</span>
-              </span>
-              <span class="lp-arrow" aria-hidden="true">›</span>
-            </button>
-          </div>
+                <span class="lp-demo-main">
+                  <span class="lp-demo-name">
+                    {{ u.username }}
+                    <span class="lp-tag" :style="{ color: u.tag, background: u.tagBg }">{{ u.label }}</span>
+                  </span>
+                  <span class="lp-demo-desc">{{ u.desc }} · 租户 {{ u.tenant }}</span>
+                </span>
+                <span class="lp-arrow" aria-hidden="true">›</span>
+              </button>
+            </div>
 
-          <p class="lp-foot-note">点击任意演示账号即可一键登录（密码已内置）。</p>
+            <p class="lp-foot-note">
+              {{
+                DEMO_PASSWORD
+                  ? '点击任意演示账号即可快速登录（口令由部署注入）。'
+                  : '点击演示账号将预填用户名，请手动输入密码后登录。'
+              }}
+            </p>
+          </template>
+
+          <p v-if="showRegister" class="lp-reg">
+            还没有账号？<RouterLink class="lp-reg-link" :to="{ name: 'register' }">去注册</RouterLink>
+          </p>
         </section>
       </div>
       <div class="lp-foot">内部试用台 · 数据仅供演示</div>
@@ -510,6 +540,9 @@ async function demoLogin(u: string): Promise<void> {
 .lp-arrow { color: var(--lp-subtle); font-size: 18px; flex: 0 0 auto; transition: transform 0.18s ease, color 0.18s ease; }
 
 .lp-foot-note { font-size: 12px; color: var(--lp-subtle); margin-top: 14px; }
+.lp-reg { font-size: 13px; color: var(--lp-muted); margin-top: 16px; text-align: center; }
+.lp-reg-link { color: var(--lp-primary); font-weight: 600; }
+.lp-reg-link:hover { text-decoration: underline; }
 .lp-foot { font-size: 12px; color: rgba(30, 50, 90, 0.5); }
 
 /* 窄屏：收起品牌区，表单卡片自带紧凑品牌头 */

@@ -98,7 +98,7 @@ const discoveryFallback = computed(() => discoveryRaw.value != null && channels.
 async function discover(): Promise<void> {
   const cap = discoveryCap.value
   if (!cap) return
-  const gate = executionGate(cap, { hasApiKey: session.hasCredential, confirmed: false })
+  const gate = executionGate(cap, { ...session.permissionContext(), confirmed: false })
   if (!gate.allowed) {
     discoveryError.value = gate.reason ?? '当前不可执行。'
     return

@@ -5,6 +5,10 @@ export interface GateContext {
   hasApiKey: boolean
   /** 危险端点二次确认闸门（executableByDefault=false 时必须为 true 才放行）。 */
   confirmed?: boolean
+  /** 凭证模式：Bearer 可按有效 scopes 精确预判；api-key 权限不透明（反应式）。缺省时回落既有 hint 逻辑。 */
+  credentialMode?: 'bearer' | 'api-key' | 'none'
+  /** Bearer 身份的有效 scopes（仅 credentialMode==='bearer' 时有意义）。 */
+  effectiveScopes?: string[]
 }
 
 export interface GateResult {
@@ -40,9 +44,23 @@ export function executionGate(cap: Capability, ctx: GateContext): GateResult {
   }
   if (cap.state === 'scope-required') {
     const scopes = cap.requiredScopes.length ? cap.requiredScopes.join(' / ') : '所需'
+    // Bearer 登录：可按有效 scopes 精确预判——缺则禁执行并说明，具备则放行无提示。
+    if (ctx.credentialMode === 'bearer') {
+      const missing = cap.requiredScopes.filter((s) => !(ctx.effectiveScopes ?? []).includes(s))
+      if (missing.length) {
+        return {
+          allowed: false,
+          reason: `当前账号缺少 ${missing.join(' / ')} scope（由角色授予），请联系管理员授予对应角色。`,
+        }
+      }
+      return { allowed: true }
+    }
+    // api-key（或未传凭证模式）：权限不透明，放行但提示可能 403（反应式鉴权，保既有行为）。
     return {
       allowed: true,
-      hint: `该能力需要 ${scopes} scope。若当前 API Key 不具备，将返回 403。`,
+      hint: `该能力需要 ${scopes} scope。若当前 ${
+        ctx.credentialMode === 'api-key' ? 'API Key' : '凭证'
+      } 不具备，将返回 403。`,
     }
   }
   return { allowed: true }

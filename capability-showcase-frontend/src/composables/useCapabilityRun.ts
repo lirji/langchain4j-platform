@@ -64,9 +64,13 @@ export function useCapabilityRun(capSource: MaybeRefOrGetter<Capability>) {
   }
 
   async function run(values: FormValues, opts: { confirmed?: boolean } = {}): Promise<void> {
+    // 传入凭证模式 + 有效 scopes：Bearer 缺 scope 精确预判，api-key 保持 unknown（反应式）。
+    const pc = session.permissionContext()
     const gate = executionGate(cap.value, {
       hasApiKey: session.hasCredential,
       confirmed: opts.confirmed,
+      credentialMode: pc.credentialMode,
+      effectiveScopes: pc.effectiveScopes,
     })
     if (!gate.allowed) {
       resetOutputs()

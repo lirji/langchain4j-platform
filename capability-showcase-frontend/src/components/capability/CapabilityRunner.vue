@@ -28,9 +28,16 @@ const confirmed = ref(false)
 const showCurl = ref(false)
 
 const isDanger = computed(() => !props.cap.executableByDefault)
-const gate = computed(() =>
-  executionGate(props.cap, { hasApiKey: session.hasCredential, confirmed: confirmed.value }),
-)
+const gate = computed(() => {
+  // 合并凭证模式 + 有效 scopes：Bearer 缺 scope 精确禁用，api-key 保持 unknown（反应式提示）。
+  const pc = session.permissionContext()
+  return executionGate(props.cap, {
+    hasApiKey: session.hasCredential,
+    confirmed: confirmed.value,
+    credentialMode: pc.credentialMode,
+    effectiveScopes: pc.effectiveScopes,
+  })
+})
 const curlText = computed(() => toCurl(props.cap, values.value, { edgeBaseUrl: session.edgeBaseUrl }))
 
 /** 能否载入示例：有整体 example，或任一参数带 defaultValue / example。 */

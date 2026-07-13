@@ -19,6 +19,8 @@ const { status, error } = storeToRefs(catalog)
 
 // 公开页（登录）全屏渲染，不套 header/侧栏/目录门禁与全局浮层。
 const isAuthRoute = computed(() => route.meta.public === true)
+// 是否需要能力目录：admin/forbidden 等 bypassCatalog 路由不依赖 catalog，catalog 失败也应能打开。
+const needsCatalog = computed(() => !isAuthRoute.value && route.meta.bypassCatalog !== true)
 
 useGlobalShortcuts()
 
@@ -52,13 +54,14 @@ onMounted(() => {
         />
 
         <main class="app-main" id="main-content">
+          <!-- 仅依赖能力目录的路由才受 catalog 状态门禁；admin/forbidden（bypassCatalog）直接渲染。 -->
           <EmptyState
-            v-if="status === 'loading'"
+            v-if="needsCatalog && status === 'loading'"
             variant="loading"
             title="正在加载能力目录…"
           />
           <EmptyState
-            v-else-if="status === 'error'"
+            v-else-if="needsCatalog && status === 'error'"
             variant="error"
             title="能力目录加载失败"
             :description="error ?? undefined"

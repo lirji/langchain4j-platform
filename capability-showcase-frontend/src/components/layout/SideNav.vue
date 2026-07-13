@@ -5,6 +5,7 @@ import { storeToRefs } from 'pinia'
 import { useCatalogStore } from '../../stores/catalog'
 import { useUiStore } from '../../stores/ui'
 import { useFavoritesStore } from '../../stores/favorites'
+import { usePermission } from '../../composables/usePermission'
 import type { Capability, CapabilityState, Module } from '../../types/catalog'
 import { GROUP_ORDER, groupIdForModule } from '../../config/moduleGroups'
 import MethodBadge from '../capability/badges/MethodBadge.vue'
@@ -14,6 +15,8 @@ const catalog = useCatalogStore()
 const ui = useUiStore()
 const favorites = useFavoritesStore()
 const route = useRoute()
+// 管理入口可见性：与顶栏/命令面板同一 permission 源（能力/管理同源门禁）。
+const { canAdmin } = usePermission()
 const { modules, catalog: cat } = storeToRefs(catalog)
 
 const manualExpand = reactive<Record<string, boolean>>({})
@@ -186,6 +189,32 @@ function moduleIcon(id: string): string {
       >
         <span class="nav__overview-ico" aria-hidden="true">🏠</span> 总览 Overview
       </RouterLink>
+
+      <!-- 平台管理：仅 role-admin（canAdmin）出现；管理项无能力五态点，选中态复用 module 行样式 -->
+      <section v-if="canAdmin" class="nav__group nav__group--admin">
+        <div class="nav__group-head nav__group-head--static">
+          <span class="nav__group-chevron" aria-hidden="true">⚙</span>
+          <span class="nav__group-label eyebrow">平台管理</span>
+        </div>
+        <ul class="nav__modules">
+          <li class="nav__module">
+            <div class="nav__module-head" :class="{ active: route.path.startsWith('/admin/users') }">
+              <RouterLink :to="{ name: 'admin-users' }" class="nav__module-link" @click="onNavigate">
+                <span class="nav__module-ico" aria-hidden="true">👥</span>
+                <span class="nav__module-title">用户管理</span>
+              </RouterLink>
+            </div>
+          </li>
+          <li class="nav__module">
+            <div class="nav__module-head" :class="{ active: route.path.startsWith('/admin/roles') }">
+              <RouterLink :to="{ name: 'admin-roles' }" class="nav__module-link" @click="onNavigate">
+                <span class="nav__module-ico" aria-hidden="true">🛡</span>
+                <span class="nav__module-title">角色管理</span>
+              </RouterLink>
+            </div>
+          </li>
+        </ul>
+      </section>
 
       <!-- 收藏虚拟分组 -->
       <section v-if="favCaps.length" class="nav__group">
@@ -378,6 +407,14 @@ function moduleIcon(id: string): string {
 }
 .nav__group-head:hover {
   background: var(--surface-2);
+}
+/* 平台管理组头：非折叠（静态 eyebrow），不响应 hover */
+.nav__group-head--static {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 8px;
 }
 .nav__group-chevron {
   width: 12px;

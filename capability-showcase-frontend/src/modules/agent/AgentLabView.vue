@@ -102,7 +102,7 @@ const isAsyncMode = computed(() => modeId.value.endsWith('.async'))
 const run = useCapabilityRun(() => activeCap.value as Capability)
 const activeGate = computed(() =>
   activeCap.value
-    ? executionGate(activeCap.value, { hasApiKey: session.hasCredential })
+    ? executionGate(activeCap.value, { ...session.permissionContext() })
     : { allowed: false, reason: '当前无可用 Agent 能力。' },
 )
 

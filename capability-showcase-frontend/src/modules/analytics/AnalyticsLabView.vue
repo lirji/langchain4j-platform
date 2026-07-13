@@ -48,7 +48,7 @@ async function callCap(
   values: FormValues,
 ): Promise<{ data?: unknown; error?: string }> {
   if (!cap) return { error: '能力不在目录中。' }
-  const gate = executionGate(cap, { hasApiKey: session.hasCredential, confirmed: false })
+  const gate = executionGate(cap, { ...session.permissionContext(), confirmed: false })
   if (!gate.allowed) return { error: gate.reason ?? '当前不可执行。' }
   try {
     const res = await runCapability(cap, values, session.runContext())
@@ -184,7 +184,7 @@ const sqlResult = ref<unknown>(null)
 
 const sqlGate = computed(() =>
   sqlCap.value
-    ? executionGate(sqlCap.value, { hasApiKey: session.hasCredential })
+    ? executionGate(sqlCap.value, { ...session.permissionContext() })
     : { allowed: false, reason: '未找到 NL2SQL 能力。' },
 )
 const sqlCurl = computed(() =>

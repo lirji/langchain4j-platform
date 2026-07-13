@@ -89,7 +89,7 @@ function prioTone(p?: string): 'danger' | 'warning' | 'neutral' {
 /** 复用 executionGate + runCapability 驱动一次动作（不手写 fetch，不绕过安全闸门）。 */
 async function exec(cap: Capability | undefined, values: FormValues, key: string): Promise<unknown> {
   if (!cap) return undefined
-  const gate = executionGate(cap, { hasApiKey: session.hasCredential, confirmed: false })
+  const gate = executionGate(cap, { ...session.permissionContext(), confirmed: false })
   if (!gate.allowed) {
     actionError.value = gate.reason ?? '当前不可执行。'
     return undefined

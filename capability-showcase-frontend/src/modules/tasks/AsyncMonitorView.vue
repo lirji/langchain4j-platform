@@ -170,7 +170,7 @@ const deadFallback = computed(() => deadRaw.value != null && deadRows.value === 
 async function loadDeadletter(): Promise<void> {
   const capDl = deadletterCap.value
   if (!capDl) return
-  const gate = executionGate(capDl, { hasApiKey: session.hasCredential, confirmed: false })
+  const gate = executionGate(capDl, { ...session.permissionContext(), confirmed: false })
   if (!gate.allowed) {
     deadError.value = gate.reason ?? '当前不可执行。'
     return

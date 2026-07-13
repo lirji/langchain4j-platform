@@ -65,4 +65,33 @@ describe('executionGate', () => {
     expect(r.allowed).toBe(true)
     expect(r.hint).toContain('ingest')
   })
+
+  it('scope-required + Bearer 缺 scope → 禁止并精确说明', () => {
+    const r = executionGate(cap({ state: 'scope-required', requiredScopes: ['ingest'] }), {
+      hasApiKey: true,
+      credentialMode: 'bearer',
+      effectiveScopes: ['chat'],
+    })
+    expect(r.allowed).toBe(false)
+    expect(r.reason).toContain('ingest')
+  })
+
+  it('scope-required + Bearer 命中 scope → 放行无提示', () => {
+    const r = executionGate(cap({ state: 'scope-required', requiredScopes: ['ingest'] }), {
+      hasApiKey: true,
+      credentialMode: 'bearer',
+      effectiveScopes: ['chat', 'ingest'],
+    })
+    expect(r.allowed).toBe(true)
+    expect(r.hint).toBeUndefined()
+  })
+
+  it('scope-required + api-key → 放行但 unknown 提示（反应式）', () => {
+    const r = executionGate(cap({ state: 'scope-required', requiredScopes: ['ingest'] }), {
+      hasApiKey: true,
+      credentialMode: 'api-key',
+    })
+    expect(r.allowed).toBe(true)
+    expect(r.hint).toContain('API Key')
+  })
 })

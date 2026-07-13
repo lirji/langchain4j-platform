@@ -25,6 +25,13 @@ export interface AuthSession {
   user: AuthUser
 }
 
+/** GET /auth/public-config 响应体（公开、非敏感）。registrationEnabled = 后端 rbac 与 registration 同开时才 true。 */
+export interface AuthPublicConfig {
+  registrationEnabled: boolean
+  passwordMinLength: number
+  passwordMaxLength: number
+}
+
 /** bootstrap 静默续期的默认超时（ms）：网关不可达时不阻塞应用启动。 */
 const REFRESH_TIMEOUT_MS = 6000
 
@@ -70,6 +77,35 @@ export async function refreshRequest(): Promise<AuthSession> {
     const data = await readJson(res)
     if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status} ${res.statusText}`.trim(), data)
     return data as AuthSession
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * 自助注册（成功即登录，返回同 login 的 AuthSession）。失败抛 ApiError（403 未开启 / 409 用户名已占用 /
+ * 400 密码策略 / 429 节流）。租户/角色由后端规则引擎按用户名域名推导，前端不选。
+ */
+export async function registerRequest(username: string, password: string): Promise<AuthSession> {
+  const res = await postAuth('/auth/register', { username, password })
+  const data = await readJson(res)
+  if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status} ${res.statusText}`.trim(), data)
+  return data as AuthSession
+}
+
+/**
+ * GET /auth/public-config（边缘 open 路径，无需凭证）。供未登录前端在渲染登录/注册页前拉取，
+ * 决定是否显示注册入口与密码长度提示。失败抛 ApiError（调用方静默处理，注册入口 fail-closed）。
+ */
+export async function fetchPublicAuthConfig(): Promise<AuthPublicConfig> {
+  // 带超时：启动时会 await 它以让路由守卫拿到真实值（修 /register 冷深链竞态），端点慢也不拖死启动。
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), REFRESH_TIMEOUT_MS)
+  try {
+    const res = await fetch(authUrl('/auth/public-config'), { credentials: 'include', signal: controller.signal })
+    const data = await readJson(res)
+    if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`.trim(), data)
+    return data as AuthPublicConfig
   } finally {
     clearTimeout(timer)
   }

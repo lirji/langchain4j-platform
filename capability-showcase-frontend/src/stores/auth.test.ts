@@ -95,4 +95,45 @@ describe('auth store', () => {
     expect(auth.isAuthenticated).toBe(true)
     expect(auth.bootstrapDone).toBe(true)
   })
+
+  it('hasScope / isAdmin 随 user 整体替换重算', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonRes(200, SESSION)))) // scopes=['chat']
+    const auth = useAuthStore()
+    await auth.login('alice', 'pw')
+    expect(auth.hasScope('chat')).toBe(true)
+    expect(auth.hasScope('role-admin')).toBe(false)
+    expect(auth.isAdmin).toBe(false)
+    // refresh 返回含 role-admin → isAdmin 重算为 true（scopeSet 依赖 user 整体替换）
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(jsonRes(200, { ...SESSION, user: { ...SESSION.user, scopes: ['chat', 'role-admin'] } }))),
+    )
+    await auth.refresh()
+    expect(auth.isAdmin).toBe(true)
+    expect(auth.hasAllScopes(['chat', 'role-admin'])).toBe(true)
+  })
+
+  it('register 成功写内存会话、不落 storage', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonRes(200, SESSION))))
+    const auth = useAuthStore()
+    await auth.register('newuser', 'pw123456')
+    expect(auth.isAuthenticated).toBe(true)
+    expect(localStorage.length).toBe(0)
+    expect(sessionStorage.length).toBe(0)
+  })
+
+  it('loadPublicConfig 成功写 publicConfig；失败保持 null 且不抛', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(jsonRes(200, { registrationEnabled: true, passwordMinLength: 6, passwordMaxLength: 128 }))),
+    )
+    const auth = useAuthStore()
+    await auth.loadPublicConfig()
+    expect(auth.publicConfig?.registrationEnabled).toBe(true)
+
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('network'))))
+    const auth2 = useAuthStore()
+    await expect(auth2.loadPublicConfig()).resolves.toBeUndefined()
+    expect(auth2.publicConfig?.registrationEnabled).toBe(true) // 失败不覆盖既有；新 store 则为 null
+  })
 })
