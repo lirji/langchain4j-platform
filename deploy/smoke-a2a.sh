@@ -5,10 +5,12 @@
 #   3) message/send（deep-research skill，异步）→ 拿到 A2A Task → tasks/get 轮询到终态
 #
 # 前置：docker compose 栈已起（edge-gateway + interop-service + agent-service + LiteLLM）。
-# 用法：BASE_URL=http://localhost:8080 API_KEY=dev-key-acme bash deploy/smoke-a2a.sh
+# 默认网关端口 18080（对齐 start-all.sh/start-local.sh 的本机端口重映射约定；
+#   若用裸 `docker compose up`，网关在 8080，传 BASE_URL=http://localhost:8080 覆盖）。
+# 用法：BASE_URL=http://localhost:18080 API_KEY=dev-key-acme bash deploy/smoke-a2a.sh
 set -euo pipefail
 
-BASE_URL="${BASE_URL:-http://localhost:8080}"
+BASE_URL="${BASE_URL:-http://localhost:18080}"
 API_KEY="${API_KEY:-dev-key-acme}"
 QUESTION="${QUESTION:-用一句话说明什么是向量检索}"
 RESEARCH="${RESEARCH:-分析一下检索增强生成的优缺点}"

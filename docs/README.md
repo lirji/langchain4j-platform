@@ -20,6 +20,9 @@
 
 **对话与检索**
 - [RAG 接入指南](对话与检索/rag-guide.md)：文档/图片上传、向量库 provider、collection-per-tenant 隔离、embedding（hash/openai/ollama）、混合检索、检索增强（rerank/查询扩展/上下文分块/HanLP 分词）、GraphRAG、Obsidian 导入、语义缓存 L1。
+- [ES 全文混排指南](对话与检索/es-hybrid-rerank.md)：Elasticsearch 真 BM25 全文分支并入四路混合检索、多源 RRF 融合、smartcn 中文分析器、`knowledge_segments_text` 索引与量纲处理。
+- [ES / Kibana 查询速查](对话与检索/es-kibana-查询速查.md)：Kibana Dev Tools 常用 DSL、按租户/分类过滤、排障命令。
+- [RAG API 演示](对话与检索/rag-api-demo.md)：`seed-kb.sh` / `rag-demo.sh` 驱动的上传→检索→查单闭环、示例语料与断言。
 - [记忆指南](对话与检索/memory-guide.md)：多轮短期记忆窗口（messages/tokens/summary）+ 长期用户画像（`/chat/memory`、`/memory/profile`）。
 - [语义缓存指南](对话与检索/semantic-cache.md)：L1 语义响应缓存、阈值与 embedding 独立性、按租户桶、`DELETE /chat/cache` 失效、文档变更跨服务失效。
 - [模型级联指南](对话与检索/model-cascade.md)：便宜模型先答 → 置信门 → 升级强模型（`/chat/cascade`）；cheap/strong 逻辑模型经 LiteLLM 映射。
@@ -40,6 +43,8 @@
 - [钉钉知识库客服接入指南](互操作渠道/dingtalk-guide.md)：钉钉群 @机器人 → 查知识库 → 机器人回复；镜像飞书事件桥、机器人发消息 API 回复、无命中转人工兜底。
 
 **平台工程（横切）**
+- [登录、RBAC 与公共知识库指南](平台工程/rbac-and-public-kb.md)：auth-service 账号密码登录 → 会话令牌 + 刷新 cookie、边缘 `SessionBearerAuthFilter` 换发内部 JWT、角色→scope 展开、`role-admin`/`public-ingest` 平台 scope、`/auth/admin/**` 管理面（If-Match 乐观锁）、`__public__` 公共/共享知识库。
+- [公网化 OIDC 改造方案](平台工程/公网化-OIDC-改造方案.md)：更早期的备选路线草案（外部 IdP 替代自建登录）；当前已由 auth-service 自建会话登录落地，本文作历史备选保留、未实施。
 - [事件总线与终态可靠投递(EOS)指南](平台工程/eventbus-guide.md)：事务性 outbox + relay + 消费侧去重 = effective exactly-once（workflow/async-task 两侧）。
 - [可观测性指南](平台工程/observability-guide.md)：跨服务 traceId 透传、OTel GenAI span（Spring Boot 原生 tracing 开关）、Prometheus 指标、`/actuator/{tokenbudget,cost}`。
 - [成本归因与配额指南](平台工程/cost-attribution.md)：per-tenant USD 成本归因 + token 预算，redis 默认的分布式计数（水平扩容正确性）、`/actuator/{tokenbudget,cost}`。
@@ -47,11 +52,12 @@
 - [部署指南](平台工程/deployment-guide.md)：本地 docker-compose、k8s/Helm 伞状 chart、External Secrets、Service DNS、Config Server。
 - [能力展示与试用控制台](平台工程/能力展示控制台.md)：前后端分离的独立前端 `capability-showcase-frontend/`（Vue3 静态 SPA，可独立部署）；direct mode 带 X-Api-Key 跨域直调业务能力、能力五态诚实呈现、catalog 静态数据驱动；后端仅 edge-gateway 加 CORS。
 - [能力前端模块拆分建议](平台工程/能力前端模块拆分建议.md)：平台能力 → 可独立拆出的前端模块（Chat/RAG/Agent/Async/Analytics/Workflow/Multimodal/Interop-Eval/Channel）的边界、优先级与拆分性。
-- [数据存储清单](参考/databases.md)：MySQL/Redis/Qdrant/Kafka/H2 的端口、账号密码、所属服务与落库开关；含可选向量库（pgvector/milvus/chroma/doris）。
+- [数据存储清单](参考/databases.md)：MySQL/Redis/Qdrant/Elasticsearch/Kafka/H2 的端口、账号密码、所属服务与落库开关；含可选向量库（pgvector/milvus/chroma/doris）。
+- [数据库与中间件清单](平台工程/数据库与中间件清单.md)：面向运维的中间件全景（含 auth 库、ES/Kibana、会话密钥、登录账号、前端端口）与端口对照。
 
 ## 当前定位
 
-`langchain4j-platform` 是从原单体 `LangChain4j_project` 拆分出来的微服务平台。业务 API 统一从 `edge-gateway` 进入（api-key→内部 JWT），所有 LLM 调用统一走 LiteLLM/OpenAI-compatible 网关。当前覆盖 conversation、knowledge、agent、analytics、workflow、async-task、channel、interop、eval、vision、voice 等限界上下文，配套 config-server 配置中心与 platform-eventbus 事件总线（Kafka 事务性 outbox + relay 的可靠终态投递）。
+`langchain4j-platform` 是从原单体 `LangChain4j_project` 拆分出来的微服务平台。业务 API 统一从 `edge-gateway` 进入（api-key **或** 登录会话 Bearer → 内部 JWT），所有 LLM 调用统一走 LiteLLM/OpenAI-compatible 网关。当前覆盖 auth（登录 + RBAC）、conversation、knowledge、agent、analytics、workflow、async-task、channel、interop、eval、vision、voice 等限界上下文，配套 config-server 配置中心、platform-eventbus 事件总线（Kafka 事务性 outbox + relay 的可靠终态投递），RAG 检索接 Qdrant 向量库 + Elasticsearch(smartcn) 全文混排，另有前后端分离的能力展示前端 `capability-showcase-frontend`。
 
 ## 文档维护原则
 

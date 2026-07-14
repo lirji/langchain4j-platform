@@ -1,5 +1,7 @@
 # 能力展示控制台公网化 OIDC 改造方案（前端 + 后端）
 
+> ⚠️ **现状更新（2026-07）**：平台已落地**自建账号登录**（`auth-service` 账号密码 → 会话 JWT + 刷新 cookie，边缘 `SessionBearerAuthFilter` 换发内部 JWT，见 [RBAC 与公共知识库指南](rbac-and-public-kb.md)）。本 OIDC 方案是**另一条备选路线**（用外部 IdP 替代自建登录），**当前未采用**、作历史设计保留。因此下文「结论先行」中「`ApiKeyToInternalTokenFilter` 是全平台唯一签发内部 JWT 的地方」已**不再成立**——现有两个签发点：`SessionBearerAuthFilter`（会话 Bearer，order -110）与 `ApiKeyToInternalTokenFilter`（api-key，order -100）；且边缘 CORS 已改为**显式白名单**（含 `Authorization`/`If-Match`）+ `allowCredentials=true`（与本稿 v2「保持 `*`」的判断相反，是登录 cookie 跨域所必需）。阅读本方案时请以该现状为准。
+
 > 状态：**方案草案（待评审 / 待拍板，获批前不改任何代码）**
 > 关联：[能力展示控制台](能力展示控制台.md)。本方案把「顶栏贴 `X-Api-Key`、仅存内存」的 direct-mode 鉴权升级为标准 OIDC（Authorization Code + PKCE），面向公网多用户。
 > 结论先行的关键事实：**下游服务零改动**——`edge-gateway` 的 `ApiKeyToInternalTokenFilter` 是全平台唯一签发内部 JWT（`X-Internal-Token`）的地方；下游只信内部 JWT。OIDC 改造只需在**边缘替换「入站凭证」**：把「校验静态 `X-Api-Key`」换成「校验 IdP 的 Bearer access token」，之后**仍 mint 现有内部 JWT**，`EdgeRateLimitFilter` / `InternalTokenAuthFilter` / `TenantContext` / scope / 限流桶全部不变。

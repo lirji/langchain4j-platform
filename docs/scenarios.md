@@ -13,12 +13,12 @@
 
 ## 访问约定
 
-所有业务端点都经**唯一对外入口 `edge-gateway`（`http://localhost:8080`）** 访问，带 `X-Api-Key`：
-网关校验 api-key → 识别租户/scope → 签发短时内部 JWT（`X-Internal-Token`）→ 按路径路由到下游服务。
-下游服务只信任内部 JWT，租户身份随之跨每一跳传播并还原进 `TenantContext`（多租户硬隔离）。
-服务直连端口（conversation:8081 … voice:8091）仅供本地调试，不建议对外。
+所有业务端点都经**唯一对外入口 `edge-gateway`（`http://localhost:8080`）** 访问，带 `X-Api-Key` **或** 登录后的 `Authorization: Bearer <会话 accessToken>`（先 `POST /auth/login`）：
+网关校验凭据 → 识别租户/scope → 签发短时内部 JWT（`X-Internal-Token`）→ 按路径路由到下游服务。
+下游服务只信任内部 JWT，对「会话 vs api-key」无感知，租户身份随之跨每一跳传播并还原进 `TenantContext`（多租户硬隔离）。
+服务直连端口（conversation:8081 … voice:8091、auth:8092）仅供本地调试，不建议对外。另有能力展示前端 `capability-showcase-frontend`（:8093）浏览器跨域直调网关。
 
-**默认开关基线**：绝大多数场景能力**默认关闭 / 内存实现**，dev/test 零外部依赖。
+**默认开关基线**：两套「默认」——application.yml 裸跑多为内存/关闭（单测零外部依赖）；docker-compose demo 为一键体验把 RAG 持久化 + ES 全文混排 + 登录 RBAC 等打开并自带基础设施。下表「默认」以 application.yml 为准。
 下表「状态」列如实标注每个场景当前跑到哪一步——「核心可跑」= 端点就位、内存/确定性实现可直接验；
 「代码就位・默认关」= 逻辑与单测就位，但需显式开开关 + 配真实 provider / 外部应用才能端到端。
 
@@ -28,7 +28,7 @@
 
 | 场景 | 子能力 | 入口端点（经 :8080） | 状态 | 详细文档 |
 | --- | --- | --- | --- | --- |
-| **① 企业知识库问答（RAG）** | 文档入库 + 带引用多轮问答 + 多租户隔离 | `POST /rag/documents`、`POST /chat` | 核心可跑（内存向量库）；生产后端 / RAG 增强默认关 | `rag-guide.md`、`memory-guide.md`、`semantic-cache.md`、`eval-guide.md` |
+| **① 企业知识库问答（RAG）** | 文档入库 + 四路混排（向量/关键词/ES BM25/图谱）+ 带引用多轮问答 + 多租户隔离 + 公共共享库 | `POST /rag/documents`、`POST /rag/query`、`POST /chat` | 核心可跑；compose demo 默认 qdrant + ES 全文混排 + RRF；RAG 增强/公共库默认关 | `rag-guide.md`、`es-hybrid-rerank.md`、`rbac-and-public-kb.md`、`memory-guide.md` |
 | **② 智能客服** · NL2SQL/ChatBI | 自然语言查业务库（6 层 SQL 护栏） | `POST /chat/sql`（别名 `/analytics/sql`） | 代码就位・默认关（需只读 DB + tool-calling 模型） | `nl2sql-guide.md` |
 | **② 智能客服** · 工作流审批 | 退款等挂人工审批的长流程（Flowable） | `POST /workflow/refund/start` | 核心可跑（需 MySQL）；终态通知可切事件总线 | `workflow-guide.md` |
 | **② 智能客服** · 渠道接入 | 飞书 / 钉钉群内 @机器人 入站事件桥 | `POST /channel/feishu/events`、`POST /channel/dingtalk/events` | 代码就位・默认关（需真应用 + 公网回调联调） | `dingtalk-guide.md` |
@@ -38,6 +38,7 @@
 | **③ 深度 Agent** · 业务流程智能体（人在环） | NL 发起/跟进退款审批，审批仍由人在流程外完成 | `POST /agent/process/run` | 代码就位・默认关（`AGENT_WORKFLOW_ENABLED` + `WORKFLOW_ENABLED`） | `agent-guide.md`、`workflow-guide.md` |
 | **④ 多模态视觉** | 看图对话 + 图片 caption/描述 + 图片 RAG | `POST /chat/vision`、`/vision/caption` | 代码就位・默认关（整服务需 `VISION_ENABLED`+模型） | `vision-guide.md` |
 | **⑤ 互操作（A2A / MCP）** | 对外 Agent 协作面（真 A2A + MCP tool surface） | `POST /interop/a2a`、`GET /.well-known/agent-card.json`、`/interop/mcp/**` | 核心可跑（端点常开）；live discovery 默认关 | `a2a-guide.md`、`mcp-guide.md` |
+| **⑥ 登录与权限（auth / RBAC）** | 账号登录 → 会话令牌 + 边缘换发内部 JWT；角色/权限管理面 + 公共知识库授权 | `POST /auth/login`、`GET /auth/me`、`/auth/admin/**` | 核心可跑（compose demo 直开 RBAC + 写）；application.yml 默认关 | `rbac-and-public-kb.md` |
 
 > **说明**：「智能客服」不是单个服务，而是**由 NL2SQL + 工作流审批 + 渠道接入（飞书/钉钉/语音）拼成的闭环**——
 > 用户从任一渠道进来 → 意图分流（退款/投诉走工作流，查数走 NL2SQL，其余走 RAG 对话）→ 长流程挂人工审批 → 终态主动回推。
@@ -53,14 +54,14 @@
 **怎么装配**：`knowledge-service`（`:8084`）负责入库与检索，`conversation-service`（`:8081`）负责对话。
 
 - **入库**：`POST /rag/documents`（JSON 文本或 multipart 文件）→ Apache Tika 按内容嗅探类型抽取 → 分块（Markdown header / parent-child / semantic）→ Embedding 向量化 → 写入**按租户隔离的 collection**（`collection-per-tenant` 默认）。可选 GraphRAG 三元组抽取。
-- **检索**：`POST /rag/query` 融合 vector + keyword（默认开）+ 可选 graph 命中，加权排序取 topK。
+- **检索（四路混排 + RRF）**：`POST /rag/query` 并行召回 vector + keyword（内存 BM25）+ es（Elasticsearch 真 BM25，`RAG_ES_ENABLED` 默认开）+ 可选 graph，交 `HybridFusionService` 融合——ES 参与时有效默认 RRF（免疫量纲差），否则加权 max，取 topK。
 - **对话增强**：`POST /chat` 默认直连 LLM；开 `CONVERSATION_RAG_ENABLED=true` 后先查 `/rag/query`、把检索结果注入 prompt 再作答，回复带 `[doc=文件名#N]` 引用。
+- **公共/共享库**：`RAG_PUBLIC_ENABLED=true` 后各租户查询并入 `__public__` 公共分区，写共享库需 `public-ingest` scope；前端据 `GET /rag/config` 决定是否展示共享库视图。
 - **前置提速**：可选 L1 语义缓存（问题级、按租户分桶、在 RAG 之前，命中即短路 RAG+LLM）与多轮记忆（会话隔离滑窗）。
 
-**状态**：**核心可跑**——开箱即用（in-memory 向量库 + 确定性 hash embedding），无需任何外部基础设施即可上传/问答/验隔离。
-生产能力**默认关、按需开**：持久化向量库（`RAG_VECTOR_STORE_PROVIDER=qdrant|pgvector|milvus|chroma|doris`）、
-真语义 embedding（`RAG_EMBEDDING_PROVIDER=openai|ollama`）、检索重排（`RAG_RERANK_ENABLED`）、查询扩展（`RAG_QUERY_EXPANSION_ENABLED`）、
-上下文增强（`RAG_CONTEXTUAL_ENABLED`）、GraphRAG（`RAG_GRAPH_ENABLED`）、`/chat` RAG 增强（`CONVERSATION_RAG_ENABLED`）均默认关。
+**状态**：**核心可跑**——单测零依赖；`docker-compose` demo 开箱即是「qdrant 向量 + nomic 语义 embedding + ES(smartcn) 全文混排 + RRF」的完整 RAG 栈（application.yml 裸跑亦默认 qdrant + ES，仅 embedding 默认 hash；真正零依赖单跑需显式退回 in-memory + `RAG_ES_ENABLED=false`）。
+其余增强**默认关、按需开**：检索重排（`RAG_RERANK_ENABLED`）、查询扩展（`RAG_QUERY_EXPANSION_ENABLED`）、
+上下文增强（`RAG_CONTEXTUAL_ENABLED`）、`/chat` RAG 增强（`CONVERSATION_RAG_ENABLED`）、公共库（`RAG_PUBLIC_ENABLED`）均默认关（GraphRAG `RAG_GRAPH_ENABLED` 现默认开）。
 
 **深入看**：接入/向量库选型/GraphRAG/语义缓存联动 → `rag-guide.md`；多轮记忆与长期画像 → `memory-guide.md`；
 L1 语义缓存单篇 → `semantic-cache.md`；检索召回评测（Recall@k / MRR）→ `eval-guide.md`。
@@ -221,6 +222,23 @@ live discovery（`INTEROP_DISCOVERY_ENABLED`）默认关，下游不可达时确
 
 ---
 
+## ⑥ 登录与权限（auth / RBAC）
+
+**做什么**：给平台加一条「账号密码登录 → 会话令牌」的对外鉴权路径（与 api-key 并存），并提供角色/权限管理面。`auth-service`（`:8092`）签发会话令牌，`edge-gateway` 的 `SessionBearerAuthFilter` 用会话密钥验签后**换发内部 JWT**，下游服务零改动、对登录无感知。
+
+- **登录/会话**：`POST /auth/login`（账号密码 → 会话 accessToken 60min + httpOnly 刷新 cookie 7d）、`POST /auth/refresh`（一次性轮转）、`POST /auth/logout`、`GET /auth/me`、`GET /auth/public-config`、`POST /auth/register`（自助注册，默认关）。前 5 个 + register 在边缘免鉴权放行。
+- **RBAC**：种子角色 `viewer/editor/analyst/approver/admin`；有效 scopes = 角色展开 ∪ 直配，签发令牌时展开。新增平台 scope `role-admin`（管理面门禁）、`public-ingest`（写公共库），只经 admin 角色获得、不挂 api-key。
+- **管理面**：`/auth/admin/{users,roles}/**`（`role-admin` scope），写端点受 `admin-writes-enabled`（关→503）+ `If-Match` 乐观锁（428/412）。护栏禁止移除最后一个 role-admin、删被引用角色（409）。
+- **前端 RBAC 控制台**：能力展示前端据登录 scope 显隐 RBAC 控制台与 RAG 租户/共享双视图（`VITE_RBAC_CONSOLE_ENABLED` / `VITE_SHARED_KB_UI_ENABLED` kill switch）。
+
+**入口**（auth :8092，经网关）：`POST /auth/login`、`GET /auth/me`、`/auth/admin/**`。demo 账号 `alice`(acme/admin) / `bob`(globex/viewer) / `analyst-a`(tenantA/analyst)，口令 `demo12345`。
+
+**状态**：**核心可跑**——`docker-compose` demo 默认 `AUTH_STORE=jdbc` + `AUTH_RBAC_ENABLED=true` + 写开放 + 种子账号，登录/管理面开箱即验（`bash deploy/smoke-rbac.sh`）；application.yml 裸跑默认 `in-memory` + RBAC 全关（只用直配 scopes 登录）。自助注册 `AUTH_REGISTRATION_ENABLED` 恒默认关。
+
+**深入看** → `rbac-and-public-kb.md`（登录会话链路 + RBAC + 公共知识库）。
+
+---
+
 ## 场景开关速查
 
 场景**级**的关键闸门（细粒度子开关见各专题文档的「开关速查」表）。默认值以各服务 `application.yml` 为准。
@@ -228,8 +246,10 @@ live discovery（`INTEROP_DISCOVERY_ENABLED`）默认关，下游不可达时确
 | 场景 / 子能力 | 关键环境变量 | 默认 | 效果 |
 | --- | --- | --- | --- |
 | ① RAG `/chat` 增强 | `CONVERSATION_RAG_ENABLED` | `false` | `/chat` 是否先查 RAG 再作答 |
-| ① 持久化向量库 | `RAG_VECTOR_STORE_PROVIDER` | `in-memory` | `qdrant`/`pgvector`/`milvus`/`chroma`/`doris` 持久化 |
-| ① 真 embedding | `RAG_EMBEDDING_PROVIDER` | `hash` | `openai`/`ollama` 语义向量 |
+| ① 持久化向量库 | `RAG_VECTOR_STORE_PROVIDER` | `qdrant` | yml/compose 默认 qdrant；可退 `in-memory`/切 `pgvector`/`milvus`/`chroma`/`doris` |
+| ① 真 embedding | `RAG_EMBEDDING_PROVIDER` | `hash`（compose `ollama`） | `openai`/`ollama` 语义向量（compose 默认 nomic 768 维） |
+| ① ES 全文混排 | `RAG_ES_ENABLED` / `RAG_FUSION_STRATEGY` | `true` / 空→rrf | ES BM25 并入四路混排、多源 RRF 融合 |
+| ① 公共/共享知识库 | `RAG_PUBLIC_ENABLED` | `false` | 查询并入 `__public__` 分区；写需 `public-ingest` scope |
 | ① L1 语义缓存 | `CONVERSATION_SEMANTIC_CACHE_ENABLED` | `false` | 命中即短路 RAG+LLM |
 | ② NL2SQL 整装配 | `NL2SQL_ENABLED`（`app.nl2sql.enabled`） | `false` | 关时 `/chat/sql` 端点不注册 |
 | ② 工作流审批 | 端点常开 | — | 需可登录 MySQL（Flowable 自管表） |
@@ -248,6 +268,10 @@ live discovery（`INTEROP_DISCOVERY_ENABLED`）默认关，下游不可达时确
 | ④ 图片 RAG（CLIP） | `RAG_MULTIMODAL_ENABLED` | `false` | `/rag/image*` 生效 |
 | ⑤ 互操作面 | 端点常开 | — | A2A / agent-card / MCP surface |
 | ⑤ live discovery | `INTEROP_DISCOVERY_ENABLED` | `false` | 从下游动态发现 skills/tools |
+| ⑥ RBAC 整套 | `AUTH_RBAC_ENABLED`（compose demo `true`） | `false` | 关时仅用直配 scopes 登录，`/auth/admin/**` 不注册 |
+| ⑥ RBAC 管理写 | `AUTH_RBAC_ADMIN_WRITES_ENABLED`（compose demo `true`） | `false` | 关时写端点 503 |
+| ⑥ 账号存储 | `AUTH_STORE`（compose `jdbc`） | `in-memory` | jdbc 落 MySQL `auth` 库 |
+| ⑥ 自助注册 | `AUTH_REGISTRATION_ENABLED` | `false` | 须与 RBAC 同开，否则 `/auth/register` 403 |
 
 ---
 
@@ -261,6 +285,5 @@ live discovery（`INTEROP_DISCOVERY_ENABLED`）默认关，下游不可达时确
 - **场景 ③** Agent 编排（通用 / 数据分析·按需探表 / 业务流程·人在环）→ `agent-guide.md`；NL2SQL 底座 → `nl2sql-guide.md`；退款审批引擎 → `workflow-guide.md`；受限代码执行 → `code-exec.md`
 - **场景 ④** 多模态视觉 → `vision-guide.md`
 - **场景 ⑤** A2A → `a2a-guide.md`；MCP → `mcp-guide.md`
+- **场景 ⑥** 登录 / RBAC / 公共知识库 → `rbac-and-public-kb.md`
 - **横切**：事件总线（跨服务原子性）→ `eventbus-guide.md`；可观测（trace/OTel/指标）→ `observability-guide.md`；成本归因 → `cost-attribution.md`
-</content>
-</invoke>

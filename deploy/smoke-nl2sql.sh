@@ -7,9 +7,12 @@ set -euo pipefail
 # analytics-service/src/main/resources/db/nl2sql-demo.sql 与 LiteLLM）。本脚本不负责
 # 拉起或构建服务，只通过 edge-gateway 打 NL2SQL 端点并校验响应字段。
 #
+# 默认网关端口 18080（对齐 start-all.sh/start-local.sh 的本机端口重映射约定；
+#   若用裸 `docker compose up`，网关在 8080，传 BASE_URL=http://localhost:8080 覆盖）。
+#
 # 用法：
 #   bash deploy/smoke-nl2sql.sh
-#   BASE_URL=http://localhost:8080 API_KEY=dev-key-tenantA-admin bash deploy/smoke-nl2sql.sh
+#   BASE_URL=http://localhost:18080 API_KEY=dev-key-tenantA-admin bash deploy/smoke-nl2sql.sh
 #
 # 退出码：
 #   0  两个端点都通过
@@ -17,7 +20,7 @@ set -euo pipefail
 #   2  响应缺少预期字段或 question 回显不匹配
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BASE_URL="${BASE_URL:-http://localhost:8080}"
+BASE_URL="${BASE_URL:-http://localhost:18080}"
 API_KEY="${API_KEY:-dev-key-tenantA-admin}"
 QUESTION="${QUESTION:-2026 年 5 月 tenantA 一共退款了多少钱？}"
 

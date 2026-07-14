@@ -7,18 +7,21 @@
 ## 目标拓扑
 
 ```
-client ──X-Api-Key──▶ edge-gateway (Spring Cloud Gateway)
-                          │  校验 api-key → 签发短时内部 JWT(X-Internal-Token)
+showcase-frontend(:8093) ─┐
+client ──X-Api-Key/Bearer──▶ edge-gateway (Spring Cloud Gateway)
+                          │  会话 Bearer 或 api-key → 签发短时内部 JWT(X-Internal-Token)
                           ▼
                   ┌───────────────── 各微服务 ─────────────────┐
-   conversation / knowledge / agent / analytics / workflow /
-   async-task / channel / interop / eval / vision / voice
+   auth(登录/RBAC) / conversation / knowledge / agent / analytics /
+   workflow / async-task / channel / interop / eval / vision / voice
                           │  所有 LLM 调用统一走 ▼
-                     LiteLLM (AI 网关)  ── provider 路由 + failover ──▶ ollama/openai/anthropic/...
+                     LiteLLM (AI 网关)  ── provider 路由 + failover ──▶ deepseek/ollama/openai/...
+
+   knowledge RAG 检索 ── Qdrant(向量) + Elasticsearch(BM25 全文, smartcn) → RRF 融合
 ```
 
 - **两层网关分工**：`edge-gateway` 管业务 API 路由/鉴权；`LiteLLM` 管 LLM provider 路由/failover。
-- **租户跨网络跳**：边缘用 api-key 换发内部 JWT，下游只认 JWT（`platform-security`）。
+- **两种对外凭据**：`X-Api-Key` 或登录会话 `Authorization: Bearer`（`auth-service` 签发）；边缘统一换发内部 JWT，下游只认 JWT（`platform-security`），对登录 vs api-key 无感知。
 
 ## 模块
 
@@ -31,10 +34,11 @@ client ──X-Api-Key──▶ edge-gateway (Spring Cloud Gateway)
 | `platform-audit` | 共享库 | 审计日志 + LLM audit listener |
 | `platform-metering` | 共享库 | token budget + cost attribution |
 | `platform-eventbus` | 共享库 | 跨服务事件总线抽象（内存默认，可选 Kafka）；channel 出入站事件走它 |
+| `auth-service` | 服务 | `/auth/login`·`/refresh`·`/logout`·`/me`·`/public-config`·`/register` 账号登录 + 会话令牌；`/auth/admin/**` RBAC 角色/权限管理面（`role-admin` scope + If-Match 乐观锁） |
 | `conversation-service` | 服务 | `/chat`（可选 RAG 增强）+ `/chat/stream` SSE 流式 + `/chat/auto` 意图路由 + `/chat/vision` 视觉对话 + `/chat/mcp` MCP 工具对话 + `/chat/cascade` 级联模型 + `/chat/memory`·`/memory/profile` 长期画像 + `/extract` 结构化抽取；多轮记忆、PII/注入护栏可选开启 |
 | `workflow-service` | 服务 | `/workflow/**` Flowable 退款审批流 + outbox |
 | `analytics-service` | 服务 | `/chat/sql`、`/analytics/sql` NL2SQL / ChatBI；`/analytics/schema/tables`(+`/{table}`) 按需探表（供数据分析智能体） |
-| `knowledge-service` | 服务 | `/rag/documents/**` 文档上传/列表/删除 + `/rag/query` 向量+keyword hybrid（可选 rerank / query-expansion / contextual / HanLP 分词）；`/rag/image*` CLIP 多模态；`/rag/graph/**` GraphRAG；`/rag/obsidian/import` Obsidian 导入 |
+| `knowledge-service` | 服务 | `/rag/documents/**` 文档上传/列表/删除 + `/rag/query` 四路混排（向量 + 内存关键词 + Elasticsearch BM25 全文 + 图谱，RRF 融合，可选 rerank / query-expansion / contextual / HanLP 分词）；`/rag/image*` 多模态；`/rag/graph/**` GraphRAG；`/rag/config` 运行时配置 + 公共/共享知识库；`/rag/obsidian/import` Obsidian 导入 |
 | `agent-service` | 服务 | `/agent/run`(+`/async`) 深度 Agent 编排 + `/agent/tasks/**` SSE；`/agent/dag/**` 多 Agent DAG（含自动规划/重规划）；`/agent/analyst/run`(+`/async`) 数据分析智能体（DAG 编排：探表→取数→计算→解读）；`/agent/process/run`(+`/async`) 业务流程智能体（人在环，默认关）；`/agent/chain` 提示词链、`/agent/vote` 投票自一致、`/agent/reflexive`(+`/stream`) Reflexion 自反思；动作跨服务调用 knowledge / analytics / vision |
 | `async-task-service` | 服务 | `/async/tasks/**` 通用任务状态、SSE 断点续订、取消与 webhook 通知中心；后续 agent/workflow 会逐步切到该服务 |
 | `channel-service` | 服务 | `/channel/**` 渠道 ACL：webhook/Feishu/voice 出站、async-task/workflow callback、出入站签名校验；`/channel/dingtalk/events`·`/channel/feishu/events` 入站客服桥；可选 Kafka event |
@@ -71,8 +75,11 @@ client ──X-Api-Key──▶ edge-gateway (Spring Cloud Gateway)
 # 1. 构建
 mvn -DskipTests package
 
-# 2. 起整网（含 LiteLLM + Redis + MySQL + Kafka + conversation + workflow + edge）
+# 2. 起整网（LiteLLM + Redis + MySQL + Kafka + Qdrant + Elasticsearch/Kibana + 全部服务含 auth + 前端 + edge）
 docker compose -f deploy/docker-compose.yml up --build
+#    或用一键脚本（本机端口重映射避开 apollo 占用的 8080/8090/3306）：
+#    bash deploy/start-all.sh   # 全 docker 含前端 nginx :8093
+#    bash deploy/start-dev.sh   # 后端 docker + 前端 vite HMR :5173
 
 # 3. 打一条 /chat（走边缘网关，用 api-key，网关内部换 JWT 转发给 conversation-service）
 curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
@@ -105,8 +112,8 @@ curl -s -X POST 'http://localhost:8080/rag/query' \
   -d '{"query":"知识库文档","topK":3,"category":"manual"}'
 ```
 
-`knowledge-service` 默认使用 `RAG_VECTOR_STORE_PROVIDER=in-memory` 和本地 deterministic hash embedding，适合开发和单测。向量库 provider 可选 `in-memory`（默认）| `qdrant` | `pgvector` | `milvus` | `chroma` | `doris`，全部走 collection-per-tenant 强隔离，基名由 `RAG_VECTOR_STORE_BASE_COLLECTION`（默认 `knowledge_segments`）决定。
-`/rag/query` 会融合 vector、keyword 和可选 GraphRAG 命中，可通过 `RAG_RANKING_VECTOR_WEIGHT`、`RAG_RANKING_KEYWORD_WEIGHT`、`RAG_RANKING_GRAPH_WEIGHT` 调整排序权重。中文 keyword 检索用 HanLP 分词。
+`knowledge-service` 的 application.yml 现默认 `RAG_VECTOR_STORE_PROVIDER=qdrant` + hash embedding + ES 全文混排（`docker compose` demo 另把 embedding 切到 nomic 语义向量）；单测仍零依赖（纯 POJO），真正零依赖单跑需显式退回 `RAG_VECTOR_STORE_PROVIDER=in-memory RAG_REGISTRY_STORE=in-memory RAG_GRAPH_STORE=in-memory RAG_ES_ENABLED=false`。向量库 provider 可选 `in-memory` | `qdrant`（默认）| `pgvector` | `milvus` | `chroma` | `doris`，全部走 collection-per-tenant 强隔离，基名由 `RAG_VECTOR_STORE_BASE_COLLECTION`（默认 `knowledge_segments`）决定。
+`/rag/query` 会**四路混排**融合 vector、keyword（内存 BM25）、es（Elasticsearch 真 BM25 全文，`RAG_ES_ENABLED=true` 默认开，smartcn 中文分析器）、可选 GraphRAG 命中：ES 参与时**有效默认 RRF 融合**（`1/(k+rank)`，免疫量纲差），否则按 `RAG_RANKING_*_WEIGHT` 加权。中文 keyword 检索用 HanLP 分词。
 
 检索质量增强开关（默认全关，可叠加）：
 

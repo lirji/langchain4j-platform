@@ -10,16 +10,17 @@
 http://localhost:8080
 ```
 
-外部调用带：
+外部调用带**两种凭据之一**：
 
 ```text
-X-Api-Key: <api-key>
+X-Api-Key: <api-key>                         # 方式一：api-key
+Authorization: Bearer <会话 accessToken>      # 方式二：登录会话令牌（先 POST /auth/login）
 Content-Type: application/json
 ```
 
-- 网关校验 `X-Api-Key` → 签发短时内部 JWT（`X-Internal-Token`）→ 按路径路由到下游服务。下游只认内部 JWT，**不建议外部直接构造 `X-Internal-Token`**。
-- 免鉴权放行的路径（`ApiKeyToInternalTokenFilter.isOpen`）：`/actuator/**`、`/.well-known/**`、`/health`。其中 `GET /.well-known/agent-card.json` 是唯一对外免鉴权的业务端点（A2A 发现惯例）。
-- 网关路由前缀（`edge-gateway/application.yml`）：`/chat`、`/chat/**`、`/extract`、`/extract/**`、`/memory`、`/memory/**` → conversation；`/chat/sql`、`/analytics`、`/analytics/**` → analytics；`/workflow`、`/workflow/**` → workflow；`/rag`、`/rag/**`、`/knowledge`、`/knowledge/**` → knowledge；`/agent`、`/agent/**` → agent；`/async`、`/async/**` → async-task；`/channel`、`/channel/**` → channel；`/interop`、`/interop/**`、`/.well-known/agent-card.json` → interop；`/eval`、`/eval/**` → eval；`/vision`、`/vision/**` → vision；`/voice`、`/voice/**` → voice。
+- 网关按凭据换发内部 JWT：`SessionBearerAuthFilter`（order -110）验会话 Bearer，或 `ApiKeyToInternalTokenFilter`（order -100）校验 `X-Api-Key` → 签发短时内部 JWT（`X-Internal-Token`）→ 按路径路由到下游服务。下游只认内部 JWT，对「会话 vs api-key」无感知，**不建议外部直接构造 `X-Internal-Token`**。
+- 免鉴权放行的路径（`EdgeOpenPaths.isOpen`，两个 filter 共用）：`/actuator*`、`/.well-known/*`、`/health`、`/auth/login`、`/auth/register`、`/auth/refresh`、`/auth/logout`、`/auth/public-config`、`/channel/feishu/events`、`/channel/dingtalk/events`。其中 `GET /.well-known/agent-card.json` 是对外免鉴权的 A2A 发现端点；`/auth/me` **不在**放行内，仍需会话 Bearer。
+- 网关路由前缀（`edge-gateway/application.yml`）：`/auth`、`/auth/**` → auth；`/chat`、`/chat/**`、`/extract`、`/extract/**`、`/memory`、`/memory/**` → conversation；`/chat/sql`、`/analytics`、`/analytics/**` → analytics；`/workflow`、`/workflow/**` → workflow；`/rag`、`/rag/**`、`/knowledge`、`/knowledge/**` → knowledge；`/agent`、`/agent/**` → agent；`/async`、`/async/**` → async-task；`/channel`、`/channel/**` → channel；`/interop`、`/interop/**`、`/.well-known/agent-card.json` → interop；`/eval`、`/eval/**` → eval；`/vision`、`/vision/**` → vision；`/voice`、`/voice/**` → voice。
 - 本文所有端点均可**经网关**访问（`是否经网关：是`）。少量端点是给服务间调用/回调设计的（如 `/conversation/workflow/*`、`/channel/callbacks/*`），虽然也在网关路由前缀内，但通常由内部服务而非终端用户调用，下面会单独标注。
 - 默认开关：平台大量能力是 feature-flag 化的（`@ConditionalOnProperty` / `@ConditionalOnBean`），**默认关闭**的端点在未开启时不注册（404）。每节标注对应开关。
 
@@ -27,12 +28,79 @@ Content-Type: application/json
 
 | api-key | 租户 | 用户 | scopes |
 |---|---|---|---|
-| `dev-key-acme` | acme | alice | chat, approve, agent, channel, eval, vision |
+| `dev-key-acme` | acme | alice | chat, ingest, approve, agent, channel, eval, vision, voice |
 | `dev-key-globex` | globex | bob | chat |
 | `dev-key-tenantA-admin` | tenantA | analyst-a | chat, analytics |
 | `dev-key-acme-ingest` | acme | alice | chat, ingest |
 
-限流分类（`EdgeRateLimitFilter`，默认 `app.rate-limit.enabled=true`，内存计数）：`chat=60`、`agent=20`、`stream=20`、`ingest=5`、`eval=5`、`default=120`（每分钟）。
+登录账号（auth-service demo 种子，口令 `demo12345`，与上表 api-key 租户/scope 镜像对齐）：`alice`(acme, admin 角色—含 `role-admin`/`public-ingest`) / `bob`(globex, viewer) / `analyst-a`(tenantA, analyst)。
+
+限流分类（`EdgeRateLimitFilter`，默认 `app.rate-limit.enabled=true`，`store=redis`）：`chat=60`、`agent=20`、`stream=20`、`ingest=5`、`eval=5`、`default=120`（每分钟）。
+
+---
+
+## Auth（auth-service）
+
+账号登录 + 会话令牌 + RBAC 管理面（:8092，`/auth/**`）。登录/刷新/登出/注册/public-config 在边缘**免鉴权放行**；`/auth/me` 与整个 `/auth/admin/**` 需鉴权。
+
+### POST `/auth/login`
+
+- 用途：账号密码登录，签发会话令牌。
+- 请求：`{ username, password }`。
+- 响应：`LoginResponse{ accessToken, expiresInSeconds, user{ userId, tenantId, scopes } }` + `Set-Cookie: refresh_token=...`（httpOnly，path `/auth`）。凭据错误 → 401。
+- 经网关：是，免鉴权。会话 accessToken 默认 60min，作后续 `Authorization: Bearer` 用。
+
+```bash
+curl -s -X POST 'http://localhost:8080/auth/login' \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"alice","password":"demo12345"}'
+```
+
+### POST `/auth/refresh`
+
+- 用途：用刷新 cookie 轮转换新会话（一次性作废旧刷新令牌，防重放）。
+- 请求：无 body，带 `refresh_token` cookie。响应同 `/auth/login`（新 accessToken + 新 cookie）。cookie 缺失/失效 → 401。
+- 经网关：是，免鉴权。
+
+### POST `/auth/logout`
+
+- 用途：撤销当前刷新会话并清 cookie。响应 204（幂等）。经网关：是，免鉴权。
+
+### GET `/auth/me`
+
+- 用途：查看当前登录用户（身份来自内部 JWT 还原的 `TenantContext`）。
+- 响应：`{ userId, tenantId, scopes }`。
+- 经网关：是。**需会话 Bearer**（不在免鉴权放行内）。
+
+### GET `/auth/public-config`
+
+- 用途：非敏感最小配置，供前端显隐注册入口。响应 `{ registrationEnabled, passwordMinLength, passwordMaxLength }`（`registrationEnabled = rbac.enabled && registration.enabled`）。经网关：是，免鉴权。
+
+### POST `/auth/register`
+
+- 用途：自助注册（默认关），成功即登录。
+- 请求：`{ username, password, ... }`。响应同 `/auth/login`。
+- 经网关：是，免鉴权。**默认关闭**——须同时 `AUTH_RBAC_ENABLED=true` 与 `AUTH_REGISTRATION_ENABLED=true`，否则 403；按客户端 IP 节流。
+
+### RBAC 管理面 `/auth/admin/**`
+
+整类 `@ConditionalOnProperty(app.auth.rbac.enabled)`（**RBAC 关时不注册**）。调用方需持 `role-admin` scope（仅 `admin` 角色经登录会话获得）；**写/删端点**再受 `AUTH_RBAC_ADMIN_WRITES_ENABLED` 二级开关（关→**503**）与 `If-Match` 乐观锁（缺失→**428**、版本冲突→**412**）约束；非 role-admin→**403**。列表回 `X-Total-Count`，单查回 `ETag` 作 If-Match 基线。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/auth/admin/users` | 分页列用户（`offset`/`limit`，`limit` capped 1–200） |
+| GET | `/auth/admin/users/{username}` | 单查用户（回 `ETag`） |
+| POST | `/auth/admin/users` | 建户（201；可带 `roles`/`directScopes`/`enabled`） |
+| PATCH | `/auth/admin/users/{username}` | 局部改（tenant/password/directScopes/enabled，null=不改；需 If-Match） |
+| PUT | `/auth/admin/users/{username}/roles` | 幂等全量替换角色（需 If-Match） |
+| DELETE | `/auth/admin/users/{username}` | 删户（204 幂等；需 If-Match） |
+| GET | `/auth/admin/roles` | 列角色 |
+| GET | `/auth/admin/roles/{name}` | 单查角色 |
+| POST | `/auth/admin/roles` | 建角色（201，重复 409） |
+| PUT | `/auth/admin/roles/{name}` | 全量替换 scopes/description（需 If-Match） |
+| DELETE | `/auth/admin/roles/{name}` | 删角色（204，被引用 409，需 If-Match） |
+
+> 护栏：不能移除最后一个启用的 role-admin、不能删被引用角色（409）。降权/禁用/删号会即时撤销刷新会话（已签发 access 仍受 TTL 约束）。
 
 ---
 
@@ -152,9 +220,10 @@ curl -s -X POST 'http://localhost:8080/extract?type=ticket' \
 - 支持两种 content-type：
   - `application/json`（`Map<String,String>`）：`title`（必填）、`text`、`contentType`（默认 `text/plain`，有 `imageBase64` 时默认 `image/png`）、`category`、图片可传 `imageBase64`。
   - `multipart/form-data`：表单字段 `file`（必填）+ 可选 `category`。
-- 图片 ingestion：`image/*` 文件或 `imageBase64` 走原生 CLIP 多模态 embedding（存入独立的 `knowledge_images_<tenant>` collection），需 `RAG_MULTIMODAL_ENABLED=true`（**默认关**，关闭时上传图片返回 400）。⚠️ 旧的 `caption`/`ocrText` 字段与 `RAG_IMAGE_TEXT_*` 图→文字路径已移除。
+- 图片 ingestion：`image/*` 文件或 `imageBase64` 走 OpenAI 兼容多模态 embedding（存入独立的 `knowledge_images_<tenant>` collection），`RAG_MULTIMODAL_ENABLED`（application.yml 默认关→上传图片 400；compose 默认开，路由在但未配真实端点时调用期报错）。⚠️ 旧的 `caption`/`ocrText` 字段与 `RAG_IMAGE_TEXT_*` 图→文字路径已移除。
+- 公共/共享库：可传 `visibility=public|shared` 写入 `__public__` 公共分区，需 `public-ingest` scope（否则 403）；缺省写本租户私有库。
 - 响应：`DocumentInfo`。
-- 经网关：是。默认开启（向量库默认 `in-memory` + deterministic hash embedding）。
+- 经网关：是。默认开启（application.yml 默认向量库 `qdrant` + hash embedding，compose 走 nomic + ES 全文混排）。
 
 JSON 示例：
 
@@ -198,10 +267,15 @@ JSON 示例：
 
 ### POST `/rag/query`（别名 `/knowledge/query`）
 
-- 用途：RAG 查询，融合 vector / keyword / 可选 graph 命中。
+- 用途：RAG 查询，四路混排融合——vector / keyword（内存 BM25）/ es（Elasticsearch 真 BM25）/ 可选 graph；ES 参与时有效默认 RRF 融合。
 - 请求：`{ query, topK, minScore, category }`（`KnowledgeQueryRequest`）。
-- 响应：`{ query, tenantId, hits[] }`，`hits[]` 含 `id, score, docId, displayName, category, index, text, source`（`source` 为 `vector|keyword|hybrid|graph`）。
-- 经网关：是。默认开启。排序权重可调（`RAG_RANKING_VECTOR_WEIGHT` 等）。
+- 响应：`{ query, tenantId, hits[] }`，`hits[]` 含 `id, score, docId, displayName, category, index, text, source, visibility`（`source` 为 `vector|keyword|es|hybrid|graph`；`RAG_PUBLIC_ENABLED` 开启时公共分区命中标 `visibility=public`）。
+- 经网关：是。默认开启。融合与权重可调（`RAG_FUSION_STRATEGY`、`RAG_RANKING_*_WEIGHT`）。
+
+### GET `/rag/config`
+
+- 用途：运行时只读回显 RAG 前端相关配置：`{ publicKbEnabled, ... }`，供前端决定是否展示共享库视图/共享图片入口。
+- 经网关：是。**需认证但无需额外 scope**（边缘内部 JWT 把守）。
 
 ### POST `/rag/graph/query`
 
@@ -448,6 +522,11 @@ JSON 示例：
 
 - 用途：接收入站渠道事件。请求 `ChannelInboundEvent`（`{ eventId, channel, source, eventType, payload }`；`channel`/`eventType` 必填）+ 头 `X-Channel-Signature`（签名校验失败 → 401）。响应 `{ eventId, status, receivedAt }`。
 - 经网关：是（外部 webhook 入站）。
+
+### POST `/channel/feishu/events`、POST `/channel/dingtalk/events`
+
+- 用途：飞书 / 钉钉群 @机器人 入站客服桥——验签（飞书 SHA-256+AES-256-CBC / 钉钉 HmacSHA256）+ 按 msgId 去重 → 设租户 → 调 conversation `/chat`（可带 RAG）→ 机器人回消息。钉钉侧含「知识库无命中 → 转人工」兜底闸门。
+- 经网关：是，且**免鉴权放行**（靠渠道签名验真）。**默认关闭**，需 `FEISHU_*` / `DINGTALK_*` 配置开启。详见 [钉钉知识库客服接入指南](../互操作渠道/dingtalk-guide.md)。
 
 ---
 

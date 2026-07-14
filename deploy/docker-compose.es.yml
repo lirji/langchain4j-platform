@@ -10,7 +10,8 @@
 #                  up -d --build elasticsearch knowledge-service
 #
 # 开启后需重灌文档以填充 ES 索引（向量在 qdrant 不受影响）：bash deploy/seed-kb.sh
-# 关闭回滚：去掉本 override 重启 knowledge-service 即回到 向量 + 内存关键词（RAG_ES_ENABLED 默认 false）。
+# 关闭回滚：基础 compose 现已默认开 ES（RAG_ES_ENABLED=true）；要真正回到 向量 + 内存关键词，
+#          需显式 RAG_ES_ENABLED=false 重启 knowledge-service（仅去掉本 override 不再等于关 ES）。
 services:
   elasticsearch:
     build: ./es
@@ -30,7 +31,7 @@ services:
 
   # Kibana：浏览/查询 ES 数据的官方 Web UI（Discover 看文档、Dev Tools 跑 DSL）。
   # http://localhost:5601 → Dev Tools 里跑： GET knowledge_segments_text/_search
-  # 较重(~1G+ RAM)，仅 --es 时起；不需要可 docker compose stop kibana。
+  # 较重(~1G+ RAM)；基础 compose 已随栈常起，不需要可 docker compose stop kibana。
   kibana:
     image: docker.elastic.co/kibana/kibana:8.15.3
     environment:

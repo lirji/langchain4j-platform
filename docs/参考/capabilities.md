@@ -2,14 +2,15 @@
 
 ## 一句话概览
 
-本项目是一个基于 Spring Boot、LangChain4j、LiteLLM 和 DDD 限界上下文拆分的企业级 AI 微服务平台。它把对话、语义缓存、模型级联、多轮记忆与长期画像、意图路由、安全护栏（PII/注入）、知识库 RAG/GraphRAG（含 rerank / 查询扩展 / 上下文增强）、NL2SQL、多种 Agent 编排模式（ReAct / DAG / 反思 / 投票 / 链式）、工作流审批、异步任务中心、渠道接入、A2A/MCP 互操作、多模态视觉、语音闭环（ASR→对话→TTS）和回归评测拆成独立服务，并通过两层网关、租户鉴权、事件总线、集中配置、共享协议和可观测能力连接起来。
+本项目是一个基于 Spring Boot、LangChain4j、LiteLLM 和 DDD 限界上下文拆分的企业级 AI 微服务平台。它把对话、语义缓存、模型级联、多轮记忆与长期画像、意图路由、安全护栏（PII/注入）、知识库 RAG/GraphRAG（四路混排：向量 + 内存关键词 + Elasticsearch BM25 全文 + 图谱，RRF 融合；含 rerank / 查询扩展 / 上下文增强 / 公共共享库）、NL2SQL、多种 Agent 编排模式（ReAct / DAG / 反思 / 投票 / 链式）、工作流审批、异步任务中心、渠道接入、A2A/MCP 互操作、多模态视觉、语音闭环（ASR→对话→TTS）和回归评测拆成独立服务，并通过两层网关、账号登录 + RBAC、租户鉴权、事件总线、集中配置、共享协议和可观测能力连接起来，另配一个前后端分离的能力展示前端。
 
 ## 访问方式与端口约定
 
-- **唯一对外入口是 `edge-gateway`（:8080）**：校验 `X-Api-Key` → 签发短时内部 JWT（`X-Internal-Token`）→ 按路径路由到下游。下文所有"经网关"的业务端点都可以用 `http://localhost:8080` + api-key 访问。
-- **服务直连端口**（本地调试/服务间调用）：conversation `:8081`、workflow `:8082`、analytics `:8083`、knowledge `:8084`、agent `:8085`、async-task `:8086`、channel `:8087`、interop `:8088`、eval `:8089`、vision `:8090`、voice `:8091`。
+- **唯一对外入口是 `edge-gateway`（:8080）**：校验 `X-Api-Key`**或** `Authorization: Bearer <会话 accessToken>` → 签发短时内部 JWT（`X-Internal-Token`）→ 按路径路由到下游。下文所有"经网关"的业务端点都可以用 `http://localhost:8080` + api-key（或登录后的会话 Bearer）访问。
+- **服务直连端口**（本地调试/服务间调用）：conversation `:8081`、workflow `:8082`、analytics `:8083`、knowledge `:8084`、agent `:8085`、async-task `:8086`、channel `:8087`、interop `:8088`、eval `:8089`、vision `:8090`、voice `:8091`、**auth `:8092`（登录 + RBAC）**。
+- **前端与检索基础设施**：能力展示前端 `capability-showcase-frontend`（:8093，Vue3 静态 SPA / nginx，前后端分离，浏览器跨域直调网关）；RAG 检索基础设施 Elasticsearch（:9200，BM25 全文混排）+ Kibana（:5601，查询 UI）+ Qdrant（:6333/:6334，向量库）。
 - **不经 edge-gateway 暴露**：`config-server`（:8888，集中配置基础设施，仅服务内部经 `spring.config.import` 拉取）。
-- **默认开关基线**：绝大多数新能力**默认关闭 / 内存实现**，dev/test 零外部依赖。下文每项都标注了默认开关状态与开启用的环境变量。
+- **默认开关基线**：两套「默认」需分清——**application.yml 裸跑默认**（多为内存/确定性/关闭，单测零外部依赖）与 **docker-compose demo 默认**（为一键体验把 RAG 持久化/ES/登录 RBAC 等打开）。下文标注以 application.yml 默认为准，并在有差异处注明 compose 覆盖。
 
 ## 核心能力矩阵
 
@@ -17,6 +18,8 @@
 |---|---|---|---|
 | 边缘网关 | API key 鉴权、租户识别、内部 JWT 签发、服务路由、限流 | `edge-gateway`（:8080） | 常开 |
 | 内部 JWT | 跨服务身份令牌，支持 HS256（默认）或 RS256 非对称签发/验签 | `platform-security` | HS256（默认）；RS256 需配 keypair |
+| 登录与会话 | 账号密码登录 → 会话 accessToken（Bearer）+ httpOnly 刷新 cookie；边缘 `SessionBearerAuthFilter` 换发内部 JWT，下游零改动 | `/auth/login`·`/auth/refresh`·`/auth/logout`·`/auth/me`（auth :8092） | RBAC 关时仍可登录（用直配 scopes）；注册 `AUTH_REGISTRATION_ENABLED=false` |
+| RBAC 权限管理 | 角色→scope 展开、用户/角色 CRUD 管理面、`role-admin`/`public-ingest` 平台 scope、乐观锁 If-Match | `/auth/admin/users/**`、`/auth/admin/roles/**` | yml 默认关；compose demo `AUTH_RBAC_ENABLED=true`+写开放 |
 | LLM 网关 | 所有模型调用统一走 OpenAI 兼容端点，provider 路由/failover 在 LiteLLM | `platform-gateway-client` + LiteLLM | 常开 |
 | 集中配置 | Spring Cloud Config Server，native（默认）/git 后端，`optional:` 接入不阻断启动 | `config-server`（:8888） | native 后端默认可用；git 需 `SPRING_PROFILES_ACTIVE=git` |
 | 事件总线 | EventPublisher SPI，Noop 默认 / Kafka 变体，幂等生产 + 消费去重（effective exactly-once） | `platform-eventbus` | `platform.eventbus.enabled=false`（默认 Noop） |
@@ -30,17 +33,19 @@
 | 多轮记忆 | 按会话隔离的滑窗记忆（messages/tokens/summary），内存或 Redis | `/chat`、`/chat/stream` 记忆键 | `CONVERSATION_MEMORY_STORE=in-memory`（常开，内存滑窗） |
 | 长期画像 | 跨会话用户画像抽取/召回、合规查看与删除 | `/chat/memory`、`GET/DELETE /memory/profile` | `CONVERSATION_MEMORY_PROFILE_ENABLED=false` |
 | 安全护栏 | 提示注入前置拦截、PII 输出脱敏，流式/非流式一致 | `/chat` 前后置 | 注入 `CONVERSATION_GUARDRAIL_INJECTION_ENABLED=false`、PII `CONVERSATION_GUARDRAIL_PII_ENABLED=false` |
-| 知识库 RAG | 文档上传、Tika 抽取、分块、向量 + keyword hybrid 检索、可配置排序权重 | `/rag/documents/**`、`/rag/query`（knowledge :8084） | 上传/查询常开；hybrid `RAG_HYBRID_ENABLED=true` |
+| 知识库 RAG | 文档上传、Tika 抽取、分块、四路混排检索（向量 + 内存关键词 + ES BM25 + 图谱）、可配置排序权重 | `/rag/documents/**`、`/rag/query`（knowledge :8084） | 上传/查询常开；hybrid `RAG_HYBRID_ENABLED=true` |
+| ES 全文混排 | Elasticsearch 真 BM25 全文分支并入混合检索，多源 **RRF 融合**（免疫量纲差），smartcn 中文分析器 | `/rag/query` 召回、索引 `knowledge_segments_text` | `RAG_ES_ENABLED=true`（默认开）；`RAG_FUSION_STRATEGY` 空 → ES 开启时有效默认 `rrf` |
+| 公共/共享知识库 | 查询在隔离查各自租户基础上并入 `__public__` 公共分区；写共享库需 `public-ingest` scope | `/rag/documents?visibility=public`、`/rag/query`、`/rag/config` | `RAG_PUBLIC_ENABLED=false`（默认关） |
 | 检索重排 | 召回放大后二次打分重排（LLM-as-judge 或 Jina reranker） | `/rag/query` 后置 | `RAG_RERANK_ENABLED=false` |
 | 查询扩展 | 用 LLM 生成 query 变体扩大召回 | `/rag/query` 前置 | `RAG_QUERY_EXPANSION_ENABLED=false` |
 | 上下文增强 | 入库时逐 chunk 加文档级上下文前缀再嵌入（Contextual Retrieval） | `/rag/documents` ingest 期 | `RAG_CONTEXTUAL_ENABLED=false` |
 | 中文分词 | keyword hybrid 支持 HanLP 中文分词（默认 simple 零依赖） | `/rag/query` keyword 路 | `RAG_HYBRID_TOKENIZER=simple`（默认）/`hanlp` |
 | Obsidian 导入 | 把 zip 打包的 Obsidian vault 批量导入 RAG（`[[双链]]`→GraphRAG 三元组） | `POST /rag/obsidian/import`（multipart） | 端点常开 |
 | 多租户隔离 | collection-per-tenant 强隔离（每租户独立 collection/namespace） | knowledge 向量库 | `RAG_VECTOR_STORE_ISOLATION=collection-per-tenant`（默认） |
-| 向量存储 | in-memory 默认；qdrant/pgvector/milvus/chroma/doris 可选，均 collection-per-tenant | knowledge | `RAG_VECTOR_STORE_PROVIDER=in-memory`（默认） |
-| Embedding | 确定性 hash（默认）/ OpenAI-compat（LiteLLM）/ Ollama | knowledge | `RAG_EMBEDDING_PROVIDER=hash`（默认） |
-| GraphRAG | 确定性三元组抽取、实体链接、邻居查询、可选融合到 `/rag/query` | `/rag/graph/query`、`/rag/graph/entities` | `RAG_GRAPH_ENABLED=false` |
-| 图谱持久化 | in-memory 或 JDBC/MySQL | knowledge | `RAG_GRAPH_STORE=in-memory`（默认） |
+| 向量存储 | qdrant 默认；in-memory/pgvector/milvus/chroma/doris 可选，均 collection-per-tenant | knowledge | `RAG_VECTOR_STORE_PROVIDER=qdrant`（yml/compose 默认，可退 in-memory） |
+| Embedding | 确定性 hash / OpenAI-compat（LiteLLM）/ Ollama | knowledge | `RAG_EMBEDDING_PROVIDER=hash`（yml 默认）；compose 走 `ollama`/`nomic-embed-text`（768 维） |
+| GraphRAG | 确定性三元组抽取、实体链接、邻居查询、可选融合到 `/rag/query` | `/rag/graph/query`、`/rag/graph/entities` | `RAG_GRAPH_ENABLED=true`（默认开） |
+| 图谱持久化 | in-memory 或 JDBC/MySQL | knowledge | `RAG_GRAPH_STORE=jdbc`（默认） |
 | NL2SQL / ChatBI | 自然语言转 SQL、只读查询保护 | `/chat/sql`、`/analytics/sql`（analytics :8083） | 常开 |
 | 工作流审批 | Flowable 退款审批流、人工审批、超时、终态通知 | `/workflow/**`（workflow :8082） | 常开；终态通知模式可切 async-task |
 | 深度 Agent（ReAct） | 单次/异步 ReAct loop，rag/sql/time/delegate 等动作 | `/agent/run`、`/agent/run/async`（agent :8085） | `AGENT_ENABLED=true` |
@@ -57,6 +62,7 @@
 | 语音闭环 | 音频 → ASR(whisper) → `/chat` → TTS，支持整轮 / SSE 半流式 / 纯转写 | `/voice/chat`、`/voice/chat/stream`、`/voice/transcribe`（voice :8091） | `VOICE_ENABLED=false`（默认整服务不装配） |
 | 审计与计量 | 审计日志、LLM audit listener、token budget、cost attribution | `platform-audit`、`platform-metering` | audit/budget 常开、cost 默认关 |
 | 可观测性 | trace id 生成与跨服务透传 | `platform-observability` | 常开 |
+| 能力展示前端 | 前后端分离的独立静态 SPA（Vue3/nginx），凭证感知导航、direct mode 跨域直调、能力五态诚实呈现、RBAC 控制台 + RAG 租户/共享双视图 | `capability-showcase-frontend`（:8093） | 独立部署；RBAC 控制台/共享库 UI 以 `VITE_*` kill switch 收口 |
 
 ## 技术栈总览（技术清单）
 
@@ -64,7 +70,7 @@
 
 ### 语言与运行时 / 构建
 - **Java 21**（`maven.compiler.release=21`），全模块统一。
-- **Maven** 多模块：父 `pom.xml`（`packaging=pom`）聚合 7 个共享库 + 11 个服务 + edge-gateway/config-server，统一版本管理。**无 Maven wrapper**，用系统 `mvn`。
+- **Maven** 多模块：父 `pom.xml`（`packaging=pom`）聚合 7 个共享库 + 12 个服务（含 `auth-service`）+ edge-gateway/config-server，统一版本管理。**无 Maven wrapper**，用系统 `mvn`。前端 `capability-showcase-frontend` 是独立的 Vite/Vue3 项目，不在 Maven reactor 内。
 - **Spring Boot 3.3.5**（`spring-boot-starter-parent`）、**Spring Cloud 2023.0.3**。
 - 打包可执行 fat jar（`spring-boot-maven-plugin`）；Docker 镜像基于 `eclipse-temurin:21-jre`。
 - **刻意未用**：JPA/Hibernate/MyBatis、Flyway/Liquibase、Lombok、任何 linter/格式化/静态分析（风格靠约定）。
@@ -80,19 +86,24 @@
 - 已接入的 LangChain4j provider/集成：`langchain4j-open-ai`（走 LiteLLM）、`langchain4j-ollama`、`langchain4j-anthropic`、`langchain4j-mcp`（1.13.1-beta23）、`langchain4j-document-parser-apache-tika`、`langchain4j-easy-rag`。
 - **本机 Ollama**（默认本地模型后端，如 `llama3.1`、embedding `nomic-embed-text`）；容器经 `host.docker.internal:11434` 访问。
 
-### RAG / 向量 / 知识图谱（`knowledge-service`）
-- 向量库集成：**Qdrant**（`langchain4j-qdrant`，推荐生产选项）、**in-memory**（默认零依赖）；另打包 **Milvus / Chroma / pgvector** 可选后端（gRPC 版本钉到 `1.59.1` 以兼容 Milvus + Qdrant 共存）。
-- Embedding：确定性 hash（默认）/ OpenAI 兼容（LiteLLM）/ Ollama（`nomic-embed-text`）。
-- 文档抽取：**Apache Tika**（PDF/Office/HTML/纯文本）；分块：Markdown header / parent-child / semantic。
-- **GraphRAG**：自研确定性三元组抽取 + 实体链接 + 邻居查询；存储 in-memory 或 JDBC/MySQL。
+### RAG / 向量 / 全文 / 知识图谱（`knowledge-service`）
+- **四路混排检索**：向量（余弦）+ 内存关键词（BM25 近似）+ **Elasticsearch 真 BM25 全文** + GraphRAG 三元组，交 `HybridFusionService` 融合。融合策略 `RRF`（`1/(k+rank)`，k=60，免疫 BM25/余弦量纲差；ES 开启时有效默认）或 `WEIGHTED_MAX`（历史加权语义）。
+- **Elasticsearch 8.15.x**（自建镜像装 `analysis-smartcn` 中文分析器，:9200 + Kibana :5601）：自研 `EsGateway`（低层 `RestClient` + 手工 JSON），索引 `knowledge_segments_text`（keyword 精确字段 + `text`/smartcn 全文）；ingest 期同步 upsert、查询期 `match+filter` 召回。刻意排除 Spring 的 ES 自动配置/健康指示器（避免 ES 关闭时 readiness DOWN）。
+- 向量库集成：**Qdrant**（`langchain4j-qdrant`，yml/compose 默认）、**in-memory**（零依赖回退）；另打包 **Milvus / Chroma / pgvector**（含向量+PG 全文 RRF 的 HYBRID 模式）/ **Doris** 可选后端（gRPC 版本钉到 `1.59.1` 以兼容 Milvus + Qdrant 共存）。
+- Embedding：确定性 hash（yml 默认，64 维）/ OpenAI 兼容（LiteLLM）/ Ollama（compose 默认 `nomic-embed-text`，768 维，带非对称 query/document 任务前缀）。切换 provider = 换向量维度，需重灌。
+- 文档抽取：**Apache Tika**（PDF/Office/HTML/纯文本）；分块：Markdown header / parent-child / semantic；中文分词 `simple`（默认零依赖）/ `hanlp`（compose 默认，更准）。
+- **GraphRAG**：自研确定性三元组抽取 + 实体链接 + 邻居查询；存储 in-memory 或 JDBC/MySQL（默认 JDBC）。
+- **图片多模态 RAG**：走 OpenAI 兼容多模态 embedding 端点（`jina-clip-v2`，1024 维），独立 image collection（`knowledge_images_<tenant>`），text→image 跨模态检索；不参与四路文本融合。
+- **公共/共享知识库**：保留租户分区 `__public__`，查询并入、写入需 `public-ingest` scope（见安全/RBAC）。
 
 ### 工作流引擎
 - **Flowable**（`flowable-spring`，BPMN 2.0）—— `workflow-service` 退款审批流，自管其数据库表（同一 MySQL 数据源）。
 
 ### 数据与存储
-- **MySQL 8.4**（`mysql-connector-j`）：Flowable / async-task / knowledge 图谱 / channel 去重等。**裸 `JdbcTemplate` 直连**，表结构靠 `Jdbc*Store` 里的 `CREATE TABLE IF NOT EXISTS` / `ALTER TABLE` 演进（无迁移工具），连接池 HikariCP（Spring Boot 默认）。JDBC 存储多为可选开启、默认内存。
-- **Redis 7**（`spring-boot-starter-data-redis`）：语义缓存 store、knowledge registry、事件去重等可选后端。
-- **Qdrant**：向量持久化。
+- **MySQL 8.4**（`mysql-connector-j`）：Flowable / async-task / knowledge 图谱 / channel 去重 / **auth 账号·角色·刷新会话** / NL2SQL demo 等。**裸 `JdbcTemplate` 直连**，表结构靠 `Jdbc*Store` 里的 `CREATE TABLE IF NOT EXISTS` / `ALTER TABLE` 演进（无迁移工具），连接池 HikariCP（Spring Boot 默认）。JDBC 存储多为可选开启（compose 默认多切 JDBC）、application.yml 默认内存。
+- **Redis 7**（`spring-boot-starter-data-redis`）：语义缓存 store、knowledge 文档 registry（默认）、事件去重、限流/token 预算/成本计数等后端。
+- **Qdrant**：向量持久化（yml/compose 默认向量库）。
+- **Elasticsearch 8.15.x + Kibana**（自研 `EsGateway`，非 Spring Data ES）：RAG 全文 BM25 混排索引 `knowledge_segments_text`，自建镜像装 `analysis-smartcn` 中文分析器（compose 默认开启，knowledge-service 待其健康探针就绪再启动）。
 - **H2**（`test` scope）：DB 相关单测的内存库（无 Testcontainers）。
 
 ### 消息 / 事件总线
@@ -100,7 +111,8 @@
 
 ### 安全 / 鉴权
 - **JJWT 0.12.6**（`jjwt-api/impl/jackson`）：内部 JWT 签发/校验，**HS256（默认）或 RS256**。
-- 边缘 `X-Api-Key` → 内部 JWT（`X-Internal-Token`）换发；`TenantContext`（ThreadLocal）跨服务传播；自研 token-bucket 限流（`platform-security/ratelimit`）。
+- 边缘双模换发内部 JWT：`X-Api-Key`（`ApiKeyToInternalTokenFilter`）**或** 登录会话 `Authorization: Bearer`（`SessionBearerAuthFilter`，会话密钥独立于内部密钥）→ 统一 `X-Internal-Token`；`TenantContext`（ThreadLocal）跨服务传播；自研 token-bucket 限流（`platform-security/ratelimit`）。
+- **auth-service（登录 + RBAC）**：`SessionTokenIssuer` 签发会话 accessToken（60min）+ 服务端只存哈希的 httpOnly 刷新令牌（7d，一次性轮转）；密码 **BCrypt**（`spring-security-crypto` 的 `BCryptPasswordEncoder`，不引入 Spring Security 过滤链）；RBAC 角色→scope 展开、`role-admin`/`public-ingest` 平台 scope、管理写端点 `If-Match` 乐观锁；存储 in-memory 或裸 `JdbcTemplate`（`USERS`/`ROLES`/`ROLE_SCOPE`/`USER_ROLE`/`AUTH_SESSION`）。
 - 渠道 webhook 自研验签：飞书 `SHA-256 + AES-256-CBC + verification token`、钉钉 `HmacSHA256(timestamp+"\n"+appSecret)`。
 
 ### 配置中心
@@ -124,20 +136,22 @@
 - **JUnit 5 + Mockito + AssertJ**，`*Test` 同包；刻意纯 POJO 单测（不用 Spring context / `@SpringBootTest`）求速；DB 相关用内存 **H2**（无 Testcontainers）。
 
 ### 部署
-- **Docker Compose**（`deploy/docker-compose.yml`，本地整网：LiteLLM + Redis + MySQL + Kafka + Qdrant + config-server + 各服务）；变体 `docker-compose.failover.yml` / `.oracle.yml`。
+- **Docker Compose**（`deploy/docker-compose.yml`，本地整网：LiteLLM + Redis + MySQL + Kafka + Qdrant + Elasticsearch/Kibana + config-server + 全部业务服务含 auth-service + 前端容器 `capability-showcase-frontend`）；变体 `docker-compose.failover.yml` / `.oracle.yml`（`.es.yml` / `.rag-full.yml` 现已并入主栈默认，仅供冒烟分层）。
+- **一键启动脚本**：`start-all.sh`（全 docker 含前端 nginx :8093）、`start-dev.sh`（后端 docker + 前端 vite HMR :5173）、`start-local.sh`（仅后端，本机端口重映射 18080/18090/13307 避开 apollo）。
 - **Helm / Kubernetes**（`deploy/helm` 伞状 chart，生产路径：External Secrets、Service DNS、Config Server）。
-- 冒烟脚本：`smoke-qdrant-rag.sh`、`smoke-a2a.sh`、`smoke-nl2sql.sh`、`smoke-failover.sh`。
+- 演示/冒烟脚本：`seed-kb.sh`（灌示例知识库）、`rag-demo.sh`（RAG 闭环演示）、`smoke-qdrant-rag.sh`、`smoke-es-hybrid-rag.sh`（ES 混排断言 source∈{es,hybrid}）、`smoke-rbac.sh`（登录→角色展开→换发内部 JWT→admin 门）、`smoke-a2a.sh`、`smoke-nl2sql.sh`、`smoke-failover.sh`。
 
 ### 各模块技术落点（速查）
 
 | 模块 | 端口 | 关键技术 |
 |---|---|---|
-| edge-gateway | 8080 | Spring Cloud Gateway (WebFlux) · JJWT · 限流 |
+| edge-gateway | 8080 | Spring Cloud Gateway (WebFlux) · JJWT（会话 Bearer / api-key 双模换发内部 JWT）· 限流 · CORS |
+| auth-service | 8092 | 登录/会话 JWT · BCrypt · RBAC（角色/scope）· MySQL（用户/角色/刷新会话）/内存 |
 | config-server | 8888 | Spring Cloud Config Server |
 | conversation | 8081 | LangChain4j · Redis（语义缓存） |
 | workflow | 8082 | Flowable BPMN · Kafka · MySQL |
 | analytics | 8083 | LangChain4j · MySQL（只读 NL2SQL） |
-| knowledge | 8084 | LangChain4j · Qdrant/Milvus/Chroma/pgvector · Tika · Ollama/OpenAI embed · MySQL（图谱）· Redis |
+| knowledge | 8084 | LangChain4j · Qdrant/Milvus/Chroma/pgvector · **Elasticsearch(smartcn) BM25 + RRF** · Tika · hash/Ollama/OpenAI embed · HanLP · MySQL（图谱）· Redis |
 | agent | 8085 | LangChain4j · langchain4j-mcp · Playwright |
 | async-task | 8086 | Kafka · MySQL · SSE |
 | channel | 8087 | Kafka · MySQL（去重）· 飞书/钉钉验签 |
@@ -145,13 +159,14 @@
 | eval | 8089 | HTTP 回归 · 可选 judge/embedding |
 | vision | 8090 | LangChain4j 多模态 ChatModel |
 | voice | 8091 | OpenAI 兼容 ASR(whisper)/TTS · 分句半流式 SSE · 转发 conversation `/chat` |
+| capability-showcase-frontend | 8093 | Vue3 + Vite 静态 SPA · nginx · 跨域直调网关 · 前后端分离（非 Maven 模块） |
 | platform-\* | — | security(JJWT) · observability · gateway-client · protocol · audit · metering · eventbus(Kafka) |
 
 ## 平台基建
 
 ### 两层网关
 
-- **`edge-gateway`（:8080）** —— 唯一对外入口。校验 `X-Api-Key`，按绑定关系识别租户/用户/scope，签发短时内部 JWT（`X-Internal-Token`），按路径路由。路由表覆盖 conversation/analytics/workflow/knowledge/agent/async-task/channel/interop/eval/vision/voice，并对 `/.well-known/agent-card.json` 放行给 interop。
+- **`edge-gateway`（:8080）** —— 唯一对外入口。校验 `X-Api-Key` **或** 登录会话 `Authorization: Bearer`（`SessionBearerAuthFilter` order -110 先于 api-key filter -100），按绑定关系识别租户/用户/scope，签发短时内部 JWT（`X-Internal-Token`），按路径路由，并对分离部署的展示前端做 CORS 放行。路由表覆盖 auth/conversation/analytics/workflow/knowledge/agent/async-task/channel/interop/eval/vision/voice，并对 `/.well-known/agent-card.json`、`/auth/login|register|refresh|logout|public-config`、渠道入站事件放行免鉴权。
 - **LiteLLM**（外部，非 Java 模块） —— LLM 网关。所有模型调用统一走一个 OpenAI 兼容端点，provider 路由/failover/模型名映射都在 LiteLLM 配置里，Java 侧没有任何 provider `switch`。
 
 ### 内部 JWT（HS256 / RS256）
@@ -159,6 +174,12 @@
 - `platform-security` 的 `InternalToken` 负责签发/校验内部 JWT，租户身份随其跨每一次网络跳传播，下游还原进 `TenantContext`。
 - 算法可配（前缀 `platform.security.jwt.*`）：默认 `HS256`（对称，沿用 `INTERNAL_JWT_SECRET`，≥32 字节，保零配置 dev/test）；设 `platform.security.jwt.algorithm=RS256` 时 edge-gateway 用私钥签发、下游用公钥验签（PEM 或纯 base64，私钥 PKCS#8 / 公钥 X.509），缩小密钥轮转爆炸半径。
 - 下游是否接受直连 `X-Api-Key`：`allow-api-key-fallback`（默认 true，本地调试用；生产可关只信 JWT）。
+
+### 登录、会话与 RBAC（auth-service，:8092）
+
+- **自建账号登录**：`POST /auth/login` 账号密码换取会话 accessToken（会话 JWT，`SESSION_JWT_SECRET` 签发，默认 60min）+ httpOnly 刷新 cookie（默认 7d，`POST /auth/refresh` 一次性轮转，`/auth/logout` 撤销）。会话令牌与 api-key 是**并存的两条入口**，边缘统一换发内部 JWT，下游零改动。跨域直调网关时刷新 cookie 需 `AUTH_COOKIE_SAME_SITE=None` + `AUTH_COOKIE_SECURE=true`。
+- **RBAC**：种子角色 `viewer/editor/analyst/approver/admin`；有效 scopes = 角色展开 ∪ 直配 scopes，签发令牌时展开写入。新增平台 scope `role-admin`（RBAC 管理面门禁）、`public-ingest`（写公共知识库），只经 `admin` 角色获得、不挂 api-key。管理面 `/auth/admin/{users,roles}/**` 整类受 `AUTH_RBAC_ENABLED` 门控，写端点再受 `admin-writes-enabled`（关→503）与 `If-Match` 乐观锁（缺失 428 / 冲突 412）约束。
+- **默认差异**：application.yml 默认 `AUTH_STORE=in-memory`、RBAC/写全关；compose demo 默认 `jdbc` + `AUTH_RBAC_ENABLED=true` + 写开放 + `AUTH_RBAC_BOOTSTRAP_ADMIN_USERS=alice`，自助注册 `AUTH_REGISTRATION_ENABLED` 恒默认关。demo 账号 `alice`(acme/admin)、`bob`(globex/viewer)、`analyst-a`(tenantA/analyst)，口令 `demo12345`，与内置 api-key 租户/scope 镜像对齐。详见 [RBAC 与公共知识库指南](../平台工程/rbac-and-public-kb.md)。
 
 ### 集中配置（config-server）
 
@@ -205,9 +226,11 @@
 
 - **文档 ingestion**：`POST /rag/documents`（JSON 文本或 multipart 文件）、`GET /rag/documents`、`GET /rag/documents/{docId}`、`DELETE /rag/documents/{docId}`。Apache Tika 抽取 PDF/Office/HTML/纯文本；支持 Markdown header、parent-child、semantic 等分块。
 - **图片多模态 embedding（CLIP）**（默认关，`RAG_MULTIMODAL_ENABLED=true`）：图片走原生 CLIP / jina-clip 多模态 embedding，向量存入独立 image collection（`knowledge_images_<tenant>`，与文本集合隔离）。`POST /rag/image`（multipart `image`）入库、`POST /rag/image-search`（文本 query 跨模态检索图片）；通用 `POST /rag/documents` 传 `image/*` 或 `imageBase64` 也走多模态。默认关闭时上传图片返回 400。⚠️ 旧的「图 → 文字（caption/OCR）」路径（`RAG_IMAGE_TEXT_*`）已移除，不再接受 `caption`/`ocrText`。
-- **检索**：`POST /rag/query`（别名 `/knowledge/query`）融合 vector、keyword、可选 graph 命中；排序权重 `RAG_RANKING_VECTOR_WEIGHT` / `_KEYWORD_WEIGHT` / `_GRAPH_WEIGHT`。keyword hybrid 默认开（`RAG_HYBRID_ENABLED=true`）。
+- **检索（四路混排 + RRF）**：`POST /rag/query`（别名 `/knowledge/query`）并行召回四路——vector（向量）、keyword（内存 BM25 近似）、es（Elasticsearch 真 BM25 全文，`RAG_ES_ENABLED=true` 默认开）、graph（可选）——交 `HybridFusionService` 融合。融合策略 `RAG_FUSION_STRATEGY`：留空时 ES 参与查询则**有效默认 `rrf`**（`1/(k+rank)`，`RAG_FUSION_RRF_K=60`，免疫 BM25/余弦量纲差），否则 `weighted_max`（权重 `RAG_RANKING_VECTOR_WEIGHT`/`_KEYWORD_WEIGHT`/`_ES_WEIGHT`/`_GRAPH_WEIGHT`）。命中多源标 `source=hybrid`。keyword hybrid 默认开（`RAG_HYBRID_ENABLED=true`）。
+- **ES 全文索引**：ingest 时 `SegmentIndexer` 把同批明文分块同步 upsert 进 `knowledge_segments_text`（`RAG_ES_INDEX_NAME`）；字段 `tenantId/docId/category/...` 为 keyword 精确过滤、`text` 用 smartcn 中文分析器全文（`RAG_ES_ANALYZER=smartcn`，不可用 standard）。ES 写失败默认 best-effort（`RAG_ES_FAIL_FAST=false`），查询失败降级返回空、由内存关键词源兜底。开启 ES 后需重灌历史文档以填充索引（`seed-kb.sh`）。
+- **公共/共享知识库**（默认关，`RAG_PUBLIC_ENABLED=true` 开启）：保留租户分区 `__public__`；开启后各租户查询在隔离查自己分区基础上并入公共分区（向量/keyword/ES 三路并，graph 本期不并），命中标 `visibility=public`。写共享库 `POST /rag/documents`（`visibility=public|shared`）需 `public-ingest` scope（否则 403），列/查共享库普通登录用户即可；运行时 `GET /rag/config` 回显 `publicKbEnabled` 供前端决定是否展示共享库视图。
 - **多租户强隔离**：`RAG_VECTOR_STORE_ISOLATION=collection-per-tenant`（默认）—— 每租户独立 collection/namespace，EmbeddingStore/Model 按租户路由；可退回 `shared`（单 store + metadata filter）。
-- **向量存储**：`RAG_VECTOR_STORE_PROVIDER=in-memory`（默认）| `qdrant`（`QDRANT_HOST`/`QDRANT_PORT`）| `pgvector`（`RAG_PGVECTOR_*`，含 `SEARCH_MODE=HYBRID` 向量+PG 全文 RRF）| `milvus`（`RAG_MILVUS_*`）| `chroma`（`RAG_CHROMA_*`）| `doris`（自研 JDBC + HNSW ANN，`RAG_DORIS_*`）。collection/表基名统一由 `RAG_VECTOR_STORE_BASE_COLLECTION`（默认 `knowledge_segments`）决定。
+- **向量存储**：`RAG_VECTOR_STORE_PROVIDER=qdrant`（yml/compose 默认，`QDRANT_HOST`/`QDRANT_PORT`）| `in-memory`（零依赖回退）| `pgvector`（`RAG_PGVECTOR_*`，含 `SEARCH_MODE=HYBRID` 向量+PG 全文 RRF）| `milvus`（`RAG_MILVUS_*`）| `chroma`（`RAG_CHROMA_*`）| `doris`（自研 JDBC + HNSW ANN，`RAG_DORIS_*`）。collection/表基名统一由 `RAG_VECTOR_STORE_BASE_COLLECTION`（默认 `knowledge_segments`）决定。
 - **Embedding provider**：`RAG_EMBEDDING_PROVIDER=hash`（默认，确定性本地）| `openai`（走 LiteLLM/OpenAI 兼容）| `ollama`（`RAG_EMBEDDING_OLLAMA_BASE_URL`、`RAG_EMBEDDING_OLLAMA_MODEL`，默认 `nomic-embed-text`）。含维度守卫、超时/重试参数。
 - **GraphRAG**（默认关，`RAG_GRAPH_ENABLED=true`）：`POST /rag/graph/query`（实体邻居查询）、`GET /rag/graph/entities`。确定性三元组抽取，受控格式 `subject|relation|object`（换行或分号分隔）；`RAG_GRAPH_INCLUDE_IN_QUERY` 决定是否融合进 `/rag/query`；关系白名单 `RAG_GRAPH_RELATION_WHITELIST`、别名 `RAG_GRAPH_ALIASES`、最大跳数 `RAG_GRAPH_MAX_HOPS`。图谱存储 `RAG_GRAPH_STORE=in-memory`（默认）| `jdbc`（MySQL）。
 - **语义缓存失效联动**（默认关，`RAG_CACHE_INVALIDATION_ENABLED=true`）：文档 `upload`/`delete` 成功后，尽力而为地调 conversation 的 `DELETE /chat/cache` 失效同租户语义缓存（松耦合、带内部 JWT 传播租户、失败只记日志不阻断 ingest），配合 §1 的失效端点实现「文档更新 → 缓存即新鲜」。默认 Noop 实现，零影响。
@@ -306,6 +329,16 @@
 - **`POST /voice/transcribe`**（multipart `audio`）：仅做 ASR（调试 / 纯转写），返回 `transcript`。
 - provider `VOICE_PROVIDER=openai`（OpenAI 兼容协议，`VOICE_BASE_URL` 可指云 OpenAI / Azure / 本地 whisper+tts 网关，`VOICE_API_KEY`）；ASR 模型 `VOICE_ASR_MODEL`（默认 `whisper-1`）、TTS 模型 `VOICE_TTS_MODEL`（默认 `tts-1`）、音色 `VOICE_TTS_VOICE`（默认 `alloy`）、输出格式 `VOICE_TTS_FORMAT`（默认 `mp3`，决定回复 content-type）、ASR 语言提示 `VOICE_LANGUAGE`（留空自动检测）。
 - 上传音频上限 `VOICE_MAX_AUDIO_BYTES`（默认 25MB，超限返回 400）+ multipart 上限 `VOICE_MAX_UPLOAD`（默认 25MB）；超时 `VOICE_TIMEOUT_SECONDS`（默认 30）。
+
+### 12. 认证、登录与 RBAC
+
+`auth-service`（:8092，`/auth/**`）自建账号体系，与 api-key 并存的第二鉴权路径：
+
+- **登录/会话**：`POST /auth/login`（账号密码 → `LoginResponse{accessToken, expiresInSeconds, user}` + Set-Cookie 刷新令牌）、`POST /auth/refresh`（用刷新 cookie 一次性轮转）、`POST /auth/logout`（撤销会话，204）、`GET /auth/me`（当前登录用户，需 Bearer）、`GET /auth/public-config`（注册开关 + 口令长度约束，供前端显隐注册入口）、`POST /auth/register`（自助注册，默认关，须同时开 `AUTH_RBAC_ENABLED` 与 `AUTH_REGISTRATION_ENABLED`）。前 5 个 + register 在边缘免鉴权放行，`/auth/me` 需会话 Bearer。
+- **会话与内部 JWT 两级 TTL**：会话 accessToken 默认 60min（`SESSION_ACCESS_TTL`）、刷新令牌默认 7d（`SESSION_REFRESH_TTL`，服务端只存 SHA-256 哈希）；边缘换发的内部 JWT 仍是 5min。降权/禁用/删号即时撤销刷新会话，已签发 access 最长延迟一个 access TTL 生效。
+- **RBAC 管理面** `/auth/admin/**`（整类 `@ConditionalOnProperty(app.auth.rbac.enabled)`，`role-admin` scope 门禁）：用户 CRUD（`GET/POST /auth/admin/users`、`GET/PATCH/DELETE /auth/admin/users/{username}`、`PUT /auth/admin/users/{username}/roles`）、角色 CRUD（`GET/POST /auth/admin/roles`、`GET/PUT/DELETE /auth/admin/roles/{name}`）。写端点二级门 `admin-writes-enabled`（关→503）+ `If-Match` 乐观锁（缺失 428 / 版本冲突 412）；护栏禁止移除最后一个 role-admin、删被引用角色（409）。列表响应 `X-Total-Count`，单查回 `ETag` 作 If-Match 基线。
+- **角色/scope 模型**：种子角色 `viewer[chat]`/`editor[chat,ingest]`/`analyst[chat,analytics]`/`approver[chat,approve]`/`admin[全量 + role-admin + public-ingest]`；有效 scopes = 角色展开 ∪ 直配，签发令牌时展开。`role-admin`/`public-ingest` 只经 admin 角色获得。
+- **默认与存储**：application.yml 默认 `AUTH_STORE=in-memory` + RBAC/写全关；compose demo 默认 `jdbc`（表 `USERS`/`USER_ROLE`/`ROLES`/`ROLE_SCOPE`/`AUTH_SESSION`，`CREATE TABLE IF NOT EXISTS` 自建）+ `AUTH_RBAC_ENABLED=true` + 写开放 + `AUTH_RBAC_BOOTSTRAP_ADMIN_USERS=alice`。密码 BCrypt，登录按 username+IP、注册按 IP 节流。生产应分阶段灰度并显式配置 bootstrap-admin 名单。
 
 ## 当前限制
 

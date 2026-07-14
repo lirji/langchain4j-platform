@@ -73,6 +73,10 @@ helm install platform deploy/helm/platform -n platform --create-namespace \
 | `interop-service` | 8088 | edge-gateway 路由 |
 | `eval-service` | 8089 | edge-gateway 路由（回归客户端） |
 | `vision-service` | 8090 | agent → `VISION_BASE_URL` |
+| `voice-service` | 8091 | edge-gateway 路由（`VOICE_URI`） |
+| `auth-service` | 8092 | edge-gateway 路由（`AUTH_URI`）；登录 + RBAC |
+
+> 前端 `capability-showcase-frontend` 是独立静态站（Vite/nginx），不在本 chart 内，按需单独部署或托管。
 
 外部基础设施（`external-services.yaml` 渲染 ExternalName Service，同名指向外部实例）：
 
@@ -82,6 +86,7 @@ helm install platform deploy/helm/platform -n platform --create-namespace \
 | `redis` | `redis:6379` | `redis.external.example.com` |
 | `kafka` | `KAFKA_BOOTSTRAP_SERVERS=kafka:9092` | `kafka.external.example.com` |
 | `qdrant` | `QDRANT_HOST=qdrant` `QDRANT_PORT=6334` | `qdrant.external.example.com` |
+| `elasticsearch` | `RAG_ES_URIS=http://elasticsearch:9200` | `elasticsearch.external.example.com` |
 | `litellm` | `GATEWAY_BASE_URL=http://litellm:4000/v1` | `litellm.external.example.com` |
 
 ## 指向外部基础设施（不自建 StatefulSet）

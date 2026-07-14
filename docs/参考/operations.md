@@ -3,7 +3,7 @@
 本手册面向本地起栈、部署与排障，覆盖前置依赖、启动命令、按能力分组的环境变量，以及常见问题。
 所有配置项均以各服务 `src/main/resources/application.yml` 和 `deploy/docker-compose.yml` 源码为准；表格里的“默认值”就是 yml 里 `${ENV:default}` 的 default，未显式给出 `${ENV}` 包装的项会标注为「属性」（只能经 config-server 或 JVM 参数设置）。
 
-平台由 **7 个共享库**（`platform-security` / `platform-observability` / `platform-gateway-client` / `platform-protocol` / `platform-audit` / `platform-metering` / `platform-eventbus`，无主类，靠自动装配自注册）加 **一批微服务**（`edge-gateway` / `config-server` / `conversation` / `workflow` / `analytics` / `knowledge` / `agent` / `async-task` / `channel` / `interop` / `eval` / `vision` / `voice`）组成。
+平台由 **7 个共享库**（`platform-security` / `platform-observability` / `platform-gateway-client` / `platform-protocol` / `platform-audit` / `platform-metering` / `platform-eventbus`，无主类，靠自动装配自注册）加 **一批微服务**（`edge-gateway` / `config-server` / `auth` / `conversation` / `workflow` / `analytics` / `knowledge` / `agent` / `async-task` / `channel` / `interop` / `eval` / `vision` / `voice`）组成。另有前后端分离的 **`capability-showcase-frontend`**（:8093，Vue3 静态 SPA / nginx，独立部署，不属于 Maven 构建）。
 
 两层网关：
 
@@ -19,10 +19,11 @@
 | JDK | 21（Spring Boot 3.3.5，Java 21） |
 | Maven | 系统 `mvn`（无 wrapper） |
 | Docker / Docker Compose | 起本地整网基础设施与服务镜像 |
-| Ollama | 本机运行，`ollama pull llama3.1`（LiteLLM 默认回连宿主机 Ollama） |
-| LiteLLM | 由 compose 提供；不用 compose 时需自行准备一个可达的 OpenAI 兼容端点，并把 `GATEWAY_BASE_URL` 指过去 |
+| Ollama | 本机运行；LiteLLM 默认回连宿主机 Ollama。compose 的 RAG 语义 embedding 默认走 `nomic-embed-text`，故需 `ollama pull nomic-embed-text`（另可 `ollama pull llama3.1` / `qwen2.5vl` 供本地对话/视觉） |
+| LiteLLM | 由 compose 提供；不用 compose 时需自行准备一个可达的 OpenAI 兼容端点，并把 `GATEWAY_BASE_URL` 指过去。compose 的 `chat-default` 默认映射 DeepSeek，需宿主环境 `DEEPSEEK_API_KEY` |
 
-> 大多数能力（RAG、GraphRAG、JDBC 持久化、向量库、agent 动作、DAG 重规划、事件总线）默认关闭且用内存/确定性实现，因此**本地跑和单测无需任何外部基础设施**。knowledge-service 默认用确定性的 `HashEmbeddingModel`，不真调 embedding。
+> **单测零外部依赖**：测试是纯 POJO（不加载 Spring context），`mvn test` 无需任何基础设施。
+> **两套「默认」需分清**：① **application.yml 裸跑默认**——多数能力（对话记忆、agent 动作、DAG 重规划、事件总线、async/图谱/registry 的部分档）为内存/关闭；但 knowledge-service 的 application.yml 现已默认 `RAG_VECTOR_STORE_PROVIDER=qdrant`、`RAG_REGISTRY_STORE=redis`、`RAG_GRAPH_STORE=jdbc`、`RAG_ES_ENABLED=true`（仅 embedding 默认 `hash` 不真调），故**单跑 knowledge-service 期望 qdrant/redis/mysql/ES 可达**；要真正零依赖单跑需显式 `RAG_VECTOR_STORE_PROVIDER=in-memory RAG_REGISTRY_STORE=in-memory RAG_GRAPH_STORE=in-memory RAG_ES_ENABLED=false`。② **docker-compose demo 默认**——为一键体验把 RAG 持久化（qdrant/redis/jdbc/ES）、nomic 语义 embedding、hanlp 分词、多模态、登录 RBAC 等打开，并自带全部基础设施。
 
 ---
 
@@ -32,21 +33,34 @@
 # 1. 构建全部（platform-* 共享库必须先构建，package 会一并处理）
 mvn -DskipTests package
 
-# 2. 起整套本地栈（LiteLLM + Redis + MySQL + Kafka + Qdrant + config-server + 各服务 + edge-gateway）
+# 2. 起整套本地栈（LiteLLM + Redis + MySQL + Kafka + Qdrant + Elasticsearch/Kibana
+#    + config-server + 各服务含 auth + edge-gateway + 前端 nginx）
 docker compose -f deploy/docker-compose.yml up --build
 
 # 校验 compose 展开后的最终配置
 docker compose -f deploy/docker-compose.yml config
 
+# —— 推荐用一键脚本（自动本机端口重映射避开 apollo 占用的 8080/8090/3306）——
+bash deploy/start-all.sh      # 全 docker（后端 + 基础设施 + 前端 nginx :8093）；网关落 :18080
+bash deploy/start-dev.sh      # 后端 docker + 前端 vite dev(:5173, HMR)；日常改前端用
+bash deploy/start-local.sh    # 仅后端应用服务（基础设施保持运行）；加 --all 连基础设施、--build 先打 jar
+
 # 3. 不用 Docker 单跑某个服务（需本机有 LiteLLM 或把 base-url 指向可用 OpenAI-compat 端点）
 mvn -pl conversation-service spring-boot:run   # :8081
 mvn -pl edge-gateway spring-boot:run           # :8080
 
-# 4. 冒烟脚本
-bash deploy/smoke-qdrant-rag.sh    # Qdrant 向量 RAG 冒烟
+# 4. 演示 / 冒烟脚本
+bash deploy/seed-kb.sh             # 灌 sample-docs 示例知识库并跑检索验证（--purge 先删 / --public 灌公共库）
+bash deploy/rag-demo.sh            # RAG 单文档闭环演示（上传→列表→检索→查单，--with-llm 打 /chat /agent）
+bash deploy/smoke-qdrant-rag.sh    # 纯向量 RAG 冒烟（断言 source 全为 vector）
+bash deploy/smoke-es-hybrid-rag.sh # ES 全文混排冒烟（断言 hits 含 source∈{es,hybrid}）
+bash deploy/smoke-rbac.sh          # 登录→角色展开→边缘换发内部 JWT→role-admin 门→409/403 护栏
+bash deploy/smoke-a2a.sh           # A2A 对外冒烟（agent-card / message/send / deep-research 异步 Task）
 bash deploy/smoke-nl2sql.sh        # NL2SQL / ChatBI 冒烟（走 edge-gateway 打 /chat/sql、/analytics/sql）
 bash deploy/smoke-failover.sh      # LiteLLM 双上游故障转移冒烟（用 deploy/docker-compose.failover.yml，独立栈）
 ```
+
+> `smoke-a2a.sh` / `smoke-nl2sql.sh` 不自起栈、默认打 `:18080`（对齐 `start-*.sh` 的网关端口约定）；若你的网关在别处，传 `BASE_URL=http://localhost:8080 bash deploy/smoke-a2a.sh` 覆盖。
 
 测试命令：
 
@@ -73,13 +87,17 @@ mvn -pl platform-security -Dtest=InternalTokenTest test   # 单类（务必带 -
 | channel-service | 8087 | `/channel`、`/channel/**` | 渠道出站/回调 + 可选 Kafka 事件 |
 | interop-service | 8088 | `/interop`、`/interop/**`、`/.well-known/agent-card.json` | A2A + MCP surface |
 | eval-service | 8089 | `/eval`、`/eval/**` | 回归测试客户端 |
-| vision-service | 8090 | `/vision`、`/vision/**` | 多模态看图/OCR |
+| vision-service | 8090 | `/vision`、`/vision/**` | 多模态图像描述（caption/describe） |
 | voice-service | 8091 | `/voice`、`/voice/**` | ASR + 对话 + TTS 语音闭环 |
+| auth-service | 8092 | `/auth`、`/auth/**` | 账号登录 / 注册 / 刷新 / RBAC 管理 |
 | config-server | 8888 | 不经网关 | 集中配置分发（可选） |
+| capability-showcase-frontend | 8093 | 不经网关（浏览器跨域直调） | 能力展示前端（Vue3 静态 SPA / nginx） |
 | LiteLLM | 4000 | 不经网关 | LLM 网关 |
-| MySQL | 3306 | — | 本地数据库 |
-| Redis | 6379 | — | RAG registry / metering 可选存储 |
-| Qdrant | 6333(HTTP) / 6334(gRPC) | — | 可选向量库 |
+| MySQL | 3306（脚本重映射 13307） | — | 本地数据库（含 auth 库） |
+| Redis | 6379 | — | RAG registry / metering / 限流 / 语义缓存 存储 |
+| Qdrant | 6333(HTTP) / 6334(gRPC) | — | 向量库（默认向量后端） |
+| Elasticsearch | 9200 | — | RAG 全文 BM25 混排索引（smartcn，默认开启） |
+| Kibana | 5601 | — | ES 查询 UI（Dev Tools） |
 | Kafka | 9092 | — | 事件总线 / channel 事件 broker |
 
 > 网关路由表见 `edge-gateway/src/main/resources/application.yml` 的 `spring.cloud.gateway.routes`。`/.well-known/agent-card.json` 是 A2A 发现别名，在 `ApiKeyToInternalTokenFilter` 里免鉴权放行，其余 `/interop/**` 仍需鉴权。
@@ -88,26 +106,57 @@ mvn -pl platform-security -Dtest=InternalTokenTest test   # 单类（务必带 -
 
 ## 4. 鉴权与租户
 
-外部调用统一带 `X-Api-Key`（经网关 :8080）。网关按 api-key 查租户绑定，签发短时内部 JWT，下游只认 `X-Internal-Token`。
+外部调用有**两种并存的凭据**（经网关 :8080，任选其一）：
+
+1. **`X-Api-Key`**：网关按 api-key 查租户绑定，签发短时内部 JWT。
+2. **`Authorization: Bearer <会话 accessToken>`**：先 `POST /auth/login` 拿会话令牌，网关 `SessionBearerAuthFilter`（order -110，早于 api-key filter -100）验签会话令牌后换发内部 JWT。
+
+两条路径产出同形状的 `X-Internal-Token`，下游只认它、对登录 vs api-key 无感知（详见第 4.1 节）。
 
 ```bash
+# 方式一：api-key
 curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
   -H 'X-Api-Key: dev-key-acme' \
   -H 'Content-Type: application/json' \
   -d '{"message":"用一句话介绍你自己"}'
 # 期望：{"reply":"...","tenantId":"acme","userId":"alice",...}
+
+# 方式二：登录换会话令牌，再带 Bearer 调业务接口
+TOKEN=$(curl -s -X POST 'http://localhost:8080/auth/login' \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"alice","password":"demo12345"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["accessToken"])')
+curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"message":"用一句话介绍你自己"}'
 ```
 
 ### 内置开发 api-key（以 `edge-gateway` 的 `platform.security.api-keys` 为准）
 
 | api-key | 租户 | 用户 | scopes |
 |---|---|---|---|
-| `dev-key-acme` | acme | alice | chat, approve, agent, channel, eval, vision |
+| `dev-key-acme` | acme | alice | chat, ingest, approve, agent, channel, eval, vision, voice |
 | `dev-key-globex` | globex | bob | chat |
 | `dev-key-tenantA-admin` | tenantA | analyst-a | chat, analytics |
 | `dev-key-acme-ingest` | acme | alice | chat, ingest |
 
 > 下游服务各自也有一份小的 `platform.security.api-keys` 和 `allow-api-key-fallback: true`，仅用于**绕过网关直连调试**；生产可把 `allow-api-key-fallback` 关掉，令下游只信 JWT。
+
+### 登录账号（auth-service demo 种子，口令 `AUTH_DEMO_PASSWORD`，默认 `demo12345`）
+
+| 用户名 | 租户 | 角色 | 有效 scopes 要点 |
+|---|---|---|---|
+| `alice` | acme | admin | 全量 + `role-admin` + `public-ingest`（可进 RBAC 控制台） |
+| `bob` | globex | viewer | chat |
+| `analyst-a` | tenantA | analyst | chat, analytics |
+
+> 登录账号与上表 api-key 的租户/scope 镜像对齐——「登录」与「手输 api-key」拿到一致身份。
+
+### 4.1 登录、会话与 RBAC（auth-service，:8092）
+
+- **会话令牌**：`SESSION_JWT_SECRET`（auth 签发 / edge 验签共用，≥32 字节，与内部密钥分离）。会话 accessToken 默认 60min（`SESSION_ACCESS_TTL`），刷新令牌默认 7d（`SESSION_REFRESH_TTL`，仅哈希存库，经 httpOnly cookie 收发）。
+- **刷新/登出**：`POST /auth/refresh`（用刷新 cookie 一次性轮转）、`POST /auth/logout`（撤销会话）。跨域直调网关时刷新 cookie 需 `AUTH_COOKIE_SAME_SITE=None` + `AUTH_COOKIE_SECURE=true`（同源 nginx 反代可用默认 Lax/false）。
+- **RBAC**：`AUTH_RBAC_ENABLED`（yml 默认 false / compose demo true）开启后 `/auth/admin/**` 管理面可用，需 `role-admin` scope；写端点再受 `AUTH_RBAC_ADMIN_WRITES_ENABLED`（关→503）与 `If-Match` 乐观锁（缺失 428 / 冲突 412）约束。`AUTH_RBAC_BOOTSTRAP_ADMIN_USERS`（默认 `alice`）指定初始 admin。
+- **存储**：`AUTH_STORE`（yml `in-memory` / compose `jdbc`）；jdbc 档自动建 `USERS`/`USER_ROLE`/`ROLES`/`ROLE_SCOPE`/`AUTH_SESSION`（`AUTH_DB_URL`/`_USER`/`_PASSWORD`）。种子 `AUTH_SEED_ENABLED`（默认 true，生产建议 false）。自助注册 `AUTH_REGISTRATION_ENABLED`（默认 false，须与 RBAC 同开）。
 
 ### 内部 JWT 签名（`platform.security.*`）
 
@@ -266,7 +315,7 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `RAG_VECTOR_STORE_PROVIDER` | `in-memory` | `in-memory` \| `qdrant` \| `pgvector` \| `milvus` \| `chroma` \| `doris` |
+| `RAG_VECTOR_STORE_PROVIDER` | `qdrant` | `in-memory` \| `qdrant`（yml/compose 默认）\| `pgvector` \| `milvus` \| `chroma` \| `doris`；真正零依赖单跑需显式设 `in-memory` |
 | `RAG_VECTOR_STORE_ISOLATION` | `collection-per-tenant` | `collection-per-tenant`（强隔离，每租户独立 collection）或 `shared`（单 store + metadata filter） |
 | `RAG_VECTOR_STORE_BASE_COLLECTION` | `knowledge_segments`（沿用 `QDRANT_COLLECTION_NAME`） | 所有 provider 通用的 collection/表基名，实际按租户拼成 `<base>_<tenant>` |
 | `QDRANT_HOST` / `QDRANT_PORT` | `localhost` / `6334` | Qdrant gRPC 地址（compose 内为 `qdrant:6334`） |
@@ -300,17 +349,50 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 | `RAG_EMBEDDING_OLLAMA_BASE_URL` | `http://localhost:11434` | `ollama` 档 Ollama 地址 |
 | `RAG_EMBEDDING_OLLAMA_MODEL` | `nomic-embed-text` | `ollama` 档 embedding 模型 |
 
-> `openai` 档复用 `GATEWAY_BASE_URL` / `GATEWAY_API_KEY`。
+> `openai` 档复用 `GATEWAY_BASE_URL` / `GATEWAY_API_KEY`。application.yml 默认 `hash`（64 维，不真调 embedding）；**compose 默认 `ollama` + `nomic-embed-text`（768 维）**，并注入非对称任务前缀 `RAG_EMBEDDING_QUERY_PREFIX="search_query: "` / `RAG_EMBEDDING_DOCUMENT_PREFIX="search_document: "`（尾部空格必须保留，仅 ollama 生效）。切换 provider = 换向量维度，需删旧 collection 重灌。
 
-### 混合检索与排序
+### 混合检索与排序（四路 → RRF）
+
+`/rag/query` 并行召回四路——vector（向量）、keyword（内存 BM25 近似）、es（Elasticsearch 真 BM25，见下）、graph（可选）——交 `HybridFusionService` 融合。
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `RAG_HYBRID_ENABLED` | `true` | keyword hybrid 检索（默认开） |
+| `RAG_HYBRID_TOKENIZER` | `simple` | keyword/graph 分支中文分词：`simple`（yml，bigram 零依赖）\| `hanlp`（compose 默认，更准）；不影响向量与 ES |
+| `RAG_FUSION_STRATEGY` | 空 | `rrf` \| `weighted_max`；留空时——ES 参与查询则**有效默认 rrf**，否则 weighted_max |
+| `RAG_FUSION_RRF_K` | `60` | RRF 常数 `1/(k+rank)` |
 | `RAG_QUERY_TOP_K` / `RAG_QUERY_MIN_SCORE` | `5` / `0.0` | 查询默认条数与最低分 |
-| `RAG_RANKING_VECTOR_WEIGHT` | `1.0` | vector 排序权重 |
+| `RAG_RANKING_VECTOR_WEIGHT` | `1.0` | vector 排序权重（weighted_max 下生效） |
 | `RAG_RANKING_KEYWORD_WEIGHT` | `1.0` | keyword 排序权重 |
+| `RAG_RANKING_ES_WEIGHT` | `1.0` | ES BM25 排序权重 |
 | `RAG_RANKING_GRAPH_WEIGHT` | `1.0` | graph 排序权重 |
+
+### ES 全文混排（BM25 + RRF，默认开）
+
+Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进 `knowledge_segments_text`，查询时 `match+filter` 召回并入四路融合。自建 ES 镜像（`deploy/es`，8.15.x）装 `analysis-smartcn` 中文分析器。knowledge-service 用自研 `EsGateway`，故刻意排除 Spring 的 ES 自动配置/健康指示器（否则 ES 关闭时 readiness DOWN）。
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `RAG_ES_ENABLED` | `true` | 总开关；false 时索引器为 Noop、不注册 ES 检索源 |
+| `RAG_ES_INDEX_ENABLED` / `RAG_ES_QUERY_ENABLED` | `true` / `true` | 分别门控写索引 / 查询（均受总开关约束，可灰度「只写不查」） |
+| `RAG_ES_URIS` | `http://localhost:9200`（compose `http://elasticsearch:9200`） | 逗号分隔多节点 |
+| `RAG_ES_INDEX_NAME` | `knowledge_segments_text` | 全文索引名 |
+| `RAG_ES_ANALYZER` | `smartcn` | 中文分析器；**不可用 `standard`**（按单字切，BM25 召回弱）；可选 `ik_smart`/`ik_max_word`（需装 analysis-ik） |
+| `RAG_ES_USERNAME` / `_PASSWORD` / `RAG_ES_API_KEY` | 空 | 二选一鉴权（ApiKey 优先） |
+| `RAG_ES_NORMALIZE_SCORE` | `true` | weighted_max 下归一 BM25（RRF 忽略分值只看名次） |
+| `RAG_ES_FAIL_FAST` | `false` | 写失败：false=best-effort（不阻断 ingest）/ true=让上传失败 |
+| `RAG_ES_CONNECT_TIMEOUT_MS` / `_SOCKET_TIMEOUT_MS` | `2000` / `5000` | ES HTTP 超时 |
+
+> 开启 ES 后需重灌历史文档以填充 ES 索引（registry/向量库不受影响）：`bash deploy/seed-kb.sh --purge`。
+
+### 公共/共享知识库
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `RAG_PUBLIC_ENABLED` | `false` | 开启后各租户查询在隔离查自己分区基础上并入 `__public__` 公共分区（向量/keyword/ES 三路并，graph 不并），命中标 `visibility=public` |
+| `RAG_PUBLIC_TENANT_ID` | `__public__` | 保留公共租户分区名（禁止真实租户/注册用户占用） |
+
+> 写共享库 `POST /rag/documents`（`visibility=public|shared`）需 `public-ingest` scope（否则 403）；`GET /rag/config` 回显 `publicKbEnabled` 供前端决定是否展示共享库视图。详见 [RBAC 与公共知识库指南](../平台工程/rbac-and-public-kb.md)。
 
 ### RAG 检索增强（rerank / 查询扩展 / 上下文化，默认全关）
 
@@ -333,8 +415,8 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `RAG_GRAPH_ENABLED` | `false` | GraphRAG 抽取与 `/rag/graph/**` 接口开关 |
-| `RAG_GRAPH_STORE` | `in-memory` | `in-memory` 或 `jdbc`（MySQL） |
+| `RAG_GRAPH_ENABLED` | `true` | GraphRAG 抽取与 `/rag/graph/**` 接口开关（yml/compose 默认开） |
+| `RAG_GRAPH_STORE` | `jdbc` | `in-memory` 或 `jdbc`（MySQL `knowledge_graph`，默认 jdbc） |
 | `RAG_GRAPH_INCLUDE_IN_QUERY` | 跟随 `RAG_GRAPH_ENABLED` | graph hit 是否融合进 `/rag/query` |
 | `RAG_GRAPH_QUERY_TOP_K` | `20` | graph 查询返回上限 |
 | `RAG_GRAPH_MAX_HOPS` | `2` | 邻居扩展跳数 |
@@ -638,3 +720,30 @@ curl -s http://localhost:8086/actuator/health   # async-task
 ### config-server 不可达
 
 不影响启动 —— `spring.config.import` 用了 `optional:`，各服务 `${ENV:default}` 兜底继续生效。仅集中下发的非密文项会缺失。
+
+### knowledge-service 起不来 / readiness 卡住
+
+- compose 里 knowledge-service 对 `elasticsearch: condition: service_healthy` 是**硬依赖**——ES 未就绪就不启动（首次拉 ES 镜像 + 健康探针需等一会）。用 `docker compose logs -f elasticsearch` 看 ES 是否 green。
+- 单跑（非 compose）时 knowledge-service application.yml 默认期望 qdrant/redis/mysql/ES；要零依赖单跑，显式 `RAG_VECTOR_STORE_PROVIDER=in-memory RAG_REGISTRY_STORE=in-memory RAG_GRAPH_STORE=in-memory RAG_ES_ENABLED=false`。
+
+### ES 检索没有 `es`/`hybrid` 命中
+
+- `RAG_ES_ENABLED=true` 且 `RAG_ES_QUERY_ENABLED=true`；ES 可达（`RAG_ES_URIS`）。
+- 历史文档需在 ES 开启后重灌才会进 `knowledge_segments_text`（`bash deploy/seed-kb.sh --purge`）。
+- 分析器须 `smartcn`（中文），用 `standard` 会按单字切、召回弱。
+
+### 会话 Bearer 401 / 登录后仍鉴权失败
+
+- `SESSION_JWT_SECRET` 必须在 auth-service（签发）与 edge-gateway（验签）一致且 ≥32 字节。
+- `/auth/me` 需带 `Authorization: Bearer`（不在免鉴权放行清单）；会话 accessToken 默认 60min 过期，需 `POST /auth/refresh` 轮转。
+
+### 跨域直调网关登录 cookie 不下发 / 刷新失败
+
+- 浏览器从异源直调网关时，刷新 cookie 需 `AUTH_COOKIE_SAME_SITE=None` + `AUTH_COOKIE_SECURE=true`（HTTPS）；同源 nginx 反代 `/auth/*` 可用默认 `Lax`/`false`。
+- 网关 CORS 需放行前端 origin（`GATEWAY_CORS_ORIGINS`）且 `allowCredentials=true`（已默认）。
+
+### RBAC 管理面 403 / 428 / 503
+
+- 403：调用方缺 `role-admin` scope（仅 `admin` 角色经登录会话获得，api-key 不含）。
+- 428/412：写端点需带 `If-Match`（先 GET 拿 `ETag`）；版本冲突返 412。
+- 503：`AUTH_RBAC_ADMIN_WRITES_ENABLED=false`（写被二级开关关闭）。

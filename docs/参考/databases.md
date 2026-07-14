@@ -4,15 +4,17 @@
 
 > ⚠️ **凭据全部是本地开发/演示默认值**（源码里的 `root/root`、`dev-only-...` 等），生产必须用 External Secrets / 环境变量覆盖，详见[部署指南](../平台工程/deployment-guide.md)。
 >
-> ℹ️ 平台几乎每个存储都有**内存/确定性默认实现**，因此本地跑和单测**不接任何外部库也能启动**。下表是「开启落库开关 / 跑演示套件」后才真正用到的外部依赖。配置以各服务 `application.yml` 与 `deploy/docker-compose.yml` 为准。
+> ℹ️ **单测零外部依赖**（纯 POJO，不加载 Spring context）。但两套「默认」需分清：application.yml 裸跑默认多为内存/关闭，**唯 knowledge-service 已默认 qdrant + redis + jdbc 图谱 + ES 全文**（真正零依赖单跑需显式退回 in-memory / `RAG_ES_ENABLED=false`）；docker-compose demo 则把 RAG 持久化 + ES + 登录 RBAC 等全打开并自带基础设施。下表是这些外部依赖。配置以各服务 `application.yml` 与 `deploy/docker-compose.yml` 为准。
 
 ## 概览
 
 | 类型 | 组件 | 镜像 | 端口 | 默认账号/密码 | 何时用到 |
 |---|---|---|---|---|---|
-| 关系型 | MySQL | `mysql:8.4` | 3306 | root / root | 工作流引擎、NL2SQL、GraphRAG、异步任务（各自逻辑库；均可关，默认内存） |
+| 关系型 | MySQL | `mysql:8.4` | 3306（脚本重映射 13307） | root / root | 工作流引擎、NL2SQL、GraphRAG、异步任务、**auth 账号/角色/会话**（各自逻辑库） |
 | 缓存/状态 | Redis | `redis:7-alpine` | 6379 | 无密码 | 限流、token 预算、成本、语义缓存、RAG 注册表、会话记忆 |
-| 向量库 | Qdrant | `qdrant/qdrant:latest` | 6333 REST / **6334 gRPC** | 无 api-key | RAG 默认向量库 |
+| 向量库 | Qdrant | `qdrant/qdrant:latest` | 6333 REST / **6334 gRPC** | 无 api-key | RAG 默认向量库（yml/compose 默认） |
+| 全文检索 | Elasticsearch | 自建（`deploy/es`，`elasticsearch:8.15.3` + smartcn） | 9200 | 无认证（`xpack.security.enabled=false`） | RAG BM25 全文混排索引（compose 默认开） |
+| 检索 UI | Kibana | `kibana:8.15.3` | 5601 | 无认证 | 浏览/查询 ES（Dev Tools 跑 DSL） |
 | 消息/事件流 | Kafka | `apache/kafka:3.8.0` | 9092（控制器 9093） | PLAINTEXT 无认证 | 渠道出入站事件（默认内存总线，需开关） |
 | 测试库 | H2 | 内嵌 | 无 | 无 | 依赖 DB 的单测（内存，无 Testcontainers） |
 
@@ -27,15 +29,18 @@ Docker 单实例 `mysql:8.4`，`MYSQL_ROOT_PASSWORD=root`、初始库 `platform`
 | workflow-service | `flowable` | root | root | 恒开 | Flowable BPMN 退款审批引擎表 + outbox |
 | analytics-service | `nl2sql_demo` | root（admin） | root | `NL2SQL_ENABLED=true` | NL2SQL 演示库（建表/写入） |
 | analytics-service | `nl2sql_demo` | `nl2sql_ro`（只读） | `nl2sql_ro` | 同上 | NL2SQL 只读执行连接（六层 SQL 护栏之一） |
-| knowledge-service | `knowledge_graph` | root | Docker `root` / 本地默认**空** | `RAG_GRAPH_STORE=jdbc` | GraphRAG 图谱存储 |
-| async-task-service | `async_task` | root | Docker `root` / 本地默认**空** | `ASYNC_TASK_STORE=jdbc` | 通用异步任务中心 |
+| knowledge-service | `knowledge_graph` | root | Docker `root` / 本地默认**空** | `RAG_GRAPH_STORE=jdbc`（compose 默认 jdbc） | GraphRAG 图谱存储 |
+| async-task-service | `async_task` | root | Docker `root` / 本地默认**空** | `ASYNC_TASK_STORE=jdbc`（compose 默认 jdbc） | 通用异步任务中心 |
+| auth-service | `auth` | root | root | `AUTH_STORE=jdbc`（compose 默认 jdbc） | 登录账号 / 角色 / role-scope / 刷新会话（`USERS`/`USER_ROLE`/`ROLES`/`ROLE_SCOPE`/`AUTH_SESSION`，仅存刷新令牌哈希） |
 | channel-service | （去重表，指向 MySQL） | — | — | `CHANNEL_DEDUP_STORE=jdbc` | 事件去重（跨重启幂等）；默认 `memory` |
 
 连接串形如 `jdbc:mysql://localhost:3306/<库名>?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true`（Docker 内主机名为 `mysql`）。
 
 > ⚠️ **本地 vs Docker 密码不一致**：`knowledge_graph` / `async_task` 在各自 `application.yml` 的默认密码是**空串**，而 `docker-compose.yml` 显式注入 `root`。按运行方式区别对待。
 
-相关环境变量：`WORKFLOW_DB_URL/USER/PASSWORD`、`NL2SQL_DB_URL/READONLY_URL/ADMIN_USER/ADMIN_PASSWORD/READONLY_USER/READONLY_PASSWORD`、`RAG_GRAPH_DB_URL/USER/PASSWORD`、`ASYNC_TASK_DB_URL/USER/PASSWORD`。
+相关环境变量：`WORKFLOW_DB_URL/USER/PASSWORD`、`NL2SQL_DB_URL/READONLY_URL/ADMIN_USER/ADMIN_PASSWORD/READONLY_USER/READONLY_PASSWORD`、`RAG_GRAPH_DB_URL/USER/PASSWORD`、`ASYNC_TASK_DB_URL/USER/PASSWORD`、`AUTH_DB_URL/USER/PASSWORD`。
+
+> auth-service 的**刷新会话只存 SHA-256 哈希**在 `AUTH_SESSION`（非明文令牌，非 Redis）；会话 accessToken 本身无状态（JWT，不落库）。RBAC 用户/角色/scope 是权威表 + CSV 影子列双写。
 
 ## 二、Redis 7（缓存/状态，:6379）
 
@@ -56,8 +61,8 @@ Docker 单实例 `mysql:8.4`，`MYSQL_ROOT_PASSWORD=root`、初始库 `platform`
 
 | provider | 默认端口 | 账号/密码 | 环境变量前缀 | 实现类 / 底层 |
 |---|---|---|---|---|
-| `in-memory`（默认） | — | — | 无外部依赖 | langchain4j `InMemoryEmbeddingStore` |
-| `qdrant`（Docker 默认） | 6334 gRPC | 无 api-key | `QDRANT_*` | `QdrantClientCollectionManager` |
+| `in-memory`（零依赖回退） | — | — | 无外部依赖 | langchain4j `InMemoryEmbeddingStore` |
+| `qdrant`（yml/compose 默认） | 6334 gRPC | 无 api-key | `QDRANT_*` | `QdrantClientCollectionManager` |
 | `pgvector`（PostgreSQL） | 5432 | postgres / postgres | `RAG_PGVECTOR_*` | `PgVectorCollectionManager`（`langchain4j-pgvector`） |
 | `milvus` | 19530 | 空 / 空 | `RAG_MILVUS_*` | `MilvusCollectionManager`（`langchain4j-milvus`） |
 | `chroma` | 8000（HTTP） | 无 | `RAG_CHROMA_BASE_URL` | `ChromaCollectionManager`（`langchain4j-chroma`） |
@@ -85,13 +90,21 @@ mvn -pl knowledge-service spring-boot:run
 2. **外部后端要先起来**（in-memory 除外）。pgvector/milvus/chroma/doris 都得有对应服务可达，否则启动即失败。
 3. **隔离模式限制**。默认 `collection-per-tenant`（每租户独立 collection/表）四个后端全支持；`RAG_VECTOR_STORE_ISOLATION=shared` **仅 in-memory / qdrant** 支持，其它 provider 用 shared 会直接抛异常。另外换 embedding provider（hash=64 维 vs openai/ollama 维度不同）也需重建库，维度守卫 `DimensionMismatchException` 会拦截不匹配。
 
-## 四、Kafka 3.8（消息/事件流，:9092）
+## 四、Elasticsearch 8.15 + Kibana（全文检索，:9200 / :5601）
+
+- **自建镜像**（`deploy/es/Dockerfile`）：`elasticsearch:8.15.3` + `elasticsearch-plugin install analysis-smartcn`（中文分析器）。single-node、`xpack.security.enabled=false`（本地无认证）、`ES_JAVA_OPTS=-Xms512m -Xmx512m`，卷 `es-data`，带 healthcheck。
+- **Kibana** `kibana:8.15.3`（:5601），`depends_on` ES 健康后启动；较重（~1G+ RAM），不需要可 `docker compose stop kibana`（不影响混排）。
+- **用途**：RAG 四路混排中的真 BM25 全文分支。knowledge-service 用自研 `EsGateway`（低层 `RestClient` + 手工 JSON，非 Spring Data ES），索引 `knowledge_segments_text`（`RAG_ES_INDEX_NAME`）；`tenantId/docId/category/...` 为 keyword 精确字段、`text` 用 smartcn 全文。ingest 时同步 upsert、删除按 `tenantId+docId` `_delete_by_query`。
+- **默认开启**（`RAG_ES_ENABLED=true`，application.yml + compose 均默认）；knowledge-service 对 ES `service_healthy` 是 compose 硬依赖。刻意排除 Spring 的 ES 自动配置/健康指示器（否则 ES 关闭会拖挂 readiness）。
+- **主机名**：Docker 内 `http://elasticsearch:9200`（`RAG_ES_URIS`）；本地默认 `http://localhost:9200`。冒烟：`bash deploy/smoke-es-hybrid-rag.sh`。
+
+## 五、Kafka 3.8（消息/事件流，:9092）
 
 - `apache/kafka:3.8.0`，KRaft 模式（控制器监听 9093），PLAINTEXT 无认证。
 - 用途：channel-service 渠道出入站事件（`CHANNEL_EVENTS_ENABLED=true` 才用；默认内存事件总线）。事务性 outbox + relay + 消费侧去重实现 effective exactly-once，详见[事件总线指南](../平台工程/eventbus-guide.md)。
 - 主机名：Docker 内 `kafka:9092`（`KAFKA_BOOTSTRAP_SERVERS`）。
 
-## 五、H2（测试，内存）
+## 六、H2（测试，内存）
 
 依赖 DB 的单测统一用内存 H2，无 Testcontainers、不占端口、无账号。测试与被测代码同包，纯 POJO 单测直接 new 组件注入 mock。
 

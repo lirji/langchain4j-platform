@@ -14,8 +14,9 @@ docs/                   项目文档
 
 新增业务能力时优先判断它属于哪个限界上下文：
 
+- 登录 / 会话 / RBAC：`auth-service`
 - 对话编排：`conversation-service`
-- 知识库/RAG/GraphRAG：`knowledge-service`
+- 知识库/RAG（四路混排 ES）/GraphRAG：`knowledge-service`
 - Agent/DAG：`agent-service`
 - 通用异步状态：`async-task-service`
 - 审批流程：`workflow-service`
@@ -23,6 +24,9 @@ docs/                   项目文档
 - 渠道：`channel-service`
 - 对外互操作：`interop-service`
 - 回归评测：`eval-service`
+- 多模态视觉：`vision-service`
+- 语音闭环（ASR→对话→TTS）：`voice-service`
+- 能力展示前端（独立 Vite/Vue3，非 Maven 模块）：`capability-showcase-frontend`
 
 ## 新增跨服务接口
 
@@ -50,9 +54,9 @@ docs/                   项目文档
 - 接入 `platform-observability`。
 - 如调用 LLM，使用 `platform-gateway-client`。
 - 如有跨服务协议，加入 `platform-protocol`。
-- 在 `edge-gateway` 增加 route。
-- 在 `deploy/docker-compose.yml` 增加 service。
-- 在 `docs/参考/capabilities.md`、`docs/参考/架构文档.md`、`docs/参考/api-reference.md` 更新说明。
+- 在 `edge-gateway` 增加 route（如需前端浏览器直调，同时把前端 origin 加进 `GATEWAY_CORS_ORIGINS`）。
+- 在 `deploy/docker-compose.yml` 增加 service（如需一键脚本拉起，核对 `start-all.sh`/`start-local.sh` 的服务过滤）。
+- 在 `docs/参考/capabilities.md`、`docs/参考/架构文档.md`、`docs/参考/api-reference.md`、`docs/参考/operations.md` 更新说明；若引入新存储，同步 `docs/参考/databases.md` 与 `docs/平台工程/数据库与中间件清单.md`。
 
 ## 测试策略
 
@@ -99,6 +103,8 @@ docker compose -f deploy/docker-compose.yml config
 - `docs/参考/api-reference.md`：新增或变化的 HTTP API。
 - `docs/参考/架构文档.md`：如果引入新服务、新存储或新调用链。
 - `docs/参考/operations.md`：如果新增环境变量、端口、启动依赖。
+- `docs/参考/databases.md` / `docs/平台工程/数据库与中间件清单.md`：如果引入新的数据库/中间件/落库开关。
+- `docs/README.md`：如新增专题文档，补索引链接。
 - `docs/迁移/migration-roadmap.md`：更新已完成/待办状态。
 
 ## 提交建议
