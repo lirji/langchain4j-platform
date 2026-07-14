@@ -172,6 +172,26 @@ public class JdbcUserAccountStore implements UserAccountStore {
     }
 
     @Override
+    public List<UserAccount> findByTenant(String tenant) {
+        if (tenant == null || tenant.isBlank()) {
+            return List.of();
+        }
+        return loadUsers("SELECT * FROM USERS WHERE TENANT=? ORDER BY USERNAME", tenant.trim());
+    }
+
+    @Override
+    public List<String> distinctTenants() {
+        return jdbc.queryForList("SELECT DISTINCT TENANT FROM USERS WHERE TENANT IS NOT NULL ORDER BY TENANT",
+                String.class);
+    }
+
+    @Override
+    public boolean touchVersionIfVersion(String username, long expectedVersion) {
+        return jdbc.update("UPDATE USERS SET VERSION=VERSION+1 WHERE USERNAME=? AND VERSION=?",
+                username.trim().toLowerCase(Locale.ROOT), expectedVersion) > 0;
+    }
+
+    @Override
     public boolean createIfAbsent(UserAccount u) {
         try {
             insertUser(u, System.currentTimeMillis());

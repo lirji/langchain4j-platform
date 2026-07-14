@@ -28,6 +28,9 @@ app:
     rbac:
       enabled: ${AUTH_RBAC_ENABLED:false}
       admin-writes-enabled: ${AUTH_RBAC_ADMIN_WRITES_ENABLED:false}
+      # 继承式 RBAC 第三段灰度（默认关）：开后把租户基础角色 + 用户组角色并入有效 scopes
+      # （有效 = 租户基础 ∪ 组 ∪ 个人角色 ∪ 直配）。关时行为与两级逐字节一致，可先建表配好绑定再开。
+      inheritance-enabled: ${AUTH_RBAC_INHERITANCE_ENABLED:false}
       bootstrap-admin-users: ${AUTH_RBAC_BOOTSTRAP_ADMIN_USERS:alice}
     # 种子开关：false 时空库不自动灌 demo 账号/角色（生产库走受控 SQL 建首个用户）。
     seed:

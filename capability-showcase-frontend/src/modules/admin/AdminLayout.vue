@@ -26,6 +26,8 @@ const auth = useAuthStore()
     <nav class="admin__nav" aria-label="管理域导航">
       <RouterLink :to="{ name: 'admin-users' }" class="admin__tab">👥 用户管理</RouterLink>
       <RouterLink :to="{ name: 'admin-roles' }" class="admin__tab">🛡 角色管理</RouterLink>
+      <RouterLink :to="{ name: 'admin-tenants' }" class="admin__tab">🏢 租户</RouterLink>
+      <RouterLink :to="{ name: 'admin-groups' }" class="admin__tab">👪 用户组</RouterLink>
     </nav>
 
     <InfoNote tone="info">
@@ -62,6 +64,7 @@ const auth = useAuthStore()
 }
 .admin__nav {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
   border-bottom: 1px solid var(--border);
   padding-bottom: var(--space-2);

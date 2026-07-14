@@ -50,6 +50,7 @@ Codex 规划所依据的后端快照**落后于当前 WIP**。逐条对照仓库
 
 - 前端不成为授权边界；所有 admin/public mutation 仍由服务端 scopes控制。
 - 不做 tenant-scoped role、角色继承、ABAC、资源 ACL、scope CRUD或注册规则管理 UI。
+  > 边界更新（2026-07-14，部分已被「继承式 RBAC」实现超越）：现已新增**租户基础角色**与**用户组**管理页（作用域绑定 + 向下继承），前端在 `🏢 租户`/`👪 用户组` tab 与 UserEditor 的有效权限归因区。仍**不做**：per-tenant 角色（角色恒全局）、角色/组嵌套、ABAC/资源 ACL、scope CRUD。详见 `docs/平台工程/rbac-and-public-kb.md`。
 - 不引入独立管理 SPA或 Console BFF；保留未来拆分边界。
 - 不让 API Key进入 RBAC 管理中心；能力试用仍保留 Key兼容。
 - 不实现共享 GraphRAG；当前 `GraphRetrievalSource` 不并公共分区，UI不得宣称支持。

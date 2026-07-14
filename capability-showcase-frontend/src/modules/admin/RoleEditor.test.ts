@@ -11,7 +11,15 @@ const h = vi.hoisted(() => ({ roles: null as unknown as Record<string, unknown> 
 vi.mock('../../stores/adminRoles', () => ({ useAdminRolesStore: () => h.roles }))
 
 function makeRolesStore(assignedUserCount: number) {
-  const selected: RoleView = { name: 'ops', scopes: ['chat'], description: '运维', version: 2, assignedUserCount }
+  const selected: RoleView = {
+    name: 'ops',
+    scopes: ['chat'],
+    description: '运维',
+    version: 2,
+    assignedUserCount,
+    boundGroupCount: 0,
+    boundTenantCount: 0,
+  }
   return reactive({
     selected,
     selectedStatus: 'ready',

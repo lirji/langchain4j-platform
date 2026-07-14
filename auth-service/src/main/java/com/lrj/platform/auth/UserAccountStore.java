@@ -59,6 +59,16 @@ public interface UserAccountStore {
         throw new UnsupportedOperationException("findByRole not supported by this store");
     }
 
+    /** 反查某租户下的所有用户（租户基础角色降权时撤销 refresh session、租户内最后管理员保护用）。 */
+    default List<UserAccount> findByTenant(String tenant) {
+        throw new UnsupportedOperationException("findByTenant not supported by this store");
+    }
+
+    /** 列出所有用户实际用到的租户（去重、排序），供租户管理页并上仅配了策略的租户。 */
+    default List<String> distinctTenants() {
+        throw new UnsupportedOperationException("distinctTenants not supported by this store");
+    }
+
     /** 分页列出用户（按 username 稳定排序）。 */
     default List<UserAccount> findPage(int offset, int limit) {
         throw new UnsupportedOperationException("findPage not supported by this store");
@@ -92,5 +102,13 @@ public interface UserAccountStore {
     /** 条件全量替换角色（乐观锁），语义同 {@link #updateProfileIfVersion}。 */
     default boolean replaceRolesIfVersion(String username, Set<String> roles, long expectedVersion) {
         throw new UnsupportedOperationException("replaceRolesIfVersion not supported by this store");
+    }
+
+    /**
+     * 仅推进用户版本（不改任何字段），用于"改用户组绑定"时 bump USERS.VERSION——使组编辑也走 If-Match 乐观锁、
+     * 用户视图版本随任何变更单调前进。仅当当前版本 == {@code expectedVersion} 才 +1，否则返回 false。
+     */
+    default boolean touchVersionIfVersion(String username, long expectedVersion) {
+        throw new UnsupportedOperationException("touchVersionIfVersion not supported by this store");
     }
 }

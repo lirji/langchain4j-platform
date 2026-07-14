@@ -8,6 +8,7 @@ import {
   fetchUser,
   fetchUsers,
   patchUser,
+  replaceUserGroups,
   replaceUserRoles,
 } from '../api/admin'
 import type { CreateUserRequest, UpdateUserRequest, UserAdminView } from '../types/admin'
@@ -83,6 +84,18 @@ export const useAdminUsersStore = defineStore('adminUsers', () => {
       throw e
     }
   }
+  /** 全量替换用户所属用户组（继承式 RBAC）。与 saveUserRoles 同构：成功局部失效，冲突抓最新后重抛。 */
+  async function saveUserGroups(username: string, groups: string[], version: number): Promise<UserAdminView> {
+    try {
+      const v = await replaceUserGroups(username, groups, version)
+      applyLocal(v)
+      conflictLatest.value = null
+      return v
+    } catch (e) {
+      if (isVersionConflict(e)) conflictLatest.value = await fetchUser(username)
+      throw e
+    }
+  }
   /** 采纳冲突时的服务端最新为新基线（放弃本地草稿）：写回 selected + 列表，触发编辑器 syncDraft。返回该值。 */
   function acceptConflictLatest(): UserAdminView | null {
     const v = conflictLatest.value
@@ -128,6 +141,7 @@ export const useAdminUsersStore = defineStore('adminUsers', () => {
     removeLocal,
     saveUserPatch,
     saveUserRoles,
+    saveUserGroups,
     acceptConflictLatest,
     clearConflict,
     createUserAction,

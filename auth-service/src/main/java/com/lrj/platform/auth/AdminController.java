@@ -1,9 +1,17 @@
 package com.lrj.platform.auth;
 
+import com.lrj.platform.auth.dto.AdminDtos.CreateGroupRequest;
 import com.lrj.platform.auth.dto.AdminDtos.CreateRoleRequest;
 import com.lrj.platform.auth.dto.AdminDtos.CreateUserRequest;
+import com.lrj.platform.auth.dto.AdminDtos.EffectivePermissionsView;
+import com.lrj.platform.auth.dto.AdminDtos.GroupView;
+import com.lrj.platform.auth.dto.AdminDtos.ReplaceMembersRequest;
 import com.lrj.platform.auth.dto.AdminDtos.ReplaceRolesRequest;
+import com.lrj.platform.auth.dto.AdminDtos.ReplaceTenantRolesRequest;
+import com.lrj.platform.auth.dto.AdminDtos.ReplaceUserGroupsRequest;
 import com.lrj.platform.auth.dto.AdminDtos.RoleView;
+import com.lrj.platform.auth.dto.AdminDtos.TenantView;
+import com.lrj.platform.auth.dto.AdminDtos.UpdateGroupRequest;
 import com.lrj.platform.auth.dto.AdminDtos.UpdateRoleRequest;
 import com.lrj.platform.auth.dto.AdminDtos.UpdateUserRequest;
 import com.lrj.platform.auth.dto.AdminDtos.UserAdminView;
@@ -31,9 +39,11 @@ import java.util.Set;
  * 身份来自内部 JWT 还原的 {@link TenantContext}（网关已用会话 Bearer 或 api-key 换发）。写端点再受
  * {@code app.auth.rbac.admin-writes-enabled} 二级开关控制（关则 503，用于"先只读灰度、稳定后再开写"）。
  *
- * <p>RBAC 与租户隔离正交：可改用户租户/角色，但改角色不影响其能看到哪份数据。改角色/scope 后需用户
- * 重新登录/刷新才在新 JWT 生效（已签发 scopes 不回溯）；降权会撤销其 refresh session 以尽快切断续期。
- * 异常统一由 {@link AuthExceptionHandler} 映射。
+ * <p>继承式 RBAC：除用户/角色外，新增<b>租户基础角色</b>（{@code /tenants/**}）、<b>用户组</b>（{@code /groups/**}）、
+ * <b>用户↔组</b>（{@code /users/{u}/groups}）与<b>有效权限归因</b>（{@code /users/{u}/effective-permissions}）。
+ * 三层继承是否折进签发的 JWT 由 {@code app.auth.rbac.inheritance-enabled} 再控（关时租户/组绑定不生效，可先配好再开）。
+ * 改角色/绑定后需用户重新登录/刷新才在新 JWT 生效；降权会撤销其 refresh session。异常统一由
+ * {@link AuthExceptionHandler} 映射。
  */
 @RestController
 @RequestMapping("/auth/admin")
@@ -92,6 +102,23 @@ public class AdminController {
         return toUserView(admin.assignRoles(username, nz(req.roles()), requireIfMatch(ifMatch)));
     }
 
+    @PutMapping("/users/{username}/groups")
+    public UserAdminView replaceUserGroups(@PathVariable String username, @RequestBody ReplaceUserGroupsRequest req,
+                                           @RequestHeader(value = "If-Match", required = false) String ifMatch) {
+        requireRoleAdminWrite();
+        return toUserView(admin.replaceUserGroups(username, nz(req.groups()), requireIfMatch(ifMatch)));
+    }
+
+    @GetMapping("/users/{username}/effective-permissions")
+    public EffectivePermissionsView getEffectivePermissions(@PathVariable String username) {
+        requireRoleAdmin();
+        UserAccount u = admin.getUser(username)
+                .orElseThrow(() -> new AuthException(404, "user_not_found", "用户不存在"));
+        EffectivePermissionResolver.EffectivePermissions ep = admin.effectivePermissionsOf(u);
+        return new EffectivePermissionsView(ep.directScopes(), ep.personalRoleScopes(), ep.tenantScopes(),
+                ep.groupScopes(), ep.all(), ep.sources());
+    }
+
     @DeleteMapping("/users/{username}")
     public ResponseEntity<Void> deleteUser(@PathVariable String username,
                                            @RequestHeader(value = "If-Match", required = false) String ifMatch) {
@@ -137,6 +164,87 @@ public class AdminController {
         return ResponseEntity.noContent().build();
     }
 
+    // ---- 租户基础角色 ----
+
+    @GetMapping("/tenants")
+    public List<TenantView> listTenants() {
+        requireRoleAdmin();
+        return admin.listTenantNames().stream().map(this::toTenantView).toList();
+    }
+
+    @GetMapping("/tenants/{tenant}")
+    public TenantView getTenant(@PathVariable String tenant) {
+        requireRoleAdmin();
+        return toTenantView(admin.getTenantVersioned(tenant));
+    }
+
+    @PutMapping("/tenants/{tenant}/roles")
+    public TenantView replaceTenantRoles(@PathVariable String tenant, @RequestBody ReplaceTenantRolesRequest req,
+                                         @RequestHeader(value = "If-Match", required = false) String ifMatch) {
+        requireRoleAdminWrite();
+        return toTenantView(admin.replaceTenantRoles(tenant, nz(req.roles()), requireIfMatch(ifMatch)));
+    }
+
+    @DeleteMapping("/tenants/{tenant}/roles")
+    public ResponseEntity<Void> clearTenantRoles(@PathVariable String tenant,
+                                                 @RequestHeader(value = "If-Match", required = false) String ifMatch) {
+        requireRoleAdminWrite();
+        admin.clearTenantRoles(tenant, requireIfMatch(ifMatch));
+        return ResponseEntity.noContent().build();
+    }
+
+    // ---- 用户组 ----
+
+    @GetMapping("/groups")
+    public List<GroupView> listGroups() {
+        requireRoleAdmin();
+        return admin.listGroups().stream().map(this::toGroupView).toList();
+    }
+
+    @GetMapping("/groups/{name}")
+    public GroupView getGroup(@PathVariable String name) {
+        requireRoleAdmin();
+        return toGroupView(admin.getGroupVersioned(name)
+                .orElseThrow(() -> new AuthException(404, "group_not_found", "用户组不存在")));
+    }
+
+    @PostMapping("/groups")
+    public ResponseEntity<GroupView> createGroup(@RequestBody CreateGroupRequest req) {
+        requireRoleAdminWrite();
+        Group g = admin.createGroup(req.name(), req.description(), nz(req.roles()));
+        return ResponseEntity.status(201).body(toGroupView(g));
+    }
+
+    @PutMapping("/groups/{name}")
+    public GroupView updateGroup(@PathVariable String name, @RequestBody UpdateGroupRequest req,
+                                 @RequestHeader(value = "If-Match", required = false) String ifMatch) {
+        requireRoleAdminWrite();
+        return toGroupView(admin.updateGroup(name, req.description(), nz(req.roles()), requireIfMatch(ifMatch)));
+    }
+
+    @DeleteMapping("/groups/{name}")
+    public ResponseEntity<Void> deleteGroup(@PathVariable String name,
+                                            @RequestHeader(value = "If-Match", required = false) String ifMatch) {
+        requireRoleAdminWrite();
+        admin.deleteGroup(name, requireIfMatch(ifMatch));
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/groups/{name}/members")
+    public List<String> getGroupMembers(@PathVariable String name) {
+        requireRoleAdmin();
+        admin.getGroupVersioned(name)
+                .orElseThrow(() -> new AuthException(404, "group_not_found", "用户组不存在"));
+        return admin.groupMembers(name);
+    }
+
+    @PutMapping("/groups/{name}/members")
+    public GroupView replaceGroupMembers(@PathVariable String name, @RequestBody ReplaceMembersRequest req,
+                                         @RequestHeader(value = "If-Match", required = false) String ifMatch) {
+        requireRoleAdminWrite();
+        return toGroupView(admin.replaceGroupMembers(name, nz(req.members()), requireIfMatch(ifMatch)));
+    }
+
     // ---- 关口 ----
 
     private static void requireRoleAdmin() {
@@ -157,7 +265,7 @@ public class AdminController {
     /** 列表 / 建户用：版本事务外读。列表不作 If-Match 基线（点进详情才走原子读）；建户后版本恒为 0，无并发覆盖窗口。 */
     private UserAdminView toUserView(UserAccount u) {
         return new UserAdminView(u.username(), u.userId(), u.tenant(),
-                u.scopes(), u.roles(), admin.effectiveScopesOf(u), u.enabled(),
+                u.scopes(), u.roles(), admin.userGroups(u.username()), admin.effectiveScopesOf(u), u.enabled(),
                 admin.userVersion(u.username()));
     }
 
@@ -165,18 +273,41 @@ public class AdminController {
     private UserAdminView toUserView(AdminService.VersionedUser vu) {
         UserAccount u = vu.account();
         return new UserAdminView(u.username(), u.userId(), u.tenant(),
-                u.scopes(), u.roles(), admin.effectiveScopesOf(u), u.enabled(), vu.version());
+                u.scopes(), u.roles(), admin.userGroups(u.username()), admin.effectiveScopesOf(u), u.enabled(),
+                vu.version());
     }
 
     private RoleView toRoleView(Role r) {
-        return new RoleView(r.name(), r.scopes(), r.description(),
-                admin.roleVersion(r.name()), admin.assignedUserCount(r.name()));
+        return new RoleView(r.name(), r.scopes(), r.description(), admin.roleVersion(r.name()),
+                admin.assignedUserCount(r.name()), admin.boundGroupCount(r.name()), admin.boundTenantCount(r.name()));
     }
 
     private RoleView toRoleView(AdminService.VersionedRole vr) {
         Role r = vr.role();
-        return new RoleView(r.name(), r.scopes(), r.description(),
-                vr.version(), admin.assignedUserCount(r.name()));
+        return new RoleView(r.name(), r.scopes(), r.description(), vr.version(),
+                admin.assignedUserCount(r.name()), admin.boundGroupCount(r.name()), admin.boundTenantCount(r.name()));
+    }
+
+    private TenantView toTenantView(String tenant) {
+        Set<String> baseRoles = admin.tenantBaseRoles(tenant);
+        return new TenantView(tenant, baseRoles, admin.expandRoles(baseRoles),
+                admin.tenantMemberCount(tenant), admin.tenantVersion(tenant));
+    }
+
+    private TenantView toTenantView(AdminService.TenantPolicy tp) {
+        return new TenantView(tp.tenant(), tp.baseRoles(), admin.expandRoles(tp.baseRoles()),
+                admin.tenantMemberCount(tp.tenant()), tp.version());
+    }
+
+    private GroupView toGroupView(Group g) {
+        return new GroupView(g.name(), g.description(), g.roles(), admin.expandRoles(g.roles()),
+                admin.memberCount(g.name()), admin.groupVersion(g.name()));
+    }
+
+    private GroupView toGroupView(AdminService.VersionedGroup vg) {
+        Group g = vg.group();
+        return new GroupView(g.name(), g.description(), g.roles(), admin.expandRoles(g.roles()),
+                admin.memberCount(g.name()), vg.version());
     }
 
     /** 写/删端点强制 If-Match：缺失返回 428（precondition_required）；否则解析版本号（非法 400）。 */

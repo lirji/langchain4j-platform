@@ -15,10 +15,10 @@ class RegistrationTest {
         // 自助注册须 rbac + registration 同时开；本套件专测注册，统一开 rbac。
         props.getRbac().setEnabled(true);
         InMemoryUserAccountStore userStore = new InMemoryUserAccountStore(hasher, props);
-        RoleService roleService = new RoleService(new InMemoryRoleStore());
+        EffectivePermissionResolver resolver = EffectivePermissionResolver.twoLayer(new InMemoryRoleStore());
         return new AuthService(userStore, new InMemoryRefreshSessionStore(), hasher,
                 new SessionTokenIssuer(new InternalSecurityProperties()),
-                new LoginThrottle(props), roleService, new RegistrationRuleEngine(props),
+                new LoginThrottle(props), resolver, new RegistrationRuleEngine(props),
                 new PasswordPolicy(props), new RegistrationThrottle(props),
                 new InMemoryRbacMutationExecutor(), props);
     }

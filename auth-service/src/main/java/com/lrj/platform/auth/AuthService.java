@@ -26,7 +26,7 @@ public class AuthService {
     private final PasswordHasher passwordHasher;
     private final SessionTokenIssuer issuer;
     private final LoginThrottle throttle;
-    private final RoleService roleService;
+    private final EffectivePermissionResolver resolver;
     private final RegistrationRuleEngine registrationRules;
     private final PasswordPolicy passwordPolicy;
     private final RegistrationThrottle registrationThrottle;
@@ -38,7 +38,7 @@ public class AuthService {
                        PasswordHasher passwordHasher,
                        SessionTokenIssuer issuer,
                        LoginThrottle throttle,
-                       RoleService roleService,
+                       EffectivePermissionResolver resolver,
                        RegistrationRuleEngine registrationRules,
                        PasswordPolicy passwordPolicy,
                        RegistrationThrottle registrationThrottle,
@@ -49,7 +49,7 @@ public class AuthService {
         this.passwordHasher = passwordHasher;
         this.issuer = issuer;
         this.throttle = throttle;
-        this.roleService = roleService;
+        this.resolver = resolver;
         this.registrationRules = registrationRules;
         this.passwordPolicy = passwordPolicy;
         this.registrationThrottle = registrationThrottle;
@@ -126,7 +126,7 @@ public class AuthService {
             throw new AuthException(400, "invalid_registration", "用户名不能为空");
         }
         RegistrationRuleEngine.Assignment a = registrationRules.resolve(username);
-        roleService.requireRolesExist(a.roles());
+        resolver.requireRolesExist(a.roles());
         // BCrypt 哈希在锁/事务外完成（CPU 密集，不占临界区）。
         String hash = passwordHasher.hash(password);
         UserAccount user = new UserAccount(
@@ -141,9 +141,10 @@ public class AuthService {
     }
 
     private AuthResult issueFor(UserAccount user) {
-        // RBAC 关闭时只用直配 scopes（灰度态不展开角色，现有用户 direct scopes 保底）。
+        // RBAC 关闭时只用直配 scopes（灰度态不展开角色，现有用户 direct scopes 保底）；开启时经 resolver
+        // 合成（含租户基础/用户组继承，受 inheritanceEnabled 再控）。
         Set<String> effective = props.getRbac().isEnabled()
-                ? roleService.effectiveScopes(user)
+                ? resolver.effectiveScopes(user)
                 : new java.util.LinkedHashSet<>(user.scopes());
         String accessToken = issuer.mintAccessToken(user, effective);
         String rawRefresh = issuer.generateRefreshToken();

@@ -6,6 +6,7 @@ import { setActivePinia, createPinia } from 'pinia'
 import UserEditor from './UserEditor.vue'
 import ScopePicker from '../../components/admin/ScopePicker.vue'
 import RolePicker from '../../components/admin/RolePicker.vue'
+import GroupPicker from '../../components/admin/GroupPicker.vue'
 import VersionConflictDialog from '../../components/admin/VersionConflictDialog.vue'
 import { ApiError } from '../../api/errors'
 import type { RoleView, UserAdminView } from '../../types/admin'
@@ -13,9 +14,24 @@ import type { RoleView, UserAdminView } from '../../types/admin'
 const h = vi.hoisted(() => ({
   users: null as unknown as Record<string, unknown>,
   roles: null as unknown as Record<string, unknown>,
+  tenants: null as unknown as Record<string, unknown>,
+  groups: null as unknown as Record<string, unknown>,
 }))
 vi.mock('../../stores/adminUsers', () => ({ useAdminUsersStore: () => h.users }))
 vi.mock('../../stores/adminRoles', () => ({ useAdminRolesStore: () => h.roles }))
+vi.mock('../../stores/adminTenants', () => ({ useAdminTenantsStore: () => h.tenants }))
+vi.mock('../../stores/adminGroups', () => ({ useAdminGroupsStore: () => h.groups }))
+// 归因区只读拉取：stub 为空结果，避免真实网络。
+vi.mock('../../api/admin', () => ({
+  fetchUserEffectivePermissions: vi.fn().mockResolvedValue({
+    directScopes: [],
+    personalRoleScopes: [],
+    tenantScopes: [],
+    groupScopes: [],
+    effectiveScopes: [],
+    sources: {},
+  }),
+}))
 
 const SELECTED: UserAdminView = {
   username: 'alice',
@@ -23,11 +39,20 @@ const SELECTED: UserAdminView = {
   tenant: 'acme',
   directScopes: ['ingest', 'read'],
   roles: ['ops'],
+  groups: [],
   effectiveScopes: ['chat'],
   enabled: true,
   version: 3,
 }
-const ROLE_OPS: RoleView = { name: 'ops', scopes: ['chat', 'agent'], description: '运维', version: 0, assignedUserCount: 1 }
+const ROLE_OPS: RoleView = {
+  name: 'ops',
+  scopes: ['chat', 'agent'],
+  description: '运维',
+  version: 0,
+  assignedUserCount: 1,
+  boundGroupCount: 0,
+  boundTenantCount: 0,
+}
 
 function makeUsersStore() {
   return reactive({
@@ -37,6 +62,7 @@ function makeUsersStore() {
     loadDetail: vi.fn(),
     saveUserPatch: vi.fn().mockResolvedValue({ ...SELECTED, version: 4 }),
     saveUserRoles: vi.fn().mockResolvedValue({ ...SELECTED, version: 5 }),
+    saveUserGroups: vi.fn().mockResolvedValue({ ...SELECTED, version: 6 }),
     createUserAction: vi.fn(),
     deleteUserAction: vi.fn(),
   })
@@ -46,6 +72,21 @@ function makeRolesStore() {
     roles: [ROLE_OPS],
     roleNames: ['ops', 'viewer'],
     status: 'ready',
+    load: vi.fn(),
+  })
+}
+function makeTenantsStore() {
+  return reactive({
+    status: 'ready',
+    baseRolesByTenant: new Map<string, string[]>(),
+    load: vi.fn(),
+  })
+}
+function makeGroupsStore() {
+  return reactive({
+    status: 'ready',
+    groupNames: [] as string[],
+    rolesByGroup: new Map<string, string[]>(),
     load: vi.fn(),
   })
 }
@@ -73,6 +114,8 @@ describe('UserEditor', () => {
     setActivePinia(createPinia())
     h.users = makeUsersStore() as unknown as Record<string, unknown>
     h.roles = makeRolesStore() as unknown as Record<string, unknown>
+    h.tenants = makeTenantsStore() as unknown as Record<string, unknown>
+    h.groups = makeGroupsStore() as unknown as Record<string, unknown>
   })
 
   it('directScopes 以只读 ScopePicker 展示', async () => {
@@ -126,6 +169,25 @@ describe('UserEditor', () => {
     const usersStore = h.users as unknown as { saveUserPatch: ReturnType<typeof vi.fn> }
     const patchReq = usersStore.saveUserPatch.mock.calls[0][1] as Record<string, unknown>
     expect(patchReq.password).toBe('newsecret1')
+  })
+
+  it('仅 groups 变更 → 只调 saveUserGroups（第三步独立写，用当前 version）', async () => {
+    const wrapper = await mountEditor()
+    await flushPromises()
+    wrapper.findComponent(GroupPicker).vm.$emit('update:modelValue', ['ops-team'])
+    await flushPromises()
+    await wrapper.find('.btn--primary').trigger('click')
+    await flushPromises()
+    const usersStore = h.users as unknown as {
+      saveUserPatch: ReturnType<typeof vi.fn>
+      saveUserRoles: ReturnType<typeof vi.fn>
+      saveUserGroups: ReturnType<typeof vi.fn>
+    }
+    expect(usersStore.saveUserPatch).not.toHaveBeenCalled()
+    expect(usersStore.saveUserRoles).not.toHaveBeenCalled()
+    expect(usersStore.saveUserGroups).toHaveBeenCalledTimes(1)
+    expect(usersStore.saveUserGroups.mock.calls[0][1]).toEqual(['ops-team'])
+    expect(usersStore.saveUserGroups.mock.calls[0][2]).toBe(3) // 未经 profile/roles bump，用 base.version
   })
 
   it('version_conflict → 打开 VersionConflictDialog（不覆盖）', async () => {

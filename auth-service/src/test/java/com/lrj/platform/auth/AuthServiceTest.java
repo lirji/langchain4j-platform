@@ -27,10 +27,10 @@ class AuthServiceTest {
         userStore = new InMemoryUserAccountStore(hasher, props);
         sessionStore = new InMemoryRefreshSessionStore();
         issuer = new SessionTokenIssuer(new InternalSecurityProperties());
-        RoleService roleService = new RoleService(new InMemoryRoleStore());
+        EffectivePermissionResolver resolver = EffectivePermissionResolver.twoLayer(new InMemoryRoleStore());
         RegistrationRuleEngine rules = new RegistrationRuleEngine(props);
         service = new AuthService(userStore, sessionStore, hasher, issuer,
-                new LoginThrottle(props), roleService, rules,
+                new LoginThrottle(props), resolver, rules,
                 new PasswordPolicy(props), new RegistrationThrottle(props),
                 new InMemoryRbacMutationExecutor(), props);
     }
@@ -71,7 +71,7 @@ class AuthServiceTest {
         UserAccountStore disabled = username -> Optional.of(
                 new UserAccount("dan", hasher.hash("pw"), "acme", "dan", java.util.Set.of("chat"), false));
         AuthService svc = new AuthService(disabled, sessionStore, hasher, issuer,
-                new LoginThrottle(props), new RoleService(new InMemoryRoleStore()),
+                new LoginThrottle(props), EffectivePermissionResolver.twoLayer(new InMemoryRoleStore()),
                 new RegistrationRuleEngine(props),
                 new PasswordPolicy(props), new RegistrationThrottle(props),
                 new InMemoryRbacMutationExecutor(), props);

@@ -16,6 +16,7 @@ function user(over: Partial<UserAdminView>): UserAdminView {
     tenant: 'acme',
     directScopes: [],
     roles: [],
+    groups: [],
     effectiveScopes: [],
     enabled: true,
     version: 0,

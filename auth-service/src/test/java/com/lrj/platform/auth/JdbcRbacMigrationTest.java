@@ -147,4 +147,90 @@ class JdbcRbacMigrationTest {
         assertThat(store.updateIfVersion(new Role("support", java.util.Set.of("chat"), "stale"), 0L)).isFalse();
         assertThat(store.findByName("support").orElseThrow().scopes()).containsExactlyInAnyOrder("chat", "ingest");
     }
+
+    // ---- 继承层新表（H2 MySQL 模式）：建表 / 反查 / 乐观锁 ----
+
+    @Test
+    void tenantPolicyStore_replaceAndVersionAndReverseLookup() {
+        JdbcTenantPolicyStore store = new JdbcTenantPolicyStore(h2("mig_tenant"));
+        assertThat(store.versionOf("acme")).isEqualTo(-1L);          // 无策略行
+        store.replaceRoles("acme", java.util.Set.of("viewer", "editor"));
+        assertThat(store.versionOf("acme")).isEqualTo(0L);           // 首次绑定即建行、版本 0
+        assertThat(store.rolesOf("acme")).containsExactlyInAnyOrder("viewer", "editor");
+        store.replaceRoles("acme", java.util.Set.of("viewer"));
+        assertThat(store.versionOf("acme")).isEqualTo(1L);           // 再次替换 +1
+        assertThat(store.rolesOf("acme")).containsExactly("viewer");
+        // 反查引用角色的租户
+        assertThat(store.tenantsUsingRole("viewer")).containsExactly("acme");
+        assertThat(store.tenantsUsingRole("editor")).isEmpty();
+        store.clear("acme");
+        assertThat(store.versionOf("acme")).isEqualTo(-1L);
+        assertThat(store.rolesOf("acme")).isEmpty();
+    }
+
+    @Test
+    void tenantPolicyStore_optimisticLock() {
+        JdbcTenantPolicyStore store = new JdbcTenantPolicyStore(h2("mig_tenant_lock"));
+        // 期望尚无行：expected=-1 首次绑定成功；再次 -1 失败（行已存在）
+        assertThat(store.replaceRolesIfVersion("acme", java.util.Set.of("viewer"), -1L)).isTrue();
+        assertThat(store.replaceRolesIfVersion("acme", java.util.Set.of("editor"), -1L)).isFalse();
+        assertThat(store.replaceRolesIfVersion("acme", java.util.Set.of("editor"), 0L)).isTrue();
+        assertThat(store.replaceRolesIfVersion("acme", java.util.Set.of("approver"), 0L)).isFalse();   // 陈旧
+        assertThat(store.rolesOf("acme")).containsExactly("editor");
+    }
+
+    @Test
+    void groupStore_crudVersionAndReverseLookup() {
+        JdbcGroupStore store = new JdbcGroupStore(h2("mig_group"));
+        assertThat(store.createIfAbsent(new Group("eng", "工程组", java.util.Set.of("editor")))).isTrue();
+        assertThat(store.createIfAbsent(new Group("eng", "dup", java.util.Set.of("viewer")))).isFalse();
+        assertThat(store.findByName("eng").orElseThrow().roles()).containsExactly("editor");
+        assertThat(store.versionOf("eng")).isEqualTo(0L);
+        assertThat(store.updateIfVersion(new Group("eng", "改", java.util.Set.of("editor", "analyst")), 0L)).isTrue();
+        assertThat(store.versionOf("eng")).isEqualTo(1L);
+        assertThat(store.updateIfVersion(new Group("eng", "stale", java.util.Set.of("viewer")), 0L)).isFalse();
+        assertThat(store.findByName("eng").orElseThrow().roles()).containsExactlyInAnyOrder("editor", "analyst");
+        // touchVersion 仅推进版本、不改内容
+        assertThat(store.touchVersionIfVersion("eng", 1L)).isTrue();
+        assertThat(store.versionOf("eng")).isEqualTo(2L);
+        assertThat(store.findByName("eng").orElseThrow().roles()).containsExactlyInAnyOrder("editor", "analyst");
+        // 反查引用角色的组
+        assertThat(store.groupsUsingRole("analyst")).containsExactly("eng");
+        store.delete("eng");
+        assertThat(store.findByName("eng")).isEmpty();
+    }
+
+    @Test
+    void userGroupStore_membershipWritesAndReverseLookup() {
+        JdbcUserGroupStore store = new JdbcUserGroupStore(h2("mig_usergroup"));
+        store.replaceGroupsForUser("alice", java.util.Set.of("eng", "ops"));
+        assertThat(store.groupsOf("alice")).containsExactlyInAnyOrder("eng", "ops");
+        assertThat(store.membersOf("eng")).containsExactly("alice");
+        // 组侧全量替换成员
+        store.replaceMembersForGroup("eng", java.util.Set.of("alice", "bob"));
+        assertThat(store.membersOf("eng")).containsExactlyInAnyOrder("alice", "bob");
+        assertThat(store.groupsOf("bob")).containsExactly("eng");
+        // 级联清理
+        store.removeAllForUser("alice");
+        assertThat(store.groupsOf("alice")).isEmpty();
+        assertThat(store.membersOf("eng")).containsExactly("bob");
+        store.removeAllForGroup("eng");
+        assertThat(store.membersOf("eng")).isEmpty();
+        assertThat(store.groupsOf("bob")).isEmpty();
+    }
+
+    @Test
+    void userAccountStore_tenantReadsAndVersionTouch() {
+        JdbcUserAccountStore store = new JdbcUserAccountStore(h2("mig_tenantreads"), hasher, noSeed());
+        store.createIfAbsent(new UserAccount("a", "h", "acme", "a", java.util.Set.of(), java.util.Set.of("viewer"), true));
+        store.createIfAbsent(new UserAccount("b", "h", "acme", "b", java.util.Set.of(), java.util.Set.of(), true));
+        store.createIfAbsent(new UserAccount("c", "h", "globex", "c", java.util.Set.of(), java.util.Set.of(), true));
+        assertThat(store.distinctTenants()).containsExactly("acme", "globex");
+        assertThat(store.findByTenant("acme")).extracting(UserAccount::username).containsExactlyInAnyOrder("a", "b");
+        // touchVersion 仅推进版本、不改字段
+        assertThat(store.versionOf("a")).isEqualTo(0L);
+        assertThat(store.touchVersionIfVersion("a", 0L)).isTrue();
+        assertThat(store.versionOf("a")).isEqualTo(1L);
+        assertThat(store.touchVersionIfVersion("a", 0L)).isFalse();   // 陈旧
+    }
 }

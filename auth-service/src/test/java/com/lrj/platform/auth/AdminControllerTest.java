@@ -1,9 +1,17 @@
 package com.lrj.platform.auth;
 
+import com.lrj.platform.auth.dto.AdminDtos.CreateGroupRequest;
 import com.lrj.platform.auth.dto.AdminDtos.CreateRoleRequest;
 import com.lrj.platform.auth.dto.AdminDtos.CreateUserRequest;
+import com.lrj.platform.auth.dto.AdminDtos.EffectivePermissionsView;
+import com.lrj.platform.auth.dto.AdminDtos.GroupView;
+import com.lrj.platform.auth.dto.AdminDtos.ReplaceMembersRequest;
 import com.lrj.platform.auth.dto.AdminDtos.ReplaceRolesRequest;
+import com.lrj.platform.auth.dto.AdminDtos.ReplaceTenantRolesRequest;
+import com.lrj.platform.auth.dto.AdminDtos.ReplaceUserGroupsRequest;
 import com.lrj.platform.auth.dto.AdminDtos.RoleView;
+import com.lrj.platform.auth.dto.AdminDtos.TenantView;
+import com.lrj.platform.auth.dto.AdminDtos.UpdateGroupRequest;
 import com.lrj.platform.auth.dto.AdminDtos.UpdateRoleRequest;
 import com.lrj.platform.auth.dto.AdminDtos.UpdateUserRequest;
 import com.lrj.platform.auth.dto.AdminDtos.UserAdminView;
@@ -24,9 +32,14 @@ class AdminControllerTest {
     private final AuthProperties props = new AuthProperties();
     private final InMemoryUserAccountStore userStore = new InMemoryUserAccountStore(hasher, props);
     private final InMemoryRoleStore roleStore = new InMemoryRoleStore();
+    private final InMemoryTenantPolicyStore tenantStore = new InMemoryTenantPolicyStore();
+    private final InMemoryGroupStore groupStore = new InMemoryGroupStore();
+    private final InMemoryUserGroupStore userGroupStore = new InMemoryUserGroupStore();
     private final InMemoryRefreshSessionStore sessionStore = new InMemoryRefreshSessionStore();
-    private final AdminService adminService = new AdminService(userStore, roleStore, new RoleService(roleStore),
-            hasher, new PasswordPolicy(props), sessionStore, new InMemoryRbacMutationExecutor());
+    private final AdminService adminService = new AdminService(userStore, roleStore,
+            new EffectivePermissionResolver(new RoleService(roleStore), roleStore, tenantStore, groupStore, userGroupStore, props),
+            tenantStore, groupStore, userGroupStore,
+            hasher, new PasswordPolicy(props), sessionStore, props, new InMemoryRbacMutationExecutor());
     private final AdminController controller = new AdminController(adminService, props);
 
     AdminControllerTest() {
@@ -221,5 +234,75 @@ class AdminControllerTest {
         assertThatThrownBy(() -> controller.patchUser("kim",
                 new UpdateUserRequest("acme2", null, null, null), "not-a-number"))
                 .isInstanceOfSatisfying(AuthException.class, e -> assertThat(e.status()).isEqualTo(400));
+    }
+
+    // ---- 继承层端点：租户基础角色 / 用户组 / 归因 ----
+
+    @Test
+    void tenant_bindListClear_withIfMatch() {
+        asRoleAdmin();
+        assertThat(controller.getTenant("globex").version()).isEqualTo(-1L);   // 无绑定
+        TenantView bound = controller.replaceTenantRoles("globex",
+                new ReplaceTenantRolesRequest(Set.of("editor")), "-1");        // 首次绑定 If-Match -1
+        assertThat(bound.baseRoles()).containsExactly("editor");
+        assertThat(bound.effectiveBaseScopes()).contains("chat", "ingest");
+        assertThat(bound.version()).isEqualTo(0L);
+        assertThat(controller.listTenants()).extracting(TenantView::tenant).contains("globex");
+        controller.clearTenantRoles("globex", "0");
+        assertThat(controller.getTenant("globex").baseRoles()).isEmpty();
+    }
+
+    @Test
+    void group_crudAndMembers_deleteWithMembers409() {
+        asRoleAdmin();
+        ResponseEntity<GroupView> created = controller.createGroup(new CreateGroupRequest("eng", "工程", Set.of("editor")));
+        assertThat(created.getStatusCode().value()).isEqualTo(201);
+        assertThat(created.getBody().effectiveScopes()).contains("chat", "ingest");
+        GroupView withMembers = controller.replaceGroupMembers("eng", new ReplaceMembersRequest(Set.of("bob")), "0");
+        assertThat(withMembers.memberCount()).isEqualTo(1);
+        assertThat(controller.getGroupMembers("eng")).containsExactly("bob");
+        long ver = controller.getGroup("eng").version();
+        assertThatThrownBy(() -> controller.deleteGroup("eng", String.valueOf(ver)))
+                .isInstanceOfSatisfying(AuthException.class, e -> assertThat(e.status()).isEqualTo(409));
+    }
+
+    @Test
+    void updateGroup_replacesRoles() {
+        asRoleAdmin();
+        controller.createGroup(new CreateGroupRequest("eng", "", Set.of("viewer")));
+        GroupView updated = controller.updateGroup("eng", new UpdateGroupRequest("改", Set.of("editor")), "0");
+        assertThat(updated.roles()).containsExactly("editor");
+        assertThat(updated.version()).isEqualTo(1L);
+    }
+
+    @Test
+    void userGroups_reflectInViewAndEffectivePermissions() {
+        props.getRbac().setInheritanceEnabled(true);   // 继承开：组角色折进有效 scopes
+        asRoleAdmin();
+        controller.createGroup(new CreateGroupRequest("eng", "", Set.of("editor")));
+        UserAdminView bob = controller.replaceUserGroups("bob",
+                new ReplaceUserGroupsRequest(Set.of("eng")), "0");
+        assertThat(bob.groups()).containsExactly("eng");
+        assertThat(bob.effectiveScopes()).contains("chat", "ingest");   // viewer(chat) + 组 editor(ingest)
+        assertThat(controller.getUser("bob").groups()).containsExactly("eng");
+        EffectivePermissionsView ep = controller.getEffectivePermissions("bob");
+        assertThat(ep.groupScopes()).contains("ingest");
+        assertThat(ep.sources().get("ingest")).contains("group:eng:editor");
+    }
+
+    @Test
+    void newEndpoints_respectRoleAdminAndWritesGate() {
+        // 无 role-admin → 403
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
+        assertThatThrownBy(() -> controller.createGroup(new CreateGroupRequest("x", "", Set.of("viewer"))))
+                .isInstanceOfSatisfying(AuthException.class, e -> assertThat(e.status()).isEqualTo(403));
+        TenantContext.clear();
+        // writes 关 → 写 503、读放行
+        props.getRbac().setAdminWritesEnabled(false);
+        asRoleAdmin();
+        assertThat(controller.listGroups()).isEmpty();
+        assertThatThrownBy(() -> controller.replaceTenantRoles("acme",
+                new ReplaceTenantRolesRequest(Set.of("viewer")), "-1"))
+                .isInstanceOfSatisfying(AuthException.class, e -> assertThat(e.status()).isEqualTo(503));
     }
 }

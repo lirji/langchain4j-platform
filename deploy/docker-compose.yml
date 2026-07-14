@@ -325,6 +325,8 @@ services:
       # 生产应默认 false 分阶段灰度，并显式配置真实 bootstrap-admin 名单。
       AUTH_RBAC_ENABLED: ${AUTH_RBAC_ENABLED:-true}
       AUTH_RBAC_ADMIN_WRITES_ENABLED: ${AUTH_RBAC_ADMIN_WRITES_ENABLED:-true}
+      # 继承式 RBAC（租户基础角色 + 用户组）折进登录 JWT。无绑定时为 no-op，demo 直接开；置 false 即退两级。
+      AUTH_RBAC_INHERITANCE_ENABLED: ${AUTH_RBAC_INHERITANCE_ENABLED:-true}
       AUTH_RBAC_BOOTSTRAP_ADMIN_USERS: ${AUTH_RBAC_BOOTSTRAP_ADMIN_USERS:-alice}
       AUTH_REGISTRATION_ENABLED: ${AUTH_REGISTRATION_ENABLED:-false}
       # 跨域直调网关时刷新 cookie 需 SameSite=None + Secure(HTTPS)；同源代理/同网可用 Lax。

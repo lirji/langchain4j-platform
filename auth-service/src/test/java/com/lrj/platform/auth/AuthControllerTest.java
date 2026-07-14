@@ -34,10 +34,10 @@ class AuthControllerTest {
         InMemoryUserAccountStore userStore = new InMemoryUserAccountStore(hasher, props);
         InMemoryRefreshSessionStore sessionStore = new InMemoryRefreshSessionStore();
         issuer = new SessionTokenIssuer(new InternalSecurityProperties());
-        RoleService roleService = new RoleService(new InMemoryRoleStore());
+        EffectivePermissionResolver resolver = EffectivePermissionResolver.twoLayer(new InMemoryRoleStore());
         RegistrationRuleEngine rules = new RegistrationRuleEngine(props);
         service = new AuthService(userStore, sessionStore, hasher, issuer,
-                new LoginThrottle(props), roleService, rules,
+                new LoginThrottle(props), resolver, rules,
                 new PasswordPolicy(props), new RegistrationThrottle(props),
                 new InMemoryRbacMutationExecutor(), props);
         controller = new AuthController(service, issuer, props);

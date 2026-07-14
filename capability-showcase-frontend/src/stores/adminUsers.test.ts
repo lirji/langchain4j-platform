@@ -22,6 +22,7 @@ function user(username: string, over: Partial<UserAdminView> = {}): UserAdminVie
     tenant: 'acme',
     directScopes: [],
     roles: ['viewer'],
+    groups: [],
     effectiveScopes: ['chat'],
     enabled: true,
     version: 0,

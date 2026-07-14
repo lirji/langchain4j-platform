@@ -14,7 +14,17 @@ vi.mock('./authorizedFetch', () => ({
 
 import { useAuthStore } from '../stores/auth'
 import { useSessionStore } from '../stores/session'
-import { fetchUsers, patchUser, replaceUserRoles, createRole } from './admin'
+import {
+  fetchUsers,
+  patchUser,
+  replaceUserRoles,
+  createRole,
+  replaceTenantRoles,
+  clearTenantRoles,
+  replaceGroupMembers,
+  replaceUserGroups,
+  createGroup,
+} from './admin'
 
 function res(status: number, body: unknown, headers: Record<string, string> = {}): Response {
   return {
@@ -79,5 +89,41 @@ describe('api/admin —— Bearer-only', () => {
   it('业务冲突 409 抛 ApiError（body 保留判别码，如建角色重名 role_exists）', async () => {
     nextResponse = () => res(409, { error: 'role_exists', message: '角色已存在' })
     await expect(createRole({ name: 'x', scopes: [], description: '' })).rejects.toMatchObject({ status: 409 })
+  })
+
+  it('replaceTenantRoles 首次绑定用 If-Match: -1（裸版本号）', async () => {
+    nextResponse = () => res(200, { tenant: 'newco', baseRoles: ['viewer'], version: 0 })
+    await replaceTenantRoles('newco', ['viewer'], -1)
+    expect(calls[0].init.method).toBe('PUT')
+    expect(header(calls[0].init, 'If-Match')).toBe('-1')
+    expect(calls[0].url).toContain('/auth/admin/tenants/newco/roles')
+  })
+
+  it('clearTenantRoles DELETE + If-Match', async () => {
+    nextResponse = () => res(204, null)
+    await clearTenantRoles('acme', 4)
+    expect(calls[0].init.method).toBe('DELETE')
+    expect(header(calls[0].init, 'If-Match')).toBe('4')
+  })
+
+  it('replaceGroupMembers PUT + If-Match，路径含 /members', async () => {
+    nextResponse = () => res(200, { name: 'ops', version: 2 })
+    await replaceGroupMembers('ops', ['alice'], 1)
+    expect(calls[0].init.method).toBe('PUT')
+    expect(header(calls[0].init, 'If-Match')).toBe('1')
+    expect(calls[0].url).toContain('/auth/admin/groups/ops/members')
+  })
+
+  it('replaceUserGroups PUT + If-Match，路径含 /groups', async () => {
+    nextResponse = () => res(200, { username: 'a' })
+    await replaceUserGroups('a', ['ops'], 3)
+    expect(calls[0].init.method).toBe('PUT')
+    expect(header(calls[0].init, 'If-Match')).toBe('3')
+    expect(calls[0].url).toContain('/auth/admin/users/a/groups')
+  })
+
+  it('createGroup 重名 409 group_exists 抛 ApiError', async () => {
+    nextResponse = () => res(409, { error: 'group_exists', message: '组已存在' })
+    await expect(createGroup({ name: 'ops', description: '', roles: [] })).rejects.toMatchObject({ status: 409 })
   })
 })

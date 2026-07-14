@@ -45,16 +45,24 @@ public class AuthProperties {
      * RBAC 开关（默认关闭）。{@code enabled=false} 时登录只用直配 scopes（角色不展开），行为回到
      * 加 RBAC 之前；灰度时可先只读（{@code adminWritesEnabled=false}）验证登录与 admin GET，稳定后再开写。
      * {@code bootstrapAdminUsers} 是迁移/种子时应确保拥有 admin 角色的用户名单（生产必须显式配置）。
+     *
+     * <p>{@code inheritanceEnabled}：继承式 RBAC 的第三段灰度（默认关闭）。关时 {@code
+     * EffectivePermissionResolver} 只做两级（个人角色 ∪ 直配），与加继承前逐字节一致；开后再把<b>租户基础角色</b>
+     * 与<b>用户组角色</b>并入有效 scopes（{@code 有效 = 租户基础 ∪ 组 ∪ 个人角色 ∪ 直配}）。建议先建表、开
+     * {@code adminWritesEnabled} 配好租户/组绑定并用归因接口核对，再翻此开关让继承折进签发的 JWT。
      */
     public static class Rbac {
         private boolean enabled = false;
         private boolean adminWritesEnabled = false;
+        private boolean inheritanceEnabled = false;
         private List<String> bootstrapAdminUsers = new ArrayList<>();
 
         public boolean isEnabled() { return enabled; }
         public void setEnabled(boolean enabled) { this.enabled = enabled; }
         public boolean isAdminWritesEnabled() { return adminWritesEnabled; }
         public void setAdminWritesEnabled(boolean adminWritesEnabled) { this.adminWritesEnabled = adminWritesEnabled; }
+        public boolean isInheritanceEnabled() { return inheritanceEnabled; }
+        public void setInheritanceEnabled(boolean inheritanceEnabled) { this.inheritanceEnabled = inheritanceEnabled; }
         public List<String> getBootstrapAdminUsers() { return bootstrapAdminUsers; }
         public void setBootstrapAdminUsers(List<String> bootstrapAdminUsers) { this.bootstrapAdminUsers = bootstrapAdminUsers; }
     }

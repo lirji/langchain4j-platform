@@ -78,6 +78,9 @@ function clearFilter(): void {
 function rolesSummary(u: UserAdminView): string {
   return u.roles.length ? u.roles.join('、') : '（无角色）'
 }
+function groupsSummary(u: UserAdminView): string {
+  return u.groups.length ? u.groups.join('、') : '（无用户组）'
+}
 </script>
 
 <template>
@@ -149,6 +152,7 @@ function rolesSummary(u: UserAdminView): string {
               <th scope="col">用户名</th>
               <th scope="col">租户</th>
               <th scope="col">角色</th>
+              <th scope="col">用户组</th>
               <th scope="col">有效权限</th>
               <th scope="col">状态</th>
               <th scope="col">版本</th>
@@ -171,6 +175,13 @@ function rolesSummary(u: UserAdminView): string {
                 <template v-else>
                   <span v-for="r in u.roles.slice(0, 2)" :key="r" class="uv__role">{{ r }}</span>
                   <span v-if="u.roles.length > 2" class="uv__role uv__role--more">+{{ u.roles.length - 2 }}</span>
+                </template>
+              </td>
+              <td class="uv__cell" :title="groupsSummary(u)">
+                <span v-if="!u.groups.length" class="uv__muted">—</span>
+                <template v-else>
+                  <span v-for="g in u.groups.slice(0, 2)" :key="g" class="uv__group">{{ g }}</span>
+                  <span v-if="u.groups.length > 2" class="uv__group uv__group--more">+{{ u.groups.length - 2 }}</span>
                 </template>
               </td>
               <td class="uv__cell" :title="u.effectiveScopes.join('、')">{{ u.effectiveScopes.length }} 项</td>
@@ -341,6 +352,21 @@ function rolesSummary(u: UserAdminView): string {
   border-radius: var(--radius-pill);
 }
 .uv__role--more {
+  color: var(--text-muted);
+  background: var(--surface-3);
+  border-color: var(--border);
+}
+.uv__group {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 1px 8px;
+  font-size: var(--fs-xs);
+  color: var(--stream);
+  background: var(--stream-soft);
+  border: 1px solid var(--stream-border);
+  border-radius: var(--radius-pill);
+}
+.uv__group--more {
   color: var(--text-muted);
   background: var(--surface-3);
   border-color: var(--border);

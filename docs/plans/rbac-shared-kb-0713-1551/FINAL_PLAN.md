@@ -30,6 +30,7 @@
 - 不让 edge 或下游实时查角色，不引入 PDP/OPA。
 - 不改变 API-key→tenant/user/scopes 目录，也不给现有 key 增权。
 - 不做 tenant-scoped role、角色继承、资源 ACL/ABAC。
+  > 边界更新（2026-07-14，已被后续「继承式 RBAC」实现部分超越）：现已支持 **IAM 式作用域绑定 + 向下继承**——租户基础角色 + 用户组（合成点 `EffectivePermissionResolver`，受 `AUTH_RBAC_INHERITANCE_ENABLED` 灰度）。仍**不做**的是：per-tenant 角色（角色恒全局）、角色/组嵌套、资源级 ACL/ABAC。详见 `docs/平台工程/rbac-and-public-kb.md`。
 - 不做角色管理前端。
 - 不新增 Kafka/RBAC 事件或修改 `platform-protocol`。
 - 不引入 JPA/Flyway/Liquibase。

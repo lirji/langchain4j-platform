@@ -11,10 +11,15 @@ import { authorizedFetch } from './authorizedFetch'
 import { ApiError } from './errors'
 import { tryParseJson } from '../utils/json'
 import type {
+  CreateGroupRequest,
   CreateRoleRequest,
   CreateUserRequest,
+  EffectivePermissionsView,
+  GroupView,
   PagedResult,
   RoleView,
+  TenantView,
+  UpdateGroupRequest,
   UpdateRoleRequest,
   UpdateUserRequest,
   UserAdminView,
@@ -105,3 +110,71 @@ export const deleteRole = (n: string, version: number): Promise<void> =>
   adminJson<void>(`/auth/admin/roles/${encodeURIComponent(n)}`, adminInit('DELETE', undefined, version)).then(
     () => undefined,
   )
+
+// —— 租户基础角色（继承式 RBAC） ——
+
+export const fetchTenants = (): Promise<TenantView[]> =>
+  adminJson<TenantView[]>('/auth/admin/tenants', adminInit('GET')).then((r) => r.data)
+
+export const fetchTenant = (tenant: string): Promise<TenantView> =>
+  adminJson<TenantView>(`/auth/admin/tenants/${encodeURIComponent(tenant)}`, adminInit('GET')).then((r) => r.data)
+
+/** 全量替换租户基础角色。首次绑定时租户 version 为 -1（用 If-Match: -1）。 */
+export const replaceTenantRoles = (tenant: string, roles: string[], version: number): Promise<TenantView> =>
+  adminJson<TenantView>(
+    `/auth/admin/tenants/${encodeURIComponent(tenant)}/roles`,
+    adminInit('PUT', { roles }, version),
+  ).then((r) => r.data)
+
+export const clearTenantRoles = (tenant: string, version: number): Promise<void> =>
+  adminJson<void>(
+    `/auth/admin/tenants/${encodeURIComponent(tenant)}/roles`,
+    adminInit('DELETE', undefined, version),
+  ).then(() => undefined)
+
+// —— 用户组（继承式 RBAC） ——
+
+export const fetchGroups = (): Promise<GroupView[]> =>
+  adminJson<GroupView[]>('/auth/admin/groups', adminInit('GET')).then((r) => r.data)
+
+export const fetchGroup = (name: string): Promise<GroupView> =>
+  adminJson<GroupView>(`/auth/admin/groups/${encodeURIComponent(name)}`, adminInit('GET')).then((r) => r.data)
+
+export const createGroup = (req: CreateGroupRequest): Promise<GroupView> =>
+  adminJson<GroupView>('/auth/admin/groups', adminInit('POST', req)).then((r) => r.data)
+
+export const updateGroup = (name: string, req: UpdateGroupRequest, version: number): Promise<GroupView> =>
+  adminJson<GroupView>(`/auth/admin/groups/${encodeURIComponent(name)}`, adminInit('PUT', req, version)).then(
+    (r) => r.data,
+  )
+
+export const deleteGroup = (name: string, version: number): Promise<void> =>
+  adminJson<void>(`/auth/admin/groups/${encodeURIComponent(name)}`, adminInit('DELETE', undefined, version)).then(
+    () => undefined,
+  )
+
+export const fetchGroupMembers = (name: string): Promise<string[]> =>
+  adminJson<string[]>(`/auth/admin/groups/${encodeURIComponent(name)}/members`, adminInit('GET')).then((r) => r.data)
+
+/** 全量替换组成员（与角色/说明 PUT 是各自独立的写，各带 version）。 */
+export const replaceGroupMembers = (name: string, members: string[], version: number): Promise<GroupView> =>
+  adminJson<GroupView>(
+    `/auth/admin/groups/${encodeURIComponent(name)}/members`,
+    adminInit('PUT', { members }, version),
+  ).then((r) => r.data)
+
+// —— 用户 ↔ 组 + 归因 ——
+
+/** 全量替换用户所属用户组。 */
+export const replaceUserGroups = (u: string, groups: string[], version: number): Promise<UserAdminView> =>
+  adminJson<UserAdminView>(
+    `/auth/admin/users/${encodeURIComponent(u)}/groups`,
+    adminInit('PUT', { groups }, version),
+  ).then((r) => r.data)
+
+/** 服务端权威的有效权限归因（只读；四支来源 + sources 标签）。 */
+export const fetchUserEffectivePermissions = (u: string): Promise<EffectivePermissionsView> =>
+  adminJson<EffectivePermissionsView>(
+    `/auth/admin/users/${encodeURIComponent(u)}/effective-permissions`,
+    adminInit('GET'),
+  ).then((r) => r.data)

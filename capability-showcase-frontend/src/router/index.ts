@@ -67,6 +67,20 @@ const routes: RouteRecordRaw[] = [
               props: true,
               component: () => import('../modules/admin/RoleEditor.vue'),
             },
+            { path: 'tenants', name: 'admin-tenants', component: () => import('../modules/admin/TenantsView.vue') },
+            {
+              path: 'tenants/:tenant',
+              name: 'admin-tenant',
+              props: true,
+              component: () => import('../modules/admin/TenantEditor.vue'),
+            },
+            { path: 'groups', name: 'admin-groups', component: () => import('../modules/admin/GroupsView.vue') },
+            {
+              path: 'groups/:name',
+              name: 'admin-group',
+              props: true,
+              component: () => import('../modules/admin/GroupEditor.vue'),
+            },
           ],
         } as RouteRecordRaw,
       ]

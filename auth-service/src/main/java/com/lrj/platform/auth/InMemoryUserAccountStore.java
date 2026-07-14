@@ -138,6 +138,42 @@ public class InMemoryUserAccountStore implements UserAccountStore {
     }
 
     @Override
+    public List<UserAccount> findByTenant(String tenant) {
+        if (tenant == null || tenant.isBlank()) {
+            return List.of();
+        }
+        String t = tenant.trim();
+        return byUsername.values().stream()
+                .filter(u -> t.equals(u.tenant()))
+                .sorted(Comparator.comparing(UserAccount::username))
+                .toList();
+    }
+
+    @Override
+    public List<String> distinctTenants() {
+        return byUsername.values().stream()
+                .map(UserAccount::tenant)
+                .filter(t -> t != null && !t.isBlank())
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
+    @Override
+    public boolean touchVersionIfVersion(String username, long expectedVersion) {
+        boolean[] ok = {false};
+        byUsername.computeIfPresent(key(username), (k, cur) -> {
+            if (versions.getOrDefault(k, 0L) != expectedVersion) {
+                return cur;
+            }
+            ok[0] = true;
+            versions.merge(k, 1L, Long::sum);
+            return cur;   // 只推进版本，账号字段不变
+        });
+        return ok[0];
+    }
+
+    @Override
     public List<UserAccount> findAll() {
         return byUsername.values().stream()
                 .sorted(Comparator.comparing(UserAccount::username))
