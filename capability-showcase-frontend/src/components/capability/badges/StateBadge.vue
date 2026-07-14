@@ -1,39 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { CapabilityState } from '../../../types/catalog'
+// 五态元数据单一事实源（与侧栏/命令面板 compact 状态点共用，避免 tone 映射重复漂移）。
+import { STATE_META } from '../../../config/stateMeta'
 
 const props = defineProps<{ state: CapabilityState }>()
 
 // 徽章不单靠颜色：每态附带独立文字与图标（无障碍）。
-const META: Record<CapabilityState, { label: string; icon: string; tone: string; hint: string }> = {
-  ready: { label: '就绪', icon: '●', tone: 'ok', hint: '默认可执行。' },
-  'ready-degraded': {
-    label: '就绪·降级',
-    icon: '◐',
-    tone: 'ok-warn',
-    hint: '可执行，但为内存/确定性降级实现（非真实语义/生产依赖）。',
-  },
-  'flag-off': {
-    label: '未启用',
-    icon: '○',
-    tone: 'off',
-    hint: '需开启对应 feature flag 才注册，默认不可执行。',
-  },
-  'scope-required': {
-    label: '需授权',
-    icon: '◆',
-    tone: 'warn',
-    hint: '需要特定 scope（如 ingest/approve），否则返回 403。',
-  },
-  'display-only': {
-    label: '已锁定',
-    icon: '■',
-    tone: 'danger',
-    hint: '破坏性写/删，默认仅展示不执行。',
-  },
-}
-
-const meta = computed(() => META[props.state])
+const meta = computed(() => STATE_META[props.state])
 </script>
 
 <template>

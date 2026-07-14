@@ -32,7 +32,8 @@
   --fs-2xl: 28px;
 
   --header-h: 56px;
-  --sidenav-w: 288px;
+  /* 方案③ 侧栏宽度：280px（较旧 288 收窄 8，容纳「中文名 + 英文副名 + 计数 + caret」双行模块行）。 */
+  --sidenav-w: 280px;
 
   --ring-w: 2px;
   /* 动效时长 / 缓动（主题无关）——保留现有 --ease，新增语义化梯度 */
@@ -322,4 +323,52 @@
   --field-gap: var(--space-3);
   --section-py: var(--space-4);
   --card-pad: var(--space-3);
+}
+
+/*
+ * ── 方案③ 导航：分组强调色 + 导航尺度令牌（纯追加，不改旧值）──
+ * 强调色只表「分类」不表「状态」，与五态状态色语义不交叉。
+ * 每个 [data-accent] 派生四件套：--g（品牌/装饰：色条·图标·连接轨·选中左条）、
+ * --g-text（AA 达标文字色）、--g-soft（柔和底）、--g-line（细线/轨）。
+ * 组件在分组/收藏/管理节点根上设 data-accent，后代经 CSS 变量继承（穿透 scoped 边界）。
+ */
+:root {
+  --nav-chip: 26px;         /* 模块图标色块 */
+  --nav-chip-sm: 22px;
+  --nav-touch-min: 44px;    /* 移动端行最小触控高度 */
+  --nav-indent: 20px;       /* 能力行相对模块的缩进 */
+  /* 侧栏统一字号：组标签/模块名/英文副名/计数/能力名/搜索/总览/管理 全部引用它，
+     杜绝零散的 10.5 / 11.5 / --fs-md 魔法值；层级改由 权重·颜色·缩进 承担。
+     方法徽章·状态点·状态图例·版本号属图标/角标，定宽小尺寸，不受此约束。 */
+  --nav-fs: 12px;
+}
+:root[data-density='compact'] {
+  --nav-chip: 22px;
+  --nav-chip-sm: 20px;
+  --nav-fs: 11px;
+}
+
+[data-accent='blue']   { --g: #2563eb; --g-text: #1d4ed8; --g-soft: rgba(37, 99, 235, 0.10);  --g-line: rgba(37, 99, 235, 0.30); }
+[data-accent='violet'] { --g: #7c3aed; --g-text: #6d28d9; --g-soft: rgba(124, 58, 237, 0.10); --g-line: rgba(124, 58, 237, 0.30); }
+[data-accent='amber']  { --g: #d97706; --g-text: #b45309; --g-soft: rgba(217, 119, 6, 0.12);  --g-line: rgba(217, 119, 6, 0.34); }
+[data-accent='teal']   { --g: #0e7490; --g-text: #0e7490; --g-soft: rgba(14, 116, 128, 0.10); --g-line: rgba(14, 116, 128, 0.30); }
+[data-accent='slate']  { --g: #475569; --g-text: #334155; --g-soft: rgba(71, 85, 105, 0.10);  --g-line: rgba(71, 85, 105, 0.28); }
+[data-accent='gold']   { --g: #d97706; --g-text: #b45309; --g-soft: rgba(217, 119, 6, 0.13);  --g-line: rgba(217, 119, 6, 0.34); }
+
+/* 深色：提亮品牌与文字、抬高柔和底透明度以保证暗底对比。 */
+:root[data-theme='dark'] [data-accent='blue']   { --g: #60a5fa; --g-text: #93c5fd; --g-soft: rgba(96, 165, 250, 0.18); --g-line: rgba(96, 165, 250, 0.34); }
+:root[data-theme='dark'] [data-accent='violet'] { --g: #a78bfa; --g-text: #c4b5fd; --g-soft: rgba(167, 139, 250, 0.18); --g-line: rgba(167, 139, 250, 0.34); }
+:root[data-theme='dark'] [data-accent='amber']  { --g: #fbbf24; --g-text: #fcd34d; --g-soft: rgba(251, 191, 36, 0.18); --g-line: rgba(251, 191, 36, 0.34); }
+:root[data-theme='dark'] [data-accent='teal']   { --g: #22d3ee; --g-text: #67e8f9; --g-soft: rgba(34, 211, 238, 0.18); --g-line: rgba(34, 211, 238, 0.34); }
+:root[data-theme='dark'] [data-accent='slate']  { --g: #94a3b8; --g-text: #cbd5e1; --g-soft: rgba(148, 163, 184, 0.16); --g-line: rgba(148, 163, 184, 0.32); }
+:root[data-theme='dark'] [data-accent='gold']   { --g: #fbbf24; --g-text: #fcd34d; --g-soft: rgba(251, 191, 36, 0.18); --g-line: rgba(251, 191, 36, 0.34); }
+
+/* 首屏兜底（系统深色、JS 未就绪）同样提亮，避免暗底上强调色过暗。 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']):not([data-theme='dark']) [data-accent='blue']   { --g: #60a5fa; --g-text: #93c5fd; --g-soft: rgba(96, 165, 250, 0.18); --g-line: rgba(96, 165, 250, 0.34); }
+  :root:not([data-theme='light']):not([data-theme='dark']) [data-accent='violet'] { --g: #a78bfa; --g-text: #c4b5fd; --g-soft: rgba(167, 139, 250, 0.18); --g-line: rgba(167, 139, 250, 0.34); }
+  :root:not([data-theme='light']):not([data-theme='dark']) [data-accent='amber']  { --g: #fbbf24; --g-text: #fcd34d; --g-soft: rgba(251, 191, 36, 0.18); --g-line: rgba(251, 191, 36, 0.34); }
+  :root:not([data-theme='light']):not([data-theme='dark']) [data-accent='teal']   { --g: #22d3ee; --g-text: #67e8f9; --g-soft: rgba(34, 211, 238, 0.18); --g-line: rgba(34, 211, 238, 0.34); }
+  :root:not([data-theme='light']):not([data-theme='dark']) [data-accent='slate']  { --g: #94a3b8; --g-text: #cbd5e1; --g-soft: rgba(148, 163, 184, 0.16); --g-line: rgba(148, 163, 184, 0.32); }
+  :root:not([data-theme='light']):not([data-theme='dark']) [data-accent='gold']   { --g: #fbbf24; --g-text: #fcd34d; --g-soft: rgba(251, 191, 36, 0.18); --g-line: rgba(251, 191, 36, 0.34); }
 }

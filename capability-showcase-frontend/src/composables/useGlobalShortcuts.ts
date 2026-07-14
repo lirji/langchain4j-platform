@@ -1,5 +1,6 @@
-import { onMounted, onUnmounted } from 'vue'
+import { nextTick, onMounted, onUnmounted } from 'vue'
 import { useUiStore } from '../stores/ui'
+import { useIsDesktop } from './useIsDesktop'
 
 /**
  * 全局快捷键（在 App 挂载）：
@@ -22,6 +23,7 @@ function isTypingTarget(el: EventTarget | null): boolean {
 
 export function useGlobalShortcuts(): void {
   const ui = useUiStore()
+  const { isDesktop } = useIsDesktop()
 
   function onKeydown(e: KeyboardEvent): void {
     const mod = e.metaKey || e.ctrlKey
@@ -56,14 +58,24 @@ export function useGlobalShortcuts(): void {
       }
     }
 
-    // 裸 "/"：聚焦侧栏筛选（当前不在输入控件中）
+    // 裸 "/"：聚焦侧栏筛选。若侧栏隐藏（桌面折叠/移动抽屉关闭），先展开再 nextTick 聚焦，
+    // 绝不聚焦被 inert/收起的屏外输入；实在拿不到可见输入则退回命令面板。
     if (!mod && !e.altKey && key === '/' && !isTypingTarget(e.target)) {
-      const el = document.getElementById(SIDENAV_FILTER_ID) as HTMLInputElement | null
-      if (el) {
-        e.preventDefault()
-        el.focus()
-        el.select?.()
+      e.preventDefault()
+      const navHidden = isDesktop.value ? ui.navCollapsed : !ui.sidebarOpen
+      if (navHidden) {
+        if (isDesktop.value) ui.setNavCollapsed(false)
+        else ui.openSidebar()
       }
+      void nextTick(() => {
+        const el = document.getElementById(SIDENAV_FILTER_ID) as HTMLInputElement | null
+        if (el) {
+          el.focus()
+          el.select?.()
+        } else {
+          ui.openCmdk()
+        }
+      })
     }
   }
 

@@ -7,7 +7,8 @@ import { useFavoritesStore } from '../../stores/favorites'
 import { useHistoryStore } from '../../stores/history'
 import { useFocusTrap } from '../../composables/useFocusTrap'
 import { usePermission } from '../../composables/usePermission'
-import type { Capability, CapabilityState } from '../../types/catalog'
+import type { Capability } from '../../types/catalog'
+import { stateTone } from '../../config/stateMeta'
 import MethodBadge from '../capability/badges/MethodBadge.vue'
 
 /**
@@ -50,14 +51,6 @@ interface CmdGroup {
   id: string
   label: string
   items: CmdItem[]
-}
-
-const stateDotTone: Record<CapabilityState, string> = {
-  ready: 'ok',
-  'ready-degraded': 'ok-warn',
-  'flag-off': 'off',
-  'scope-required': 'warn',
-  'display-only': 'danger',
 }
 
 function fuzzy(needle: string, haystack: string): boolean {
@@ -349,7 +342,7 @@ useFocusTrap({
                 <span class="cmdk__module">{{ item.moduleTitle }}</span>
                 <span
                   class="cmdk__dot"
-                  :data-tone="stateDotTone[item.cap.state]"
+                  :data-tone="stateTone(item.cap.state)"
                   :title="item.cap.state"
                   aria-hidden="true"
                 />

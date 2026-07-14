@@ -1,0 +1,953 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>左侧菜单重设计 · 3 套低保真视觉方案对比</title>
+<style>
+  :root{
+    --page-bg:#f6f8fd; --ink:#0f172a; --muted:#475569; --subtle:#64748b;
+    --border:#e2e8f0; --card:#ffffff; --primary:#2563eb;
+    --stage-bg:linear-gradient(135deg,#eef2f7,#e6ecf4);
+    --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page-bg);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;line-height:1.55}
+  .wrap{max-width:1240px;margin:0 auto;padding:40px 24px 80px}
+
+  header.top{margin-bottom:28px}
+  .eyebrow{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--primary);margin:0 0 8px}
+  h1{font-size:30px;font-weight:700;letter-spacing:-.01em;margin:0 0 10px}
+  .lead{font-size:15px;color:var(--muted);max-width:76ch;margin:0}
+  .lead code{font-family:var(--mono);font-size:12.5px;background:#eef2f9;border:1px solid var(--border);border-radius:5px;padding:1px 6px}
+
+  .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;margin-top:26px}
+  @media (max-width:1100px){.grid{grid-template-columns:1fr}}
+
+  .col{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;
+    box-shadow:0 2px 6px -2px rgba(15,23,42,.06),0 12px 30px -14px rgba(15,23,42,.12);display:flex;flex-direction:column}
+  .col__head{padding:18px 20px 14px;border-bottom:1px solid var(--border)}
+  .tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#fff;
+    padding:3px 10px;border-radius:999px;margin-bottom:8px}
+  .col--1 .tag{background:#2563eb}.col--2 .tag{background:#334155}.col--3 .tag{background:#7c3aed}
+  .col__title{font-size:18px;font-weight:700;margin:2px 0 4px}
+  .col__sub{font-size:13px;color:var(--subtle);margin:0}
+
+  .stage{background:var(--stage-bg);display:flex;justify-content:center;padding:26px 18px}
+  /* 统一化：抹平各 mock 自带的外层背景/内边距/排布，套进等宽舞台，让玻璃质感也有底可透 */
+  .compare .mock1,.compare .mock2,.compare .mock3{
+    background:transparent!important;padding:0!important;display:flex!important;justify-content:center!important;
+    width:auto!important;height:auto!important}
+
+  .notes{padding:16px 20px 20px}
+  .notes h4{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--subtle);margin:0 0 10px}
+  .notes ul{margin:0;padding-left:18px}
+  .notes li{font-size:13px;color:var(--muted);margin-bottom:6px}
+  .notes li b{color:var(--ink);font-weight:600}
+  .meta{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin-top:14px;padding-top:14px;border-top:1px dashed var(--border);
+    font-size:12.5px}
+  .meta dt{color:var(--subtle);font-weight:600}
+  .meta dd{margin:0;color:var(--ink)}
+
+  .cmp{margin-top:40px;background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+  .cmp h2{font-size:17px;margin:0;padding:16px 20px;border-bottom:1px solid var(--border)}
+  .cmp .scroll{overflow-x:auto}
+  table{border-collapse:collapse;width:100%;min-width:640px;font-size:13px}
+  th,td{text-align:left;padding:11px 16px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{background:#f1f5f9;font-weight:700;color:var(--muted);font-size:12px;letter-spacing:.02em}
+  td:first-child{font-weight:600;color:var(--ink);white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+
+  .foot{margin-top:34px;padding:20px 22px;background:#eef4ff;border:1px solid #bfdbfe;border-radius:14px;
+    font-size:14px;color:#1e3a8a}
+  .foot b{font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <p class="eyebrow">Capability Showcase · Sidebar Redesign</p>
+    <h1>左侧菜单重设计 · 3 套低保真视觉方案</h1>
+    <p class="lead">同一套真实信息架构（9 模块 / 82 能力 / 4 语义分组 + 总览 + 平台管理 + 收藏），三个刻意拉开差异的视觉方向。均为浅色主题下的低保真示意，展示了搜索、总览、平台管理、收藏、四个分组、以及 <code>对话 Chat Console</code> 模块展开后的能力行（含方法徽章 + 五态状态点）。<b>看完在下方选一个编号告诉我</b>，我据此定稿阶段 3 视觉并实现。</p>
+  </header>
+
+  <div class="grid compare">
+
+    <!-- ================= 方案① ================= -->
+    <section class="col col--1">
+      <div class="col__head">
+        <span class="tag">方案 ①</span>
+        <div class="col__title">精炼技术流 Refined Tech</div>
+        <p class="col__sub">延续毛玻璃 + 技术蓝，做精致；统一线性图标替换随机 emoji。低风险精修。</p>
+      </div>
+      <div class="stage">
+<section class="mock1">
+  <div class="m1-sidebar">
+    <div class="m1-search">
+      <svg class="m1-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" placeholder="筛选能力…" />
+      <span class="m1-kbd">/</span>
+    </div>
+    <div class="m1-scroll">
+      <div class="m1-nav">
+        <svg class="m1-nav-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span>总览 Overview</span>
+      </div>
+      <div class="m1-group">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--subtle)"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <span class="m1-group-t">平台管理</span>
+        <span class="m1-admin">Admin</span>
+        <span class="m1-line"></span>
+      </div>
+      <div class="m1-nav">
+        <svg class="m1-nav-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>用户管理</span>
+      </div>
+      <div class="m1-nav">
+        <svg class="m1-nav-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span>角色管理</span>
+      </div>
+      <div class="m1-group">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="color:#d97706"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        <span class="m1-group-t">收藏</span>
+        <span class="m1-line"></span>
+      </div>
+      <div class="m1-favlist">
+        <div class="m1-ab">
+          <span class="m1-method m1-post">POST</span>
+          <span class="m1-ab-name">流式对话 (SSE)</span>
+          <span class="m1-dot m1-degraded" title="ready-degraded"></span>
+        </div>
+        <div class="m1-ab">
+          <span class="m1-method m1-post">POST</span>
+          <span class="m1-ab-name">自然语言转 SQL</span>
+          <span class="m1-dot m1-scope" title="scope-required"></span>
+        </div>
+      </div>
+      <div class="m1-group"><span class="m1-group-t">对话与检索</span><span class="m1-line"></span></div>
+      <div class="m1-mod is-selected is-open">
+        <svg class="m1-chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        <svg class="m1-mod-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span class="m1-mod-name">对话</span>
+        <span class="m1-mod-en">Chat Console</span>
+        <span class="m1-count">10</span>
+      </div>
+      <div class="m1-children">
+        <div class="m1-ab"><span class="m1-method m1-post">POST</span><span class="m1-ab-name">单轮对话</span><span class="m1-dot m1-ready" title="ready"></span></div>
+        <div class="m1-ab"><span class="m1-method m1-post">POST</span><span class="m1-ab-name">流式对话 (SSE)</span><span class="m1-dot m1-ready" title="ready"></span></div>
+        <div class="m1-ab"><span class="m1-method m1-post">POST</span><span class="m1-ab-name">结构化抽取</span><span class="m1-dot m1-ready" title="ready"></span></div>
+        <div class="m1-ab"><span class="m1-method m1-post">POST</span><span class="m1-ab-name">图文对话</span><span class="m1-dot m1-ready" title="ready"></span></div>
+      </div>
+      <div class="m1-mod is-hover">
+        <svg class="m1-chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        <svg class="m1-mod-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        <span class="m1-mod-name">知识库</span>
+        <span class="m1-mod-en">RAG Workspace</span>
+        <span class="m1-count">11</span>
+      </div>
+      <div class="m1-group"><span class="m1-group-t">智能体与编排</span><span class="m1-line"></span></div>
+      <div class="m1-mod">
+        <svg class="m1-chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        <svg class="m1-mod-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="2" x2="9" y2="4"/><line x1="15" y1="2" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="22"/><line x1="15" y1="20" x2="15" y2="22"/><line x1="20" y1="9" x2="22" y2="9"/><line x1="20" y1="15" x2="22" y2="15"/><line x1="2" y1="9" x2="4" y2="9"/><line x1="2" y1="15" x2="4" y2="15"/></svg>
+        <span class="m1-mod-name">智能体</span><span class="m1-mod-en">Agent Lab</span><span class="m1-count">18</span>
+      </div>
+      <div class="m1-mod">
+        <svg class="m1-chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        <svg class="m1-mod-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span class="m1-mod-name">异步任务</span><span class="m1-mod-en">Async Monitor</span><span class="m1-count">8</span>
+      </div>
+      <div class="m1-mod">
+        <svg class="m1-chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        <svg class="m1-mod-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+        <span class="m1-mod-name">工作流</span><span class="m1-mod-en">Workflow Desk</span><span class="m1-count">7</span>
+      </div>
+      <div class="m1-mod">
+        <svg class="m1-chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        <svg class="m1-mod-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+        <span class="m1-mod-name">数据分析</span><span class="m1-mod-en">Analytics Lab</span><span class="m1-count">3</span>
+      </div>
+      <div class="m1-group"><span class="m1-group-t">多模态</span><span class="m1-line"></span></div>
+      <div class="m1-mod">
+        <svg class="m1-chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        <svg class="m1-mod-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+        <span class="m1-mod-name">多模态</span><span class="m1-mod-en">Multimodal Console</span><span class="m1-count">8</span>
+      </div>
+      <div class="m1-group"><span class="m1-group-t">平台工程与互操作</span><span class="m1-line"></span></div>
+      <div class="m1-mod">
+        <svg class="m1-chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        <svg class="m1-mod-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>
+        <span class="m1-mod-name">互操作与评测</span><span class="m1-mod-en">Interop &amp; Eval Tools</span><span class="m1-count">12</span>
+      </div>
+      <div class="m1-mod">
+        <svg class="m1-chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        <svg class="m1-mod-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/></svg>
+        <span class="m1-mod-name">渠道</span><span class="m1-mod-en">Channel Console</span><span class="m1-count">5</span>
+      </div>
+    </div>
+    <div class="m1-footer">
+      <div class="m1-density">
+        <button class="is-active">紧凑</button>
+        <button>舒适</button>
+      </div>
+      <span class="m1-version">目录 v1</span>
+    </div>
+  </div>
+  <style>
+    .mock1{
+      --surface:#ffffff; --surface-2:#f1f5f9; --surface-3:#e8edf5;
+      --border:#e2e8f0; --text:#0f172a; --muted:#475569; --subtle:#64748b;
+      --primary:#2563eb; --primary-soft:#eff6ff; --primary-border:#bfdbfe;
+      --success:#15803d; --warning:#b45309; --danger:#b91c1c;
+      --mono:"SF Mono",ui-monospace,monospace;
+      font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+      -webkit-font-smoothing:antialiased; color:var(--text);
+    }
+    .mock1 *{ box-sizing:border-box; }
+    .mock1 .m1-sidebar{
+      width:264px; height:660px; display:flex; flex-direction:column;
+      background:rgba(255,255,255,.72);
+      backdrop-filter:blur(12px) saturate(1.15);
+      -webkit-backdrop-filter:blur(12px) saturate(1.15);
+      border:1px solid rgba(226,232,240,.9); border-radius:16px;
+      box-shadow:0 10px 34px rgba(15,23,42,.07); overflow:hidden;
+    }
+    .mock1 .m1-search{
+      flex:none; display:flex; align-items:center; gap:8px; margin:12px 12px 6px;
+      padding:8px 10px; background:var(--surface); border:1px solid var(--border);
+      border-radius:10px; transition:border-color .15s, box-shadow .15s;
+    }
+    .mock1 .m1-search:focus-within{ border-color:var(--primary-border); box-shadow:0 0 0 3px rgba(37,99,235,.08); }
+    .mock1 .m1-search svg{ color:var(--subtle); flex:none; }
+    .mock1 .m1-search input{ border:none; outline:none; background:none; font:inherit; font-size:12.5px; color:var(--text); flex:1 1 auto; min-width:0; }
+    .mock1 .m1-search input::placeholder{ color:var(--subtle); }
+    .mock1 .m1-kbd{ font-family:var(--mono); font-size:11px; color:var(--subtle); background:var(--surface-2); border:1px solid var(--border); border-radius:5px; padding:0 6px; line-height:16px; flex:none; }
+    .mock1 .m1-scroll{ flex:1 1 auto; overflow-y:auto; padding:2px 8px 8px; }
+    .mock1 .m1-scroll::-webkit-scrollbar{ width:8px; }
+    .mock1 .m1-scroll::-webkit-scrollbar-thumb{ background:#cbd5e1; border-radius:99px; border:2px solid transparent; background-clip:content-box; }
+    .mock1 .m1-scroll::-webkit-scrollbar-thumb:hover{ background:#94a3b8; background-clip:content-box; }
+    .mock1 .m1-nav{ display:flex; align-items:center; gap:9px; padding:8px 10px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:500; color:var(--text); }
+    .mock1 .m1-nav:hover{ background:var(--surface-2); }
+    .mock1 .m1-nav-ico{ color:var(--subtle); flex:none; }
+    .mock1 .m1-group{ display:flex; align-items:center; gap:7px; padding:15px 10px 5px; }
+    .mock1 .m1-group-t{ font-size:10.5px; font-weight:700; letter-spacing:.9px; text-transform:uppercase; color:var(--subtle); white-space:nowrap; }
+    .mock1 .m1-group .m1-line{ flex:1 1 auto; height:1px; background:var(--border); }
+    .mock1 .m1-admin{ font-size:9px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; color:var(--warning); background:#fffbeb; border:1px solid #fde68a; border-radius:999px; padding:1px 6px; }
+    .mock1 .m1-mod{ position:relative; display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:8px; cursor:pointer; color:var(--text); }
+    .mock1 .m1-mod:hover, .mock1 .m1-mod.is-hover{ background:var(--surface-2); }
+    .mock1 .m1-chev{ color:var(--subtle); flex:none; transition:transform .15s ease; }
+    .mock1 .m1-mod-ico{ color:var(--subtle); flex:none; }
+    .mock1 .m1-mod-name{ font-size:13px; font-weight:600; flex:none; }
+    .mock1 .m1-mod-en{ font-size:11.5px; color:var(--subtle); flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .mock1 .m1-count{ font-family:var(--mono); font-size:11px; color:var(--subtle); background:var(--surface-2); border-radius:999px; padding:1px 7px; flex:none; }
+    .mock1 .m1-mod.is-selected{ background:var(--primary-soft); }
+    .mock1 .m1-mod.is-selected::before{ content:""; position:absolute; left:0; top:6px; bottom:6px; width:3px; border-radius:0 3px 3px 0; background:var(--primary); }
+    .mock1 .m1-mod.is-selected .m1-mod-name{ color:var(--primary); }
+    .mock1 .m1-mod.is-selected .m1-mod-ico{ color:var(--primary); }
+    .mock1 .m1-mod.is-selected .m1-count{ color:var(--primary); background:#fff; }
+    .mock1 .m1-mod.is-open .m1-chev, .mock1 .m1-mod.is-selected .m1-chev{ transform:rotate(90deg); }
+    .mock1 .m1-mod.is-selected .m1-chev{ color:var(--primary); }
+    .mock1 .m1-children{ margin:2px 0 4px 25px; padding-left:11px; border-left:1px solid var(--border); }
+    .mock1 .m1-favlist{ padding:0 2px; }
+    .mock1 .m1-ab{ display:flex; align-items:center; gap:8px; padding:5px 8px; border-radius:6px; cursor:pointer; }
+    .mock1 .m1-ab:hover{ background:var(--surface-2); }
+    .mock1 .m1-ab-name{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12.5px; color:var(--muted); }
+    .mock1 .m1-method{ font-family:var(--mono); font-size:9.5px; font-weight:700; letter-spacing:.3px; padding:1px 4px; border-radius:4px; flex:none; line-height:1.3; }
+    .mock1 .m1-post{ color:#1d4ed8; background:#eff6ff; }
+    .mock1 .m1-get{ color:#15803d; background:#ecfdf3; }
+    .mock1 .m1-dot{ width:8px; height:8px; border-radius:50%; flex:none; }
+    .mock1 .m1-ready{ background:var(--success); }
+    .mock1 .m1-degraded{ background:var(--success); box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--warning); }
+    .mock1 .m1-flagoff{ background:#94a3b8; }
+    .mock1 .m1-scope{ background:var(--warning); }
+    .mock1 .m1-display{ background:var(--danger); }
+    .mock1 .m1-footer{ flex:none; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 12px; border-top:1px solid var(--border); background:rgba(255,255,255,.55); }
+    .mock1 .m1-density{ display:inline-flex; background:var(--surface-2); border-radius:8px; padding:2px; gap:2px; }
+    .mock1 .m1-density button{ border:none; background:none; font:inherit; font-size:11.5px; color:var(--subtle); padding:3px 10px; border-radius:6px; cursor:pointer; }
+    .mock1 .m1-density button.is-active{ background:#fff; color:var(--text); font-weight:600; box-shadow:0 1px 2px rgba(15,23,42,.08); }
+    .mock1 .m1-version{ font-family:var(--mono); font-size:11px; color:var(--subtle); }
+  </style>
+</section>
+      </div>
+      <div class="notes">
+        <h4>设计要点</h4>
+        <ul>
+          <li><b>统一线性图标</b>替换 9 个随机 emoji，风格一致、随选中变主色。</li>
+          <li><b>三级主次分层</b>：组头小标签 ＜ 模块行主导航 ＜ 能力行次级（缩进 + 引导线）。</li>
+          <li><b>强选中态</b>：主色软底 + 左 3px 强调条 + 主色文字/图标。</li>
+          <li>弱化 blur、去多余光晕，收紧密度、8px 网格对齐。</li>
+        </ul>
+        <dl class="meta">
+          <dt>宽度</dt><dd>264px（现状 288）</dd>
+          <dt>风格</dt><dd>毛玻璃 · 技术蓝（延续）</dd>
+          <dt>风险</dt><dd>最低（与现有 token 无缝）</dd>
+          <dt>适合</dt><dd>想变精致但不换语言</dd>
+        </dl>
+      </div>
+    </section>
+
+    <!-- ================= 方案② ================= -->
+    <section class="col col--2">
+      <div class="col__head">
+        <span class="tag">方案 ②</span>
+        <div class="col__title">静谧扁平 / IDE 风 Calm Flat</div>
+        <p class="col__sub">去毛玻璃，实色安静高可读；三级压成两级观感。Linear / VS Code 气质，最直观。</p>
+      </div>
+      <div class="stage">
+<section class="mock2">
+  <aside class="m2-sidebar">
+    <div class="m2-search">
+      <svg class="m2-ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.3"/><path d="M10.3 10.3 14 14"/></svg>
+      <input class="m2-search__in" type="text" placeholder="筛选能力…" aria-label="筛选能力">
+      <kbd class="m2-kbd">/</kbd>
+    </div>
+    <nav class="m2-scroll">
+      <a class="m2-nav" href="#">
+        <svg class="m2-ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>
+        <span class="m2-nav__t">总览 Overview</span>
+      </a>
+      <div class="m2-sec">
+        <div class="m2-head">
+          <span class="m2-head__t">平台管理</span>
+          <svg class="m2-head__c" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
+        </div>
+        <a class="m2-nav m2-nav--sub" href="#">
+          <svg class="m2-ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5" r="2.6"/><path d="M3.6 13c0-2.5 2-4 4.4-4s4.4 1.5 4.4 4"/></svg>
+          <span class="m2-nav__t">用户管理</span>
+        </a>
+        <a class="m2-nav m2-nav--sub" href="#">
+          <svg class="m2-ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.2l4.4 1.7v3.3c0 3-2 5.1-4.4 6.2-2.4-1.1-4.4-3.2-4.4-6.2V3.9z"/></svg>
+          <span class="m2-nav__t">角色管理</span>
+        </a>
+      </div>
+      <div class="m2-sec">
+        <div class="m2-head">
+          <svg class="m2-head__s" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.4l1.7 3.4 3.8.5-2.8 2.6.7 3.8L8 11.4 4.6 12.7l.7-3.8L2.5 6.3l3.8-.5z"/></svg>
+          <span class="m2-head__t">收藏</span>
+        </div>
+        <a class="m2-cap" href="#">
+          <span class="m2-badge m2-badge--post">POST</span>
+          <span class="m2-cap__t">混合检索</span>
+          <span class="m2-dot m2-dot--degraded" title="ready · 降级"></span>
+        </a>
+        <a class="m2-cap" href="#">
+          <span class="m2-badge m2-badge--post">POST</span>
+          <span class="m2-cap__t">NL2SQL 数据问答</span>
+          <span class="m2-dot m2-dot--scope" title="需授权"></span>
+        </a>
+      </div>
+      <div class="m2-sec">
+        <div class="m2-head">
+          <span class="m2-head__t">对话与检索</span>
+          <svg class="m2-head__c" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
+        </div>
+        <div class="m2-mod m2-mod--open">
+          <button class="m2-mod__row" type="button">
+            <svg class="m2-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg>
+            <span class="m2-mod__t">对话 Chat Console</span>
+            <span class="m2-count">10</span>
+          </button>
+          <div class="m2-caps">
+            <a class="m2-cap m2-cap--hover" href="#">
+              <span class="m2-badge m2-badge--post">POST</span>
+              <span class="m2-cap__t">单轮对话</span>
+              <span class="m2-dot m2-dot--ready" title="ready"></span>
+            </a>
+            <a class="m2-cap m2-cap--active" href="#" aria-current="page">
+              <span class="m2-badge m2-badge--post">POST</span>
+              <span class="m2-cap__t">流式对话 (SSE)</span>
+              <span class="m2-dot m2-dot--ready" title="ready"></span>
+            </a>
+            <a class="m2-cap" href="#">
+              <span class="m2-badge m2-badge--post">POST</span>
+              <span class="m2-cap__t">结构化抽取</span>
+              <span class="m2-dot m2-dot--ready" title="ready"></span>
+            </a>
+            <a class="m2-cap" href="#">
+              <span class="m2-badge m2-badge--post">POST</span>
+              <span class="m2-cap__t">图文对话</span>
+              <span class="m2-dot m2-dot--ready" title="ready"></span>
+            </a>
+          </div>
+        </div>
+        <div class="m2-mod">
+          <button class="m2-mod__row" type="button">
+            <svg class="m2-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg>
+            <span class="m2-mod__t">知识库 RAG Workspace</span>
+            <span class="m2-count">11</span>
+          </button>
+        </div>
+      </div>
+      <div class="m2-sec">
+        <div class="m2-head">
+          <span class="m2-head__t">智能体与编排</span>
+          <svg class="m2-head__c" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
+        </div>
+        <div class="m2-mod">
+          <button class="m2-mod__row" type="button">
+            <svg class="m2-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg>
+            <span class="m2-mod__t">智能体 Agent Lab</span><span class="m2-count">18</span>
+          </button>
+        </div>
+        <div class="m2-mod">
+          <button class="m2-mod__row" type="button">
+            <svg class="m2-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg>
+            <span class="m2-mod__t">异步任务 Async Monitor</span><span class="m2-count">8</span>
+          </button>
+        </div>
+        <div class="m2-mod">
+          <button class="m2-mod__row" type="button">
+            <svg class="m2-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg>
+            <span class="m2-mod__t">工作流 Workflow Desk</span><span class="m2-count">7</span>
+          </button>
+        </div>
+        <div class="m2-mod">
+          <button class="m2-mod__row" type="button">
+            <svg class="m2-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg>
+            <span class="m2-mod__t">数据分析 Analytics Lab</span><span class="m2-count">3</span>
+          </button>
+        </div>
+      </div>
+      <div class="m2-sec">
+        <div class="m2-head">
+          <span class="m2-head__t">多模态</span>
+          <svg class="m2-head__c" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
+        </div>
+        <div class="m2-mod">
+          <button class="m2-mod__row" type="button">
+            <svg class="m2-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg>
+            <span class="m2-mod__t">多模态 Multimodal Console</span><span class="m2-count">8</span>
+          </button>
+        </div>
+      </div>
+      <div class="m2-sec">
+        <div class="m2-head">
+          <span class="m2-head__t">平台工程与互操作</span>
+          <svg class="m2-head__c" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
+        </div>
+        <div class="m2-mod">
+          <button class="m2-mod__row" type="button">
+            <svg class="m2-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg>
+            <span class="m2-mod__t">互操作与评测 Interop &amp; Eval Tools</span><span class="m2-count">12</span>
+          </button>
+        </div>
+        <div class="m2-mod">
+          <button class="m2-mod__row" type="button">
+            <svg class="m2-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg>
+            <span class="m2-mod__t">渠道 Channel Console</span><span class="m2-count">5</span>
+          </button>
+        </div>
+      </div>
+    </nav>
+    <div class="m2-foot">
+      <div class="m2-density" role="group" aria-label="密度切换">
+        <button class="m2-density__b is-on" type="button">紧凑</button>
+        <button class="m2-density__b" type="button">宽松</button>
+      </div>
+      <span class="m2-ver">目录 v1</span>
+    </div>
+  </aside>
+  <style>
+    .mock2{
+      --s:#ffffff; --s2:#f1f5f9; --s3:#e8edf5;
+      --bd:#e2e8f0;
+      --tx:#0f172a; --mut:#475569; --sub:#64748b;
+      --pri:#2563eb; --pri-soft:#eff6ff; --pri-bd:#bfdbfe;
+      --ok:#15803d; --warn:#b45309; --dng:#b91c1c; --neu:#94a3b8;
+      font-family:-apple-system,"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;
+      color:var(--tx); -webkit-font-smoothing:antialiased;
+    }
+    .mock2 *{box-sizing:border-box; margin:0; padding:0;}
+    .m2-sidebar{
+      width:256px; height:660px; display:flex; flex-direction:column;
+      background:var(--s); border:1px solid var(--bd); border-radius:12px;
+      overflow:hidden;
+    }
+    .m2-ico{width:16px;height:16px;flex:0 0 16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;}
+    .m2-search{
+      display:flex; align-items:center; gap:8px;
+      height:44px; padding:0 12px; margin:8px 8px 4px;
+      background:var(--s2); border-radius:8px; color:var(--sub);
+    }
+    .m2-search__in{
+      flex:1; min-width:0; border:0; background:transparent; outline:none;
+      font:inherit; font-size:13px; color:var(--tx);
+    }
+    .m2-search__in::placeholder{color:var(--sub);}
+    .m2-kbd{
+      font:11px/1 "SF Mono",ui-monospace,Menlo,monospace; color:var(--sub);
+      background:var(--s); border:1px solid var(--bd); border-radius:5px;
+      padding:2px 6px; flex:0 0 auto;
+    }
+    .m2-scroll{flex:1; overflow-y:auto; padding:4px 8px 8px;}
+    .m2-scroll::-webkit-scrollbar{width:8px;}
+    .m2-scroll::-webkit-scrollbar-thumb{background:var(--s3); border-radius:8px; border:2px solid var(--s);}
+    .m2-scroll::-webkit-scrollbar-thumb:hover{background:#d3dbe6;}
+    .m2-nav{
+      display:flex; align-items:center; gap:10px;
+      height:32px; padding:0 10px; border-radius:7px;
+      color:var(--tx); text-decoration:none; font-size:13px; font-weight:500;
+    }
+    .m2-nav .m2-ico{color:var(--sub);}
+    .m2-nav__t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .m2-nav:hover{background:var(--s2);}
+    .m2-nav--sub{font-weight:450;}
+    .m2-sec{margin-top:12px;}
+    .m2-head{
+      display:flex; align-items:center; gap:6px;
+      height:24px; padding:0 10px; user-select:none; cursor:default;
+    }
+    .m2-head__t{
+      flex:1; font-size:11px; font-weight:600; letter-spacing:.05em;
+      text-transform:uppercase; color:var(--sub);
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    }
+    .m2-head__c{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.6;
+      stroke-linecap:round;stroke-linejoin:round;color:#b4c0d0;flex:0 0 12px;}
+    .m2-head:hover .m2-head__c{color:var(--sub);}
+    .m2-head__s{width:13px;height:13px;fill:currentColor;color:#b4c0d0;flex:0 0 13px;}
+    .m2-mod__row{
+      display:flex; align-items:center; gap:6px; width:100%;
+      height:30px; padding:0 8px 0 8px; border:0; background:transparent;
+      border-radius:7px; cursor:pointer; text-align:left; font:inherit; color:var(--tx);
+    }
+    .m2-chev{
+      width:13px;height:13px;flex:0 0 13px;fill:none;stroke:currentColor;stroke-width:1.6;
+      stroke-linecap:round;stroke-linejoin:round;color:var(--sub);
+      transition:transform .15s ease;
+    }
+    .m2-mod--open>.m2-mod__row .m2-chev{transform:rotate(90deg);color:var(--mut);}
+    .m2-mod__t{
+      flex:1; min-width:0; font-size:13px; font-weight:500;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    }
+    .m2-mod--open>.m2-mod__row .m2-mod__t{color:var(--tx);}
+    .m2-count{
+      font:11px/1 "SF Mono",ui-monospace,Menlo,monospace; color:var(--sub);
+      flex:0 0 auto; padding-left:6px;
+    }
+    .m2-mod__row:hover{background:var(--s2);}
+    .m2-caps{display:none; padding-left:0;}
+    .m2-mod--open>.m2-caps{display:block;}
+    .m2-cap{
+      position:relative; display:flex; align-items:center; gap:8px;
+      height:28px; padding:0 10px 0 30px; border-radius:7px;
+      text-decoration:none; color:var(--mut); font-size:12.5px;
+    }
+    .m2-cap__t{flex:1; min-width:0; overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .m2-cap:hover,.m2-cap--hover{background:var(--s2); color:var(--tx);}
+    .m2-sec > .m2-cap{padding-left:22px;}
+    .m2-cap--active{background:var(--pri-soft); color:var(--pri); font-weight:500;}
+    .m2-cap--active::before{
+      content:""; position:absolute; left:0; top:4px; bottom:4px; width:2px;
+      background:var(--pri); border-radius:0 2px 2px 0;
+    }
+    .m2-cap--active .m2-badge--post{color:var(--pri);}
+    .m2-badge{
+      flex:0 0 auto; min-width:34px; text-align:center;
+      font:9.5px/1 "SF Mono",ui-monospace,Menlo,monospace; letter-spacing:.02em;
+      padding:3px 4px; border-radius:4px; background:var(--s2); color:var(--sub);
+    }
+    .m2-badge--post{color:#3b58c9;}
+    .m2-badge--get{color:#2f7a52;}
+    .m2-dot{flex:0 0 auto; width:7px; height:7px; border-radius:50%;}
+    .m2-dot--ready{background:var(--ok);}
+    .m2-dot--degraded{background:var(--ok); box-shadow:0 0 0 2px rgba(180,83,9,.38);}
+    .m2-dot--flagoff{background:var(--s); border:1.5px solid var(--neu); width:7px; height:7px;}
+    .m2-dot--scope{background:var(--warn);}
+    .m2-dot--display{background:var(--dng);}
+    .m2-foot{
+      display:flex; align-items:center; justify-content:space-between;
+      height:44px; padding:0 12px; border-top:1px solid var(--bd); background:var(--s);
+    }
+    .m2-density{display:inline-flex; background:var(--s2); border-radius:7px; padding:2px;}
+    .m2-density__b{
+      border:0; background:transparent; cursor:pointer; font:inherit; font-size:11.5px;
+      color:var(--sub); padding:3px 9px; border-radius:5px;
+    }
+    .m2-density__b.is-on{background:var(--s); color:var(--tx); box-shadow:0 0 0 1px var(--bd) inset;}
+    .m2-ver{font:11px/1 "SF Mono",ui-monospace,Menlo,monospace; color:var(--sub);}
+  </style>
+</section>
+      </div>
+      <div class="notes">
+        <h4>设计要点</h4>
+        <ul>
+          <li><b>去毛玻璃/光晕</b>，实色安静表面，密集列表阅读不被底纹干扰、更省渲染。</li>
+          <li><b>三级压两级观感</b>：组头降为安静灰标签，模块行为主，能力按需展开。</li>
+          <li>只保留一种 chevron 图标 + 极少顶部图标，图形语言收敛。</li>
+          <li>主色只点睛：选中 pill + 2px 左条（VS Code active 语义），其余中性灰。</li>
+        </ul>
+        <dl class="meta">
+          <dt>宽度</dt><dd>256px（现状 288）</dd>
+          <dt>风格</dt><dd>扁平安静 · IDE/Linear</dd>
+          <dt>风险</dt><dd>中（换视觉语言）</dd>
+          <dt>适合</dt><dd>要专业、直观、久看不累</dd>
+        </dl>
+      </div>
+    </section>
+
+    <!-- ================= 方案③ ================= -->
+    <section class="col col--3">
+      <div class="col__head">
+        <span class="tag">方案 ③</span>
+        <div class="col__title">工作台 / 彩色编码 Color-coded</div>
+        <p class="col__sub">每个语义组配强调色 + 图标色块 chip，颜色帮助扫读定位。最好看、最有辨识度。</p>
+      </div>
+      <div class="stage">
+<section class="mock3">
+  <div class="m3-search">
+    <div class="m3-search-box">
+      <span class="m3-search-ico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.4-3.4"/></svg>
+      </span>
+      <input class="m3-search-input" type="text" placeholder="筛选能力…" aria-label="筛选能力">
+      <kbd class="m3-kbd">/</kbd>
+    </div>
+  </div>
+  <nav class="m3-scroll">
+    <a class="m3-item m3-home m3-slate" aria-current="false">
+      <span class="m3-chip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>
+      </span>
+      <span class="m3-item-name">总览 Overview</span>
+    </a>
+    <div class="m3-group m3-slate">
+      <div class="m3-ghead">
+        <span class="m3-gbar"></span>
+        <span class="m3-glabel">平台管理</span>
+        <span class="m3-gtag">仅管理员</span>
+      </div>
+      <a class="m3-item">
+        <span class="m3-chip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3.5 19.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.5a3 3 0 0 1 0 6"/><path d="M17.5 14.6c2.2.4 3.9 2.1 3.9 4.9"/></svg>
+        </span>
+        <span class="m3-item-name">用户管理</span>
+      </a>
+      <a class="m3-item">
+        <span class="m3-chip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l7 2.6v5.4c0 4.2-2.9 7-7 8.5-4.1-1.5-7-4.3-7-8.5V6.1z"/><path d="M9.3 12l1.9 1.9 3.5-3.7"/></svg>
+        </span>
+        <span class="m3-item-name">角色管理</span>
+      </a>
+    </div>
+    <div class="m3-group m3-gold">
+      <div class="m3-ghead">
+        <span class="m3-gstar">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 3.6l2.6 5.2 5.8.9-4.2 4.1 1 5.7-5.2-2.7-5.2 2.7 1-5.7-4.2-4.1 5.8-.9z"/></svg>
+        </span>
+        <span class="m3-glabel">收藏</span>
+        <span class="m3-gmeta">2</span>
+      </div>
+      <div class="m3-caps">
+        <a class="m3-cap">
+          <span class="m3-method m3-post">POST</span>
+          <span class="m3-cap-name">混合检索</span>
+          <span class="m3-st st-degraded" title="降级可用（ready-degraded）"></span>
+        </a>
+        <a class="m3-cap">
+          <span class="m3-method m3-post">POST</span>
+          <span class="m3-cap-name">NL2SQL 查询</span>
+          <span class="m3-st st-scope" title="需授权（scope-required）"></span>
+        </a>
+      </div>
+    </div>
+    <div class="m3-group m3-blue">
+      <div class="m3-ghead">
+        <span class="m3-gbar"></span>
+        <span class="m3-glabel">对话与检索</span>
+        <span class="m3-gmeta">2 模块</span>
+      </div>
+      <button class="m3-mod m3-open" aria-expanded="true">
+        <span class="m3-chip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12.5a7 7 0 0 1-7 7 7.6 7.6 0 0 1-2.8-.5L5 20.5l1.4-4.1A7 7 0 1 1 20 12.5z"/></svg>
+        </span>
+        <span class="m3-mod-text">
+          <span class="m3-mod-name">对话</span>
+          <span class="m3-mod-en">Chat Console</span>
+        </span>
+        <span class="m3-count">10</span>
+        <span class="m3-caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+      </button>
+      <div class="m3-caps">
+        <a class="m3-cap">
+          <span class="m3-method m3-post">POST</span>
+          <span class="m3-cap-name">单轮对话</span>
+          <span class="m3-st st-ready" title="就绪（ready）"></span>
+        </a>
+        <a class="m3-cap m3-selected" aria-current="page">
+          <span class="m3-method m3-post">POST</span>
+          <span class="m3-cap-name">流式对话 (SSE)</span>
+          <span class="m3-st st-ready" title="就绪（ready）"></span>
+        </a>
+        <a class="m3-cap m3-hover">
+          <span class="m3-method m3-post">POST</span>
+          <span class="m3-cap-name">结构化抽取</span>
+          <span class="m3-st st-ready" title="就绪（ready）"></span>
+        </a>
+        <a class="m3-cap">
+          <span class="m3-method m3-post">POST</span>
+          <span class="m3-cap-name">图文对话</span>
+          <span class="m3-st st-ready" title="就绪（ready）"></span>
+        </a>
+      </div>
+      <button class="m3-mod" aria-expanded="false">
+        <span class="m3-chip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l8.5 4.5-8.5 4.5L3.5 8z"/><path d="M4 12l8 4.3 8-4.3"/><path d="M4 16l8 4.3 8-4.3"/></svg>
+        </span>
+        <span class="m3-mod-text">
+          <span class="m3-mod-name">知识库</span>
+          <span class="m3-mod-en">RAG Workspace</span>
+        </span>
+        <span class="m3-count">11</span>
+        <span class="m3-caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+      </button>
+    </div>
+    <div class="m3-group m3-violet">
+      <div class="m3-ghead">
+        <span class="m3-gbar"></span>
+        <span class="m3-glabel">智能体与编排</span>
+        <span class="m3-gmeta">4 模块</span>
+      </div>
+      <button class="m3-mod" aria-expanded="false">
+        <span class="m3-chip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="2"/><rect x="10.4" y="10.4" width="3.2" height="3.2" rx=".6"/><path d="M10 3.5v2.5M14 3.5v2.5M10 18v2.5M14 18v2.5M3.5 10H6M3.5 14H6M18 10h2.5M18 14h2.5"/></svg>
+        </span>
+        <span class="m3-mod-text"><span class="m3-mod-name">智能体</span><span class="m3-mod-en">Agent Lab</span></span>
+        <span class="m3-count">18</span>
+        <span class="m3-caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+      </button>
+      <button class="m3-mod" aria-expanded="false">
+        <span class="m3-chip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4.2l2.8 1.8"/></svg>
+        </span>
+        <span class="m3-mod-text"><span class="m3-mod-name">异步任务</span><span class="m3-mod-en">Async Monitor</span></span>
+        <span class="m3-count">8</span>
+        <span class="m3-caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+      </button>
+      <button class="m3-mod" aria-expanded="false">
+        <span class="m3-chip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="6" r="2.2"/><circle cx="7" cy="18" r="2.2"/><circle cx="17" cy="9" r="2.2"/><path d="M7 8.2v7.6"/><path d="M9.2 15.8H11c3 0 6-1.3 6-4.6"/></svg>
+        </span>
+        <span class="m3-mod-text"><span class="m3-mod-name">工作流</span><span class="m3-mod-en">Workflow Desk</span></span>
+        <span class="m3-count">7</span>
+        <span class="m3-caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+      </button>
+      <button class="m3-mod" aria-expanded="false">
+        <span class="m3-chip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><rect x="6" y="11" width="3" height="6" rx=".6"/><rect x="11" y="7" width="3" height="10" rx=".6"/><rect x="16" y="13" width="3" height="4" rx=".6"/></svg>
+        </span>
+        <span class="m3-mod-text"><span class="m3-mod-name">数据分析</span><span class="m3-mod-en">Analytics Lab</span></span>
+        <span class="m3-count">3</span>
+        <span class="m3-caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+      </button>
+    </div>
+    <div class="m3-group m3-amber">
+      <div class="m3-ghead">
+        <span class="m3-gbar"></span>
+        <span class="m3-glabel">多模态</span>
+        <span class="m3-gmeta">1 模块</span>
+      </div>
+      <button class="m3-mod" aria-expanded="false">
+        <span class="m3-chip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2.5"/><circle cx="9" cy="9.5" r="1.8"/><path d="M5 16.5l4-3.5 3.5 3 3-2.5 3.5 3"/></svg>
+        </span>
+        <span class="m3-mod-text"><span class="m3-mod-name">多模态</span><span class="m3-mod-en">Multimodal Console</span></span>
+        <span class="m3-count">8</span>
+        <span class="m3-caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+      </button>
+    </div>
+    <div class="m3-group m3-teal">
+      <div class="m3-ghead">
+        <span class="m3-gbar"></span>
+        <span class="m3-glabel">平台工程与互操作</span>
+        <span class="m3-gmeta">2 模块</span>
+      </div>
+      <button class="m3-mod" aria-expanded="false">
+        <span class="m3-chip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="12" r="2"/><circle cx="17" cy="7" r="2"/><circle cx="17" cy="17" r="2"/><path d="M4 12h4"/><path d="M11.7 11l3.6-2.6"/><path d="M11.7 13l3.6 2.6"/></svg>
+        </span>
+        <span class="m3-mod-text"><span class="m3-mod-name">互操作与评测</span><span class="m3-mod-en">Interop &amp; Eval Tools</span></span>
+        <span class="m3-count">12</span>
+        <span class="m3-caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+      </button>
+      <button class="m3-mod" aria-expanded="false">
+        <span class="m3-chip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4L11 14"/><path d="M21 4l-6.5 16.5-3.5-7.5L3.5 9.5z"/></svg>
+        </span>
+        <span class="m3-mod-text"><span class="m3-mod-name">渠道</span><span class="m3-mod-en">Channel Console</span></span>
+        <span class="m3-count">5</span>
+        <span class="m3-caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+      </button>
+    </div>
+  </nav>
+  <div class="m3-footer">
+    <div class="m3-legend" aria-label="状态图例">
+      <span><i class="m3-st st-ready"></i>就绪</span>
+      <span><i class="m3-st st-degraded"></i>降级</span>
+      <span><i class="m3-st st-scope"></i>需授权</span>
+      <span><i class="m3-st st-flagoff"></i>未启</span>
+      <span><i class="m3-st st-display"></i>仅展示</span>
+    </div>
+    <div class="m3-bar">
+      <div class="m3-density" role="group" aria-label="密度切换">
+        <button class="m3-seg on">舒适</button>
+        <button class="m3-seg">紧凑</button>
+      </div>
+      <button class="m3-collapse" aria-label="收起为图标轨道">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 6l-6 6 6 6"/><path d="M19 6l-6 6 6 6"/></svg>
+        收起
+      </button>
+      <span class="m3-ver">v1</span>
+    </div>
+  </div>
+  <style>
+    .mock3 *{box-sizing:border-box; margin:0; padding:0;}
+    .mock3{
+      --m-surface:#ffffff; --m-surface-2:#f1f5f9; --m-surface-3:#e8edf5;
+      --m-border:#e2e8f0;
+      --m-text:#0f172a; --m-muted:#475569; --m-subtle:#64748b;
+      --m-success:#15803d; --m-warning:#b45309; --m-danger:#b91c1c;
+      --m-r-sm:6px; --m-r:10px; --m-r-lg:14px;
+      width:280px; height:660px; display:flex; flex-direction:column;
+      background:var(--m-surface); color:var(--m-text);
+      border:1px solid var(--m-border); border-radius:var(--m-r-lg);
+      box-shadow:0 8px 30px rgba(15,23,42,.08); overflow:hidden;
+      font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;
+      font-size:13px; line-height:1.3; text-align:left; -webkit-font-smoothing:antialiased;
+    }
+    .mock3 svg{display:block;}
+    .mock3 .m3-blue  {--g:#2563eb; --g-soft:rgba(37,99,235,.10);  --g-line:rgba(37,99,235,.30);}
+    .mock3 .m3-violet{--g:#7c3aed; --g-soft:rgba(124,58,237,.10); --g-line:rgba(124,58,237,.30);}
+    .mock3 .m3-amber {--g:#d97706; --g-soft:rgba(217,119,6,.12);  --g-line:rgba(217,119,6,.32);}
+    .mock3 .m3-teal  {--g:#0e7490; --g-soft:rgba(14,116,128,.10); --g-line:rgba(14,116,128,.30);}
+    .mock3 .m3-slate {--g:#475569; --g-soft:rgba(71,85,105,.10);  --g-line:rgba(71,85,105,.28);}
+    .mock3 .m3-gold  {--g:#d97706; --g-soft:rgba(217,119,6,.13);  --g-line:rgba(217,119,6,.32);}
+    .mock3 .m3-search{flex:none; padding:12px 12px 8px;}
+    .mock3 .m3-search-box{display:flex; align-items:center; gap:8px; height:34px; padding:0 8px 0 10px;
+      background:var(--m-surface-2); border:1px solid var(--m-border); border-radius:var(--m-r); transition:.15s;}
+    .mock3 .m3-search-box:focus-within{background:#fff; border-color:#93b4f2; box-shadow:0 0 0 3px rgba(37,99,235,.12);}
+    .mock3 .m3-search-ico{color:var(--m-subtle); display:flex;}
+    .mock3 .m3-search-ico svg{width:15px; height:15px;}
+    .mock3 .m3-search-input{flex:1; min-width:0; border:0; background:transparent; outline:none; font:inherit; font-size:12.5px; color:var(--m-text);}
+    .mock3 .m3-search-input::placeholder{color:var(--m-subtle);}
+    .mock3 .m3-kbd{font-family:"SF Mono",ui-monospace,monospace; font-size:10.5px; color:var(--m-subtle);
+      background:#fff; border:1px solid var(--m-border); border-radius:5px; padding:0 5px; line-height:16px;}
+    .mock3 .m3-scroll{flex:1; overflow-y:auto; overflow-x:hidden; padding:2px 8px 10px;}
+    .mock3 .m3-scroll::-webkit-scrollbar{width:9px;}
+    .mock3 .m3-scroll::-webkit-scrollbar-thumb{background:#dbe2ec; border-radius:99px; border:2px solid #fff;}
+    .mock3 .m3-scroll::-webkit-scrollbar-thumb:hover{background:#c6d0de;}
+    .mock3 .m3-chip{width:26px; height:26px; flex:none; border-radius:8px; display:flex; align-items:center; justify-content:center;
+      background:var(--g-soft); color:var(--g);}
+    .mock3 .m3-chip svg{width:15px; height:15px;}
+    .mock3 .m3-item{display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:var(--m-r);
+      color:var(--m-text); text-decoration:none; cursor:pointer;}
+    .mock3 .m3-item:hover{background:var(--m-surface-2);}
+    .mock3 .m3-item-name{font-size:13px; font-weight:500;}
+    .mock3 .m3-home{margin-top:2px;}
+    .mock3 .m3-home .m3-item-name{font-weight:600;}
+    .mock3 .m3-group{margin-top:8px;}
+    .mock3 .m3-ghead{display:flex; align-items:center; gap:8px; padding:6px 8px 4px;}
+    .mock3 .m3-gbar{width:3px; height:13px; border-radius:99px; background:var(--g); flex:none;}
+    .mock3 .m3-gstar{color:var(--g); display:flex;} .mock3 .m3-gstar svg{width:13px; height:13px;}
+    .mock3 .m3-glabel{font-size:11.5px; font-weight:700; letter-spacing:.02em; color:var(--m-muted);}
+    .mock3 .m3-gmeta{margin-left:auto; font-size:10.5px; color:var(--m-subtle);}
+    .mock3 .m3-gtag{margin-left:auto; font-size:10px; font-weight:600; color:var(--g); background:var(--g-soft); padding:1px 7px; border-radius:99px;}
+    .mock3 .m3-mod{display:flex; align-items:center; gap:10px; width:100%; padding:6px 8px; border:0; background:transparent;
+      border-radius:var(--m-r); cursor:pointer; text-align:left; color:var(--m-text); font:inherit;}
+    .mock3 .m3-mod:hover{background:var(--m-surface-2);}
+    .mock3 .m3-mod.m3-open{background:var(--g-soft);}
+    .mock3 .m3-mod-text{display:flex; flex-direction:column; min-width:0; flex:1; line-height:1.15;}
+    .mock3 .m3-mod-name{font-size:13px; font-weight:600; color:var(--m-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    .mock3 .m3-mod-en{font-size:10.5px; color:var(--m-subtle); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    .mock3 .m3-count{flex:none; font-family:"SF Mono",ui-monospace,monospace; font-size:10.5px; font-weight:600;
+      color:var(--g); background:var(--g-soft); padding:1px 7px; border-radius:99px;}
+    .mock3 .m3-caret{flex:none; color:var(--m-subtle); display:flex;}
+    .mock3 .m3-caret svg{width:14px; height:14px;}
+    .mock3 .m3-mod.m3-open .m3-caret{color:var(--g);}
+    .mock3 .m3-caps{margin:2px 0 6px 20px; padding-left:12px; border-left:1.5px solid var(--g-line);
+      display:flex; flex-direction:column; gap:1px;}
+    .mock3 .m3-cap{position:relative; display:flex; align-items:center; gap:8px; padding:5px 8px; border-radius:8px;
+      text-decoration:none; color:var(--m-text); cursor:pointer;}
+    .mock3 .m3-cap:hover, .mock3 .m3-cap.m3-hover{background:var(--m-surface-2);}
+    .mock3 .m3-cap-name{flex:1; min-width:0; font-size:12.5px; color:var(--m-muted);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    .mock3 .m3-cap:hover .m3-cap-name, .mock3 .m3-cap.m3-hover .m3-cap-name{color:var(--m-text);}
+    .mock3 .m3-cap.m3-selected{background:var(--g-soft);}
+    .mock3 .m3-cap.m3-selected::before{content:""; position:absolute; left:-13px; top:50%; transform:translateY(-50%);
+      width:3px; height:17px; border-radius:99px; background:var(--g);}
+    .mock3 .m3-cap.m3-selected .m3-cap-name{color:var(--g); font-weight:600;}
+    .mock3 .m3-method{flex:none; width:34px; text-align:center; font-family:"SF Mono",ui-monospace,monospace;
+      font-size:9px; font-weight:700; letter-spacing:.03em; line-height:1; padding:3px 0; border-radius:5px;}
+    .mock3 .m3-post{background:var(--m-surface-3); color:#334155;}
+    .mock3 .m3-get{background:transparent; color:#64748b; box-shadow:inset 0 0 0 1px var(--m-border);}
+    .mock3 .m3-st{flex:none; width:9px; height:9px; border-radius:99px; display:inline-block;}
+    .mock3 .st-ready   {background:var(--m-success);}
+    .mock3 .st-degraded{background:var(--m-success); box-shadow:0 0 0 1.5px #fff,0 0 0 3px var(--m-warning);}
+    .mock3 .st-scope   {background:var(--m-warning); width:8px; height:8px; border-radius:2px; transform:rotate(45deg);}
+    .mock3 .st-flagoff {background:transparent; box-shadow:inset 0 0 0 1.6px #94a3b8;}
+    .mock3 .st-display {background:var(--m-danger); width:8px; height:8px; border-radius:2px;}
+    .mock3 .m3-footer{flex:none; border-top:1px solid var(--m-border); background:var(--m-surface); padding:8px 12px 10px;}
+    .mock3 .m3-legend{display:flex; flex-wrap:wrap; gap:6px 12px; margin-bottom:9px;}
+    .mock3 .m3-legend span{display:inline-flex; align-items:center; gap:5px; font-size:10px; color:var(--m-subtle);}
+    .mock3 .m3-legend .m3-st{width:8px; height:8px;}
+    .mock3 .m3-bar{display:flex; align-items:center; gap:8px;}
+    .mock3 .m3-density{display:inline-flex; background:var(--m-surface-2); border:1px solid var(--m-border); border-radius:8px; padding:2px;}
+    .mock3 .m3-seg{border:0; background:transparent; font:inherit; font-size:11px; color:var(--m-subtle); padding:3px 9px; border-radius:6px; cursor:pointer;}
+    .mock3 .m3-seg.on{background:#fff; color:var(--m-text); font-weight:600; box-shadow:0 1px 2px rgba(15,23,42,.08);}
+    .mock3 .m3-collapse{margin-left:auto; display:inline-flex; align-items:center; gap:3px; border:1px solid var(--m-border);
+      background:#fff; border-radius:8px; padding:3px 7px; font:inherit; font-size:10.5px; color:var(--m-muted); cursor:pointer;}
+    .mock3 .m3-collapse svg{width:13px; height:13px;}
+    .mock3 .m3-collapse:hover{background:var(--m-surface-2);}
+    .mock3 .m3-ver{font-family:"SF Mono",ui-monospace,monospace; font-size:10px; color:var(--m-subtle);
+      background:var(--m-surface-2); border:1px solid var(--m-border); padding:2px 7px; border-radius:99px;}
+  </style>
+</section>
+      </div>
+      <div class="notes">
+        <h4>设计要点</h4>
+        <ul>
+          <li><b>分组强调色系统</b>：对话=蓝 / 智能体=紫 / 多模态=琥珀 / 平台=青，颜色只点睛不铺满。</li>
+          <li><b>图标色块 chip</b>：模块行左侧 26px 圆角色块，一眼分辨类别，也是折叠图标轨道的锚点。</li>
+          <li>状态点<b>颜色+形状双编码</b>（圆/环/菱形/空心/方块）+ 底部图例，色盲友好。</li>
+          <li>底部含「收起为图标轨道」入口暗示。</li>
+        </ul>
+        <dl class="meta">
+          <dt>宽度</dt><dd>280px（现状 288）</dd>
+          <dt>风格</dt><dd>彩色编码 · 产品感</dd>
+          <dt>风险</dt><dd>中（配色可访问性需守）</dd>
+          <dt>适合</dt><dd>要好看、有个性、易扫读</dd>
+        </dl>
+      </div>
+    </section>
+
+  </div><!-- /grid -->
+
+  <div class="cmp">
+    <h2>横向对比</h2>
+    <div class="scroll">
+    <table>
+      <thead>
+        <tr><th>维度</th><th>① 精炼技术流</th><th>② 静谧扁平 / IDE</th><th>③ 工作台 / 彩色编码</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>整体气质</td><td>延续现有毛玻璃技术蓝，做精致</td><td>安静、扁平、专业，久看不累</td><td>有个性、活泼、辨识度高</td></tr>
+        <tr><td>与现状差异</td><td>小（同一设计语言升级）</td><td>中（去玻璃、换语言）</td><td>中（引入配色维度）</td></tr>
+        <tr><td>图标</td><td>统一线性图标（每模块一枚）</td><td>极简：仅 chevron + 少量顶部图标</td><td>线性图标 + 分组彩色 chip</td></tr>
+        <tr><td>颜色用法</td><td>主色点睛（选中态）</td><td>主色最克制，几乎全中性</td><td>分组强调色编码（4 色）</td></tr>
+        <tr><td>侧栏宽度</td><td>264px</td><td>256px（最窄）</td><td>280px</td></tr>
+        <tr><td>扫读定位</td><td>靠图标 + 层级</td><td>靠层级 + 留白</td><td>靠颜色 + 图标（最快）</td></tr>
+        <tr><td>可访问性</td><td>稳</td><td>最稳（高对比、低干扰）</td><td>需守色彩对比（已用形状兜底）</td></tr>
+        <tr><td>实现风险</td><td>最低</td><td>中</td><td>中（多一套配色变量）</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b>下一步</b>：三套都建立在同一套真实信息架构与已修复的交互缺陷之上，可任选或组合（例如「② 的克制骨架 + ③ 的分组色点睛」）。<b>告诉我你选哪个编号（或组合）</b>，我会据此定稿 FINAL_PLAN 阶段 3 的视觉基线，然后按阶段 ①→⑤ 开始实现。
+  </div>
+</div>
+</body>
+</html>

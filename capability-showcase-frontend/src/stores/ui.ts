@@ -104,20 +104,33 @@ export const useUiStore = defineStore('ui', () => {
     setDensity(density.value === 'comfortable' ? 'compact' : 'comfortable')
   }
 
-  function toggleSidebar(): void {
-    sidebarOpen.value = !sidebarOpen.value
+  // ── 移动端抽屉（内存态）──
+  /** 显式设置移动抽屉开合（resize/断点同步用 set，避免 toggle 竞态导致 scrim 残留）。 */
+  function setSidebarOpen(open: boolean): void {
+    sidebarOpen.value = open
+  }
+  function openSidebar(): void {
+    setSidebarOpen(true)
   }
   function closeSidebar(): void {
-    sidebarOpen.value = false
+    setSidebarOpen(false)
   }
-  /** 桌面端折叠/展开侧栏（持久化）。 */
-  function toggleNavCollapsed(): void {
-    navCollapsed.value = !navCollapsed.value
+  function toggleSidebar(): void {
+    setSidebarOpen(!sidebarOpen.value)
+  }
+
+  // ── 桌面端侧栏折叠（持久化，非敏感）──
+  /** 显式设置桌面折叠态并持久化（幂等；重复 set 同值无副作用）。 */
+  function setNavCollapsed(collapsed: boolean): void {
+    navCollapsed.value = collapsed
     try {
-      localStorage.setItem(NAV_COLLAPSED_KEY, navCollapsed.value ? '1' : '0')
+      localStorage.setItem(NAV_COLLAPSED_KEY, collapsed ? '1' : '0')
     } catch {
       /* 忽略 */
     }
+  }
+  function toggleNavCollapsed(): void {
+    setNavCollapsed(!navCollapsed.value)
   }
 
   // ── 浮层开关（open* 会关闭其它浮层，保持单层模态）──
@@ -174,8 +187,11 @@ export const useUiStore = defineStore('ui', () => {
     setDensity,
     cycleDensity,
     applyDensity,
+    setSidebarOpen,
+    openSidebar,
     toggleSidebar,
     closeSidebar,
+    setNavCollapsed,
     toggleNavCollapsed,
     openCmdk,
     closeCmdk,

@@ -1,0 +1,200 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
+import { createRouter, createMemoryHistory, type Router } from 'vue-router'
+import { useCatalogStore } from '../../stores/catalog'
+import { useFavoritesStore } from '../../stores/favorites'
+import { useUiStore } from '../../stores/ui'
+import { loadCatalog } from '../../test/fixtures'
+import SideNav from './SideNav.vue'
+
+// 受控 canAdmin（管理入口门禁），避免拉起真实 auth/session。
+const admin = vi.hoisted(() => ({ value: false }))
+vi.mock('../../composables/usePermission', async () => {
+  const { computed } = await import('vue')
+  return { usePermission: () => ({ canAdmin: computed(() => admin.value) }) }
+})
+
+const stub = { template: '<div />' }
+function makeRouter(): Router {
+  return createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/', name: 'overview', component: stub },
+      { path: '/m/:moduleId', name: 'module', component: stub },
+      { path: '/m/:moduleId/:capId', name: 'capability', component: stub },
+      { path: '/admin/users', name: 'admin-users', component: stub },
+      { path: '/admin/roles', name: 'admin-roles', component: stub },
+    ],
+  })
+}
+
+async function mountNav(path = '/') {
+  const router = makeRouter()
+  await router.push(path)
+  await router.isReady()
+  const wrapper = mount(SideNav, { global: { plugins: [router] } })
+  await flushPromises()
+  return wrapper
+}
+
+beforeEach(() => {
+  setActivePinia(createPinia())
+  useCatalogStore().catalog = loadCatalog()
+  admin.value = false
+  localStorage.clear()
+})
+
+describe('SideNav · 结构渲染', () => {
+  it('渲染全部 4 个语义分组、模块名与计数', async () => {
+    const wrapper = await mountNav('/')
+    const text = wrapper.text()
+    expect(text).toContain('对话与检索')
+    expect(text).toContain('智能体与编排')
+    expect(text).toContain('多模态')
+    expect(text).toContain('平台工程与互操作')
+    // 模块中文主名（拆分自双语标题）
+    expect(text).toContain('对话')
+    expect(text).toContain('智能体')
+    expect(text).toContain('互操作与评测')
+    // 9 个模块行
+    expect(wrapper.findAll('.mod').length).toBe(9)
+  })
+
+  it('底部渲染五态图例（非纯颜色，有文字）', async () => {
+    const wrapper = await mountNav('/')
+    const legend = wrapper.find('.nav__legend').text()
+    expect(legend).toContain('就绪')
+    expect(legend).toContain('需授权')
+    expect(legend).toContain('已锁定')
+  })
+})
+
+describe('SideNav · 管理入口门禁（三处同源）', () => {
+  it('canAdmin=false 时不渲染平台管理', async () => {
+    admin.value = false
+    const wrapper = await mountNav('/')
+    expect(wrapper.text()).not.toContain('平台管理')
+  })
+  it('canAdmin=true 时渲染平台管理 + 用户/角色管理', async () => {
+    admin.value = true
+    const wrapper = await mountNav('/')
+    const text = wrapper.text()
+    expect(text).toContain('平台管理')
+    expect(text).toContain('用户管理')
+    expect(text).toContain('角色管理')
+  })
+})
+
+describe('SideNav · 唯一 active 与祖先可见', () => {
+  it('总览路由：总览高亮，无模块 current（不双亮）', async () => {
+    const wrapper = await mountNav('/')
+    expect(wrapper.find('.nav__overview.active').exists()).toBe(true)
+    expect(wrapper.find('.mod--current').exists()).toBe(false)
+  })
+
+  it('模块深链：对应模块 current + 自动展开其能力；总览不再高亮', async () => {
+    const wrapper = await mountNav('/m/chat')
+    expect(wrapper.find('.nav__overview.active').exists()).toBe(false)
+    const current = wrapper.findAll('.mod--current')
+    expect(current.length).toBe(1)
+    expect(current[0].text()).toContain('对话')
+    // 当前模块自动展开 → 其能力行出现
+    const firstCap = loadCatalog().modules.find((m) => m.id === 'chat')!.capabilities[0]
+    expect(wrapper.text()).toContain(firstCap.title)
+  })
+
+  it('管理深链（无 moduleId）不误亮总览、也无模块 current', async () => {
+    admin.value = true
+    const wrapper = await mountNav('/admin/users')
+    expect(wrapper.find('.nav__overview.active').exists()).toBe(false)
+    expect(wrapper.find('.mod--current').exists()).toBe(false)
+  })
+})
+
+describe('SideNav · 收藏', () => {
+  it('收藏能力渲染在收藏分组（扁平）', async () => {
+    setActivePinia(createPinia())
+    useCatalogStore().catalog = loadCatalog()
+    const chatCap = loadCatalog().modules.find((m) => m.id === 'chat')!.capabilities[0]
+    useFavoritesStore().ids = [chatCap.id]
+    const wrapper = await mountNav('/')
+    const fav = wrapper.find('.nav__fav')
+    expect(fav.exists()).toBe(true)
+    expect(fav.text()).toContain('收藏')
+    expect(fav.text()).toContain(chatCap.title)
+  })
+})
+
+describe('SideNav · 搜索', () => {
+  it('无匹配查询渲染零结果空态 + 清除入口', async () => {
+    const wrapper = await mountNav('/')
+    useUiStore().filter = 'zzz-绝不匹配-xyz'
+    await flushPromises()
+    expect(wrapper.text()).toContain('无匹配能力')
+    // 清除按钮复位 filter
+    await wrapper.find('.empty__clear').trigger('click')
+    await flushPromises()
+    expect(useUiStore().filter).toBe('')
+    expect(wrapper.text()).not.toContain('无匹配能力')
+  })
+
+  it('命中查询时相关分组保留、无关模块隐去', async () => {
+    const wrapper = await mountNav('/')
+    useUiStore().filter = '知识检索'
+    await flushPromises()
+    const text = wrapper.text()
+    expect(text).toContain('知识库')
+    expect(text).not.toContain('无匹配能力')
+  })
+})
+
+describe('SideNav · 分组折叠持久化', () => {
+  it('点击组头折叠并写入 showcase.navGroups', async () => {
+    const wrapper = await mountNav('/')
+    const head = wrapper.find('.grp__head')
+    await head.trigger('click')
+    const raw = localStorage.getItem('showcase.navGroups')
+    expect(raw).toBeTruthy()
+    const parsed = JSON.parse(raw as string)
+    expect(Object.values(parsed).some((v) => v === true)).toBe(true)
+  })
+})
+
+describe('SideNav · 模块行 = 展开/收起开关（不跳转）', () => {
+  function ragRow(wrapper: ReturnType<typeof mount>) {
+    return wrapper.findAll('.mod').find((li) => li.text().includes('知识库'))!
+  }
+  const ragCapTitle = () => loadCatalog().modules.find((m) => m.id === 'rag')!.capabilities[0].title
+
+  it('点击模块行即展开能力，且不跳转（总览仍高亮、无模块 current）', async () => {
+    const wrapper = await mountNav('/')
+    expect(wrapper.text()).not.toContain(ragCapTitle())
+    await ragRow(wrapper).find('.mod__link').trigger('click')
+    await flushPromises()
+    // 展开
+    expect(wrapper.text()).toContain(ragCapTitle())
+    // 未跳转：路由未变 → 总览仍高亮、无模块 current
+    expect(wrapper.find('.nav__overview.active').exists()).toBe(true)
+    expect(wrapper.find('.mod--current').exists()).toBe(false)
+  })
+
+  it('再次点击同一模块行即收起（整行 = 展开/收起来回切）', async () => {
+    const wrapper = await mountNav('/')
+    // 第一次点击：展开
+    await ragRow(wrapper).find('.mod__link').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain(ragCapTitle())
+    // 第二次点击：收起
+    await ragRow(wrapper).find('.mod__link').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).not.toContain(ragCapTitle())
+  })
+
+  it('模块行是 button（不是链接），确保点击不导航', async () => {
+    const wrapper = await mountNav('/')
+    const link = ragRow(wrapper).find('.mod__link')
+    expect(link.element.tagName).toBe('BUTTON')
+    expect(link.attributes('href')).toBeUndefined()
+  })
+})

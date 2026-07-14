@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import AuthControl from './AuthControl.vue'
 import ThemeToggle from './ThemeToggle.vue'
@@ -8,12 +8,14 @@ import DensityToggle from './DensityToggle.vue'
 import { useUiStore } from '../../stores/ui'
 import { useHistoryStore } from '../../stores/history'
 import { usePermission } from '../../composables/usePermission'
+import { useIsDesktop } from '../../composables/useIsDesktop'
 import { CATALOG_URL } from '../../config'
 
 const ui = useUiStore()
 const history = useHistoryStore()
 // 管理入口可见性：与侧栏/命令面板同一 permission 源（Bearer role-admin + 构建开关）。
 const { canAdmin } = usePermission()
+const { isDesktop } = useIsDesktop()
 
 // 中屏以下的溢出菜单（⋯）：收纳次要项。
 const moreOpen = ref(false)
@@ -31,14 +33,14 @@ function onDocClick(e: MouseEvent): void {
 onMounted(() => document.addEventListener('click', onDocClick))
 onUnmounted(() => document.removeEventListener('click', onDocClick))
 
-/** ☰ 菜单按钮：窄屏开合移动抽屉，宽屏折叠/展开桌面侧栏（重复点击收起菜单栏）。 */
+/** ☰ 菜单按钮：桌面折叠/展开侧栏、窄屏开合移动抽屉（按断点分流用显式 action）。 */
 function toggleNav(): void {
-  if (typeof window !== 'undefined' && window.innerWidth <= 1023) {
-    ui.toggleSidebar()
-  } else {
-    ui.toggleNavCollapsed()
-  }
+  if (isDesktop.value) ui.toggleNavCollapsed()
+  else ui.toggleSidebar()
 }
+// aria/label 反映按钮在当前断点实际控制的开合态（修复"绑 navCollapsed 却改 sidebarOpen"）。
+const navExpanded = computed(() => (isDesktop.value ? !ui.navCollapsed : ui.sidebarOpen))
+const navToggleLabel = computed(() => (navExpanded.value ? '收起导航菜单' : '展开导航菜单'))
 </script>
 
 <template>
@@ -46,8 +48,8 @@ function toggleNav(): void {
     <button
       type="button"
       class="header__menu"
-      :aria-label="ui.navCollapsed ? '展开导航菜单' : '收起导航菜单'"
-      :aria-expanded="!ui.navCollapsed"
+      :aria-label="navToggleLabel"
+      :aria-expanded="navExpanded"
       title="开合菜单栏"
       @click="toggleNav()"
     >
@@ -184,14 +186,22 @@ function toggleNav(): void {
   z-index: var(--z-header);
   flex-shrink: 0;
 }
+/* 菜单按钮：桌面亦可见（折叠后有常驻恢复入口），窄屏切换移动抽屉。 */
 .header__menu {
-  display: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 6px 10px;
   font-size: 18px;
   color: var(--text-muted);
   background: transparent;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.header__menu:hover {
+  color: var(--text);
+  background: var(--surface-2);
 }
 .header__brand {
   display: inline-flex;
@@ -379,9 +389,6 @@ a.header__pop-item:hover {
 
 /* 中屏以下：次要项收进 ⋯ */
 @media (max-width: 1023px) {
-  .header__menu {
-    display: inline-block;
-  }
   .header__title {
     display: none;
   }

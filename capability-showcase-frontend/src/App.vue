@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute } from 'vue-router'
 import AppHeader from './components/layout/AppHeader.vue'
@@ -11,16 +11,52 @@ import ShortcutsDialog from './components/common/ShortcutsDialog.vue'
 import { useCatalogStore } from './stores/catalog'
 import { useUiStore } from './stores/ui'
 import { useGlobalShortcuts } from './composables/useGlobalShortcuts'
+import { useIsDesktop } from './composables/useIsDesktop'
+import { useFocusTrap } from './composables/useFocusTrap'
 
 const catalog = useCatalogStore()
 const ui = useUiStore()
 const route = useRoute()
 const { status, error } = storeToRefs(catalog)
+const { isDesktop } = useIsDesktop()
+
+const navRef = ref<ComponentPublicInstance | null>(null)
+const navContainer = computed<HTMLElement | null>(
+  () => (navRef.value?.$el as HTMLElement | undefined) ?? null,
+)
 
 // 公开页（登录）全屏渲染，不套 header/侧栏/目录门禁与全局浮层。
 const isAuthRoute = computed(() => route.meta.public === true)
 // 是否需要能力目录：admin/forbidden 等 bypassCatalog 路由不依赖 catalog，catalog 失败也应能打开。
 const needsCatalog = computed(() => !isAuthRoute.value && route.meta.bypassCatalog !== true)
+
+/**
+ * 侧栏是否处于隐藏态（桌面折叠 或 移动抽屉关闭）——隐藏时对其设 inert + aria-hidden，
+ * 使屏外/收起的导航不可 Tab、不被读屏，修复"隐藏导航仍可聚焦"。
+ */
+const navHidden = computed(() =>
+  isDesktop.value ? ui.navCollapsed : !ui.sidebarOpen,
+)
+
+// 断点切换清理：进入桌面时用 set 关闭移动抽屉（避免遗留 scrim/开态）。
+watch(isDesktop, (desktop) => {
+  if (desktop) ui.setSidebarOpen(false)
+})
+
+/**
+ * 移动抽屉焦点隔离：仅移动端抽屉打开、且无其它全局浮层时激活 —— 与命令面板/历史/快捷键互斥，
+ * 避免多层焦点陷阱相互抢占。Esc 关闭并由 useFocusTrap 归还焦点给打开前元素。
+ */
+useFocusTrap({
+  active: () =>
+    !isDesktop.value &&
+    ui.sidebarOpen &&
+    !ui.cmdkOpen &&
+    !ui.historyOpen &&
+    !ui.shortcutsOpen,
+  container: navContainer,
+  onEscape: () => ui.closeSidebar(),
+})
 
 useGlobalShortcuts()
 
@@ -43,8 +79,11 @@ onMounted(() => {
 
       <div class="app-body">
         <SideNav
+          ref="navRef"
           class="app-nav"
           :class="{ 'app-nav--open': ui.sidebarOpen, 'app-nav--collapsed': ui.navCollapsed }"
+          :inert="navHidden"
+          :aria-hidden="navHidden ? 'true' : undefined"
         />
         <div
           v-if="ui.sidebarOpen"
