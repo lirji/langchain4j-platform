@@ -261,9 +261,15 @@ public class DocumentService {
                 Instant.now(),
                 category == null || category.isBlank() ? null : category);
         registry.put(info);
-        // 双写授权关系：仅【新建】文档写 owner + parent_space；同名覆盖保留原 owner（不夺权）。默认 Noop。
+        // 双写授权关系：仅【新建】文档写 owner + home_dept（上传人部门）；同名覆盖保留原 owner（不夺权）。默认 Noop。
         if (!shared && existing.isEmpty()) {
-            knowledgeAuthz.onDocumentCreated(tenantId, docId, TenantContext.current().userId());
+            String department = TenantContext.current().department();
+            // enforce 下无法确定上传人部门 → 拒绝新建（不写无归属的孤儿文档，只有 owner 能看）；disabled/shadow 不拦。
+            if (knowledgeAuthz.mode() == AuthzMode.ENFORCE && (department == null || department.isBlank())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "cannot determine uploader's home department; refusing document creation under enforce");
+            }
+            knowledgeAuthz.onDocumentCreated(tenantId, docId, TenantContext.current().userId(), department);
         }
         audit.record(AuditEventType.DOCUMENT_UPLOADED, Map.of(
                 "docId", docId,

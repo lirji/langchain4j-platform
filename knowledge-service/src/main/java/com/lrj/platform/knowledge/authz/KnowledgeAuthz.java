@@ -19,8 +19,8 @@ public interface KnowledgeAuthz {
         return mode() != AuthzMode.DISABLED;
     }
 
-    /** 文档创建: 写 owner + parent_space 关系。 */
-    void onDocumentCreated(String tenantId, String docId, String ownerUserId);
+    /** 文档创建: 写 owner + home_dept 关系（departmentId 为空/null 时不写 home_dept，仅 owner）。 */
+    void onDocumentCreated(String tenantId, String docId, String ownerUserId, String departmentId);
 
     /** 文档删除: 清该文档的全部关系。 */
     void onDocumentDeleted(String tenantId, String docId);

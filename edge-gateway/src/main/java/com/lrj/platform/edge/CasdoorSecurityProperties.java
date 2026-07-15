@@ -54,6 +54,9 @@ public class CasdoorSecurityProperties {
     /** 当 scopeClaim 是对象数组（Casdoor permissions）时，从每个对象的此字段取 scope 名。 */
     private String scopeNameField = "name";
 
+    /** 部门来自哪个 claim（Casdoor 用户 groups，元素形如 {@code <org>/<group>}）；一人一部门，取与 owner 同 org 的唯一组。 */
+    private String groupsClaim = "groups";
+
     /** 固定业务 scope allowlist（与角色数量无关）；只有其中的 scope 才写入内部 JWT。 */
     private List<String> scopeAllowlist = List.of();
 
@@ -103,6 +106,14 @@ public class CasdoorSecurityProperties {
 
     public void setTenantClaim(String tenantClaim) {
         this.tenantClaim = tenantClaim;
+    }
+
+    public String getGroupsClaim() {
+        return groupsClaim;
+    }
+
+    public void setGroupsClaim(String groupsClaim) {
+        this.groupsClaim = groupsClaim == null ? "groups" : groupsClaim;
     }
 
     public String getSubjectClaim() {

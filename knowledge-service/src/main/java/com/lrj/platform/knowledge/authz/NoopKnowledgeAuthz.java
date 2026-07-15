@@ -11,7 +11,7 @@ public class NoopKnowledgeAuthz implements KnowledgeAuthz {
     }
 
     @Override
-    public void onDocumentCreated(String tenantId, String docId, String ownerUserId) {
+    public void onDocumentCreated(String tenantId, String docId, String ownerUserId, String departmentId) {
         // no-op
     }
 

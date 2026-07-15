@@ -32,13 +32,13 @@ public class KnowledgeAccessApplicationService {
      * @param docId              裸 docId（用于业务写关系）
      * @param granteeUserId      被授权用户
      */
-    @CheckAccess(permission = "edit", resourceType = "document", resourceIdParam = "documentResourceId", fullyConsistent = true)
+    @CheckAccess(permission = "share", resourceType = "document", resourceIdParam = "documentResourceId", fullyConsistent = true)
     public void shareDocument(String documentResourceId, String docId, String granteeUserId) {
         knowledgeAuthz.grantDocumentViewer(TenantContext.current().tenantId(), docId, granteeUserId);
     }
 
     /** 撤销某用户对文档的 viewer。要求调用者对该文档有 edit 权。 */
-    @CheckAccess(permission = "edit", resourceType = "document", resourceIdParam = "documentResourceId", fullyConsistent = true)
+    @CheckAccess(permission = "share", resourceType = "document", resourceIdParam = "documentResourceId", fullyConsistent = true)
     public void unshareDocument(String documentResourceId, String docId, String granteeUserId) {
         knowledgeAuthz.revokeDocumentViewer(TenantContext.current().tenantId(), docId, granteeUserId);
     }

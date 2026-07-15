@@ -71,27 +71,48 @@ class RealKnowledgeAuthzTest {
     }
 
     @Test
-    void onDocumentCreated_writesOwnerAndParentSpace() {
+    void onDocumentCreated_writesOwnerAndHomeDept() {
         AuthzEngine engine = mock(AuthzEngine.class);
         when(engine.writeRelationships(anyList())).thenReturn(new ZedTokenView("t"));
         RealKnowledgeAuthz authz = new RealKnowledgeAuthz(engine, AuthzMode.ENFORCE);
 
-        authz.onDocumentCreated(TID, "d1", "alice");
+        authz.onDocumentCreated(TID, "d1", "alice", "ecom");
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<RelationshipUpdate>> cap = ArgumentCaptor.forClass(List.class);
         verify(engine).writeRelationships(cap.capture());
         List<RelationshipUpdate> updates = cap.getValue();
-        assertThat(updates).hasSize(2);
+        assertThat(updates).hasSize(3);
         assertThat(updates).anySatisfy(u -> {
             assertThat(u.relation()).isEqualTo("owner");
             assertThat(u.subject()).isEqualTo(SubjectRef.user("alice"));
             assertThat(u.resource()).isEqualTo(ResourceRef.of("document", TID + "_d1"));
         });
         assertThat(updates).anySatisfy(u -> {
+            assertThat(u.relation()).isEqualTo("home_dept");
+            assertThat(u.subject()).isEqualTo(SubjectRef.of("department", TID + "_ecom"));
+        });
+        // 兼容窗口双写 parent_space（仅供回滚；contract 阶段移除）
+        assertThat(updates).anySatisfy(u -> {
             assertThat(u.relation()).isEqualTo("parent_space");
             assertThat(u.subject()).isEqualTo(SubjectRef.of("space", TID + "_default"));
         });
+    }
+
+    @Test
+    void onDocumentCreated_noDepartment_writesOwnerAndParentSpaceOnly() {
+        AuthzEngine engine = mock(AuthzEngine.class);
+        when(engine.writeRelationships(anyList())).thenReturn(new ZedTokenView("t"));
+        RealKnowledgeAuthz authz = new RealKnowledgeAuthz(engine, AuthzMode.ENFORCE);
+
+        authz.onDocumentCreated(TID, "d1", "alice", null);   // 无部门 → 不写 home_dept
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<RelationshipUpdate>> cap = ArgumentCaptor.forClass(List.class);
+        verify(engine).writeRelationships(cap.capture());
+        List<RelationshipUpdate> updates = cap.getValue();
+        assertThat(updates).hasSize(2);
+        assertThat(updates).noneSatisfy(u -> assertThat(u.relation()).isEqualTo("home_dept"));
     }
 
     @Test

@@ -155,7 +155,7 @@ class KnowledgeQueryServiceAuthzTest {
         }
 
         @Override
-        public void onDocumentCreated(String tenantId, String docId, String ownerUserId) {
+        public void onDocumentCreated(String tenantId, String docId, String ownerUserId, String departmentId) {
         }
 
         @Override

@@ -18,6 +18,11 @@ public final class KnowledgeResourceIds {
         return join(tenantId, spaceId);
     }
 
+    /** department 资源 id：{@code <tenantId>_<deptId>}（与 {@code CasdoorGroupIds.encode} 同构）。 */
+    public static String department(String tenantId, String deptId) {
+        return join(tenantId, deptId);
+    }
+
     /** organization 资源 id：{@code <tenantId>}。 */
     public static String organization(String tenantId) {
         return tenantId;

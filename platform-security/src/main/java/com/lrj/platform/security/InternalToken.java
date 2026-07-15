@@ -102,14 +102,17 @@ public final class InternalToken {
                     "当前节点未配置签发密钥（RS256 需 platform.security.jwt.private-key），无法签发内部 JWT");
         }
         Instant now = Instant.now();
-        return Jwts.builder()
+        var builder = Jwts.builder()
                 .subject(tenant.tenantId())
                 .claim("uid", tenant.userId())
                 .claim("scopes", List.copyOf(tenant.scopes() == null ? Set.of() : tenant.scopes()))
                 .issuedAt(Date.from(now))
-                .expiration(Date.from(now.plus(ttl)))
-                .signWith(signingKey)
-                .compact();
+                .expiration(Date.from(now.plus(ttl)));
+        // 可选加法字段 dept（部门层级授权用）：旧 reader 忽略此 claim；新 reader 遇旧 token 缺失时 department=null。
+        if (tenant.department() != null && !tenant.department().isBlank()) {
+            builder.claim("dept", tenant.department());
+        }
+        return builder.signWith(signingKey).compact();
     }
 
     /** 校验签名 + 过期，重建 Tenant；无效返回 null（调用方决定拒绝或降级 anonymous）。 */
@@ -133,7 +136,8 @@ public final class InternalToken {
                 for (Object o : list) scopes.add(String.valueOf(o));
             }
             String uid = c.get("uid", String.class);
-            return new TenantContext.Tenant(c.getSubject(), uid, scopes);
+            String dept = c.get("dept", String.class);   // 旧 token 无 dept -> null（向后兼容）
+            return new TenantContext.Tenant(c.getSubject(), uid, scopes, dept);
         } catch (JwtException | IllegalArgumentException e) {
             return null;
         }

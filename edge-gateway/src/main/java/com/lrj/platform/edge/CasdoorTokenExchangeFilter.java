@@ -15,7 +15,11 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
+
+import java.util.Collection;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -34,6 +38,8 @@ import java.util.Set;
 @Component
 @ConditionalOnProperty(prefix = "edge.casdoor", name = "enabled", havingValue = "true")
 public class CasdoorTokenExchangeFilter implements GlobalFilter, Ordered {
+
+    private static final Logger log = LoggerFactory.getLogger(CasdoorTokenExchangeFilter.class);
 
     private static final String BEARER = "Bearer ";
 
@@ -112,7 +118,8 @@ public class CasdoorTokenExchangeFilter implements GlobalFilter, Ordered {
             return exchange.getResponse().setComplete();
         }
         Set<String> scopes = extractScopes(jwt);
-        String jwtOut = internalTokens.mint(new TenantContext.Tenant(tenant, uid, scopes));
+        String department = extractDepartment(jwt, tenant, uid);
+        String jwtOut = internalTokens.mint(new TenantContext.Tenant(tenant, uid, scopes, department));
         // 注：本 filter 在 decoder.decode(...) 的【异步】回调里改头，此时 exchange.getRequest().mutate() 的 Builder 头是
         // 只读的（ReadOnlyHttpHeaders）——.header()/.headers(set) 都抛 UnsupportedOperationException（仅真实 Netty 请求才有，
         // mock 单测发现不了；同步的 SessionBearer/ApiKey filter 无此问题）。故绕开 Builder：用可写副本 + Decorator 覆写 getHeaders。
@@ -130,6 +137,39 @@ public class CasdoorTokenExchangeFilter implements GlobalFilter, Ordered {
             }
         };
         return chain.filter(exchange.mutate().request(mutated).build());
+    }
+
+    /**
+     * 从 Casdoor token 的 groups claim 解析用户唯一部门（一人一部门）。groups 元素形如 {@code <org>/<group>}；
+     * 只接受与 token owner 同 org 的组（防跨租户串权），取裸 {@code <group>} 作部门 id。
+     * 恰好一个候选→返回；0=缺失、>1=歧义→返回 null（不猜；下游知识写路径按 mode 处理，不因部门异常拒登录）。
+     * <p>注：真实 token groups 的精确形状为 V-04 待验证——非字符串列表/异常形状时安全返回 null。
+     */
+    private String extractDepartment(Jwt jwt, String owner, String uid) {
+        Object raw = jwt.getClaim(casdoor.getGroupsClaim());
+        if (!(raw instanceof Collection<?> col) || col.isEmpty()) {
+            return null;
+        }
+        String prefix = owner + "/";
+        LinkedHashSet<String> depts = new LinkedHashSet<>();
+        for (Object o : col) {
+            if (!(o instanceof String g) || g.isBlank()) {
+                continue;
+            }
+            if (g.startsWith(prefix)) {
+                depts.add(g.substring(prefix.length()));   // <org>/<group> -> <group>
+            } else if (!g.contains("/")) {
+                depts.add(g);                               // 已是裸名
+            }
+            // 跨 org 的 group 忽略（防串租户）
+        }
+        if (depts.size() == 1) {
+            return depts.iterator().next();
+        }
+        if (depts.size() > 1) {
+            log.warn("casdoor token owner={} sub={} 含多个部门候选 {}，标 ambiguous，不写 department", owner, uid, depts);
+        }
+        return null;
     }
 
     /**

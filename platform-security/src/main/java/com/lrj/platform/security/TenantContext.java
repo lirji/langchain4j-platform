@@ -37,7 +37,16 @@ public final class TenantContext {
         CURRENT.remove();
     }
 
-    public record Tenant(String tenantId, String userId, Set<String> scopes) {
+    /**
+     * @param department 用户所属部门 id（{@code <tenantId>_<deptId>}，来自 Casdoor 嵌套 group）；一人一部门。
+     *                   可为 null——非知识写路径 / legacy / api-key / 缺 group 的身份不要求部门，仅知识写路径按 mode 处理。
+     */
+    public record Tenant(String tenantId, String userId, Set<String> scopes, String department) {
+        /** 向后兼容：无部门的三参构造（既有构造点默认 {@code department=null}，行为不变）。 */
+        public Tenant(String tenantId, String userId, Set<String> scopes) {
+            this(tenantId, userId, scopes, null);
+        }
+
         public boolean hasScope(String scope) {
             return scopes != null && scopes.contains(scope);
         }

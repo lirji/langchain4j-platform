@@ -83,15 +83,21 @@ public class RealKnowledgeAuthz implements KnowledgeAuthz {
     }
 
     @Override
-    public void onDocumentCreated(String tenantId, String docId, String ownerUserId) {
+    public void onDocumentCreated(String tenantId, String docId, String ownerUserId, String departmentId) {
         ResourceRef doc = ResourceRef.of("document", key(tenantId, docId));
-        List<RelationshipUpdate> updates = List.of(
-                // owner 用 CREATE（非 TOUCH）：并发/重复新建时 SpiceDB 拒绝第二个 owner，防止 owner 累积/被接管。
-                RelationshipUpdate.create(doc, "owner", SubjectRef.user(ownerUserId)),
-                RelationshipUpdate.touch(doc, "parent_space",
-                        SubjectRef.of("space", KnowledgeResourceIds.space(tenantId, DEFAULT_SPACE))));
+        List<RelationshipUpdate> updates = new ArrayList<>();
+        // owner 用 CREATE（非 TOUCH）：并发/重复新建时 SpiceDB 拒绝第二个 owner，防止 owner 累积/被接管。
+        updates.add(RelationshipUpdate.create(doc, "owner", SubjectRef.user(ownerUserId)));
+        // 部门层级模型：归属 = 上传人部门（home_dept）。departmentId 为空则不写——enforce 下无部门的上传由上游按 mode 拒绝。
+        if (departmentId != null && !departmentId.isBlank()) {
+            updates.add(RelationshipUpdate.touch(doc, "home_dept",
+                    SubjectRef.of("department", KnowledgeResourceIds.department(tenantId, departmentId))));
+        }
+        // 兼容窗口：临时保留 parent_space=<t>_default 双写（仅供回滚；不进入新 view，contract 阶段移除）。
+        updates.add(RelationshipUpdate.touch(doc, "parent_space",
+                SubjectRef.of("space", KnowledgeResourceIds.space(tenantId, DEFAULT_SPACE))));
         engine.writeRelationships(updates);
-        log.debug("authz: document {} owner={} 写入", doc.ref(), ownerUserId);
+        log.debug("authz: document {} owner={} dept={} 写入", doc.ref(), ownerUserId, departmentId);
     }
 
     @Override

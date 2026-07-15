@@ -89,7 +89,7 @@ class CheckAccessShareTest {
     @Test
     void share_denied_whenCallerHasNoEdit() {
         TenantContext.set(new TenantContext.Tenant(TID, "mallory", Set.of()));
-        when(Cfg.engine.check(any(), eq("edit"), any(), any())).thenReturn(false);
+        when(Cfg.engine.check(any(), eq("share"), any(), any())).thenReturn(false);
 
         assertThatThrownBy(() -> access.shareDocument(TID + "_d1", "d1", "bob"))
                 .isInstanceOf(AccessDeniedException.class);
@@ -99,7 +99,7 @@ class CheckAccessShareTest {
     @Test
     void share_allowed_whenCallerHasEdit() {
         TenantContext.set(new TenantContext.Tenant(TID, "alice", Set.of()));
-        when(Cfg.engine.check(any(), eq("edit"), any(), any())).thenReturn(true);
+        when(Cfg.engine.check(any(), eq("share"), any(), any())).thenReturn(true);
 
         access.shareDocument(TID + "_d1", "d1", "bob");
 
@@ -109,14 +109,14 @@ class CheckAccessShareTest {
     @Test
     void share_passesCorrectSubjectResourceAndFullyConsistent() {
         TenantContext.set(new TenantContext.Tenant(TID, "alice", Set.of()));
-        when(Cfg.engine.check(any(), eq("edit"), any(), any())).thenReturn(true);
+        when(Cfg.engine.check(any(), eq("share"), any(), any())).thenReturn(true);
 
         access.shareDocument(TID + "_d1", "d1", "bob");
 
         ArgumentCaptor<SubjectRef> subject = ArgumentCaptor.forClass(SubjectRef.class);
         ArgumentCaptor<ResourceRef> resource = ArgumentCaptor.forClass(ResourceRef.class);
         ArgumentCaptor<Consistency> consistency = ArgumentCaptor.forClass(Consistency.class);
-        verify(Cfg.engine).check(subject.capture(), eq("edit"), resource.capture(), consistency.capture());
+        verify(Cfg.engine).check(subject.capture(), eq("share"), resource.capture(), consistency.capture());
         assertThat(subject.getValue()).as("主体=当前用户").isEqualTo(SubjectRef.user("alice"));
         assertThat(resource.getValue()).as("资源=完整 document id").isEqualTo(ResourceRef.of("document", TID + "_d1"));
         assertThat(consistency.getValue().mode()).as("敏感授权变更用强一致")
