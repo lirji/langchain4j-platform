@@ -59,16 +59,37 @@ public class CasdoorDecoderConfig {
         }
     }
 
-    /** aud 至少命中一个允许的 client_id 才通过。 */
-    private static OAuth2TokenValidator<Jwt> audienceValidator(List<String> allowed) {
+    /**
+     * aud 校验（支持 Casdoor Shared Application 的多租户 aud）：
+     * <ul>
+     *   <li>传统单 app：{@code aud} 恰等于某个允许的 client_id（membership，向后兼容）；</li>
+     *   <li>Shared Application：{@code aud} 形如 {@code <base>-org-<org>}（<base>=允许的共享 app client_id）——
+     *       此时额外绑定 {@code owner}（已验签的 Casdoor org=租户，不可伪造）必须等于 aud 里的 {@code <org>} 段，
+     *       否则拒绝（防跨租户串权：拿 acme 的 base 却带 owner=beta 的 token 不放行）。</li>
+     * </ul>
+     * 实测（casdoor-multitenant-identity §C）：shared app 每 org 的 token aud=[{@code <base>-org-<org>}], owner=该 org。
+     */
+    static OAuth2TokenValidator<Jwt> audienceValidator(List<String> allowedBases) {
         return jwt -> {
+            String owner = jwt.getClaimAsString("owner");   // 已验签的 Casdoor org
+            String mismatch = null;
             for (String a : jwt.getAudience()) {
-                if (allowed.contains(a)) {
-                    return OAuth2TokenValidatorResult.success();
+                for (String base : allowedBases) {
+                    if (a.equals(base)) {
+                        return OAuth2TokenValidatorResult.success();               // 传统单 app
+                    }
+                    String prefix = base + "-org-";
+                    if (a.startsWith(prefix)) {
+                        String org = a.substring(prefix.length());
+                        if (!org.isEmpty() && org.equals(owner)) {
+                            return OAuth2TokenValidatorResult.success();           // shared app：(owner,aud) 绑定成立
+                        }
+                        mismatch = "aud org '" + org + "' 与 owner '" + owner + "' 不符";
+                    }
                 }
             }
-            return OAuth2TokenValidatorResult.failure(
-                    new OAuth2Error("invalid_token", "audience not allowed", null));
+            return OAuth2TokenValidatorResult.failure(new OAuth2Error(
+                    "invalid_token", mismatch != null ? mismatch : "audience not allowed", null));
         };
     }
 }

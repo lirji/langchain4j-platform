@@ -118,8 +118,8 @@ edge:
     mode: ${EDGE_CASDOOR_MODE:dual}
     issuer: ${CASDOOR_ISSUER:http://localhost:8000}
     jwk-set-uri: ${CASDOOR_JWKS:http://localhost:8000/.well-known/jwks}
-    # 允许的 Casdoor client_id（前端 auth-console；多个逗号分隔）
-    audiences: ${CASDOOR_AUDIENCES:cad5642b16071c3513d4}
+    # 允许的 Casdoor client_id **base**（方案C Shared Application）；aud=<base> 或 <base>-org-<org>（后者绑 owner==org）。多个逗号分隔。
+    audiences: ${CASDOOR_AUDIENCES:ragshared0client00000001}
     tenant-claim: owner
     subject-claim: sub
     # 承载已展开业务能力的 claim（默认 Casdoor permissions 对象数组；scope-name-field 为对象取名字段）

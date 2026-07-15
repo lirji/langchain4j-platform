@@ -112,11 +112,11 @@ describe('auth store —— OIDC 驱动', () => {
     expect(oidc.signOutRedirect).not.toHaveBeenCalled()
   })
 
-  it('startOidcLogin 透传 returnTo 给重定向登录', async () => {
+  it('startOidcLogin 透传 tenant + returnTo 给重定向登录', async () => {
     oidc.startOidcLogin.mockResolvedValue(undefined)
     const auth = useAuthStore()
-    await auth.startOidcLogin('/m/agent/run')
-    expect(oidc.startOidcLogin).toHaveBeenCalledWith('/m/agent/run')
+    await auth.startOidcLogin('acme', '/m/agent/run')
+    expect(oidc.startOidcLogin).toHaveBeenCalledWith('acme', '/m/agent/run')
   })
 
   it('handleOidcCallback 建立会话并返回 returnTo（原 state）', async () => {

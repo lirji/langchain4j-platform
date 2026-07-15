@@ -27,14 +27,44 @@ function absUrl(path: string): string {
   return `${window.location.origin}${import.meta.env.BASE_URL}${path}`
 }
 
-let manager: UserManager | null = null
+/** 活跃租户 sessionStorage key（tab 级）。 */
+const TENANT_KEY = 'oidc.tenant'
 
-/** 懒加载单例 UserManager（apikey 模式下永不构造，故不影响现状）。 */
-export function getUserManager(): UserManager {
-  if (manager) return manager
+/** 每租户实际 client_id = `<base>-org-<org>`（Casdoor Shared Application）；无 tenant 回退 base（传统单 app 兼容）。 */
+function clientIdForTenant(tenant: string | null): string {
+  return tenant ? `${CASDOOR_CLIENT_ID}-org-${tenant}` : CASDOOR_CLIENT_ID
+}
+
+/** 当前活跃租户（登录时写；回调/续期/硬刷新恢复据此取对应 UserManager）。 */
+export function getActiveTenant(): string | null {
+  return window.sessionStorage.getItem(TENANT_KEY)
+}
+function setActiveTenant(tenant: string | null): void {
+  if (tenant) window.sessionStorage.setItem(TENANT_KEY, tenant)
+  else window.sessionStorage.removeItem(TENANT_KEY)
+}
+
+let manager: UserManager | null = null
+let managerTenant: string | null | undefined
+
+/**
+ * 取 tenant 对应的 UserManager（方案C：多租户 shared app）。tenant 变化时重建，并停旧的静默续期，
+ * 避免多个 manager 并发续期。tenant 省略时用 {@link getActiveTenant}（回调/续期/硬刷新恢复）。
+ * apikey 模式下永不调用，故不影响现状。
+ */
+export function getUserManager(tenant?: string | null): UserManager {
+  const t = tenant !== undefined ? tenant : getActiveTenant()
+  if (manager && managerTenant === t) return manager
+  if (manager) {
+    try {
+      manager.stopSilentRenew()
+    } catch {
+      /* ignore */
+    }
+  }
   manager = new UserManager({
     authority: CASDOOR_ISSUER,
-    client_id: CASDOOR_CLIENT_ID,
+    client_id: clientIdForTenant(t),
     redirect_uri: absUrl(CASDOOR_REDIRECT_PATH),
     post_logout_redirect_uri: absUrl(CASDOOR_POST_LOGOUT_PATH),
     silent_redirect_uri: absUrl(CASDOOR_SILENT_PATH),
@@ -46,6 +76,7 @@ export function getUserManager(): UserManager {
     userStore: new WebStorageStateStore({ store: window.sessionStorage }),
     silentRequestTimeoutInSeconds: 5, // 仅 iframe 回退才用得到；调短以防偶发卡顿
   })
+  managerTenant = t
   return manager
 }
 
@@ -93,9 +124,13 @@ export function userFromAccessToken(accessToken: string): AuthUser {
   return { username: name, tenant: owner, scopes }
 }
 
-/** 发起 Casdoor 重定向登录；returnTo 经 `state` 随 IdP 往返（回调时取回，避免自建 sessionStorage）。 */
-export function startOidcLogin(returnTo?: string): Promise<void> {
-  return getUserManager().signinRedirect({ state: returnTo ?? null })
+/**
+ * 发起 Casdoor 重定向登录（方案C：按 tenant 用 shared app 的 `<base>-org-<tenant>` 客户端）。
+ * 记住活跃租户，回调/续期据此恢复对应 UserManager。returnTo 经 `state` 随 IdP 往返。
+ */
+export function startOidcLogin(tenant: string, returnTo?: string): Promise<void> {
+  setActiveTenant(tenant)
+  return getUserManager(tenant).signinRedirect({ state: returnTo ?? null })
 }
 
 /** 顶层重定向回调：换 token、校验 state/nonce，返回登录用户。 */

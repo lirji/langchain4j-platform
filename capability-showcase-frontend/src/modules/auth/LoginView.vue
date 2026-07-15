@@ -12,6 +12,7 @@ const catalog = useCatalogStore()
 const router = useRouter()
 const route = useRoute()
 
+const tenant = ref('') // 方案C：登录前选/输租户(=Casdoor org)，用 shared app 的 <base>-org-<tenant> 客户端
 const username = ref('')
 const password = ref('')
 const passwordEl = ref<HTMLInputElement | null>(null)
@@ -33,9 +34,14 @@ const showLegacyForm = computed(() => AUTH_MODE === 'apikey')
 /** 跳 Casdoor OIDC 登录：returnTo 经 state 随 IdP 往返，回调后还原。成功则整页跳转、不回此处。 */
 async function casdoorLogin(): Promise<void> {
   errorMsg.value = ''
+  const t = tenant.value.trim()
+  if (!t) {
+    errorMsg.value = '请先输入租户 / 组织名（Casdoor org）'
+    return
+  }
   casdoorBusy.value = true
   try {
-    await auth.startOidcLogin(sanitizeRedirect(route.query.redirect) ?? '/')
+    await auth.startOidcLogin(t, sanitizeRedirect(route.query.redirect) ?? '/')
   } catch (e) {
     casdoorBusy.value = false
     errorMsg.value = loginErrorText(e)
@@ -154,7 +160,19 @@ async function demoLogin(u: string): Promise<void> {
           <h1 class="lp-title">登录</h1>
           <p class="lp-subtitle">内部试用台 · 登录后即可体验全部能力</p>
 
-          <!-- Casdoor OIDC 登录（oidc/dual 模式）：整页跳转 IdP。 -->
+          <!-- Casdoor OIDC 登录（oidc/dual 模式）：先选租户(org)，再整页跳转 IdP（方案C shared app）。 -->
+          <div v-if="OIDC_ENABLED" class="lp-input-wrap">
+            <span class="lp-input-ico" aria-hidden="true">🏢</span>
+            <input
+              v-model="tenant"
+              class="lp-input"
+              type="text"
+              autocomplete="organization"
+              placeholder="租户 / 组织名（如 acme）"
+              :disabled="casdoorBusy"
+              @keyup.enter="casdoorLogin"
+            />
+          </div>
           <button
             v-if="OIDC_ENABLED"
             type="button"

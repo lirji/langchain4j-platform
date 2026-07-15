@@ -124,9 +124,9 @@ export const useAuthStore = defineStore('auth', () => {
     // 静默续期失败不在此强制登出，交由后续 401/守卫处理，避免打断当前操作。
   }
 
-  /** 发起 Casdoor 重定向登录（oidc/dual 模式）；returnTo 经 state 随 IdP 往返（回调时取回）。整页跳转。 */
-  async function startOidcLogin(returnTo?: string): Promise<void> {
-    await oidcStartLogin(returnTo)
+  /** 发起 Casdoor 重定向登录（方案C：按 tenant 用 shared app 的 <base>-org-<tenant> 客户端）。整页跳转。 */
+  async function startOidcLogin(tenant: string, returnTo?: string): Promise<void> {
+    await oidcStartLogin(tenant, returnTo)
   }
 
   /** /callback 顶层回调：换 token、建立内存会话、订阅事件；返回 returnTo（原 state）供路由还原。 */

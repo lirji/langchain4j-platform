@@ -55,8 +55,11 @@ export const OIDC_ENABLED: boolean = AUTH_MODE !== 'apikey'
 /** Casdoor issuer（oidc-client-ts authority，自动 discovery）。dev 默认本地 docker Casdoor。 */
 export const CASDOOR_ISSUER: string = (env.VITE_CASDOOR_ISSUER ?? 'http://localhost:8000').replace(/\/$/, '')
 
-/** Casdoor 公有客户端 client_id（须与 edge `edge.casdoor.audiences` 一致）。 */
-export const CASDOOR_CLIENT_ID: string = env.VITE_CASDOOR_CLIENT_ID ?? 'cad5642b16071c3513d4'
+/**
+ * Casdoor **Shared Application** 的 base client_id（方案C 多租户登录）。每租户实际用 `<base>-org-<org>`
+ * 构造 UserManager（见 `auth/oidc.ts`）。须与 edge `edge.casdoor.audiences` 的 base 一致。
+ */
+export const CASDOOR_CLIENT_ID: string = env.VITE_CASDOOR_CLIENT_ID ?? 'ragshared0client00000001'
 
 /** OIDC 请求 scope（标准 OIDC；业务 scope 由 Casdoor permissions claim 展开，不在此请求）。 */
 export const CASDOOR_SCOPES: string = env.VITE_CASDOOR_SCOPES ?? 'openid profile email offline_access'

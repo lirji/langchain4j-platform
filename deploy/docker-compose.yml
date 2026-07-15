@@ -456,7 +456,7 @@ services:
         VITE_AUTH_MODE: ${SHOWCASE_AUTH_MODE:-apikey}
         VITE_CASDOOR_ISSUER: ${SHOWCASE_CASDOOR_ISSUER:-http://localhost:8000}
         # client_id 必须 = edge.casdoor.audiences（否则 aud 校验 401）。
-        VITE_CASDOOR_CLIENT_ID: ${SHOWCASE_CASDOOR_CLIENT_ID:-cad5642b16071c3513d4}
+        VITE_CASDOOR_CLIENT_ID: ${SHOWCASE_CASDOOR_CLIENT_ID:-ragshared0client00000001}
         VITE_CASDOOR_SCOPES: ${SHOWCASE_CASDOOR_SCOPES:-openid profile email offline_access}
         # 回调/登出/静默续期 SPA 路径（须与 Casdoor app redirectUris 精确登记；silent 刻意无扩展名以走 SPA fallback）。
         VITE_CASDOOR_REDIRECT_PATH: ${SHOWCASE_CASDOOR_REDIRECT_PATH:-callback}
@@ -501,7 +501,7 @@ services:
       CASDOOR_ISSUER: ${CASDOOR_ISSUER:-http://localhost:8000}
       CASDOOR_JWKS: ${CASDOOR_JWKS:-http://host.docker.internal:8000/.well-known/jwks}
       # 多 audience（设计 §10.2）：前端 auth-console(PKCE) + 机器 service app(app-built-in, client_credentials/password)。
-      CASDOOR_AUDIENCES: ${CASDOOR_AUDIENCES:-cad5642b16071c3513d4,ea46d9a8033b0be2d8ed}
+      CASDOOR_AUDIENCES: ${CASDOOR_AUDIENCES:-ragshared0client00000001,ea46d9a8033b0be2d8ed}
       # 注：入站最大请求头（Casdoor 大 token 防 431）已移入 edge application.yml（server.max-http-request-header-size，
       # 默认 32KB，仍可用 SERVER_MAX_HTTP_REQUEST_HEADER_SIZE 覆盖）。SPRING_AUTOCONFIGURE_EXCLUDE 已移除——
       # edge pom 改用 spring-security-oauth2-jose（无 spring-security-web/resource-server），不再触发那条 SecurityWebFilterChain。
