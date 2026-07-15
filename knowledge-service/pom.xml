@@ -108,6 +108,18 @@
             <artifactId>platform-audit</artifactId>
         </dependency>
 
+        <!-- 统一权限平台接入 SDK (grpc-free: 仅 protocol + spring-web/jackson, 不引 authzed grpc) -->
+        <dependency>
+            <groupId>com.lrj.authz</groupId>
+            <artifactId>auth-platform-sdk</artifactId>
+            <version>0.1.0-SNAPSHOT</version>
+        </dependency>
+        <!-- SDK 的 @CheckAccess 声明式判权需 AOP；SDK 把 starter-aop 设为 optional，消费方按需引入。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

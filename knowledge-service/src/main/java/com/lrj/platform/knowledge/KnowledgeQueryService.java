@@ -16,6 +16,9 @@ import com.lrj.platform.knowledge.search.RetrievalSource;
 import com.lrj.platform.knowledge.search.VectorRetrievalSource;
 import com.lrj.platform.knowledge.store.EmbeddingStoreRouter;
 import com.lrj.platform.knowledge.store.SingleEmbeddingStoreRouter;
+import com.lrj.platform.knowledge.authz.AuthzMode;
+import com.lrj.platform.knowledge.authz.KnowledgeAuthz;
+import com.lrj.platform.knowledge.authz.NoopKnowledgeAuthz;
 import com.lrj.platform.security.TenantContext;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -28,7 +31,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 检索编排器（es-hybrid-rerank 重构后）。职责：校验 → topK/minScore → 查询扩展 → 收集各启用
@@ -71,6 +77,8 @@ public class KnowledgeQueryService {
     // 把保留公共分区 publicKbTenantId 的命中也并入（读取不破坏隔离）。
     private boolean publicKbEnabled = false;
     private String publicKbTenantId = PublicKb.TENANT_ID;
+    // 细粒度读授权（接 auth-platform）：默认 Noop（关时不过滤），app.rag.authz.mode=shadow|enforce 时注入 Real。
+    private KnowledgeAuthz knowledgeAuthz = new NoopKnowledgeAuthz();
 
     @Autowired
     public KnowledgeQueryService(EmbeddingStoreRouter storeRouter,
@@ -280,10 +288,47 @@ public class KnowledgeQueryService {
         }
 
         List<Hit> candidates = fusion.fuse(groups, fusionStrategy, rrfK);
+        // 细粒度读授权过滤（融合后、重排前；关闭时直通）。
+        candidates = filterReadable(tenantId, candidates);
         List<Hit> hits = reranker.rerank(query, candidates, limit);
         log.info("knowledge query tenant={} topK={} minScore={} category={} strategy={} variants={} -> {} hits",
                 tenantId, limit, floor, category, fusionStrategy, variants.size(), hits.size());
         return new QueryResult(query, tenantId, hits);
+    }
+
+    /**
+     * 细粒度读授权过滤（app.rag.authz.mode=shadow|enforce 时生效）：对非公共候选按当前用户 view 判权，
+     * 公共库命中（shared）短路放行。关闭时直通。候选池 poolLimit 有界，故一次 checkBulk 即可。
+     */
+    private List<Hit> filterReadable(String tenantId, List<Hit> candidates) {
+        if (!knowledgeAuthz.enabled() || candidates.isEmpty()) {
+            return candidates;
+        }
+        String userId = TenantContext.current().userId();
+        Set<String> docIds = candidates.stream()
+                .filter(h -> !h.shared() && h.docId() != null)
+                .map(Hit::docId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        // 触发判权（shadow 记 would_filter 指标并返回全集；enforce 返回可读子集）。
+        Set<String> readable = docIds.isEmpty()
+                ? Set.of()
+                : knowledgeAuthz.filterReadable(tenantId, userId, docIds);
+        // shadow/disabled 不拦截（指标已记录）；仅 enforce 真过滤。
+        if (knowledgeAuthz.mode() != AuthzMode.ENFORCE) {
+            return candidates;
+        }
+        // enforce：公共库放行；有 docId 按可读过滤；【无 docId 命中（如 GraphRAG 三元组）无法资源级判权 → fail-closed 丢弃】。
+        List<Hit> out = candidates.stream()
+                .filter(h -> h.shared() || (h.docId() != null && readable.contains(h.docId())))
+                .toList();
+        // 无 docId 命中（图谱三元组、或缺 metadata 的向量/关键词命中）无法资源级判权 → fail-closed 丢弃并计数。
+        long droppedNoDocId = candidates.stream().filter(h -> !h.shared() && h.docId() == null).count();
+        if (droppedNoDocId > 0) {
+            log.info("authz enforce dropped {} hits without docId (no resource-level authz; incl. graph triples / metadata-less vector·keyword hits)",
+                    droppedNoDocId);
+        }
+        log.debug("authz enforce filter tenant={} user={} candidates={} -> kept={}", tenantId, userId, candidates.size(), out.size());
+        return out;
     }
 
     /** 测试注入自定义扩展器（生产由 Spring @Autowired 按开关装配）。 */
@@ -302,6 +347,14 @@ public class KnowledgeQueryService {
     /** 测试注入自定义重排器（生产由 Spring @Autowired 按开关装配）。 */
     void setReranker(Reranker reranker) {
         this.reranker = reranker == null ? new NoopReranker() : reranker;
+    }
+
+    /** 注入细粒度读授权（生产由 Spring @Autowired 按 app.rag.authz.mode 装配；测试保持默认 Noop）。 */
+    @Autowired(required = false)
+    public void setKnowledgeAuthz(KnowledgeAuthz knowledgeAuthz) {
+        if (knowledgeAuthz != null) {
+            this.knowledgeAuthz = knowledgeAuthz;
+        }
     }
 
     /** 测试注入额外检索源（如 ES 源的 fake）。 */

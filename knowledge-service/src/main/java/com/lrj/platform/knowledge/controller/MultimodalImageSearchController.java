@@ -1,8 +1,12 @@
 package com.lrj.platform.knowledge.controller;
 
+import com.lrj.platform.knowledge.authz.AuthzMode;
+import com.lrj.platform.knowledge.authz.KnowledgeAuthz;
+import com.lrj.platform.knowledge.authz.NoopKnowledgeAuthz;
 import com.lrj.platform.knowledge.multimodal.MultimodalEmbeddingProperties;
 import com.lrj.platform.knowledge.multimodal.MultimodalRetrievalService;
 import com.lrj.platform.security.TenantContext;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -33,10 +37,19 @@ public class MultimodalImageSearchController {
 
     private final MultimodalRetrievalService retrieval;
     private final MultimodalEmbeddingProperties props;
+    // 细粒度授权：默认 Noop；enforce 时图片检索 fail-closed（图片无 docId/owner，不在本期文本文档 ReBAC 范围）。
+    private KnowledgeAuthz knowledgeAuthz = new NoopKnowledgeAuthz();
 
     public MultimodalImageSearchController(MultimodalRetrievalService retrieval, MultimodalEmbeddingProperties props) {
         this.retrieval = retrieval;
         this.props = props;
+    }
+
+    @Autowired(required = false)
+    public void setKnowledgeAuthz(KnowledgeAuthz knowledgeAuthz) {
+        if (knowledgeAuthz != null) {
+            this.knowledgeAuthz = knowledgeAuthz;
+        }
     }
 
     /** 图片入库：multipart {@code image}。返回 {@code {id, fileName, type}}。需 ingest scope。 */
@@ -63,6 +76,10 @@ public class MultimodalImageSearchController {
     @PostMapping(value = "/rag/image-search",
             consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> search(@RequestBody SearchRequest body) {
+        if (knowledgeAuthz.mode() == AuthzMode.ENFORCE) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "image search lacks resource-level ReBAC (no docId/owner); disabled under enforce mode"));
+        }
         if (body == null || body.query() == null || body.query().isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "empty query"));
         }

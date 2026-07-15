@@ -29,6 +29,11 @@ platform:
 
 app:
   rag:
+    # 细粒度授权（接 auth-platform / SpiceDB ReBAC）。默认 disabled —— 与接入前逐字一致。
+    # disabled | shadow（照写关系、读路径双算记差异但不拦截，灰度观测）| enforce（读路径按 ReBAC 真过滤）。
+    # mode != disabled 时经下方 authz.client.server-url 调 auth-platform-server(:8200)。
+    authz:
+      mode: ${RAG_AUTHZ_MODE:disabled}
     # 公共/共享知识库：一个所有租户可读的保留分区（tenantId=__public__）。开启后查询在隔离查
     # 各自租户的基础上并入公共分区命中；写公共库需 public-ingest scope（见 DocumentController）。
     # 默认关闭 —— 关闭时行为与引入该特性前完全一致（向后兼容）。
@@ -197,11 +202,21 @@ app:
         driver-class-name: ${RAG_GRAPH_DB_DRIVER:com.mysql.cj.jdbc.Driver}
         maximum-pool-size: ${RAG_GRAPH_DB_MAX_POOL_SIZE:8}
 
+# auth-platform 判权 SDK（grpc-free，仅 app.rag.authz.mode != disabled 时实际调用）。
+# server-url 指向 auth-platform-server(:8200)；A-3 起 /v1/** 需 service-credential，token 见下。
+authz:
+  client:
+    server-url: ${AUTHZ_SERVER_URL:http://localhost:8200}
+    # service credential；须与 auth-platform-server 的 authz.server.security.token 一致。
+    # server 端未开鉴权（默认）时留空即可；生产两侧同时配置。
+    token: ${AUTHZ_SERVER_TOKEN:}
+
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # metrics: 供 shadow 灰度观测 knowledge.authz.decisions{mode,operation,permission,decision}（内网只读）
+        include: health,info,metrics
   endpoint:
     health:
       probes:

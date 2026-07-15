@@ -13,6 +13,8 @@ import com.lrj.platform.knowledge.ingest.NoopContextualEnricher;
 import com.lrj.platform.knowledge.store.EmbeddingStoreRouter;
 import com.lrj.platform.knowledge.store.SingleEmbeddingStoreRouter;
 import com.lrj.platform.knowledge.PublicKb;
+import com.lrj.platform.knowledge.authz.KnowledgeAuthz;
+import com.lrj.platform.knowledge.authz.NoopKnowledgeAuthz;
 import com.lrj.platform.security.TenantContext;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.DocumentSplitter;
@@ -30,12 +32,19 @@ import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import com.lrj.platform.knowledge.authz.AuthzMode;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metadataKey;
 
@@ -59,6 +68,8 @@ public class DocumentService {
     private com.lrj.platform.knowledge.observability.ChunkMetrics chunkMetrics;
     // ES 全文索引器（es-hybrid-rerank）：默认 Noop（测试与 ES 关闭时零副作用），生产由 Spring @Autowired setter 注入。
     private SegmentIndexer segmentIndexer = new NoopSegmentIndexer();
+    // 细粒度授权钩子（接 auth-platform）：默认 Noop（关时零副作用、测试不受影响），app.rag.authz.mode=shadow|enforce 时注入 Real。
+    private KnowledgeAuthz knowledgeAuthz = new NoopKnowledgeAuthz();
 
     @Autowired
     public DocumentService(EmbeddingStoreRouter storeRouter,
@@ -99,6 +110,14 @@ public class DocumentService {
     public void setSegmentIndexer(SegmentIndexer segmentIndexer) {
         if (segmentIndexer != null) {
             this.segmentIndexer = segmentIndexer;
+        }
+    }
+
+    /** 注入细粒度授权钩子（生产由 Spring @Autowired 按 app.rag.authz.mode 装配；测试保持默认 Noop）。 */
+    @Autowired(required = false)
+    public void setKnowledgeAuthz(KnowledgeAuthz knowledgeAuthz) {
+        if (knowledgeAuthz != null) {
+            this.knowledgeAuthz = knowledgeAuthz;
         }
     }
 
@@ -189,7 +208,14 @@ public class DocumentService {
         String tenantId = shared ? PublicKb.TENANT_ID : TenantContext.current().tenantId();
         String docId = computeDocId(tenantId, displayName);
 
-        int nextVersion = registry.get(tenantId, docId)
+        Optional<DocumentInfo> existing = registry.get(tenantId, docId);
+        // 同名覆盖 = 对已存在文档的写：非公共库须有 edit 权，否则拒绝——防只有 ingest 的用户覆盖内容/夺取他人文档。
+        // 默认 Noop 恒放行；enforce 时无 edit 抛 403。
+        if (existing.isPresent() && !shared
+                && !knowledgeAuthz.checkDocument(tenantId, TenantContext.current().userId(), docId, "edit")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "no edit permission to overwrite existing document");
+        }
+        int nextVersion = existing
                 .map(prev -> {
                     deleteInternal(prev);
                     return prev.version() + 1;
@@ -235,6 +261,10 @@ public class DocumentService {
                 Instant.now(),
                 category == null || category.isBlank() ? null : category);
         registry.put(info);
+        // 双写授权关系：仅【新建】文档写 owner + parent_space；同名覆盖保留原 owner（不夺权）。默认 Noop。
+        if (!shared && existing.isEmpty()) {
+            knowledgeAuthz.onDocumentCreated(tenantId, docId, TenantContext.current().userId());
+        }
         audit.record(AuditEventType.DOCUMENT_UPLOADED, Map.of(
                 "docId", docId,
                 "displayName", displayName,
@@ -257,16 +287,41 @@ public class DocumentService {
      *               而非调用方租户；共享元数据读取不需特殊 scope（由 controller 关口决定）。
      */
     public List<DocumentInfo> list(boolean shared) {
-        return registry.list(partition(shared));
+        List<DocumentInfo> all = registry.list(partition(shared));
+        if (shared || !knowledgeAuthz.enabled() || all.isEmpty()) {
+            return all;
+        }
+        // 列表读判权：shadow 记 would_filter 并返回全集；enforce 过滤为可 view 子集（默认 Noop 恒放行）。
+        String tenantId = partition(shared);
+        Set<String> docIds = all.stream().map(DocumentInfo::docId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Set<String> readable = knowledgeAuthz.filterReadable(tenantId, TenantContext.current().userId(), docIds);
+        if (knowledgeAuthz.mode() != AuthzMode.ENFORCE) {
+            return all;
+        }
+        return all.stream().filter(d -> readable.contains(d.docId())).toList();
     }
 
     public Optional<DocumentInfo> get(String docId) {
         return get(docId, false);
     }
 
-    /** @param shared true 时读共享库保留分区的单文档元数据。 */
+    /**
+     * @param shared true 时读共享库保留分区的单文档元数据（公共库不判权）。
+     *               非公共库时按当前用户对该文档做 view 判权（统一 app.rag.authz.mode，默认 Noop 恒放行）。
+     */
     public Optional<DocumentInfo> get(String docId, boolean shared) {
-        return registry.get(partition(shared), docId);
+        Optional<DocumentInfo> info = registry.get(partition(shared), docId);
+        if (info.isEmpty() || shared) {
+            return info;
+        }
+        // 单文档读判权：enforce 拒绝→empty（上层转 404，不泄露文档存在性）；shadow 放行；默认 Noop 恒 true。
+        String tenantId = TenantContext.current().tenantId();
+        String userId = TenantContext.current().userId();
+        if (!knowledgeAuthz.checkDocument(tenantId, userId, docId, "view")) {
+            return Optional.empty();
+        }
+        return info;
     }
 
     public boolean delete(String docId) {
@@ -279,6 +334,15 @@ public class DocumentService {
         Optional<DocumentInfo> info = registry.get(tenantId, docId);
         if (info.isEmpty()) {
             return false;
+        }
+        // 单文档删判权（非公共库）：判 edit。enforce 拒绝→false（上层转 404）；shadow 放行；默认 Noop 恒 true。
+        if (!shared && !knowledgeAuthz.checkDocument(tenantId, TenantContext.current().userId(), docId, "edit")) {
+            return false;
+        }
+        // fail-closed 顺序：【先撤 SpiceDB 关系，再删业务数据】。撤关系抛错则中止（宁留数据不留悬空权限）；
+        // 撤关系成功后即便后续业务删除失败，该文档也已对所有人不可见（安全侧）。默认 Noop。
+        if (!shared) {
+            knowledgeAuthz.onDocumentDeleted(tenantId, docId);
         }
         deleteInternal(info.get());
         registry.remove(tenantId, docId);
