@@ -8,7 +8,7 @@ import {
 import OverviewView from '../modules/OverviewView.vue'
 import ModuleHost from '../modules/ModuleHost.vue'
 import LoginView from '../modules/auth/LoginView.vue'
-import { REQUIRE_LOGIN, RBAC_CONSOLE_ENABLED } from '../config'
+import { REQUIRE_LOGIN, RBAC_CONSOLE_ENABLED, CASDOOR_REDIRECT_PATH } from '../config'
 import { useAuthStore } from '../stores/auth'
 
 declare module 'vue-router' {
@@ -28,6 +28,15 @@ const routes: RouteRecordRaw[] = [
     path: '/register',
     name: 'register',
     component: () => import('../modules/auth/RegisterView.vue'),
+    meta: { public: true, bypassCatalog: true },
+  },
+  {
+    // Casdoor OIDC 顶层重定向回调（阶段④）。路径取自 CASDOOR_REDIRECT_PATH（与 oidc.ts 的 redirect_uri
+    // 同源，改 env 二者一起移动，不写死 /callback）。public+bypassCatalog：豁免登录守卫、不依赖目录，
+    // 否则未登录访问回调页会被守卫跳 /login 造成死循环。
+    path: `/${CASDOOR_REDIRECT_PATH}`,
+    name: 'callback',
+    component: () => import('../modules/auth/CallbackView.vue'),
     meta: { public: true, bypassCatalog: true },
   },
   { path: '/', name: 'overview', component: OverviewView },

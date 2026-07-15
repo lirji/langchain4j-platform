@@ -4,6 +4,7 @@ import type { FormValues } from '../utils/validation'
 import { ApiError } from './errors'
 import { authorizedFetch } from './authorizedFetch'
 import { tryParseJson } from '../utils/json'
+import { AUTH_MODE } from '../config'
 
 /** HTTP 头名（大小写不敏感，统一常量避免拼写漂移）。 */
 export const API_KEY_HEADER = 'X-Api-Key'
@@ -111,10 +112,18 @@ export function assembleRequest(cap: Capability, values: FormValues, ctx: RunCon
   const url = buildTargetUrl(cap.path, cap.params, values, ctx.edgeBaseUrl)
   const headers: Record<string, string> = {}
   // 业务 header 参数先注入；平台凭证头后置注入，确保永远来自 ctx、不被业务 header 覆盖。
-  // 凭证互斥二选一：手输 api-key 为显式覆盖优先，否则用登录会话 Bearer（网关双模均接受）。
+  // 凭证注入按 AUTH_MODE（构建期常量）：
+  //  - apikey/oidc（默认互斥二选一）：手输 api-key 显式覆盖优先，否则登录会话 Bearer（网关双模均接受）。
+  //  - dual（迁移期）：两者都带；edge 侧 Casdoor(-120) 优先换发、api-key 仅在 Casdoor 验不过时兜底。
   Object.assign(headers, buildHeaderParams(cap.params, values))
-  if (ctx.apiKey) headers[API_KEY_HEADER] = ctx.apiKey
-  else if (ctx.accessToken) headers[AUTH_HEADER] = `Bearer ${ctx.accessToken}`
+  if (AUTH_MODE === 'dual') {
+    if (ctx.apiKey) headers[API_KEY_HEADER] = ctx.apiKey
+    if (ctx.accessToken) headers[AUTH_HEADER] = `Bearer ${ctx.accessToken}`
+  } else if (ctx.apiKey) {
+    headers[API_KEY_HEADER] = ctx.apiKey
+  } else if (ctx.accessToken) {
+    headers[AUTH_HEADER] = `Bearer ${ctx.accessToken}`
+  }
 
   let body: string | FormData | undefined
 

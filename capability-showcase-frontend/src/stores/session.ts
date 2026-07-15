@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { redactKey } from '../utils/redact'
-import { EDGE_BASE_URL } from '../config'
+import { EDGE_BASE_URL, OIDC_ENABLED } from '../config'
 import { useAuthStore } from './auth'
 import type { RunContext } from '../types/api'
 
@@ -30,13 +30,27 @@ export const useSessionStore = defineStore('session', () => {
    */
   const hasCredential = computed(() => hasApiKey.value || useAuthStore().isAuthenticated)
 
-  /** 凭证模式：api-key 覆盖优先。getter 内延迟 useAuthStore()，避免循环依赖时序。 */
-  const credentialMode = computed<CredentialMode>(() =>
-    hasApiKey.value ? 'api-key' : useAuthStore().isAuthenticated ? 'bearer' : 'none',
-  )
+  /**
+   * 凭证模式（Casdoor-aware，#2）。语义随认证模式而异：
+   * - **legacy（apikey）**：api-key 显式覆盖会话 Bearer（client.ts 注入 api-key 优先），故 hasApiKey→'api-key'。
+   * - **oidc/dual**：edge 的 Casdoor filter(-120) 先跑，**有效 Casdoor Bearer 优先换发、api-key 被忽略/剥离**，
+   *   故 Casdoor 已登录时有效凭证是 Bearer（与 legacy 相反）；未登录时 dual 才回退 api-key。
+   * getter 内延迟 useAuthStore()，避免循环依赖时序。
+   */
+  const credentialMode = computed<CredentialMode>(() => {
+    const authed = useAuthStore().isAuthenticated
+    if (OIDC_ENABLED && authed) return 'bearer' // Casdoor 已登录：edge 里 Casdoor 优先，api-key 不覆盖
+    if (hasApiKey.value) return 'api-key'
+    return authed ? 'bearer' : 'none'
+  })
 
-  /** 两种凭证同时存在：api-key 覆盖了登录会话（顶栏据此高对比警告）。 */
-  const apiKeyOverridesBearer = computed(() => hasApiKey.value && useAuthStore().isAuthenticated)
+  /**
+   * 两种凭证同时存在且 **api-key 会盖过 Bearer**（顶栏据此高对比警告）。
+   * 仅 legacy 语义成立；oidc/dual 下 edge Casdoor 优先，api-key 不覆盖 → 恒 false，不误报警告。
+   */
+  const apiKeyOverridesBearer = computed(
+    () => !OIDC_ENABLED && hasApiKey.value && useAuthStore().isAuthenticated,
+  )
 
   /**
    * 统一 permission 上下文（供 gate/usePermission，避免通用 runner 与专用页面裁决漂移）。

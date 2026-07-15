@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { useSessionStore } from '../../stores/session'
+import { AUTH_MODE } from '../../config'
 import ApiKeyInput from './ApiKeyInput.vue'
 
 const auth = useAuthStore()
@@ -19,6 +20,12 @@ const onAdminRoute = computed(() => {
   return Array.isArray(rs) && rs.length > 0
 })
 
+/**
+ * 是否展示 api-key 直连入口（#2）：纯 oidc 模式隐藏——Casdoor 是唯一凭证，client.ts 只发 Bearer，
+ * 此时填 api-key 既无处可发又造成身份混淆。apikey/dual 保留（dual 下 api-key 是 Casdoor 兜底）。
+ */
+const showApiKeyUi = computed(() => AUTH_MODE !== 'oidc')
+
 /** 凭证模式徽章：Bearer（账号会话）/ API Key（直连覆盖）/ 未登录；颜色不单独表意，附图标+文字。 */
 const credBadge = computed(() => {
   switch (session.credentialMode) {
@@ -32,6 +39,8 @@ const credBadge = computed(() => {
 })
 
 async function doLogout(): Promise<void> {
+  // 本地敏感态清理（api-key + history）已下沉进 auth.logout()（#12），所有登出入口一致。
+  // oidc 模式 auth.logout() 会整页跳 Casdoor end_session（不回此处）；legacy 则本地清态后跳登录页。
   await auth.logout()
   void router.push({ name: 'login' })
 }
@@ -57,7 +66,7 @@ async function doLogout(): Promise<void> {
         </span>
       </span>
 
-      <details v-if="!onAdminRoute" class="authctl__adv">
+      <details v-if="!onAdminRoute && showApiKeyUi" class="authctl__adv">
         <summary class="authctl__advbtn" title="高级：直连 API Key（可选覆盖登录会话）">高级</summary>
         <div class="authctl__panel">
           <p class="authctl__hint">可选：填写 X-Api-Key 以指定凭证直连（存在时覆盖登录会话）。</p>
@@ -86,7 +95,7 @@ async function doLogout(): Promise<void> {
 
     <template v-else>
       <RouterLink class="authctl__btn authctl__btn--primary" :to="{ name: 'login' }">登录</RouterLink>
-      <details v-if="!onAdminRoute" class="authctl__adv">
+      <details v-if="!onAdminRoute && showApiKeyUi" class="authctl__adv">
         <summary class="authctl__advbtn" title="高级：直连 API Key">API Key</summary>
         <div class="authctl__panel">
           <p class="authctl__hint">未登录也可用 X-Api-Key 直连（老流程）。</p>

@@ -38,3 +38,44 @@ export const SHARED_KB_UI_ENABLED: boolean = env.VITE_SHARED_KB_UI_ENABLED !== '
 
 /** 演示账号一键登录开关（默认开，便于内部试用；生产置 false 后登录页不内置 demo 密码/账号）。 */
 export const DEMO_LOGIN_ENABLED: boolean = env.VITE_DEMO_LOGIN_ENABLED !== 'false'
+
+/**
+ * 认证模式（灰度/回滚开关，构建期烘焙）：
+ * - `apikey`（默认）：现状——顶栏手输 X-Api-Key / 账号密码会话 Bearer；不加载 Casdoor OIDC。
+ * - `oidc`：Casdoor OIDC 登录（Authorization Code + PKCE），业务请求带 `Authorization: Bearer <casdoor-token>`。
+ * - `dual`：迁移期两者都带（edge 侧 Casdoor 优先、api-key 兜底）。
+ * 独立于 {@link REQUIRE_LOGIN}（后者是 legacy 守卫开关，不复用）。回滚＝改 env 重构建。
+ */
+export const AUTH_MODE: 'apikey' | 'oidc' | 'dual' =
+  env.VITE_AUTH_MODE === 'oidc' || env.VITE_AUTH_MODE === 'dual' ? env.VITE_AUTH_MODE : 'apikey'
+
+/** 是否启用 Casdoor OIDC（oidc 或 dual 模式）。apikey 模式下前端不初始化 UserManager。 */
+export const OIDC_ENABLED: boolean = AUTH_MODE !== 'apikey'
+
+/** Casdoor issuer（oidc-client-ts authority，自动 discovery）。dev 默认本地 docker Casdoor。 */
+export const CASDOOR_ISSUER: string = (env.VITE_CASDOOR_ISSUER ?? 'http://localhost:8000').replace(/\/$/, '')
+
+/** Casdoor 公有客户端 client_id（须与 edge `edge.casdoor.audiences` 一致）。 */
+export const CASDOOR_CLIENT_ID: string = env.VITE_CASDOOR_CLIENT_ID ?? 'cad5642b16071c3513d4'
+
+/** OIDC 请求 scope（标准 OIDC；业务 scope 由 Casdoor permissions claim 展开，不在此请求）。 */
+export const CASDOOR_SCOPES: string = env.VITE_CASDOOR_SCOPES ?? 'openid profile email offline_access'
+
+/**
+ * SPA 内回调/登出/静默续期路径（相对 BASE_URL，无前导斜杠）；三者须在 Casdoor app redirectUris 精确登记。
+ * silent 路径**刻意不带扩展名**（如 `oidc-silent`），使 dev(vite) 与 prod(nginx) 的 SPA history fallback
+ * 都能把它兜到 index.html（`.html` 结尾会被当静态文件、fallback 不覆盖）→ main.ts 据此短路处理静默回调。
+ */
+export const CASDOOR_REDIRECT_PATH: string = env.VITE_CASDOOR_REDIRECT_PATH ?? 'callback'
+export const CASDOOR_POST_LOGOUT_PATH: string = env.VITE_CASDOOR_POST_LOGOUT_PATH ?? 'login'
+export const CASDOOR_SILENT_PATH: string = env.VITE_CASDOOR_SILENT_PATH ?? 'oidc-silent'
+
+/**
+ * 业务 scope allowlist —— 与 edge `edge.casdoor.scope-allowlist` **逐字同步**（11 项）。
+ * 前端解 access_token 的 `permissions[].name` 后 ∩ 本表，保证前端预判与 edge 换发的内部 JWT scopes 零漂移。
+ * 改动须与 `edge-gateway/application.yml` 的 scope-allowlist 同步。
+ */
+export const SCOPE_ALLOWLIST: readonly string[] = [
+  'chat', 'ingest', 'approve', 'agent', 'channel', 'eval',
+  'vision', 'voice', 'analytics', 'role-admin', 'public-ingest',
+]

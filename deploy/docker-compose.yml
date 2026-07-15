@@ -439,6 +439,17 @@ services:
         # demo 一键登录：本地演示可开并注入口令；生产置 false / 留空口令，产物即不含明文口令。
         VITE_DEMO_LOGIN_ENABLED: ${SHOWCASE_DEMO_LOGIN_ENABLED:-true}
         VITE_DEMO_PASSWORD: ${SHOWCASE_DEMO_PASSWORD:-demo12345}
+        # ③ 阶段④ Casdoor OIDC（构建期烘焙、可秒回滚）：默认 apikey（引入即安全，走现状 X-Api-Key/会话 Bearer）。
+        # 切 oidc/dual 前须先开后端 EDGE_CASDOOR_ENABLED=true（DR-11 顺序约束），否则 Casdoor Bearer 落到会话 filter 全 401。
+        VITE_AUTH_MODE: ${SHOWCASE_AUTH_MODE:-apikey}
+        VITE_CASDOOR_ISSUER: ${SHOWCASE_CASDOOR_ISSUER:-http://localhost:8000}
+        # client_id 必须 = edge.casdoor.audiences（否则 aud 校验 401）。
+        VITE_CASDOOR_CLIENT_ID: ${SHOWCASE_CASDOOR_CLIENT_ID:-cad5642b16071c3513d4}
+        VITE_CASDOOR_SCOPES: ${SHOWCASE_CASDOOR_SCOPES:-openid profile email offline_access}
+        # 回调/登出/静默续期 SPA 路径（须与 Casdoor app redirectUris 精确登记；silent 刻意无扩展名以走 SPA fallback）。
+        VITE_CASDOOR_REDIRECT_PATH: ${SHOWCASE_CASDOOR_REDIRECT_PATH:-callback}
+        VITE_CASDOOR_POST_LOGOUT_PATH: ${SHOWCASE_CASDOOR_POST_LOGOUT_PATH:-login}
+        VITE_CASDOOR_SILENT_PATH: ${SHOWCASE_CASDOOR_SILENT_PATH:-oidc-silent}
     ports:
       - "8093:80"
 
@@ -459,9 +470,20 @@ services:
       VOICE_URI: http://voice-service:8091
       AUTH_URI: http://auth-service:8092
       # 允许分离部署的展示前端跨域（含 compose 内 :8093 与本地 dev/preview 端口）。
-      GATEWAY_CORS_ORIGINS: ${GATEWAY_CORS_ORIGINS:-http://localhost:8093,http://localhost:5173,http://localhost:4173}
+      GATEWAY_CORS_ORIGINS: ${GATEWAY_CORS_ORIGINS:-http://localhost:8093,http://localhost:5173,http://localhost:5273,http://localhost:4173}
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
       SESSION_JWT_SECRET: ${SESSION_JWT_SECRET:-dev-only-session-secret-change-me-please-32b}
+      # ③ Casdoor SSO（阶段④联调）。默认关，引入即安全。开启后 edge 验 Casdoor access token → 换发内部 JWT。
+      # 注：JWKS 拉取用 host.docker.internal（edge 与 casdoor 不同 docker 网络）；issuer 保持 localhost:8000
+      # 以匹配 token 的 iss（issuer 校验是字符串比较，不发网络请求）。audiences=auth-console client_id。
+      EDGE_CASDOOR_ENABLED: ${EDGE_CASDOOR_ENABLED:-false}
+      CASDOOR_ISSUER: ${CASDOOR_ISSUER:-http://localhost:8000}
+      CASDOOR_JWKS: ${CASDOOR_JWKS:-http://host.docker.internal:8000/.well-known/jwks}
+      # 多 audience（设计 §10.2）：前端 auth-console(PKCE) + 机器 service app(app-built-in, client_credentials/password)。
+      CASDOOR_AUDIENCES: ${CASDOOR_AUDIENCES:-cad5642b16071c3513d4,ea46d9a8033b0be2d8ed}
+      # 注：入站最大请求头（Casdoor 大 token 防 431）已移入 edge application.yml（server.max-http-request-header-size，
+      # 默认 32KB，仍可用 SERVER_MAX_HTTP_REQUEST_HEADER_SIZE 覆盖）。SPRING_AUTOCONFIGURE_EXCLUDE 已移除——
+      # edge pom 改用 spring-security-oauth2-jose（无 spring-security-web/resource-server），不再触发那条 SecurityWebFilterChain。
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:

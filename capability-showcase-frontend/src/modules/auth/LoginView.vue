@@ -5,7 +5,7 @@ import { useAuthStore } from '../../stores/auth'
 import { useCatalogStore } from '../../stores/catalog'
 import { ApiError, humanizeError } from '../../api/errors'
 import { sanitizeRedirect } from '../../router'
-import { DEMO_LOGIN_ENABLED } from '../../config'
+import { AUTH_MODE, DEMO_LOGIN_ENABLED, OIDC_ENABLED } from '../../config'
 
 const auth = useAuthStore()
 const catalog = useCatalogStore()
@@ -19,8 +19,28 @@ const showPassword = ref(false)
 const submitting = ref(false)
 const pending = ref<string | null>(null) // 正在一键登录的演示账号
 const errorMsg = ref('')
+const casdoorBusy = ref(false) // 正在跳转 Casdoor
 
 const busy = computed(() => submitting.value || pending.value !== null)
+
+/**
+ * 是否展示账号密码表单：仅 apikey 模式（legacy 会话驱动）显示。
+ * oidc **与 dual** 均隐藏——dual 下 store 的会话生命周期（bootstrap/refresh/logout）已由 OIDC 驱动接管，
+ * 账密登录建立的 legacy 会话无法被 OIDC 续期，展示它会造成"登进去却续不上"的割裂（#1）。dual 只兜底 api-key。
+ */
+const showLegacyForm = computed(() => AUTH_MODE === 'apikey')
+
+/** 跳 Casdoor OIDC 登录：returnTo 经 state 随 IdP 往返，回调后还原。成功则整页跳转、不回此处。 */
+async function casdoorLogin(): Promise<void> {
+  errorMsg.value = ''
+  casdoorBusy.value = true
+  try {
+    await auth.startOidcLogin(sanitizeRedirect(route.query.redirect) ?? '/')
+  } catch (e) {
+    casdoorBusy.value = false
+    errorMsg.value = loginErrorText(e)
+  }
+}
 
 /**
  * 一键登录口令：仅从构建期注入的 VITE_DEMO_PASSWORD 读取——源码绝不内置任何明文口令。
@@ -134,11 +154,24 @@ async function demoLogin(u: string): Promise<void> {
           <h1 class="lp-title">登录</h1>
           <p class="lp-subtitle">内部试用台 · 登录后即可体验全部能力</p>
 
+          <!-- Casdoor OIDC 登录（oidc/dual 模式）：整页跳转 IdP。 -->
+          <button
+            v-if="OIDC_ENABLED"
+            type="button"
+            class="lp-btn lp-btn--casdoor"
+            :disabled="casdoorBusy"
+            @click="casdoorLogin"
+          >
+            <span v-if="casdoorBusy" class="lp-spin" aria-hidden="true" />
+            {{ casdoorBusy ? '正在跳转 Casdoor…' : '用 Casdoor 登录' }}
+          </button>
+          <div v-if="OIDC_ENABLED && showLegacyForm" class="lp-divider"><span>或用账号密码登录</span></div>
+
           <div v-if="errorMsg" class="lp-error" role="alert">
             <span aria-hidden="true">⚠️</span><span>{{ errorMsg }}</span>
           </div>
 
-          <form class="lp-fields" @submit.prevent="submit">
+          <form v-if="showLegacyForm" class="lp-fields" @submit.prevent="submit">
             <div class="lp-field">
               <label class="lp-label" for="login-username">用户名</label>
               <div class="lp-input-wrap">
@@ -187,8 +220,8 @@ async function demoLogin(u: string): Promise<void> {
             </button>
           </form>
 
-          <!-- 演示账号卡：仅 DEMO_LOGIN_ENABLED 时渲染；口令由部署注入，源码不内置明文。 -->
-          <template v-if="DEMO_LOGIN_ENABLED">
+          <!-- 演示账号卡：仅 legacy 表单可见 + DEMO_LOGIN_ENABLED 时渲染；口令由部署注入，源码不内置明文。 -->
+          <template v-if="showLegacyForm && DEMO_LOGIN_ENABLED">
             <div class="lp-divider"><span>或用演示账号快速登录</span></div>
 
             <div class="lp-demos">
@@ -225,7 +258,7 @@ async function demoLogin(u: string): Promise<void> {
             </p>
           </template>
 
-          <p v-if="showRegister" class="lp-reg">
+          <p v-if="showLegacyForm && showRegister" class="lp-reg">
             还没有账号？<RouterLink class="lp-reg-link" :to="{ name: 'register' }">去注册</RouterLink>
           </p>
         </section>
@@ -481,6 +514,8 @@ async function demoLogin(u: string): Promise<void> {
 }
 .lp-btn:not(:disabled):active { transform: translateY(0); }
 .lp-btn:disabled { cursor: not-allowed; opacity: 0.75; }
+/* Casdoor 登录按钮：紧随副标题，留出间距（复用 .lp-btn 渐变样式）。 */
+.lp-btn--casdoor { margin-top: 20px; }
 .lp-spin {
   width: 15px; height: 15px;
   border: 2px solid rgba(255, 255, 255, 0.45);
