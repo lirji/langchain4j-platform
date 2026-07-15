@@ -29,6 +29,16 @@
             <groupId>com.lrj.platform</groupId>
             <artifactId>platform-security</artifactId>
         </dependency>
+        <!-- ③ Casdoor SSO：只需 NimbusReactiveJwtDecoder + JWT 校验器验 Casdoor RS256 token。
+             刻意用 spring-security-oauth2-jose（而非 spring-boot-starter-oauth2-resource-server）：
+             jose 提供 decoder/validators 但**不含** BearerTokenAuthenticationToken / spring-security-web/config，
+             故不会触发 ReactiveOAuth2ResourceServer/ReactiveSecurity 自动装配那条 SecurityWebFilterChain
+             （否则会劫持所有请求、CORS 预检 OPTIONS→401）。edge 鉴权全由自定义 GlobalFilter 承担、decoder 只在
+             filter 里手动调用。这样也免去了 SPRING_AUTOCONFIGURE_EXCLUDE 那组排除（设计 §D2/S3）。 -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-oauth2-jose</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
