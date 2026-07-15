@@ -205,6 +205,18 @@ services:
       RAG_REGISTRY_STORE: ${RAG_REGISTRY_STORE:-redis}
       # 公共/共享知识库（默认关闭）：开启后查询在隔离查各自租户基础上并入 __public__ 公共分区。
       RAG_PUBLIC_ENABLED: ${RAG_PUBLIC_ENABLED:-false}
+      # ── 细粒度授权（接 auth-platform / SpiceDB ReBAC）。默认 disabled（与接入前逐字一致）──
+      # disabled | shadow（照写关系、读双算记差异但不拦截，灰度观测）| enforce（读按 ReBAC 真过滤）。
+      # 灰度顺序：disabled → shadow（观测 knowledge.authz.* 指标）→ 单租户 enforce → 扩大。切回 shadow 即回滚。
+      RAG_AUTHZ_MODE: ${RAG_AUTHZ_MODE:-disabled}
+      # auth-platform-server(:8200)。该服务不在本 compose（在 auth-platform 仓库自带 deploy），故走宿主机地址。
+      AUTHZ_SERVER_URL: ${AUTHZ_SERVER_URL:-http://host.docker.internal:8200}
+      # service credential：须与 auth-platform-server 的 authz.server.security.token 一致；server 未开鉴权时留空。
+      AUTHZ_SERVER_TOKEN: ${AUTHZ_SERVER_TOKEN:-}
+      # 候选/批次安全上限（非法值启动失败）。默认值见 application.yml，可按压测调整。
+      RAG_AUTHZ_CANDIDATE_MULTIPLIER: ${RAG_AUTHZ_CANDIDATE_MULTIPLIER:-3}
+      RAG_AUTHZ_MAX_CANDIDATES: ${RAG_AUTHZ_MAX_CANDIDATES:-200}
+      RAG_AUTHZ_BULK_SIZE: ${RAG_AUTHZ_BULK_SIZE:-100}
       RAG_HYBRID_ENABLED: ${RAG_HYBRID_ENABLED:-true}
       # 混合检索关键词半边用 HanLP 中文分词（默认 simple=bigram），仅影响 keyword/graph 分支，不碰向量。
       RAG_HYBRID_TOKENIZER: ${RAG_HYBRID_TOKENIZER:-hanlp}
@@ -450,6 +462,12 @@ services:
         VITE_CASDOOR_REDIRECT_PATH: ${SHOWCASE_CASDOOR_REDIRECT_PATH:-callback}
         VITE_CASDOOR_POST_LOGOUT_PATH: ${SHOWCASE_CASDOOR_POST_LOGOUT_PATH:-login}
         VITE_CASDOOR_SILENT_PATH: ${SHOWCASE_CASDOOR_SILENT_PATH:-oidc-silent}
+    environment:
+      # CSP 的 edge/Casdoor 源在容器启动时 envsubst 进 nginx 模板，取值与构建期 VITE_EDGE_BASE_URL /
+      # VITE_CASDOOR_ISSUER 同源（同一 SHOWCASE_* 变量），端口不再漂移。FILTER 保证只替换 CSP_* 变量。
+      CSP_EDGE_ORIGIN: ${SHOWCASE_EDGE_BASE_URL:-http://localhost:8080}
+      CSP_CASDOOR_ORIGIN: ${SHOWCASE_CASDOOR_ISSUER:-http://localhost:8000}
+      NGINX_ENVSUBST_FILTER: "^CSP_"
     ports:
       - "8093:80"
 
@@ -477,6 +495,9 @@ services:
       # 注：JWKS 拉取用 host.docker.internal（edge 与 casdoor 不同 docker 网络）；issuer 保持 localhost:8000
       # 以匹配 token 的 iss（issuer 校验是字符串比较，不发网络请求）。audiences=auth-console client_id。
       EDGE_CASDOOR_ENABLED: ${EDGE_CASDOOR_ENABLED:-false}
+      # 认证模式：dual（灰度，验不过透传 legacy）| only（严格 Casdoor-only，非 open path 无有效 token → 401）。
+      # 最终验收切 only；保留 dual 作应急回滚窗口。仅 EDGE_CASDOOR_ENABLED=true 时生效。
+      EDGE_CASDOOR_MODE: ${EDGE_CASDOOR_MODE:-dual}
       CASDOOR_ISSUER: ${CASDOOR_ISSUER:-http://localhost:8000}
       CASDOOR_JWKS: ${CASDOOR_JWKS:-http://host.docker.internal:8000/.well-known/jwks}
       # 多 audience（设计 §10.2）：前端 auth-console(PKCE) + 机器 service app(app-built-in, client_credentials/password)。

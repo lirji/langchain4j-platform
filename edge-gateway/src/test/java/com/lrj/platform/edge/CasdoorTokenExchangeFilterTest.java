@@ -208,6 +208,62 @@ class CasdoorTokenExchangeFilterTest {
                 .as("客户端伪造的入站内部头被剥离").isNull();
     }
 
+    private CasdoorSecurityProperties casdoorPropsOnly() {
+        CasdoorSecurityProperties p = casdoorProps();
+        p.setMode(CasdoorSecurityProperties.Mode.ONLY);
+        return p;
+    }
+
+    @Test
+    void onlyMode_noBearer_returns401_noLegacyFallthrough() {
+        ReactiveJwtDecoder decoder = mock(ReactiveJwtDecoder.class);
+        CasdoorTokenExchangeFilter filter =
+                new CasdoorTokenExchangeFilter(casdoorPropsOnly(), internalProps, tokens, decoder);
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/rag/query"));
+        CapturingChain chain = new CapturingChain();
+        filter.filter(exchange, chain).block();
+
+        assertThat(chain.captured.get()).as("ONLY 无 Bearer → 不落 legacy").isNull();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        verify(decoder, never()).decode(any());
+    }
+
+    @Test
+    void onlyMode_invalidToken_returns401() {
+        ReactiveJwtDecoder decoder = mock(ReactiveJwtDecoder.class);
+        when(decoder.decode("bad")).thenReturn(Mono.error(new BadJwtException("invalid")));
+        CasdoorTokenExchangeFilter filter =
+                new CasdoorTokenExchangeFilter(casdoorPropsOnly(), internalProps, tokens, decoder);
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/rag/query").header(HttpHeaders.AUTHORIZATION, "Bearer bad"));
+        CapturingChain chain = new CapturingChain();
+        filter.filter(exchange, chain).block();
+
+        assertThat(chain.captured.get()).as("ONLY 验签失败 → 不落 legacy").isNull();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void onlyMode_validToken_stillMintsInternalJwt() {
+        ReactiveJwtDecoder decoder = mock(ReactiveJwtDecoder.class);
+        Jwt jwt = Jwt.withTokenValue("t").header("alg", "RS256")
+                .claim("owner", "acme").claim("sub", "u1").claim("scope", List.of("chat")).build();
+        when(decoder.decode("t")).thenReturn(Mono.just(jwt));
+        CasdoorTokenExchangeFilter filter =
+                new CasdoorTokenExchangeFilter(casdoorPropsOnly(), internalProps, tokens, decoder);
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/rag/query").header(HttpHeaders.AUTHORIZATION, "Bearer t"));
+        CapturingChain chain = new CapturingChain();
+        filter.filter(exchange, chain).block();
+
+        String internalJwt = chain.captured.get().getRequest().getHeaders().getFirst(internalProps.getInternalHeader());
+        assertThat(internalJwt).as("ONLY 有效 token 仍换发内部 JWT").isNotNull();
+        assertThat(tokens.verify(internalJwt).tenantId()).isEqualTo("acme");
+    }
+
     @Test
     void openPath_passesThrough() {
         ReactiveJwtDecoder decoder = mock(ReactiveJwtDecoder.class);

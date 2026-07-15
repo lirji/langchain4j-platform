@@ -63,17 +63,32 @@ public class CasdoorTokenExchangeFilter implements GlobalFilter, Ordered {
         }
         String auth = ex.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
         if (auth == null || !auth.startsWith(BEARER)) {
-            return chain.filter(ex); // 无 Bearer：交给 legacy filter
+            return onMissingOrInvalid(ex, chain); // 无 Bearer：DUAL 透传 legacy / ONLY 401
         }
         String token = auth.substring(BEARER.length()).trim();
-        // decode 的【任何】失败（验签失败 / JWKS 拉取 / 网络）→ 透传给 legacy。用 Optional 隔离，使 onError 只作用于
-        // decode 本身；decode 成功后的 mint/claim/下游错误正常传播（不被吞、不误当"验签失败"重入 chain）。
+        // decode 的【任何】失败（验签失败 / JWKS 拉取 / 网络）→ DUAL 透传 legacy / ONLY 401。用 Optional 隔离，使 onError
+        // 只作用于 decode 本身；decode 成功后的 mint/claim/下游错误正常传播（不被吞、不误当"验签失败"重入 chain）。
         return decoder.decode(token)
                 .map(java.util.Optional::of)
                 .onErrorReturn(java.util.Optional.empty())
                 .flatMap(opt -> opt.isPresent()
                         ? exchangeAndForward(ex, chain, opt.get())
-                        : chain.filter(ex));
+                        : onMissingOrInvalid(ex, chain));
+    }
+
+    /**
+     * 无 Bearer / 验签失败时的处置：
+     * <ul>
+     *   <li>DUAL：透传给 legacy(session/api-key) filter（灰度）。</li>
+     *   <li>ONLY：401，不落 legacy——非 open path 必须持有效 Casdoor token，杜绝身份混用。</li>
+     * </ul>
+     */
+    private Mono<Void> onMissingOrInvalid(ServerWebExchange exchange, GatewayFilterChain chain) {
+        if (casdoor.getMode() == CasdoorSecurityProperties.Mode.ONLY) {
+            exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+            return exchange.getResponse().setComplete();
+        }
+        return chain.filter(exchange);
     }
 
     /** 移除入站内部头（客户端伪造防护）；无则原样返回。 */

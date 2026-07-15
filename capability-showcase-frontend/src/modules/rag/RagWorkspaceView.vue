@@ -4,7 +4,8 @@
  *
  * 左「文档库」：rag.documents.list 列表（标题/类目/id + 详情/删除）；文档入库（file/json/obsidian，需 ingest scope）。
  * 右「检索台」：rag.query 输入 → 带分数排序的结果卡（score/docId/category/text，高亮命中）。
- *   rag.query 为 ready-degraded：顶部降级横幅（默认 HashEmbedding 内存库，非真实语义）。
+ *   顶部横幅按后端 /rag/config.rag 动态呈现：语义就绪时展示真实 provider/模型 + 混排开关；
+ *   未探测到运行时（v1 后端 / 无凭证 / 探测失败）诚实回退到"默认 HashEmbedding 降级"提示。
  * GraphRAG 子分区（rag.graph.query / entities，flag-off）：诚实锁定。
  *
  * 深链（capId 存在）沿用通用 CapabilityRunner。执行统一经 executionGate + runCapability。
@@ -109,6 +110,12 @@ const sharedTabEnabled = computed(
 )
 /** 共享图片入库是否受支持（后端权威；false 时共享图片入口禁用 + 说明）。 */
 const sharedImagesSupported = computed(() => ragConfig.value?.sharedImagesSupported === true)
+/**
+ * 当前 RAG 后端运行时形态（合同 v2）。为 null 时（v1 后端 / 未探测 / 探测失败）检索台横幅诚实回退到
+ * "默认 HashEmbedding 降级"提示；非 null 且 semantic 时展示真实 provider / 模型 / 混排开关。
+ */
+const ragRuntime = computed(() => ragConfig.value?.rag ?? null)
+const onOff = (v: boolean): string => (v ? '开' : '关')
 /** 构建开关已开、但后端明确关闭共享分区时给出说明（区别于"未探测"）。 */
 const sharedDisabledNote = computed(
   () => SHARED_KB_UI_ENABLED && ragConfig.value != null && ragConfig.value.publicEnabled === false,
@@ -500,7 +507,20 @@ const ingestScopeHint = computed(() => {
           subtitle="输入查询，结果按相关度分数排序展示（命中词高亮）。"
         >
           <template #notice>
-            <InfoNote tone="warning">
+            <!-- 语义就绪：如实展示当前后端实际形态（技术 provider / 模型 + 混排开关）。 -->
+            <InfoNote v-if="ragRuntime?.semantic" tone="success">
+              <strong>语义就绪：</strong>embedding <code>{{ ragRuntime.embeddingModel }}</code>（<code>{{
+                ragRuntime.embeddingProvider
+              }}</code>）· 向量库 <code>{{ ragRuntime.vectorStoreProvider }}</code>。
+              <br />
+              混排：ES 全文 <strong>{{ onOff(ragRuntime.esHybridEnabled) }}</strong> · 关键词
+              <strong>{{ onOff(ragRuntime.keywordHybridEnabled) }}</strong> · GraphRAG
+              <strong>{{ onOff(ragRuntime.graphEnabled) }}</strong> · 多模态
+              <strong>{{ onOff(ragRuntime.multimodalEnabled) }}</strong> · 融合
+              <code>{{ ragRuntime.fusionStrategy }}</code>。
+            </InfoNote>
+            <!-- 降级 或 未探测到运行时：诚实回退到 HashEmbedding 提示（安全默认）。 -->
+            <InfoNote v-else tone="warning">
               <strong>就绪·降级：</strong>默认 <code>HashEmbedding</code> 内存库（确定性降级，<strong>非真实语义</strong>）。
               接生产语义需配置 <code>qdrant</code> + <code>nomic</code> 等真实向量库 / embedding。
             </InfoNote>

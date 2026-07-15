@@ -46,7 +46,7 @@ client ──X-Api-Key/Bearer──▶ edge-gateway (Spring Cloud Gateway)
 | `eval-service` | 服务 | `/eval/**` 外部回归测试客户端，可执行 HTTP target case、加载 baseline suite、做响应/oracle 断言并输出 JSON report |
 | `vision-service` | 服务 | `/vision/caption`·`/vision/describe` 图像描述（多模态，JSON 或 multipart 上传）；默认关（`VISION_ENABLED=false`） |
 | `voice-service` | 服务 | `/voice/transcribe` 转写 + `/voice/chat`(+`/stream`) 语音闭环 ASR(whisper)→`/chat`→TTS；默认关（`VOICE_ENABLED=false`） |
-| `edge-gateway` | 服务 | 边缘 API 网关 |
+| `edge-gateway` | 服务 | 边缘 API 网关：入站凭证 → 换发内部 JWT（`X-Internal-Token`）转发下游。三个签发 filter：`CasdoorTokenExchangeFilter`(Casdoor Bearer, -120，默认关) / `SessionBearerAuthFilter`(会话 Bearer, -110) / `ApiKeyToInternalTokenFilter`(X-Api-Key, -100)；限流 + CORS 白名单 |
 
 > 后续继续加固 `channel`/`interop`/`eval` 的真实适配逻辑，并继续加固 `knowledge`/`async-task` 的持久化和跨服务协议。
 
@@ -64,7 +64,7 @@ client ──X-Api-Key/Bearer──▶ edge-gateway (Spring Cloud Gateway)
 - Agent 与编排：[Agent](docs/Agent编排/agent-guide.md) · [工作流](docs/Agent编排/workflow-guide.md) · [Code Interpreter](docs/Agent编排/code-exec.md)
 - 多模态与语音：[视觉](docs/多模态语音/vision-guide.md) · [语音](docs/多模态语音/voice-guide.md)
 - 互操作与渠道：[A2A](docs/互操作渠道/a2a-guide.md) · [MCP](docs/互操作渠道/mcp-guide.md) · [钉钉桥](docs/互操作渠道/dingtalk-guide.md)
-- 平台工程：[RBAC与登录](docs/平台工程/rbac-and-public-kb.md) · [事件总线](docs/平台工程/eventbus-guide.md) · [可观测性](docs/平台工程/observability-guide.md) · [成本归因](docs/平台工程/cost-attribution.md) · [评测](docs/平台工程/eval-guide.md)
+- 平台工程：[RBAC与登录](docs/平台工程/rbac-and-public-kb.md) · [Casdoor SSO/OIDC 接入](docs/平台工程/公网化-OIDC-改造方案.md) · [事件总线](docs/平台工程/eventbus-guide.md) · [可观测性](docs/平台工程/observability-guide.md) · [成本归因](docs/平台工程/cost-attribution.md) · [评测](docs/平台工程/eval-guide.md)
 - [迁移路线图](docs/迁移/migration-roadmap.md)
 
 ## 本地跑（Phase 0）

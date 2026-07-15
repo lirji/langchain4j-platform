@@ -178,6 +178,7 @@ public class ElasticsearchEsGateway implements EsGateway, AutoCloseable {
 
     @Override
     public void deleteByDoc(String tenantId, String docId) {
+        requireTenant(tenantId);
         ArrayNode filter = mapper.createArrayNode();
         filter.add(mapper.createObjectNode().set("term", mapper.createObjectNode().put("tenantId", tenantId)));
         filter.add(mapper.createObjectNode().set("term", mapper.createObjectNode().put("docId", docId)));
@@ -200,17 +201,7 @@ public class ElasticsearchEsGateway implements EsGateway, AutoCloseable {
 
     @Override
     public List<EsSearchHit> search(String tenantId, String category, String queryText, int limit) {
-        ArrayNode filter = mapper.createArrayNode();
-        filter.add(mapper.createObjectNode().set("term", mapper.createObjectNode().put("tenantId", tenantId)));
-        if (category != null && !category.isBlank()) {
-            filter.add(mapper.createObjectNode().set("term", mapper.createObjectNode().put("category", category)));
-        }
-        ObjectNode bool = mapper.createObjectNode();
-        bool.set("must", mapper.createObjectNode().set("match", mapper.createObjectNode().put("text", queryText)));
-        bool.set("filter", filter);
-        ObjectNode body = mapper.createObjectNode();
-        body.put("size", Math.max(1, limit));
-        body.set("query", mapper.createObjectNode().set("bool", bool));
+        ObjectNode body = buildSearchBody(mapper, tenantId, category, queryText, limit);
         try {
             Request req = new Request("POST", "/" + index + "/_search");
             req.setJsonEntity(mapper.writeValueAsString(body));
@@ -232,6 +223,34 @@ public class ElasticsearchEsGateway implements EsGateway, AutoCloseable {
             throw new UncheckedIOException(new IOException("ES search failed", e));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * 构造 _search 请求体。<strong>租户 term 无条件加入</strong>（租户隔离的唯一入口，不可省略）；
+     * category 存在时叠加。提取为静态方法便于纯单元断言"tenant term 恒在"（无需真实 ES）。
+     * tenantId 为空/空白时 fail-fast 抛出，绝不发出无租户过滤的查询。
+     */
+    static ObjectNode buildSearchBody(ObjectMapper mapper, String tenantId, String category, String queryText, int limit) {
+        requireTenant(tenantId);
+        ArrayNode filter = mapper.createArrayNode();
+        filter.add(mapper.createObjectNode().set("term", mapper.createObjectNode().put("tenantId", tenantId)));
+        if (category != null && !category.isBlank()) {
+            filter.add(mapper.createObjectNode().set("term", mapper.createObjectNode().put("category", category)));
+        }
+        ObjectNode bool = mapper.createObjectNode();
+        bool.set("must", mapper.createObjectNode().set("match", mapper.createObjectNode().put("text", queryText)));
+        bool.set("filter", filter);
+        ObjectNode body = mapper.createObjectNode();
+        body.put("size", Math.max(1, limit));
+        body.set("query", mapper.createObjectNode().set("bool", bool));
+        return body;
+    }
+
+    /** 租户隔离前置条件：ES 查询/删除必须带非空 tenantId，缺失即 fail-closed。 */
+    static void requireTenant(String tenantId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new IllegalArgumentException("ES 查询/删除要求非空 tenantId（租户隔离不可省略）");
         }
     }
 

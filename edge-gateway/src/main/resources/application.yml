@@ -114,6 +114,8 @@ platform:
 edge:
   casdoor:
     enabled: ${EDGE_CASDOOR_ENABLED:false}
+    # dual（灰度，验不过透传 legacy）| only（严格 Casdoor-only，非 open path 无有效 token → 401；tenant 恒取 owner）。
+    mode: ${EDGE_CASDOOR_MODE:dual}
     issuer: ${CASDOOR_ISSUER:http://localhost:8000}
     jwk-set-uri: ${CASDOOR_JWKS:http://localhost:8000/.well-known/jwks}
     # 允许的 Casdoor client_id（前端 auth-console；多个逗号分隔）

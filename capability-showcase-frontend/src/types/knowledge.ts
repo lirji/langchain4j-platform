@@ -19,11 +19,28 @@ export interface DocumentInfo {
   category: string | null
 }
 
-/** 后端 `GET /rag/config`（KnowledgeRuntimeView）。 */
+/**
+ * RAG 运行时后端形态（`KnowledgeRuntimeView.rag`，合同 v2 起返回）。
+ * 供检索台如实展示"当前实际用哪种 embedding / 向量库 / 有没有开混排"，取代写死的"默认 HashEmbedding"提示。
+ */
+export interface RagRuntimeView {
+  embeddingProvider: string
+  embeddingModel: string
+  semantic: boolean
+  vectorStoreProvider: string
+  esHybridEnabled: boolean
+  fusionStrategy: string
+  graphEnabled: boolean
+  keywordHybridEnabled: boolean
+  multimodalEnabled: boolean
+}
+
+/** 后端 `GET /rag/config`（KnowledgeRuntimeView）。`rag` 在合同 v1 后端缺省，前端按"未探测"回退。 */
 export interface KnowledgeRuntimeView {
   contractVersion: number
   publicEnabled: boolean
   sharedImagesSupported: boolean
+  rag?: RagRuntimeView
 }
 
 /** 强类型化的检索命中（结构化解析 /rag/query 结果时用）。visibility 服务端权威。 */

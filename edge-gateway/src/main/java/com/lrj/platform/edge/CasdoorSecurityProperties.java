@@ -19,6 +19,20 @@ public class CasdoorSecurityProperties {
     /** 是否启用 Casdoor token 换发。默认关（引入即安全）。 */
     private boolean enabled = false;
 
+    /**
+     * 认证模式（仅 enabled=true 时生效）：
+     * <ul>
+     *   <li>{@code DUAL}（默认，灰度）：Casdoor 验过即换发内部 JWT；无 Bearer / 验签失败 → <strong>透传</strong>
+     *       给 legacy(session/api-key) filter，供切换窗口回滚。</li>
+     *   <li>{@code ONLY}（严格 Casdoor-only，最终验收）：非 open path <strong>必须</strong>有有效 Casdoor token；
+     *       无 Bearer / 验签失败 → <strong>401</strong>，不再落 legacy。tenant 恒取 owner，杜绝身份混用。</li>
+     * </ul>
+     */
+    private Mode mode = Mode.DUAL;
+
+    /** {@link #mode} 取值。disabled 由 {@code enabled=false} 表达（filter 根本不装配）。 */
+    public enum Mode { DUAL, ONLY }
+
     /** Casdoor issuer（token iss 校验）。 */
     private String issuer;
 
@@ -49,6 +63,14 @@ public class CasdoorSecurityProperties {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public Mode getMode() {
+        return mode;
+    }
+
+    public void setMode(Mode mode) {
+        this.mode = mode == null ? Mode.DUAL : mode;
     }
 
     public String getIssuer() {

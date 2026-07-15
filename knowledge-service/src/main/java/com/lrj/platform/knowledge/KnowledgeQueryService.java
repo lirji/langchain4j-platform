@@ -19,6 +19,7 @@ import com.lrj.platform.knowledge.store.SingleEmbeddingStoreRouter;
 import com.lrj.platform.knowledge.authz.AuthzMode;
 import com.lrj.platform.knowledge.authz.KnowledgeAuthz;
 import com.lrj.platform.knowledge.authz.NoopKnowledgeAuthz;
+import com.lrj.platform.knowledge.authz.RagAuthzProperties;
 import com.lrj.platform.security.TenantContext;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -79,6 +80,8 @@ public class KnowledgeQueryService {
     private String publicKbTenantId = PublicKb.TENANT_ID;
     // 细粒度读授权（接 auth-platform）：默认 Noop（关时不过滤），app.rag.authz.mode=shadow|enforce 时注入 Real。
     private KnowledgeAuthz knowledgeAuthz = new NoopKnowledgeAuthz();
+    // 授权候选/批次上限：默认值即安全；生产由 Spring 注入 app.rag.authz.* 的 RagAuthzProperties。
+    private RagAuthzProperties authzProps = new RagAuthzProperties();
 
     @Autowired
     public KnowledgeQueryService(EmbeddingStoreRouter storeRouter,
@@ -248,12 +251,15 @@ public class KnowledgeQueryService {
         if (query == null || query.isBlank()) {
             throw new IllegalArgumentException("query is required");
         }
-        String tenantId = TenantContext.current().tenantId();
+        // 请求期一次性快照可信身份（tenantId/userId 同源于已验签的内部 JWT），避免链路中二次读取上下文。
+        var ctx = TenantContext.current();
+        String tenantId = ctx.tenantId();
+        String userId = ctx.userId();
         int limit = topK != null && topK > 0 ? topK : defaultTopK;
         double floor = minScore != null && minScore >= 0 ? minScore : defaultMinScore;
 
-        // rerank 开启时多召回一些候选（候选池 = topK × 放大倍数），给重排腾挪空间；关闭时 = topK。
-        int poolLimit = Math.max(limit, limit * Math.max(1, reranker.retrieveMultiplier()));
+        // 候选池：授权关闭时 = topK × max(1, rerank 放大)（与接入前一致）；授权开启时有界 overfetch（见方法注释）。
+        int poolLimit = computePoolLimit(limit);
 
         // 查询扩展：原 query + 若干变体；关闭时只有原 query，行为不变。
         List<String> variants = new ArrayList<>();
@@ -289,7 +295,7 @@ public class KnowledgeQueryService {
 
         List<Hit> candidates = fusion.fuse(groups, fusionStrategy, rrfK);
         // 细粒度读授权过滤（融合后、重排前；关闭时直通）。
-        candidates = filterReadable(tenantId, candidates);
+        candidates = filterReadable(tenantId, userId, candidates);
         List<Hit> hits = reranker.rerank(query, candidates, limit);
         log.info("knowledge query tenant={} topK={} minScore={} category={} strategy={} variants={} -> {} hits",
                 tenantId, limit, floor, category, fusionStrategy, variants.size(), hits.size());
@@ -297,14 +303,31 @@ public class KnowledgeQueryService {
     }
 
     /**
-     * 细粒度读授权过滤（app.rag.authz.mode=shadow|enforce 时生效）：对非公共候选按当前用户 view 判权，
-     * 公共库命中（shared）短路放行。关闭时直通。候选池 poolLimit 有界，故一次 checkBulk 即可。
+     * 候选池大小。授权关闭时：{@code = topK × max(1, rerank 放大)}（与接入前逐字一致）。
+     * 授权开启时（shadow/enforce）：放大倍数取 rerank 与 {@code authz.candidate-multiplier} 的 <em>max</em>
+     * （不相乘），并封顶到 {@code authz.max-candidates}——给授权过滤留 overfetch 余量以减少 underfill，
+     * 同时对 checkBulk 候选数设绝对上限（纵深防御）。授权关闭路径完全不受新上限影响。
      */
-    private List<Hit> filterReadable(String tenantId, List<Hit> candidates) {
+    private int computePoolLimit(int limit) {
+        int rerankMult = Math.max(1, reranker.retrieveMultiplier());
+        if (!knowledgeAuthz.enabled()) {
+            return Math.max(limit, limit * rerankMult);
+        }
+        int maxCandidates = Math.max(1, authzProps.getMaxCandidates());
+        int base = Math.min(limit, maxCandidates);
+        int mult = Math.max(rerankMult, Math.max(1, authzProps.getCandidateMultiplier()));
+        long raw = (long) base * mult;
+        return (int) Math.max(1, Math.min(raw, maxCandidates));
+    }
+
+    /**
+     * 细粒度读授权过滤（app.rag.authz.mode=shadow|enforce 时生效）：对非公共候选按当前用户 view 判权，
+     * 公共库命中（shared）短路放行。关闭时直通。候选池 poolLimit 有界，判权侧按 bulk-size 分批。
+     */
+    private List<Hit> filterReadable(String tenantId, String userId, List<Hit> candidates) {
         if (!knowledgeAuthz.enabled() || candidates.isEmpty()) {
             return candidates;
         }
-        String userId = TenantContext.current().userId();
         Set<String> docIds = candidates.stream()
                 .filter(h -> !h.shared() && h.docId() != null)
                 .map(Hit::docId)
@@ -354,6 +377,14 @@ public class KnowledgeQueryService {
     public void setKnowledgeAuthz(KnowledgeAuthz knowledgeAuthz) {
         if (knowledgeAuthz != null) {
             this.knowledgeAuthz = knowledgeAuthz;
+        }
+    }
+
+    /** 注入授权候选/批次上限（生产由 Spring @Autowired 注入 RagAuthzProperties；测试保持默认值）。 */
+    @Autowired(required = false)
+    public void setRagAuthzProperties(RagAuthzProperties authzProps) {
+        if (authzProps != null) {
+            this.authzProps = authzProps;
         }
     }
 

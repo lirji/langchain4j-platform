@@ -14,15 +14,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class KnowledgeQueryController {
 
-    /** {@code GET /rag/config} 合同版本，前端能力协商用。 */
-    private static final int CONFIG_CONTRACT_VERSION = 1;
+    /** {@code GET /rag/config} 合同版本，前端能力协商用（v2 起附带 rag 运行时视图）。 */
+    private static final int CONFIG_CONTRACT_VERSION = 2;
     /** 共享库当前不支持图片入库（仅文本），前端据此禁用共享图片入口。 */
     private static final boolean SHARED_IMAGES_SUPPORTED = false;
 
     private final KnowledgeQueryService queryService;
+    private final RagRuntimeInfo ragRuntimeInfo;
 
-    public KnowledgeQueryController(KnowledgeQueryService queryService) {
+    public KnowledgeQueryController(KnowledgeQueryService queryService, RagRuntimeInfo ragRuntimeInfo) {
         this.queryService = queryService;
+        this.ragRuntimeInfo = ragRuntimeInfo;
     }
 
     @PostMapping({"/rag/query", "/knowledge/query"})
@@ -48,7 +50,8 @@ public class KnowledgeQueryController {
         return new KnowledgeRuntimeView(
                 CONFIG_CONTRACT_VERSION,
                 queryService.publicKbEnabled(),
-                SHARED_IMAGES_SUPPORTED);
+                SHARED_IMAGES_SUPPORTED,
+                ragRuntimeInfo.view());
     }
 
     private static KnowledgeQueryReply toReply(KnowledgeQueryService.QueryResult result) {

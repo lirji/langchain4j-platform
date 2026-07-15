@@ -140,6 +140,17 @@ config:
   RAG_FUSION_STRATEGY: "rrf"       # ES 开启显式固化 rrf；留空亦会取有效默认（ES 开→rrf，关→weighted_max）
   RAG_FUSION_RRF_K: "60"
   RAG_RANKING_ES_WEIGHT: "1.0"
+  # --- 细粒度授权（接 auth-platform-server / SpiceDB ReBAC）。默认 disabled（与接入前逐字一致）---
+  #     disabled | shadow（观测不拦截）| enforce（真过滤）。灰度：disabled→shadow→单租户 enforce→扩大；切回 shadow 即回滚。
+  #     AUTHZ_SERVER_TOKEN 是 service credential，放 secrets（非本 ConfigMap）。auth-platform-server 不属本 chart，
+  #     externalInfra 提供其 DNS；生产用 NetworkPolicy 仅放行 knowledge-service→auth-platform-server。
+  RAG_AUTHZ_MODE: "disabled"
+  AUTHZ_SERVER_URL: "http://auth-platform-server:8200"
+  RAG_AUTHZ_CANDIDATE_MULTIPLIER: "3"
+  RAG_AUTHZ_MAX_CANDIDATES: "200"
+  RAG_AUTHZ_BULK_SIZE: "100"
+  # edge Casdoor 认证模式：dual（灰度）| only（严格 Casdoor-only，非 open path 无有效 token→401）。仅 EDGE_CASDOOR_ENABLED=true 生效。
+  EDGE_CASDOOR_MODE: "dual"
 
   # --- conversation（可选 RAG 增强） ---
   CONVERSATION_RAG_ENABLED: "false"
@@ -231,6 +242,10 @@ secrets:
     CHANNEL_OUTBOUND_SIGNATURE_SECRET: ""
     # eval 客户端打边缘网关用的 api-key。
     EVAL_API_KEY: "dev-key-acme"
+    # auth-platform-server service credential（须 = 其 authz.server.security.token）。RAG_AUTHZ_MODE=disabled 时留空即可。
+    # 债务（FINAL_PLAN §6.3 #7）：此处放 shared 会注入所有服务；生产应下沉为 knowledge-service 专属 Secret
+    # + NetworkPolicy（仅 knowledge→auth-platform-server）+ 定期轮换。首期以 Secret 隔离+网络策略兜底。
+    AUTHZ_SERVER_TOKEN: ""
 
   # --- edge-gateway 专属 Secret：edge-gateway-jwt（仅 gateway envFrom） ---
   # RS256 私钥隔离在此 Secret，只有 edge-gateway 挂载 → 下游拿不到私钥，缩小爆炸半径。

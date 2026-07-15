@@ -34,6 +34,14 @@ app:
     # mode != disabled 时经下方 authz.client.server-url 调 auth-platform-server(:8200)。
     authz:
       mode: ${RAG_AUTHZ_MODE:disabled}
+      # 候选池与批次安全上限（领域模型，非法值启动即失败）。实际消费在后续阶段的检索/判权改造：
+      # candidate-multiplier 与 reranker 放大取 max（不相乘）；max-candidates 是候选池绝对上限；
+      # bulk-size 为单次 checkBulk 资源上限（超出分批），须落在 [1, max-candidates]。
+      candidate-multiplier: ${RAG_AUTHZ_CANDIDATE_MULTIPLIER:3}
+      max-candidates: ${RAG_AUTHZ_MAX_CANDIDATES:200}
+      bulk-size: ${RAG_AUTHZ_BULK_SIZE:100}
+      # 严格租户模式（身份仅取 Casdoor owner，且与公共库互斥）。默认 false，真正生效在接口/配置层。
+      strict-tenant-only: ${RAG_AUTHZ_STRICT_TENANT_ONLY:false}
     # 公共/共享知识库：一个所有租户可读的保留分区（tenantId=__public__）。开启后查询在隔离查
     # 各自租户的基础上并入公共分区命中；写公共库需 public-ingest scope（见 DocumentController）。
     # 默认关闭 —— 关闭时行为与引入该特性前完全一致（向后兼容）。

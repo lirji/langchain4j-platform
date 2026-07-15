@@ -2,6 +2,7 @@ package com.lrj.platform.knowledge.contract;
 
 import com.lrj.platform.knowledge.KnowledgeQueryService;
 import com.lrj.platform.knowledge.controller.KnowledgeQueryController;
+import com.lrj.platform.knowledge.controller.RagRuntimeInfo;
 import io.restassured.module.mockmvc.RestAssuredMockMvc;
 import org.junit.jupiter.api.BeforeEach;
 
@@ -37,6 +38,8 @@ public abstract class KnowledgeContractBase {
         when(service.query(eq(" "), eq(null), eq(null), eq(null)))
                 .thenThrow(new IllegalArgumentException("query is required"));
 
-        RestAssuredMockMvc.standaloneSetup(new KnowledgeQueryController(service));
+        var runtime = new RagRuntimeInfo("hash", "embedding-default", "nomic-embed-text",
+                "in-memory", false, "", false, true, false);
+        RestAssuredMockMvc.standaloneSetup(new KnowledgeQueryController(service, runtime));
     }
 }

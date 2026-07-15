@@ -19,6 +19,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -190,6 +191,44 @@ class RealKnowledgeAuthzTest {
         RealKnowledgeAuthz authz = new RealKnowledgeAuthz(engine, AuthzMode.SHADOW);
         assertThat(authz.filterReadable(TID, "bob", ordered("d1", "d2"))).as("shadow 故障→全集(不拦截)")
                 .containsExactly("d1", "d2");
+    }
+
+    @Test
+    void filterReadable_batchesByBulkSize_andMergesResults() {
+        AuthzEngine engine = mock(AuthzEngine.class);
+        // 每批回带本批资源的判定（全 true），验证跨批合并正确。
+        when(engine.checkBulk(any(), eq("view"), anyList(), any())).thenAnswer(inv -> {
+            List<ResourceRef> res = inv.getArgument(2);
+            Map<ResourceRef, Boolean> m = new java.util.HashMap<>();
+            for (ResourceRef r : res) {
+                m.put(r, true);
+            }
+            return m;
+        });
+        RealKnowledgeAuthz authz = new RealKnowledgeAuthz(engine, AuthzMode.ENFORCE, null, 2);
+
+        Set<String> readable = authz.filterReadable(TID, "alice", ordered("d1", "d2", "d3"));
+
+        assertThat(readable).containsExactly("d1", "d2", "d3");
+        // 3 个 docId / bulkSize 2 → 2 批 checkBulk
+        verify(engine, times(2)).checkBulk(any(), eq("view"), anyList(), any());
+    }
+
+    @Test
+    void enforce_recordsVolumeMetrics() {
+        AuthzEngine engine = mock(AuthzEngine.class);
+        when(engine.checkBulk(any(), eq("view"), anyList(), any())).thenReturn(Map.of(
+                ResourceRef.of("document", TID + "_d1"), true,
+                ResourceRef.of("document", TID + "_d2"), false));
+        io.micrometer.core.instrument.simple.SimpleMeterRegistry meter =
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        RealKnowledgeAuthz authz = new RealKnowledgeAuthz(engine, AuthzMode.ENFORCE, meter);
+
+        authz.filterReadable(TID, "alice", ordered("d1", "d2"));
+
+        assertThat(meter.get("knowledge.authz.candidates").tags("mode", "enforce").counter().count()).isEqualTo(2.0);
+        assertThat(meter.get("knowledge.authz.allowed_docs").tags("mode", "enforce").counter().count()).isEqualTo(1.0);
+        assertThat(meter.get("knowledge.authz.underfill").tags("mode", "enforce").counter().count()).isEqualTo(1.0);
     }
 
     private static Set<String> ordered(String... ids) {

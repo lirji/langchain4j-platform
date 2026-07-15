@@ -35,6 +35,11 @@ public class CasdoorDecoderConfig {
         if (props.getAudiences() == null || props.getAudiences().isEmpty()) {
             throw new IllegalStateException("edge.casdoor.enabled=true 但 edge.casdoor.audiences 为空（必须校验 aud）");
         }
+        // ONLY（严格 Casdoor-only）下 tenant 必须恒取已验签的 owner——防经配置漂移把 tenant 指向可伪造的 claim。
+        if (props.getMode() == CasdoorSecurityProperties.Mode.ONLY && !"owner".equals(props.getTenantClaim())) {
+            throw new IllegalStateException(
+                    "edge.casdoor.mode=only 要求 tenant-claim=owner（已验签的 Casdoor org），当前=" + props.getTenantClaim());
+        }
         NimbusReactiveJwtDecoder decoder = NimbusReactiveJwtDecoder.withJwkSetUri(props.getJwkSetUri()).build();
         List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
         validators.add(new JwtTimestampValidator());

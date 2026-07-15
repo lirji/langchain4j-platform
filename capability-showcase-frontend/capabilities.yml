@@ -192,7 +192,7 @@ modules:
   # ─────────────────────────── P0：知识库 ───────────────────────────
   - id: rag
     title: 知识库 RAG Workspace
-    description: 文档入库与检索。knowledge-service。默认 HashEmbedding 内存库（确定性降级，非真实语义）。
+    description: 文档入库与检索。knowledge-service。embedding / 向量库 / 混排开关随部署而定，检索台顶部实时显示当前形态（默认零依赖 HashEmbedding，可配 qdrant/nomic 真实语义）。
     order: 2
     priority: P0
     service: knowledge-service
@@ -201,7 +201,7 @@ modules:
       - id: rag.query
         module: rag
         title: 知识检索
-        description: "POST /rag/query，KnowledgeQueryRequest。默认 HashEmbedding 内存库，接真实语义需配 qdrant/nomic。"
+        description: "POST /rag/query，KnowledgeQueryRequest。当前 embedding / 向量库以检索台顶部实时状态为准（默认零依赖 HashEmbedding，可配 qdrant/nomic 真实语义）。"
         method: POST
         path: /rag/query
         requestKind: json

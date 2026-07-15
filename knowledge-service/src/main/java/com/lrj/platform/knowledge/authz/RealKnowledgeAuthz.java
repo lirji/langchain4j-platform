@@ -10,6 +10,9 @@ import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -44,10 +47,15 @@ public class RealKnowledgeAuthz implements KnowledgeAuthz {
      */
     private static final String DEFAULT_SPACE = "default";
 
+    /** 单次 checkBulk 资源数默认上限（未显式配置时；配置来自 app.rag.authz.bulk-size）。 */
+    private static final int DEFAULT_BULK_SIZE = 100;
+
     private final AuthzEngine engine;
     private final AuthzMode mode;
     /** 可选判权指标 (Micrometer); null 时仅日志。 */
     private final MeterRegistry meter;
+    /** 单次 checkBulk 的最大资源数, 超出按此分批(稳定顺序)。>=1。 */
+    private final int bulkSize;
 
     /** 默认 ENFORCE（供集成测试与显式强制场景; 生产由 {@link KnowledgeAuthzConfig} 按 app.rag.authz.mode 注入）。 */
     public RealKnowledgeAuthz(AuthzEngine engine) {
@@ -59,9 +67,14 @@ public class RealKnowledgeAuthz implements KnowledgeAuthz {
     }
 
     public RealKnowledgeAuthz(AuthzEngine engine, AuthzMode mode, MeterRegistry meter) {
+        this(engine, mode, meter, DEFAULT_BULK_SIZE);
+    }
+
+    public RealKnowledgeAuthz(AuthzEngine engine, AuthzMode mode, MeterRegistry meter, int bulkSize) {
         this.engine = engine;
         this.mode = mode == null ? AuthzMode.ENFORCE : mode;
         this.meter = meter;
+        this.bulkSize = bulkSize < 1 ? DEFAULT_BULK_SIZE : bulkSize;
     }
 
     @Override
@@ -123,27 +136,36 @@ public class RealKnowledgeAuthz implements KnowledgeAuthz {
         if (docIds == null || docIds.isEmpty()) {
             return docIds;
         }
-        List<ResourceRef> resources = docIds.stream()
-                .map(d -> ResourceRef.of("document", key(tenantId, d)))
-                .toList();
-        Map<ResourceRef, Boolean> allowed;
+        List<String> ordered = new ArrayList<>(docIds);
+        Map<ResourceRef, Boolean> allowed = new LinkedHashMap<>();
+        long startNanos = System.nanoTime();
         try {
             // 首期强一致：多副本下刚写入的授权/撤权立即可见，避免单进程水位在多实例间失效。
-            allowed = engine.checkBulk(SubjectRef.user(userId), "view", resources, Consistency.fullyConsistent());
+            // 候选池有界(KnowledgeQueryService 封顶)，但仍按 bulkSize 分批, 防单请求过大打爆 SpiceDB。
+            for (int i = 0; i < ordered.size(); i += bulkSize) {
+                List<String> chunk = ordered.subList(i, Math.min(i + bulkSize, ordered.size()));
+                List<ResourceRef> resources = chunk.stream()
+                        .map(d -> ResourceRef.of("document", key(tenantId, d)))
+                        .toList();
+                allowed.putAll(engine.checkBulk(SubjectRef.user(userId), "view", resources, Consistency.fullyConsistent()));
+            }
         } catch (RuntimeException e) {
             log.warn("authz dependency error mode={} op=filter: {}", mode, e.toString());
             recordError("filter", "view");
-            // 判权依赖故障：shadow 放行全集(fail-open + 观测)；enforce 拒绝全部(fail-closed)。
+            recordCheckBulkLatency(startNanos);
+            // 判权依赖故障(含 SDK 响应协议异常)：shadow 放行全集(fail-open + 观测)；enforce 拒绝全部(fail-closed)。
             return mode == AuthzMode.SHADOW ? docIds : Set.of();
         }
+        recordCheckBulkLatency(startNanos);
         Set<String> readable = new LinkedHashSet<>();
-        for (String d : docIds) {
+        for (String d : ordered) {
             boolean ok = Boolean.TRUE.equals(allowed.get(ResourceRef.of("document", key(tenantId, d))));
             record("filter", "view", ok);
             if (ok) {
                 readable.add(d);
             }
         }
+        recordVolume(docIds.size(), readable.size());
         if (mode == AuthzMode.SHADOW) {
             // 影子模式：只观测、不拦截。返回全集，差异打点供灰度评估 enforce 影响。
             if (readable.size() != docIds.size()) {
@@ -183,6 +205,32 @@ public class RealKnowledgeAuthz implements KnowledgeAuthz {
                 "operation", operation,
                 "permission", permission == null ? "view" : permission,
                 "decision", "error").increment();
+    }
+
+    /**
+     * 记录一次 filter 判权的容量指标（低基数, 仅 mode tag）：候选数、可读数、underfill（不可读数,
+     * 即 enforce 下会被过滤掉的量；shadow 下为"若 enforce 会被过滤的量"）。供灰度评估召回损失。
+     */
+    private void recordVolume(int candidates, int readable) {
+        if (meter == null) {
+            return;
+        }
+        String m = mode.name().toLowerCase();
+        meter.counter("knowledge.authz.candidates", "mode", m).increment(candidates);
+        meter.counter("knowledge.authz.allowed_docs", "mode", m).increment(readable);
+        int underfill = Math.max(0, candidates - readable);
+        if (underfill > 0) {
+            meter.counter("knowledge.authz.underfill", "mode", m).increment(underfill);
+        }
+    }
+
+    /** 记录 checkBulk 调用总耗时（含分批, 低基数）。 */
+    private void recordCheckBulkLatency(long startNanos) {
+        if (meter == null) {
+            return;
+        }
+        meter.timer("knowledge.authz.check_bulk.latency", "mode", mode.name().toLowerCase())
+                .record(Duration.ofNanos(System.nanoTime() - startNanos));
     }
 
     private static String key(String tenantId, String id) {
