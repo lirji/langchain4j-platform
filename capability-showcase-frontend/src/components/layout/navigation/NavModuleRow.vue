@@ -1,16 +1,25 @@
 <script setup lang="ts">
+import { useRouter } from 'vue-router'
 import type { NavModuleVM } from '../../../navigation/navigationModel'
 import NavModuleIcon from './NavModuleIcon.vue'
 import NavCapabilityRow from './NavCapabilityRow.vue'
 
 /**
  * 模块行（主导航）：色块图标 chip + 中文名/英文副名 + 计数 + 折叠 chevron。
- * 整行即「展开/收起」按钮——点击只 toggle 能力列表、不导航（模块总览页从总览卡片/面包屑进入）。
+ * 整行点击「双动作」：既 toggle 能力列表的展开/收起，又跳转到该模块工作台落地页（/m/:id，
+ * 如知识库的文档库/共享库/检索台）；工作台落地页也可继续从总览卡片/面包屑进入。
  * 强调色 --g/--g-soft/--g-text 由祖先分组注入（此处也回落 data-accent 便于独立测试）。
  * navigate 事件仍向上透传：来自内部能力行 NavCapabilityRow（移动端点叶子后收起抽屉）。
  */
-defineProps<{ mod: NavModuleVM; open: boolean }>()
+const props = defineProps<{ mod: NavModuleVM; open: boolean }>()
 const emit = defineEmits<{ (e: 'toggle'): void; (e: 'navigate'): void }>()
+const router = useRouter()
+
+/** 点模块行：展开/收起子菜单 + 跳到模块工作台落地页 /m/:id（两件事都做，保留展开能力列表）。 */
+function onModuleClick(): void {
+  emit('toggle')
+  void router.push(`/m/${props.mod.id}`)
+}
 </script>
 
 <template>
@@ -20,8 +29,8 @@ const emit = defineEmits<{ (e: 'toggle'): void; (e: 'navigate'): void }>()
         type="button"
         class="mod__link"
         :aria-expanded="mod.hasCaps ? open : undefined"
-        :aria-label="mod.hasCaps ? `展开/收起 ${mod.name}` : mod.name"
-        @click="emit('toggle')"
+        :aria-label="mod.hasCaps ? `进入 ${mod.name} 工作台并展开/收起` : `进入 ${mod.name}`"
+        @click="onModuleClick"
       >
         <span class="mod__chip"><NavModuleIcon :name="mod.id" /></span>
         <span class="mod__text">
