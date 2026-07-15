@@ -8,6 +8,7 @@ import EmptyState from './components/common/EmptyState.vue'
 import CommandPalette from './components/common/CommandPalette.vue'
 import HistoryDrawer from './components/common/HistoryDrawer.vue'
 import ShortcutsDialog from './components/common/ShortcutsDialog.vue'
+import SessionExpiredDialog from './components/common/SessionExpiredDialog.vue'
 import { useCatalogStore } from './stores/catalog'
 import { useUiStore } from './stores/ui'
 import { useGlobalShortcuts } from './composables/useGlobalShortcuts'
@@ -53,7 +54,8 @@ useFocusTrap({
     ui.sidebarOpen &&
     !ui.cmdkOpen &&
     !ui.historyOpen &&
-    !ui.shortcutsOpen,
+    !ui.shortcutsOpen &&
+    !ui.authModalOpen,
   container: navContainer,
   onEscape: () => ui.closeSidebar(),
 })
@@ -118,6 +120,7 @@ onMounted(() => {
       <CommandPalette />
       <HistoryDrawer />
       <ShortcutsDialog />
+      <SessionExpiredDialog />
     </template>
   </div>
 </template>

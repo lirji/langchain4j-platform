@@ -11,6 +11,7 @@ import {
 import { OIDC_ENABLED } from '../config'
 import { useSessionStore } from './session'
 import { useHistoryStore } from './history'
+import { broadcastLogout } from '../utils/authChannel'
 import {
   clearStoredUser,
   completeLoginCallback,
@@ -103,6 +104,15 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /**
+   * 响应其它标签的登出信号（BroadcastChannel）：本标签清态、不重定向（下次请求 401 → 会话过期模态）。
+   * oidc 还需 purge 本标签自己的 sessionStorage User（sessionStorage 是标签级、不跨标签共享）。
+   */
+  function clearFromRemoteLogout(): void {
+    if (OIDC_ENABLED) void clearOidcSession()
+    else clear()
+  }
+
   let oidcEventsWired = false
   /** 订阅 UserManager 事件：轮换后新 token 回写 store（M3，UserManager 为真相源、store 为镜像）。幂等。 */
   function ensureOidcEvents(): void {
@@ -161,6 +171,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function logout(): Promise<void> {
     useSessionStore().clearApiKey()
     useHistoryStore().clear()
+    broadcastLogout() // 通知其它标签同步登出（不广播 token；本标签不会收到自己的信号）
     if (OIDC_ENABLED) {
       try {
         await signOutRedirect()
@@ -251,6 +262,7 @@ export const useAuthStore = defineStore('auth', () => {
     bootstrap,
     loadPublicConfig,
     clear,
+    clearFromRemoteLogout,
     // Casdoor OIDC（oidc/dual 模式）
     startOidcLogin,
     handleOidcCallback,

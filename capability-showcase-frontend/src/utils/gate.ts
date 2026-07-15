@@ -1,4 +1,5 @@
 import type { Capability } from '../types/catalog'
+import { needCredentialText, credentialNoun } from './authPrompt'
 
 export interface GateContext {
   /** 是否具备可执行凭证：已登录会话 或 已填写 API Key（调用方传 session.hasCredential）。 */
@@ -40,7 +41,7 @@ export function executionGate(cap: Capability, ctx: GateContext): GateResult {
     }
   }
   if (!ctx.hasApiKey) {
-    return { allowed: false, reason: '请先登录（或在顶栏"高级"里填写 API Key）。所有业务能力经网关都需凭证。' }
+    return { allowed: false, reason: needCredentialText() }
   }
   if (cap.state === 'scope-required') {
     const scopes = cap.requiredScopes.length ? cap.requiredScopes.join(' / ') : '所需'
@@ -58,9 +59,7 @@ export function executionGate(cap: Capability, ctx: GateContext): GateResult {
     // api-key（或未传凭证模式）：权限不透明，放行但提示可能 403（反应式鉴权，保既有行为）。
     return {
       allowed: true,
-      hint: `该能力需要 ${scopes} scope。若当前 ${
-        ctx.credentialMode === 'api-key' ? 'API Key' : '凭证'
-      } 不具备，将返回 403。`,
+      hint: `该能力需要 ${scopes} scope。若当前 ${credentialNoun(ctx.credentialMode)} 不具备，将返回 403。`,
     }
   }
   return { allowed: true }

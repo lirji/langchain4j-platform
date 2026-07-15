@@ -2,6 +2,7 @@ import { computed } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useSessionStore } from '../stores/session'
 import { RBAC_CONSOLE_ENABLED } from '../config'
+import { loginHintText } from '../utils/authPrompt'
 
 /**
  * 权限裁决单一入口——供 gate、管理入口可见性、能力缺权说明共用，避免"通用 runner 与专用页面裁决漂移"。
@@ -34,7 +35,7 @@ export function usePermission() {
         allowed: false,
         reason: 'need-login',
         missingScopes: requiredScopes,
-        message: '请先登录，或在顶栏「高级」填写 API Key。',
+        message: loginHintText(),
       }
     }
     if (mode === 'api-key') {

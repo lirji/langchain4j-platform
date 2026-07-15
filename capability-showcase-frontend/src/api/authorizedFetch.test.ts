@@ -12,6 +12,7 @@ vi.mock('../router', () => ({
 }))
 
 import { authorizedFetch } from './authorizedFetch'
+import { useUiStore } from '../stores/ui'
 
 function res(status: number, body: unknown = {}): Response {
   return {
@@ -96,13 +97,17 @@ describe('authorizedFetch', () => {
     expect(refreshCount).toBe(1)
   })
 
-  it('刷新失败 → 返回原 401 并跳转登录（带 redirect）', async () => {
+  it('刷新失败 → 返回原 401 并打开会话过期模态（记录 deep-link，不整页跳走）', async () => {
     const f = vi.fn((url: unknown) =>
       String(url).includes('/auth/refresh') ? Promise.resolve(res(401)) : Promise.resolve(res(401)),
     )
     vi.stubGlobal('fetch', f)
     const r = await authorizedFetch('/chat', { headers: { Authorization: 'Bearer old' } })
     expect(r.status).toBe(401)
-    expect(replaceMock).toHaveBeenCalledWith({ name: 'login', query: { redirect: '/m/agent' } })
+    // DR-1：不再 router.replace 整页跳登录，而是弹会话过期模态并记录 returnTo 供重登还原。
+    const ui = useUiStore()
+    expect(ui.authModalOpen).toBe(true)
+    expect(ui.authReturnTo).toBe('/m/agent')
+    expect(replaceMock).not.toHaveBeenCalled()
   })
 })

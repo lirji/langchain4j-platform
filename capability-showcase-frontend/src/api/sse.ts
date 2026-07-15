@@ -169,17 +169,21 @@ export function streamCapability(
   handlers: SseHandlers,
 ): { abort: () => void } {
   const controller = new AbortController()
+  // 记录最近事件 id：中途断流后用 Last-Event-ID 续订，让服务端从断点续发、不重复已消费的 token（DR-1）。
+  let lastEventId: string | undefined
+  let resubscribed = false
 
-  // 用指定令牌重建请求并发起（复用同一 controller，使上层 abort() 始终有效）。
-  const fetchWith = (accessToken?: string): Promise<Response> => {
+  // 用指定令牌 + 可选 Last-Event-ID 重建请求并发起（复用同一 controller，使上层 abort() 始终有效）。
+  const fetchWith = (accessToken?: string, lastId?: string): Promise<Response> => {
     const plan = assembleRequest(cap, values, {
       ...ctx,
       ...(accessToken ? { accessToken } : {}),
       signal: controller.signal,
     })
+    const headers = lastId ? { ...plan.headers, 'Last-Event-ID': lastId } : plan.headers
     return fetch(plan.url, {
       method: plan.method,
-      headers: plan.headers,
+      headers,
       body: plan.body,
       signal: controller.signal,
     })
@@ -188,12 +192,33 @@ export function streamCapability(
   const firstPlan = assembleRequest(cap, values, { ...ctx, signal: controller.signal })
   const usedBearer = Boolean(firstPlan.headers[AUTH_HEADER])
 
+  // 追踪 lastEventId，其余事件透传给上层（用户 onToken/onNamed 在续订前后连续收到）。
+  const tracking: SseHandlers = {
+    ...handlers,
+    onEvent: (ev) => {
+      if (ev.id) lastEventId = ev.id
+      handlers.onEvent?.(ev)
+    },
+  }
+
+  // 消费一次流并归结 done 原因（onError 暂存、不立即上抛——是否上抛由是否续订成功决定）。
+  const consumeOnce = (body: ReadableStream<Uint8Array>): Promise<{ reason: SseDoneReason; error?: unknown }> =>
+    new Promise((resolve) => {
+      let captured: unknown
+      void consumeSseStream(body, {
+        ...tracking,
+        onError: (e) => {
+          captured = e
+        },
+        onDone: (reason) => resolve({ reason, error: captured }),
+      })
+    })
+
   handlers.onStart?.()
   void (async () => {
     try {
       let res = await fetchWith()
       // 握手 401 且本次用的是会话 Bearer → 单飞续期 → 用新令牌重建请求，复用同一 controller 重试一次。
-      // （流一旦开始消费，中途的网络/业务错误不会再以 HTTP 401 出现，故只在此握手阶段可透明重试。）
       if (res.status === 401 && usedBearer) {
         const newToken = await useAuthStore().refresh()
         if (newToken) res = await fetchWith(newToken)
@@ -213,7 +238,24 @@ export function streamCapability(
         handlers.onDone?.('error')
         return
       }
-      await consumeSseStream(res.body, handlers)
+
+      let { reason, error } = await consumeOnce(res.body)
+      // 中途断流（error）且用的是 Bearer：可能是流跨越了 access token 有效期。续期后带 Last-Event-ID 续订一次。
+      // 局限：SSE 无「因鉴权关闭」的协议信号，干净 EOF(complete) 与鉴权关闭不可区分，故仅在 error 关闭时尝试。
+      if (reason === 'error' && usedBearer && !resubscribed) {
+        resubscribed = true
+        const newToken = await useAuthStore().refresh()
+        if (newToken) {
+          const res2 = await fetchWith(newToken, lastEventId)
+          if (res2.ok && res2.body) {
+            handlers.onOpen?.(res2)
+            ;({ reason, error } = await consumeOnce(res2.body))
+          }
+        }
+      }
+
+      if (reason === 'error') handlers.onError?.(error)
+      handlers.onDone?.(reason)
     } catch (err) {
       if (isAbortError(err)) {
         handlers.onDone?.('abort')

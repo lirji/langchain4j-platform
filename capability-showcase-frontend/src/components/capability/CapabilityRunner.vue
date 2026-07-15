@@ -215,7 +215,7 @@ function onKeydown(e: KeyboardEvent): void {
 
         <div v-if="showCurl" class="runner__curl">
           <div class="runner__curl-bar">
-            <span>curl 预览（API Key 以 <code>$API_KEY</code> 占位，不含明文）</span>
+            <span>curl 预览（凭证以占位符呈现，不含明文）</span>
             <CopyButton :text="curlText" compact />
           </div>
           <pre class="runner__curl-code">{{ curlText }}</pre>

@@ -376,7 +376,7 @@ async function runSql(): Promise<void> {
 
             <div v-if="showSqlCurl" class="al__curl">
               <div class="al__curl-bar">
-                <span>curl 预览（API Key 以 <code>$API_KEY</code> 占位）</span>
+                <span>curl 预览（凭证以占位符呈现，不含明文）</span>
                 <CopyButton :text="sqlCurl" compact />
               </div>
               <pre class="al__curl-code">{{ sqlCurl }}</pre>

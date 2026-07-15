@@ -1,4 +1,5 @@
 import type { Capability } from '../types/catalog'
+import { AUTH_MODE } from '../config'
 
 /** 业务/HTTP 错误的统一载体。 */
 export class ApiError extends Error {
@@ -82,15 +83,20 @@ export function humanizeError(err: unknown, cap?: Capability, opts?: HumanizeOpt
       case 400:
         return `请求参数有误（400）。${server ?? '请检查表单填写。'}`
       case 401:
-        // Bearer：authorizedFetch 续期失败后到此；api-key：Key 无效。
-        if (mode === 'bearer') return '登录已过期（401），请重新登录。'
+        // Bearer：authorizedFetch 续期失败后到此；非 Bearer：按 AUTH_MODE 出对应文案（oidc 不提 api-key）。
+        if (mode === 'bearer') {
+          return AUTH_MODE === 'apikey' ? '登录已过期（401），请重新登录。' : '登录已过期（401），请重新用 Casdoor 登录。'
+        }
+        if (AUTH_MODE === 'oidc') return '未登录或登录已过期（401），请用 Casdoor 登录。'
         return 'API Key 缺失或无效（401）。请在顶栏填写有效的 X-Api-Key。'
       case 403: {
+        const scopes = cap?.requiredScopes?.length ? `（需要 scope：${cap.requiredScopes.join(', ')}）` : ''
         if (mode === 'bearer') {
-          const scopes = cap?.requiredScopes?.length ? `（需要 scope：${cap.requiredScopes.join(', ')}）` : ''
           return `无权限（403）。当前账号缺少所需 scope${scopes}（由角色授予），请联系管理员授予对应角色。`
         }
-        const scopes = cap?.requiredScopes?.length ? `（需要 scope：${cap.requiredScopes.join(', ')}）` : ''
+        if (AUTH_MODE === 'oidc') {
+          return `无权限（403）。当前账号缺少所需 scope${scopes}（由角色授予），请联系管理员授予对应角色。`
+        }
         return `无权限（403）。当前 API Key 缺少所需 scope${scopes}。请更换具备该 scope 的 Key。`
       }
       case 404:
@@ -130,4 +136,25 @@ export function humanizeError(err: unknown, cap?: Capability, opts?: HumanizeOpt
     return '网络请求失败：无法连接到服务。请确认后端 / 网关已启动，且代理配置正确。'
   }
   return err instanceof Error ? err.message : String(err)
+}
+
+/**
+ * OIDC 回调错误人话化（state/nonce/code/取消）。oidc-client-ts 抛的多是英文技术信息，
+ * 直接展示会泄露内部细节且不友好——按关键词归类为可读中文（DR-1）。
+ */
+export function humanizeOidcCallbackError(err: unknown): string {
+  const raw = (err instanceof Error ? err.message : String(err ?? '')).toLowerCase()
+  if (raw.includes('access_denied') || raw.includes('cancel')) {
+    return '你取消了登录，或授权被拒绝。可重新登录。'
+  }
+  if (raw.includes('state')) {
+    return '登录校验未通过（state 不匹配，可能回调已过期或被篡改）。请重新登录。'
+  }
+  if (raw.includes('nonce')) {
+    return '登录校验未通过（nonce 不匹配）。请重新登录。'
+  }
+  if (raw.includes('expired') || raw.includes('invalid_grant') || raw.includes('code')) {
+    return '登录凭证已失效（回调 code 过期或已被使用）。请重新登录。'
+  }
+  return '登录未能完成，请重试。'
 }

@@ -9,6 +9,7 @@ import { useRouter } from 'vue-router'
 import EmptyState from '../../components/common/EmptyState.vue'
 import { useAuthStore } from '../../stores/auth'
 import { sanitizeRedirect } from '../../router'
+import { humanizeOidcCallbackError } from '../../api/errors'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -21,8 +22,8 @@ onMounted(async () => {
     await router.replace(sanitizeRedirect(returnTo) ?? '/')
   } catch (e) {
     failed.value = true
-    // 常见：state/nonce 不匹配（CSRF 防护）、code 过期、用户取消。文案人话化，不泄露内部细节。
-    message.value = e instanceof Error && e.message ? e.message : '登录未能完成，请重试。'
+    // 常见：state/nonce 不匹配（CSRF 防护）、code 过期、用户取消。人话化，不泄露内部细节。
+    message.value = humanizeOidcCallbackError(e)
   }
 })
 

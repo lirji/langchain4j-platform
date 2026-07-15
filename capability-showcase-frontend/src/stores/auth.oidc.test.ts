@@ -99,6 +99,19 @@ describe('auth store —— OIDC 驱动', () => {
     expect(oidc.signOutRedirect).toHaveBeenCalledTimes(1)
   })
 
+  it('clearFromRemoteLogout（其它标签登出）→ 本标签清态 + purge sessionStorage、不重定向', async () => {
+    oidc.completeLoginCallback.mockResolvedValue({ access_token: 'cas-tok-admin', state: null })
+    const auth = useAuthStore()
+    await auth.handleOidcCallback()
+    expect(auth.isAuthenticated).toBe(true)
+    auth.clearFromRemoteLogout()
+    expect(auth.isAuthenticated).toBe(false)
+    // oidc 下须 purge 本标签自己的 sessionStorage User（clear 镜像 + removeUser）。
+    expect(oidc.clearStoredUser).toHaveBeenCalled()
+    // 不发起单点登出（那是当前标签主动登出才做，收到远端信号只清本地）。
+    expect(oidc.signOutRedirect).not.toHaveBeenCalled()
+  })
+
   it('startOidcLogin 透传 returnTo 给重定向登录', async () => {
     oidc.startOidcLogin.mockResolvedValue(undefined)
     const auth = useAuthStore()

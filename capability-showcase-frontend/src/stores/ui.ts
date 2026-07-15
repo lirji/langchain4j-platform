@@ -59,6 +59,9 @@ export const useUiStore = defineStore('ui', () => {
   const cmdkOpen = ref(false)
   const historyOpen = ref(false)
   const shortcutsOpen = ref(false)
+  // 会话过期模态（authorizedFetch 续期失败时打开；引导重登、不丢当前 deep-link）。
+  const authModalOpen = ref(false)
+  const authReturnTo = ref('/')
 
   const effectiveTheme = computed<'light' | 'dark'>(() =>
     theme.value === 'system' ? (prefersDark() ? 'dark' : 'light') : theme.value,
@@ -158,6 +161,20 @@ export const useUiStore = defineStore('ui', () => {
     historyOpen.value = false
     shortcutsOpen.value = true
   }
+  /**
+   * 打开会话过期模态（互斥关闭其它浮层）。记录 returnTo，供「重新登录」还原当前 deep-link。
+   * 幂等：已开时仅刷新 returnTo（避免并发 401 反复覆盖为不同路径——首个失败点即当前页，稳定）。
+   */
+  function openAuthModal(returnTo?: string): void {
+    cmdkOpen.value = false
+    historyOpen.value = false
+    shortcutsOpen.value = false
+    if (returnTo && !authModalOpen.value) authReturnTo.value = returnTo
+    authModalOpen.value = true
+  }
+  function closeAuthModal(): void {
+    authModalOpen.value = false
+  }
   function toggleCmdk(): void {
     cmdkOpen.value ? closeCmdk() : openCmdk()
   }
@@ -181,6 +198,8 @@ export const useUiStore = defineStore('ui', () => {
     cmdkOpen,
     historyOpen,
     shortcutsOpen,
+    authModalOpen,
+    authReturnTo,
     setTheme,
     cycleTheme,
     applyTheme,
@@ -202,5 +221,7 @@ export const useUiStore = defineStore('ui', () => {
     openShortcuts,
     closeShortcuts,
     toggleShortcuts,
+    openAuthModal,
+    closeAuthModal,
   }
 })

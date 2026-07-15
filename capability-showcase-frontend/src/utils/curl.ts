@@ -2,17 +2,19 @@ import type { Capability } from '../types/catalog'
 import type { FormValues } from './validation'
 import {
   API_KEY_HEADER,
+  AUTH_HEADER,
   buildHeaderParams,
   buildJsonBody,
   buildTargetUrl,
   isStreamingKind,
 } from '../api/client'
+import { AUTH_MODE } from '../config'
 
 /**
  * 生成可复制的 curl 预览。
  *
- * 安全约束：绝不写入真实 API Key —— X-Api-Key 恒用占位符（默认 $API_KEY），
- * 以免密钥泄露到剪贴板 / 日志 / 分享。
+ * 安全约束：绝不写入真实凭证 —— 凭证头恒用占位符（apikey/dual：`X-Api-Key: $API_KEY`；
+ * oidc：`Authorization: Bearer $ACCESS_TOKEN`），以免凭证泄露到剪贴板 / 日志 / 分享（DR-1）。
  */
 /** POSIX shell 单引号转义：值内 ' → '\'' ，防止含引号/换行/shell 片段的用户值把复制的 curl 打断或注入。 */
 function shq(s: string): string {
@@ -22,15 +24,21 @@ function shq(s: string): string {
 export function toCurl(
   cap: Capability,
   values: FormValues,
-  opts: { edgeBaseUrl?: string; keyPlaceholder?: string } = {},
+  opts: { edgeBaseUrl?: string; keyPlaceholder?: string; tokenPlaceholder?: string } = {},
 ): string {
   const edgeBaseUrl = opts.edgeBaseUrl ?? ''
   const keyPlaceholder = opts.keyPlaceholder ?? '$API_KEY'
+  const tokenPlaceholder = opts.tokenPlaceholder ?? '$ACCESS_TOKEN'
   const url = buildTargetUrl(cap.path, cap.params, values, edgeBaseUrl)
 
   const lines: string[] = [`curl -X ${cap.method} ${shq(url)}`]
-  // X-Api-Key 恒为占位符字面量（保持 $API_KEY 可见，供用户自行替换/设为环境变量）。
-  lines.push(`  -H '${API_KEY_HEADER}: ${keyPlaceholder}'`)
+  // 凭证头恒为占位符字面量（可见、供用户自行替换/设环境变量），绝不含真实明文。
+  // oidc：Casdoor 是唯一凭证 → Bearer 占位符；apikey/dual：X-Api-Key 占位符（dual 以 api-key 为最简示例）。
+  if (AUTH_MODE === 'oidc') {
+    lines.push(`  -H '${AUTH_HEADER}: Bearer ${tokenPlaceholder}'`)
+  } else {
+    lines.push(`  -H '${API_KEY_HEADER}: ${keyPlaceholder}'`)
+  }
 
   // 业务 header 参数（in:header）；X-Api-Key 恒为占位符，不受 header 参数影响。
   for (const [name, val] of Object.entries(buildHeaderParams(cap.params, values))) {

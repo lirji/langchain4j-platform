@@ -5,12 +5,16 @@ import './styles/base.css'
 import App from './App.vue'
 import { router } from './router'
 import { useAuthStore } from './stores/auth'
+import { onRemoteLogout } from './utils/authChannel'
 import { REQUIRE_LOGIN, OIDC_ENABLED, CASDOOR_SILENT_PATH } from './config'
 
 async function bootstrap(): Promise<void> {
   const app = createApp(App)
   const pinia = createPinia()
   app.use(pinia)
+
+  // 多标签登出同步：其它标签登出 → 本标签清态（不重定向；下次请求 401 → 会话过期模态）。
+  onRemoteLogout(() => useAuthStore(pinia).clearFromRemoteLogout())
 
   // 挂载前先恢复登录态，使路由守卫按最终登录态裁决、避免首帧误跳 /login。绝不阻塞启动（各自带超时）。
   // - legacy：仅强制登录模式需要（用 httpOnly 刷新 cookie 打 /auth/refresh）。
