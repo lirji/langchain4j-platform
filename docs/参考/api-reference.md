@@ -19,6 +19,7 @@ Content-Type: application/json
 ```
 
 - 网关按凭据换发内部 JWT：`SessionBearerAuthFilter`（order -110）验会话 Bearer，或 `ApiKeyToInternalTokenFilter`（order -100）校验 `X-Api-Key` → 签发短时内部 JWT（`X-Internal-Token`）→ 按路径路由到下游服务。下游只认内部 JWT，对「会话 vs api-key」无感知，**不建议外部直接构造 `X-Internal-Token`**。
+- **第三条凭据（默认关）**：`CasdoorTokenExchangeFilter`（order **-120**，最早跑）接受外部 **Casdoor SSO** 签发的 Bearer JWT，JWKS 验签后换发同形状内部 JWT。`EDGE_CASDOOR_ENABLED=false` 时不装配；开启后 `dual` 档与上两条并存（Casdoor 优先、失败回退）、`only` 档独占（失败 401 不回退）。详见 `operations.md` 第 4.2 节。
 - 免鉴权放行的路径（`EdgeOpenPaths.isOpen`，两个 filter 共用）：`/actuator*`、`/.well-known/*`、`/health`、`/auth/login`、`/auth/register`、`/auth/refresh`、`/auth/logout`、`/auth/public-config`、`/channel/feishu/events`、`/channel/dingtalk/events`。其中 `GET /.well-known/agent-card.json` 是对外免鉴权的 A2A 发现端点；`/auth/me` **不在**放行内，仍需会话 Bearer。
 - 网关路由前缀（`edge-gateway/application.yml`）：`/auth`、`/auth/**` → auth；`/chat`、`/chat/**`、`/extract`、`/extract/**`、`/memory`、`/memory/**` → conversation；`/chat/sql`、`/analytics`、`/analytics/**` → analytics；`/workflow`、`/workflow/**` → workflow；`/rag`、`/rag/**`、`/knowledge`、`/knowledge/**` → knowledge；`/agent`、`/agent/**` → agent；`/async`、`/async/**` → async-task；`/channel`、`/channel/**` → channel；`/interop`、`/interop/**`、`/.well-known/agent-card.json` → interop；`/eval`、`/eval/**` → eval；`/vision`、`/vision/**` → vision；`/voice`、`/voice/**` → voice。
 - 本文所有端点均可**经网关**访问（`是否经网关：是`）。少量端点是给服务间调用/回调设计的（如 `/conversation/workflow/*`、`/channel/callbacks/*`），虽然也在网关路由前缀内，但通常由内部服务而非终端用户调用，下面会单独标注。
@@ -222,6 +223,7 @@ curl -s -X POST 'http://localhost:8080/extract?type=ticket' \
   - `multipart/form-data`：表单字段 `file`（必填）+ 可选 `category`。
 - 图片 ingestion：`image/*` 文件或 `imageBase64` 走 OpenAI 兼容多模态 embedding（存入独立的 `knowledge_images_<tenant>` collection），`RAG_MULTIMODAL_ENABLED`（application.yml 默认关→上传图片 400；compose 默认开，路由在但未配真实端点时调用期报错）。⚠️ 旧的 `caption`/`ocrText` 字段与 `RAG_IMAGE_TEXT_*` 图→文字路径已移除。
 - 公共/共享库：可传 `visibility=public|shared` 写入 `__public__` 公共分区，需 `public-ingest` scope（否则 403）；缺省写本租户私有库。
+- 文档级授权（仅 `RAG_AUTHZ_MODE=enforce`，**默认 `disabled` 不影响**）：**新建**（非共享）文档时把 `owner`（上传人）+ `home_dept`（上传人部门）关系写入外部 auth-platform；若判不出上传人部门（内部 JWT 无 `dept`）→ **403**「cannot determine uploader's home department」。**同名覆盖**既有非共享文档需对其有 `edit` 权限（否则 403，覆盖不夺原 owner）。disabled/shadow 不触发上述拦截。
 - 响应：`DocumentInfo`。
 - 经网关：是。默认开启（application.yml 默认向量库 `qdrant` + hash embedding，compose 走 nomic + ES 全文混排）。
 
@@ -251,6 +253,19 @@ JSON 示例：
 - 用途：删除文档、向量与关联图谱。需要 `ingest` scope。响应 `{ docId, deleted }`。
 - 经网关：是。默认开启。
 
+### POST `/rag/documents/{docId}/share`
+
+- 用途：把某文档共享给另一用户（授予其对该文档的读权限）。
+- 请求：`{ "userId": "bob" }`（被授权用户 id）。
+- 权限：调用者须对该文档有 `share` 权限（服务层 SDK `@CheckAccess(permission="share", ...)`，`FULLY_CONSISTENT`）；无权 → **403**（`AccessDeniedException`）。
+- 经网关：是。**仅 `RAG_AUTHZ_MODE=enforce` 时注册**（`@ConditionalOnProperty(app.rag.authz.mode=enforce)`）；disabled/shadow 下整个 controller 不装配（404）。
+
+### DELETE `/rag/documents/{docId}/share/{userId}`
+
+- 用途：撤销此前对某用户的文档共享。
+- 权限：同上，调用者须有 `share` 权限（否则 403）。
+- 经网关：是。仅 enforce 时注册（同上）。
+
 ### POST `/rag/image`
 
 - 用途：图片入库（原生 CLIP 多模态 embedding，向量存入独立的 `knowledge_images_<tenant>` collection）。需要 `ingest` scope。
@@ -270,11 +285,13 @@ JSON 示例：
 - 用途：RAG 查询，四路混排融合——vector / keyword（内存 BM25）/ es（Elasticsearch 真 BM25）/ 可选 graph；ES 参与时有效默认 RRF 融合。
 - 请求：`{ query, topK, minScore, category }`（`KnowledgeQueryRequest`）。
 - 响应：`{ query, tenantId, hits[] }`，`hits[]` 含 `id, score, docId, displayName, category, index, text, source, visibility`（`source` 为 `vector|keyword|es|hybrid|graph`；`RAG_PUBLIC_ENABLED` 开启时公共分区命中标 `visibility=public`）。
+- 文档级授权（仅 `RAG_AUTHZ_MODE=enforce`，**默认 `disabled` 不过滤**）：融合后、重排前经外部 auth-platform `checkBulk(view)` 按 ReBAC 过滤，只保留调用者有 `view` 权限的命中；**无 `docId` 的命中**（如 GraphRAG 三元组）在 enforce 下被 **fail-closed 丢弃**。`shadow` 档只双算记差异、不过滤。
 - 经网关：是。默认开启。融合与权重可调（`RAG_FUSION_STRATEGY`、`RAG_RANKING_*_WEIGHT`）。
 
 ### GET `/rag/config`
 
 - 用途：运行时只读回显 RAG 前端相关配置：`{ publicKbEnabled, ... }`，供前端决定是否展示共享库视图/共享图片入口。
+- 响应：`KnowledgeRuntimeView`（`contractVersion=2`），仅含公共库开关、共享图片支持位与 RAG 后端形态（embedding / 向量库 / 混排 / graph / 多模态）。**刻意不透出任何文档级授权内部态**（无 `RAG_AUTHZ_MODE`、无权限/候选池 caps）——authz 是判权链路内部实现，不进前端能力协商。
 - 经网关：是。**需认证但无需额外 scope**（边缘内部 JWT 把守）。
 
 ### POST `/rag/graph/query`

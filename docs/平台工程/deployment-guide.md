@@ -2,7 +2,7 @@
 
 平台有两种部署形态：**本地 docker-compose 一体化栈**（开发/演示）和 **k8s / Helm 伞状 chart**（生产）。二者共享同一套服务命名与跨服务 base-url——k8s Service 名 == compose 服务名 == 各服务 env 里硬编码的主机名，因此从 compose 迁到 k8s 近零改动。
 
-前置：JDK 21、Maven、Docker/Docker Compose、可用的 LiteLLM（可再接 Ollama/OpenAI/Anthropic）。默认所有增强能力（Kafka 事件总线、RS256、GraphRAG、语义缓存、agent 高级动作等）**关闭**、走内存/确定性实现，零外部依赖。
+前置：JDK 21、Maven、Docker/Docker Compose、可用的 LiteLLM（可再接 Ollama/OpenAI/Anthropic）。默认所有增强能力（Kafka 事件总线、RS256、GraphRAG、语义缓存、agent 高级动作、Casdoor SSO `edge.casdoor.enabled=false`、RAG 文档级授权 `app.rag.authz.mode=disabled` 等）**关闭**、走内存/确定性实现，零外部依赖——`app.rag.authz.mode=enforce` 时才需外部 `auth-platform-server`(:8200) 可达。
 
 ---
 
@@ -25,11 +25,19 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 
 | 文件 | 用途 |
 |---|---|
-| `deploy/docker-compose.yml` | 完整本地栈 |
+| `deploy/docker-compose.yml` | 完整本地栈（ES/Kibana + 语义 embedding + 持久化后端现已默认并入） |
+| `deploy/docker-compose.es.yml` | ES 全文混排 override（现已并入基础栈，冗余；仅供 `smoke-es-hybrid-rag.sh` 显式分层或非默认组合叠加 ES） |
+| `deploy/docker-compose.rag-full.yml` | 语义 RAG 全量 override（Ollama nomic embedding + qdrant/redis/jdbc 持久化；现已并入基础栈，冗余，保留兼容旧脚本） |
 | `deploy/docker-compose.failover.yml` + `deploy/litellm/config.failover.yaml` | LiteLLM 双上游 + fallback 故障转移冒烟（配 `deploy/smoke-failover.sh`） |
 | `deploy/docker-compose.oracle.yml` | 起冻结单体作 oracle，供 eval 双跑回归门禁（D4）真实比对 |
+| `deploy/start-all.sh` / `start-dev.sh` / `start-local.sh` | 一键起栈：全 docker 起前后端 / 后端 docker + 前端 vite dev 热更 / 仅本机后端 docker 栈 |
+| `deploy/seed-kb.sh` / `deploy/rag-demo.sh` | 导入 `sample-docs/` 示例语料 / RAG 上传→列表→检索→查单一键演示闭环 |
 | `deploy/smoke-nl2sql.sh` | NL2SQL / ChatBI 冒烟 |
 | `deploy/smoke-qdrant-rag.sh` | Qdrant 向量库 RAG 冒烟 |
+| `deploy/smoke-es-hybrid-rag.sh` | ES 全文混排冒烟（断言命中含 ES/hybrid 来源） |
+| `deploy/smoke-rbac.sh` | 登录 + RBAC 管理面 e2e 冒烟（会话 Bearer → 内部 JWT scope 传播） |
+| `deploy/smoke-rag-tenant-authz.sh` | 跨服务 required E2E：Casdoor→edge→knowledge→ES→auth-platform→SpiceDB，断言租户隔离 + 文档级 ReBAC（需全栈 `enforce`） |
+| `deploy/smoke-a2a.sh` | A2A 对外互操作冒烟（agent-card 发现 + `message/send`） |
 | `deploy/smoke-failover.sh` | 干掉一个 LiteLLM 上游、验证 fallback |
 
 compose 编排的各服务端口：edge-gateway `8080`、config-server `8888`、conversation `8081`、workflow `8082`、analytics `8083`、knowledge `8084`、agent `8085`、async-task `8086`、channel `8087`、interop `8088`、eval `8089`、vision `8090`、voice `8091`。
@@ -80,6 +88,14 @@ helm install platform deploy/helm/platform -n platform --create-namespace \
     --set externalSecrets.vaultPath=secret/data/langchain4j-platform \
     --set externalSecrets.secretStoreRef.name=vault-backend
   ```
+
+### 外接 auth-platform（Casdoor SSO / SpiceDB 文档级授权）
+`values.yaml` 的 `config` 已内置 auth-platform 相关项，**默认安全关**：`RAG_AUTHZ_MODE="disabled"`、`AUTHZ_SERVER_URL="http://auth-platform-server:8200"`、`RAG_AUTHZ_CANDIDATE_MULTIPLIER/MAX_CANDIDATES/BULK_SIZE`、`EDGE_CASDOOR_MODE="dual"`（进 ConfigMap）；`AUTHZ_SERVER_TOKEN` 是 service credential，放 **`secrets`**（非 ConfigMap），`RAG_AUTHZ_MODE=disabled` 时留空即可。**`auth-platform-server`(:8200) 不属本 chart**——仅当 `RAG_AUTHZ_MODE=shadow|enforce` 时才是外部依赖，由 `externalInfra` 提供其 DNS（同名 ExternalName），生产建议加 NetworkPolicy 仅放行 `knowledge-service → auth-platform-server`。灰度：`disabled → shadow → 单租户 enforce → 扩大`，切回 `shadow`/`disabled` 即回滚。
+
+```bash
+--set config.RAG_AUTHZ_MODE=enforce \
+--set config.EDGE_CASDOOR_MODE=only --set config.EDGE_CASDOOR_ENABLED=true
+```
 
 ### 有状态语义与水平扩展（重要）
 默认各服务单副本 + 内存态。多副本前必须切持久化，否则副本分裂丢状态：

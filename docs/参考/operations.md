@@ -7,7 +7,7 @@
 
 两层网关：
 
-- **`edge-gateway`（:8080）** —— 唯一对外入口。校验 `X-Api-Key`，换发短时内部 JWT（`X-Internal-Token`），按路径路由到各服务。
+- **`edge-gateway`（:8080）** —— 唯一对外入口。按入站凭据换发短时内部 JWT（`X-Internal-Token`），按路径路由到各服务。三条签发路径按 order 依次尝试：`CasdoorTokenExchangeFilter`（Casdoor Bearer，order -120，**默认关**）→ `SessionBearerAuthFilter`（会话 Bearer，order -110）→ `ApiKeyToInternalTokenFilter`（校验 `X-Api-Key`，order -100）。
 - **LiteLLM（:4000，外部，非 Java 模块）** —— LLM 网关。所有模型调用走一个 OpenAI 兼容端点，provider 路由/failover/模型名映射都在 `deploy/litellm/config.yaml` 里。
 
 ---
@@ -54,6 +54,7 @@ bash deploy/seed-kb.sh             # 灌 sample-docs 示例知识库并跑检索
 bash deploy/rag-demo.sh            # RAG 单文档闭环演示（上传→列表→检索→查单，--with-llm 打 /chat /agent）
 bash deploy/smoke-qdrant-rag.sh    # 纯向量 RAG 冒烟（断言 source 全为 vector）
 bash deploy/smoke-es-hybrid-rag.sh # ES 全文混排冒烟（断言 hits 含 source∈{es,hybrid}）
+bash deploy/smoke-rag-tenant-authz.sh # 跨服务 RAG 租户/文档级 ReBAC required E2E（断言租户隔离 + enforce 下只返回有 view 权限的文档；需全栈 enforce + edge Casdoor only + auth-platform 全栈，不可 skip）
 bash deploy/smoke-rbac.sh          # 登录→角色展开→边缘换发内部 JWT→role-admin 门→409/403 护栏
 bash deploy/smoke-a2a.sh           # A2A 对外冒烟（agent-card / message/send / deep-research 异步 Task）
 bash deploy/smoke-nl2sql.sh        # NL2SQL / ChatBI 冒烟（走 edge-gateway 打 /chat/sql、/analytics/sql）
@@ -106,12 +107,14 @@ mvn -pl platform-security -Dtest=InternalTokenTest test   # 单类（务必带 -
 
 ## 4. 鉴权与租户
 
-外部调用有**两种并存的凭据**（经网关 :8080，任选其一）：
+外部调用**默认有两种并存的凭据**（经网关 :8080，任选其一）：
 
 1. **`X-Api-Key`**：网关按 api-key 查租户绑定，签发短时内部 JWT。
 2. **`Authorization: Bearer <会话 accessToken>`**：先 `POST /auth/login` 拿会话令牌，网关 `SessionBearerAuthFilter`（order -110，早于 api-key filter -100）验签会话令牌后换发内部 JWT。
 
-两条路径产出同形状的 `X-Internal-Token`，下游只认它、对登录 vs api-key 无感知（详见第 4.1 节）。
+另有**默认关**的第三条 **Casdoor SSO Bearer** 路径（`CasdoorTokenExchangeFilter`，order -120，最早跑）——开启后与上两条并存或独占，见第 4.2 节。
+
+三条路径产出同形状的 `X-Internal-Token`，下游只认它、对 Casdoor / 登录 / api-key 无感知（详见第 4.1 / 4.2 节）。
 
 ```bash
 # 方式一：api-key
@@ -157,6 +160,25 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 - **刷新/登出**：`POST /auth/refresh`（用刷新 cookie 一次性轮转）、`POST /auth/logout`（撤销会话）。跨域直调网关时刷新 cookie 需 `AUTH_COOKIE_SAME_SITE=None` + `AUTH_COOKIE_SECURE=true`（同源 nginx 反代可用默认 Lax/false）。
 - **RBAC**：`AUTH_RBAC_ENABLED`（yml 默认 false / compose demo true）开启后 `/auth/admin/**` 管理面可用，需 `role-admin` scope；写端点再受 `AUTH_RBAC_ADMIN_WRITES_ENABLED`（关→503）与 `If-Match` 乐观锁（缺失 428 / 冲突 412）约束。`AUTH_RBAC_BOOTSTRAP_ADMIN_USERS`（默认 `alice`）指定初始 admin。
 - **存储**：`AUTH_STORE`（yml `in-memory` / compose `jdbc`）；jdbc 档自动建 `USERS`/`USER_ROLE`/`ROLES`/`ROLE_SCOPE`/`AUTH_SESSION`（`AUTH_DB_URL`/`_USER`/`_PASSWORD`）。种子 `AUTH_SEED_ENABLED`（默认 true，生产建议 false）。自助注册 `AUTH_REGISTRATION_ENABLED`（默认 false，须与 RBAC 同开）。
+
+### 4.2 Casdoor SSO Bearer（边缘身份切换，`edge.casdoor.*`，默认关）
+
+边缘可接**外部 Casdoor（OIDC/SSO 身份，非本仓库模块）**签发的 JWT 作第三条凭据：`CasdoorTokenExchangeFilter`（order **-120**，早于会话 -110 / api-key -100）用 **JWKS 验签** Casdoor JWT，通过后**剥掉入站 `X-Internal-Token`/`Authorization`/`X-Api-Key`**（防伪造、Casdoor token 不进内网），从 claims 取 `owner`（租户）/`sub`（用户）/scope/`groups`→部门，重新签发内部 JWT。**总开关默认关**——`EDGE_CASDOOR_ENABLED=false` 时此 filter/decoder 全不装配、行为与接入前一致。
+
+- **`dual`（默认，安全）**：有合法 Casdoor Bearer 就用它换发；无 Bearer 或验签失败 → **透传**给会话 / api-key filter 兜底（灰度过渡窗口）。
+- **`only`（最终态）**：无 Bearer 或验签失败 → 直接 **401**，**不回退**旧凭据；且要求 `tenant-claim=owner`（启动即校验，否则 fail-fast）。
+- **audience 绑定**：接受 `aud == <base>`（传统单 app）或 `aud == <base>-org-<org>`（Casdoor Shared Application，且已验签 `owner` 必须 == `<org>`），否则 401。
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `EDGE_CASDOOR_ENABLED` | `false` | 总开关；关时不装配 Casdoor filter/decoder（默认双凭据不变） |
+| `EDGE_CASDOOR_MODE` | `dual` | `dual`（Casdoor 优先、失败回退旧凭据）或 `only`（仅 Casdoor，失败 401、无回退）；仅此二值 |
+| `CASDOOR_ISSUER` | `http://localhost:8000` | Casdoor issuer（校验 `iss`） |
+| `CASDOOR_JWKS` | `http://localhost:8000/.well-known/jwks`（compose `http://host.docker.internal:8000/.well-known/jwks`） | JWKS 端点（RS256 验签公钥，自动缓存/轮转） |
+| `CASDOOR_AUDIENCES` | `ragshared0client00000001`（compose `ragshared0client00000001,ea46d9a8033b0be2d8ed`） | 允许的 audience 基名（逗号分隔），须与 Casdoor 应用 client_id 一致 |
+| `CASDOOR_SCOPE_CLAIM` / `CASDOOR_SCOPE_NAME_FIELD` | `permissions` / `name` | 从 Casdoor JWT 提取 scope 的 claim 名与对象内字段名 |
+
+> 开启需先起外部 Casdoor 并配好 org/应用/组。启用后（尤其 `only`）建议先按 `dual` 灰度、再切 `only`；`enabled=true` 但 `jwk-set-uri`/`issuer`/`audiences` 缺失将启动即失败。部门来自 Casdoor 嵌套 group（`<org>/<group>` 且同 org 前缀，唯一命中才生效，0 个或多个 → 空、不阻断登录），随内部 JWT 的可选 `dept` claim 传给下游做部门级知识隔离。
 
 ### 内部 JWT 签名（`platform.security.*`）
 
@@ -337,6 +359,22 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 | `RAG_DORIS_METRIC` | `cosine` | 距离度量（`cosine` \| `l2`） |
 | `RAG_DORIS_CREATE_TABLE` / `_BUCKETS` | `true` / `4` | 是否自动建表及分桶数 |
 | `RAG_REGISTRY_STORE` | `redis` | 文档 registry：`redis`（默认，需可达 redis）或 `in-memory` |
+
+### 文档级授权（细粒度 ReBAC，接外部 auth-platform / SpiceDB，默认 `disabled`）
+
+在 collection-per-tenant 租户隔离之上叠加**文档级 ReBAC 判权**：读路径把融合后的候选交外部 **auth-platform-server（:8200）** 的 `checkBulk(view)` 过滤。三档灰度、**默认 `disabled`**——关闭时与接入前逐字一致、**不调 auth-platform**（`NoopKnowledgeAuthz`）。**auth-platform-server（:8200）仅在 `mode != disabled` 时才成为外部依赖**。非法配置启动即失败（不静默降级）。
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `RAG_AUTHZ_MODE` | `disabled` | `disabled`（默认，与接入前逐字一致，不调 auth-platform）\| `shadow`（照写关系、读路径双算记差异但**不拦截**，灰度观测，fail-open）\| `enforce`（融合后按 ReBAC `checkBulk(view)` 真过滤，**fail-closed**——判权依赖失败即返回空） |
+| `RAG_AUTHZ_CANDIDATE_MULTIPLIER` | `3` | 判权候选池放大倍数；与 reranker 放大**取 max（不相乘）**，作用于 `min(topK, max-candidates)` 后再截断 |
+| `RAG_AUTHZ_MAX_CANDIDATES` | `200` | 候选池绝对上限（放大后仍被此值封顶） |
+| `RAG_AUTHZ_BULK_SIZE` | `100` | 单次 `checkBulk` 资源上限（超出分批）；须落在 `[1, max-candidates]`，否则启动失败 |
+| `RAG_AUTHZ_STRICT_TENANT_ONLY` | `false` | 严格租户模式（身份仅取 Casdoor `owner`）；与公共库（`RAG_PUBLIC_ENABLED=true`）及 `disabled` 档互斥，冲突启动失败 |
+| `AUTHZ_SERVER_URL`（→ `authz.client.server-url`） | `http://localhost:8200` | auth-platform-server 判权服务地址（compose 内为 `http://host.docker.internal:8200`） |
+| `AUTHZ_SERVER_TOKEN`（→ `authz.client.token`） | 空 | service credential，须与 auth-platform-server 的 `authz.server.security.token` 一致；server 未开鉴权（默认）时留空 |
+
+> enforce 下另有几处硬约束：① 上传**新建**（非共享）文档时若判不出上传人部门（无 `department`）→ **403**，拒绝建档（并写 `owner` + `home_dept` 关系到 auth-platform）；② `/rag/query` 命中中无 `docId` 的条目（如 GraphRAG 三元组）被 **fail-closed 丢弃**；③ 同名覆盖既有（非共享）文档需 `edit` 权限，否则 403（覆盖不夺原 owner）。shadow/disabled 均不触发上述拦截。shadow 灰度指标：`knowledge.authz.decisions{mode,operation,permission,decision}`（`/actuator/metrics`，内网只读）。
 
 ### Embedding
 
@@ -747,3 +785,20 @@ curl -s http://localhost:8086/actuator/health   # async-task
 - 403：调用方缺 `role-admin` scope（仅 `admin` 角色经登录会话获得，api-key 不含）。
 - 428/412：写端点需带 `If-Match`（先 GET 拿 `ETag`）；版本冲突返 412。
 - 503：`AUTH_RBAC_ADMIN_WRITES_ENABLED=false`（写被二级开关关闭）。
+
+### RAG 判权 403 / 查询结果被过滤（`RAG_AUTHZ_MODE=enforce`）
+
+- enforce 下 `/rag/query` 只返回调用者对其有 `view` 权限的文档——跨部门/未授权文档被 auth-platform `checkBulk` 过滤属正常；命中中无 `docId` 的条目（如 GraphRAG 三元组）被 fail-closed 丢弃。想先观测不拦截：设 `RAG_AUTHZ_MODE=shadow`（照算记差异、不过滤）。
+- `checkBulk`/判权依赖失败时 enforce 档 **fail-closed**（返回空、宁可少给），`shadow` 档 fail-open（返回全集）。确认 `AUTHZ_SERVER_URL`（默认 `:8200`）指向的 auth-platform-server 可达、`AUTHZ_SERVER_TOKEN` 与 server 端 `authz.server.security.token` 一致。
+- 灰度看板：`GET /actuator/metrics/knowledge.authz.decisions`（`{mode,operation,permission,decision}`）。
+
+### 上传文档 403「cannot determine uploader's home department」
+
+enforce 下**新建**（非共享）文档要求判得出上传人部门（内部 JWT 的 `dept` claim）。缺部门即 403、拒绝建档（避免建出无归属、谁都判不了权的文档）。根因通常在身份链路：Casdoor 用户未入唯一部门 group（`<org>/<group>`），或未走 Casdoor Bearer（api-key/会话路径不带 `dept`）。disabled/shadow 不触发此拦截；同名覆盖既有文档需 `edit` 权限。
+
+### Casdoor Bearer 401 / audience 不符 / 启动失败（`EDGE_CASDOOR_ENABLED=true`）
+
+- 401：`only` 档无合法 Casdoor Bearer 直接 401 且不回退；`dual` 档验签失败会回退旧凭据（若旧凭据也缺才 401）。先确认 `CASDOOR_ISSUER` 与 token 的 `iss` 一致、`CASDOOR_JWKS` 可达。
+- aud 不符 401：token 的 `aud` 须等于 `CASDOOR_AUDIENCES` 里的基名，或 `<base>-org-<org>` 且已验签 `owner` == `<org>`（Casdoor Shared Application）；前端 `VITE_CASDOOR_CLIENT_ID` 必须 = `edge.casdoor.audiences`。
+- 启动即失败：`enabled=true` 但 `CASDOOR_JWKS`/`CASDOOR_ISSUER`/`CASDOOR_AUDIENCES` 缺失，或 `only` 档 `tenant-claim != owner`——刻意 fail-fast，不静默降级。
+- 顺序坑：前端切 oidc/dual 前须先开后端 `EDGE_CASDOOR_ENABLED=true`，否则 Casdoor Bearer 落到会话 filter 全 401。

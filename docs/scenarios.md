@@ -28,7 +28,7 @@
 
 | 场景 | 子能力 | 入口端点（经 :8080） | 状态 | 详细文档 |
 | --- | --- | --- | --- | --- |
-| **① 企业知识库问答（RAG）** | 文档入库 + 四路混排（向量/关键词/ES BM25/图谱）+ 带引用多轮问答 + 多租户隔离 + 公共共享库 | `POST /rag/documents`、`POST /rag/query`、`POST /chat` | 核心可跑；compose demo 默认 qdrant + ES 全文混排 + RRF；RAG 增强/公共库默认关 | `rag-guide.md`、`es-hybrid-rerank.md`、`rbac-and-public-kb.md`、`memory-guide.md` |
+| **① 企业知识库问答（RAG）** | 文档入库 + 四路混排（向量/关键词/ES BM25/图谱）+ 带引用多轮问答 + 多租户隔离 + 公共共享库 + 可选文档/部门级授权(ReBAC) | `POST /rag/documents`、`POST /rag/query`、`POST /chat` | 核心可跑；compose demo 默认 qdrant + ES 全文混排 + RRF；RAG 增强/公共库/文档级授权默认关 | `rag-guide.md`、`es-hybrid-rerank.md`、`rbac-and-public-kb.md`、`memory-guide.md` |
 | **② 智能客服** · NL2SQL/ChatBI | 自然语言查业务库（6 层 SQL 护栏） | `POST /chat/sql`（别名 `/analytics/sql`） | 代码就位・默认关（需只读 DB + tool-calling 模型） | `nl2sql-guide.md` |
 | **② 智能客服** · 工作流审批 | 退款等挂人工审批的长流程（Flowable） | `POST /workflow/refund/start` | 核心可跑（需 MySQL）；终态通知可切事件总线 | `workflow-guide.md` |
 | **② 智能客服** · 渠道接入 | 飞书 / 钉钉群内 @机器人 入站事件桥 | `POST /channel/feishu/events`、`POST /channel/dingtalk/events` | 代码就位・默认关（需真应用 + 公网回调联调） | `dingtalk-guide.md` |
@@ -38,7 +38,7 @@
 | **③ 深度 Agent** · 业务流程智能体（人在环） | NL 发起/跟进退款审批，审批仍由人在流程外完成 | `POST /agent/process/run` | 代码就位・默认关（`AGENT_WORKFLOW_ENABLED` + `WORKFLOW_ENABLED`） | `agent-guide.md`、`workflow-guide.md` |
 | **④ 多模态视觉** | 看图对话 + 图片 caption/描述 + 图片 RAG | `POST /chat/vision`、`/vision/caption` | 代码就位・默认关（整服务需 `VISION_ENABLED`+模型） | `vision-guide.md` |
 | **⑤ 互操作（A2A / MCP）** | 对外 Agent 协作面（真 A2A + MCP tool surface） | `POST /interop/a2a`、`GET /.well-known/agent-card.json`、`/interop/mcp/**` | 核心可跑（端点常开）；live discovery 默认关 | `a2a-guide.md`、`mcp-guide.md` |
-| **⑥ 登录与权限（auth / RBAC）** | 账号登录 → 会话令牌 + 边缘换发内部 JWT；角色/权限管理面 + 公共知识库授权 | `POST /auth/login`、`GET /auth/me`、`/auth/admin/**` | 核心可跑（compose demo 直开 RBAC + 写）；application.yml 默认关 | `rbac-and-public-kb.md` |
+| **⑥ 登录与权限（auth / RBAC / SSO）** | 账号登录 → 会话令牌 + 边缘换发内部 JWT；角色/权限管理面 + 公共知识库授权；+ Casdoor OIDC SSO 多租户登录 + SpiceDB 文档级授权（均默认关） | `POST /auth/login`、`GET /auth/me`、`/auth/admin/**` | 核心可跑（compose demo 直开 RBAC + 写）；Casdoor SSO / 文档级授权代码就位・默认关 | `rbac-and-public-kb.md` |
 
 > **说明**：「智能客服」不是单个服务，而是**由 NL2SQL + 工作流审批 + 渠道接入（飞书/钉钉/语音）拼成的闭环**——
 > 用户从任一渠道进来 → 意图分流（退款/投诉走工作流，查数走 NL2SQL，其余走 RAG 对话）→ 长流程挂人工审批 → 终态主动回推。
@@ -57,6 +57,7 @@
 - **检索（四路混排 + RRF）**：`POST /rag/query` 并行召回 vector + keyword（内存 BM25）+ es（Elasticsearch 真 BM25，`RAG_ES_ENABLED` 默认开）+ 可选 graph，交 `HybridFusionService` 融合——ES 参与时有效默认 RRF（免疫量纲差），否则加权 max，取 topK。
 - **对话增强**：`POST /chat` 默认直连 LLM；开 `CONVERSATION_RAG_ENABLED=true` 后先查 `/rag/query`、把检索结果注入 prompt 再作答，回复带 `[doc=文件名#N]` 引用。
 - **公共/共享库**：`RAG_PUBLIC_ENABLED=true` 后各租户查询并入 `__public__` 公共分区，写共享库需 `public-ingest` scope；前端据 `GET /rag/config` 决定是否展示共享库视图。
+- **（默认关）文档/部门级授权**：在租户硬隔离之上可再叠一层**文档级 ReBAC**（接外部 `auth-platform`：Casdoor 身份 + SpiceDB 授权），由 `RAG_AUTHZ_MODE=disabled(默认)/shadow/enforce` 门控——`enforce` 下检索按当前用户 `view` 权过滤命中、新建文档绑定上传人部门（`home_dept`），`disabled` 时逐字等同接入前。详见 ⑥ 与 `rbac-and-public-kb.md`。
 - **前置提速**：可选 L1 语义缓存（问题级、按租户分桶、在 RAG 之前，命中即短路 RAG+LLM）与多轮记忆（会话隔离滑窗）。
 
 **状态**：**核心可跑**——单测零依赖；`docker-compose` demo 开箱即是「qdrant 向量 + nomic 语义 embedding + ES(smartcn) 全文混排 + RRF」的完整 RAG 栈（application.yml 裸跑亦默认 qdrant + ES，仅 embedding 默认 hash；真正零依赖单跑需显式退回 in-memory + `RAG_ES_ENABLED=false`）。
@@ -224,18 +225,19 @@ live discovery（`INTEROP_DISCOVERY_ENABLED`）默认关，下游不可达时确
 
 ## ⑥ 登录与权限（auth / RBAC）
 
-**做什么**：给平台加一条「账号密码登录 → 会话令牌」的对外鉴权路径（与 api-key 并存），并提供角色/权限管理面。`auth-service`（`:8092`）签发会话令牌，`edge-gateway` 的 `SessionBearerAuthFilter` 用会话密钥验签后**换发内部 JWT**，下游服务零改动、对登录无感知。
+**做什么**：给平台加对外鉴权路径（与 api-key 并存），并提供角色/权限管理面。有两条并存的登录路径：**(a) 自建会话登录**——`auth-service`（`:8092`）「账号密码 → 会话令牌」，`edge-gateway` 的 `SessionBearerAuthFilter` 验签后换发内部 JWT；**(b) Casdoor OIDC SSO（已落地，默认关）**——外部 Casdoor 作 IdP，`edge-gateway` 的 `CasdoorTokenExchangeFilter` 验 Casdoor JWT 后换发内部 JWT。下游服务零改动、对登录方式无感知。
 
 - **登录/会话**：`POST /auth/login`（账号密码 → 会话 accessToken 60min + httpOnly 刷新 cookie 7d）、`POST /auth/refresh`（一次性轮转）、`POST /auth/logout`、`GET /auth/me`、`GET /auth/public-config`、`POST /auth/register`（自助注册，默认关）。前 5 个 + register 在边缘免鉴权放行。
 - **RBAC**：种子角色 `viewer/editor/analyst/approver/admin`；有效 scopes = 角色展开 ∪ 直配，签发令牌时展开。新增平台 scope `role-admin`（管理面门禁）、`public-ingest`（写公共库），只经 admin 角色获得、不挂 api-key。
 - **管理面**：`/auth/admin/{users,roles}/**`（`role-admin` scope），写端点受 `admin-writes-enabled`（关→503）+ `If-Match` 乐观锁（428/412）。护栏禁止移除最后一个 role-admin、删被引用角色（409）。
 - **前端 RBAC 控制台**：能力展示前端据登录 scope 显隐 RBAC 控制台与 RAG 租户/共享双视图（`VITE_RBAC_CONSOLE_ENABLED` / `VITE_SHARED_KB_UI_ENABLED` kill switch）。
-
-**入口**（auth :8092，经网关）：`POST /auth/login`、`GET /auth/me`、`/auth/admin/**`。demo 账号 `alice`(acme/admin) / `bob`(globex/viewer) / `analyst-a`(tenantA/analyst)，口令 `demo12345`。
+- **（已落地，默认关）Casdoor OIDC SSO**：`edge-gateway` 的 `CasdoorTokenExchangeFilter`（order `-120`，最早）用 Casdoor JWKS 验 `Authorization: Bearer` 后换发内部 JWT。由 `EDGE_CASDOOR_ENABLED=false`（默认）门控；`EDGE_CASDOOR_MODE=dual(默认)/only` 两档——`dual` 灰度期 Casdoor 验过即换发、验不过透传给 legacy(session/api-key) filter，`only` 严格 Casdoor-only（非 open path 无有效 token → 401、不回落，tenant 恒取 owner）。
+- **（已落地，默认关）多租户登录（方案 C：Casdoor Shared Application + 选组织）**：前端 `LoginView` 登录前先选/输租户(=Casdoor org)，`getUserManager(tenant)` 用 shared app 的 `<base>-org-<tenant>` 客户端（base client_id 默认 `ragshared0client00000001`，`VITE_CASDOOR_CLIENT_ID`），每 org token `aud=<base>-org-<org>`、`owner=org`。前端登录模式 `VITE_AUTH_MODE=apikey(默认)/oidc/dual`。
+- **（默认关）SpiceDB 文档级授权 + 部门身份链**：`RAG_AUTHZ_MODE=enforce` 时 RAG 检索接 `auth-platform`(SpiceDB ReBAC) 按 `view` 权过滤（见场景 ①）。身份链：Casdoor 嵌套 group → edge 推导部门 → `dept` claim → `TenantContext.department`，供文档按上传人部门（`home_dept`）隔离。
 
 **状态**：**核心可跑**——`docker-compose` demo 默认 `AUTH_STORE=jdbc` + `AUTH_RBAC_ENABLED=true` + 写开放 + 种子账号，登录/管理面开箱即验（`bash deploy/smoke-rbac.sh`）；application.yml 裸跑默认 `in-memory` + RBAC 全关（只用直配 scopes 登录）。自助注册 `AUTH_REGISTRATION_ENABLED` 恒默认关。
 
-**深入看** → `rbac-and-public-kb.md`（登录会话链路 + RBAC + 公共知识库）。
+**深入看** → `rbac-and-public-kb.md`（登录会话链路 + RBAC + 公共知识库 + Casdoor SSO / 文档级 ReBAC）；Casdoor OIDC 公网化落地 → `公网化-OIDC-改造方案.md`；RAG 文档级授权开关与判权链路 → `rag-guide.md`。
 
 ---
 
@@ -272,6 +274,10 @@ live discovery（`INTEROP_DISCOVERY_ENABLED`）默认关，下游不可达时确
 | ⑥ RBAC 管理写 | `AUTH_RBAC_ADMIN_WRITES_ENABLED`（compose demo `true`） | `false` | 关时写端点 503 |
 | ⑥ 账号存储 | `AUTH_STORE`（compose `jdbc`） | `in-memory` | jdbc 落 MySQL `auth` 库 |
 | ⑥ 自助注册 | `AUTH_REGISTRATION_ENABLED` | `false` | 须与 RBAC 同开，否则 `/auth/register` 403 |
+| ①⑥ 文档级授权（SpiceDB ReBAC） | `RAG_AUTHZ_MODE` | `disabled` | `shadow` 只观测 / `enforce` 按 `view` 权过滤检索、绑上传人部门；需 `auth-platform-server`(:8200) |
+| ⑥ Casdoor OIDC SSO | `EDGE_CASDOOR_ENABLED` | `false` | 开后 edge 验 Casdoor JWT 换发内部 JWT |
+| ⑥ Casdoor 认证模式 | `EDGE_CASDOOR_MODE` | `dual` | `dual` 验不过回落 legacy / `only` 严格（无有效 token→401） |
+| ⑥ 前端登录模式 | `VITE_AUTH_MODE` | `apikey` | `oidc`/`dual` 启用 Casdoor 多租户登录（方案 C shared-app + 选组织） |
 
 ---
 

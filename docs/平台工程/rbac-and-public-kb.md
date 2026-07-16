@@ -2,15 +2,16 @@
 
 本页说明两个正交的能力：**RBAC**（能做什么，scopes）与**公共知识库**（跨租户可读的通用文档）。二者与既有的**租户硬隔离**（能看到哪份数据）配合使用。
 
-## 心智模型：三层正交
+## 心智模型：四层正交
 
 | 维度 | 决定 | 载体 |
 |---|---|---|
-| 认证 | 你是谁 | api-key 或登录会话 Bearer（网关换发内部 JWT） |
+| 认证 | 你是谁 | api-key、登录会话 Bearer 或 **Casdoor SSO Bearer**（网关换发内部 JWT） |
 | RBAC（授权） | 你能做哪些操作 | 角色 → scopes，登录签发令牌那一刻展开进 JWT |
-| 租户隔离 | 你能看到哪份数据 | tenantId（Qdrant 分集合 + ES term + DocumentMirror 分区） |
+| 租户隔离 | 你能看到哪个租户的数据 | tenantId（Qdrant 分集合 + ES term + DocumentMirror 分区） |
+| 细粒度授权（ReBAC，可选） | 你能看到**哪一篇**文档 | 委托外部 **auth-platform（SpiceDB/Zanzibar ReBAC）**；`app.rag.authz.mode` 默认 `disabled` |
 
-> 关键：给用户加 `admin` 角色**不会**让他看到别的租户的数据——那是租户隔离。要让通用文档跨租户可见，用**公共库**。
+> 关键：给用户加 `admin` 角色**不会**让他看到别的租户的数据——那是租户隔离。要让通用文档跨租户可见，用**公共库**；要在同租户内按**部门层级 / 单篇**精确控制"谁能看哪一篇"，才动第四层 ReBAC（默认关，见下文；模型细节见 auth-platform 仓库 `docs/authz-department-model.md`）。前三层（scope RBAC）与第四层（ReBAC）**正交并存、互不替代**：scope 决定"能做什么操作"，ReBAC 决定"能看哪一篇"。
 
 > **继承式 RBAC（Google Cloud IAM 式作用域绑定）**：授权层支持三层继承——`有效 scopes = 个人直配 ∪ 个人角色 ∪ 租户基础角色 ∪ 用户组角色`。角色**恒为全局能力包**（绝不做 per-tenant 角色，这是防"角色爆炸"的根）；把角色**绑定在层级节点**（租户 / 组 / 个人），权限沿层级向下继承。一条租户绑定即覆盖该租户全体成员、几十条组绑定即替代数千条个人分配——5000 人规模的痛在管理侧而非运行时（scope 仍只在登录展开一次）。详见下文「继承式 RBAC」。租户维度只承载"基础权限"这一层，仍**不**决定看哪份数据（那是租户隔离）。
 
@@ -43,7 +44,7 @@
 - **用户组**：命名的成员容器 + 一组全局角色绑定；成员经组继承这些角色。组**全局、不嵌套**（`user→group→role→scope` 固定三层 DAG，天然无环）。用几十条组绑定替代数千条个人分配。
 - **合成点唯一**：`EffectivePermissionResolver.resolve(user)` 批量展开四层并集（登录一次算完，无 N+1），并产出逐 scope 归因（`direct` / `role:x` / `tenant:x` / `group:g:x`）供 `GET /auth/admin/users/{u}/effective-permissions` 与前端"有效权限来源"展示。
 - **护栏全覆盖新降权来源**：「最后一个启用的 role-admin」保护改为经 resolver 前瞻评估——含**仅经租户/组获得** role-admin 的用户（改角色 scope / 改租户绑定 / 改组角色 / 移出组 / 删组均预检 → 409）。降权撤销亦扩展：租户基础/组角色收缩、移出组、删组会撤销受影响用户的 refresh session。删角色的引用检查并查用户 / 用户组 / 租户三处（任一引用 → 409 不级联）。
-- **为什么不上 Zanzibar/ReBAC**：那是"按单对象共享的超大规模 ACL"（谁能看*这一篇*文档），与本平台 11 个粗粒度 scope、控制器级校验、JWT 烘焙、下游零查库不是同一问题；上它等于推翻这套改成每次校验外部查一次 ACL。除非未来要做"把某知识库精确共享给某几个用户"这类**按资源**授权，才值得考虑。
+- **scope RBAC 与 ReBAC 分层，不是二选一**：本层这套（粗粒度 scope、控制器级校验、JWT 烘焙、下游零查库）负责"能做什么操作"，**保持不变**。而"谁能看*这一篇*文档"这类**按单对象 / 按部门层级**的共享，是另一个问题，本平台**不在此层解决**——已委托外部 **auth-platform（SpiceDB/Zanzibar ReBAC）**，作为第四层**可选**授权（knowledge-service `app.rag.authz.mode`=disabled/shadow/enforce，默认 `disabled`；仅 enforce 时才每次判权外部查一次）。这正是本段早先所说"未来要做按资源授权才值得考虑"的落地：ReBAC 与 scope RBAC 正交并存，不替代。文档级/部门级模型见 auth-platform 的 `docs/authz-department-model.md`。
 - **设计边界**：**角色恒全局**——per-tenant 角色、角色/组嵌套仍是非目标（这才是防爆炸的根）；本期新增的是"角色绑定被作用域化 + 向下继承"，不是角色继承。
 
 管理示例（承接上文 `$TOKEN`；写端点同受 `role-admin` + admin-writes 开关 + If-Match 乐观锁）：

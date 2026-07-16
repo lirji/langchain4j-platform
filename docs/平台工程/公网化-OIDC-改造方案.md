@@ -2,6 +2,8 @@
 
 > ✅ **已落地（2026-07-15）**：本方案作为 **Casdoor SSO（③ 阶段①–④）** 已实现并合入 `main`——边缘新增 `CasdoorTokenExchangeFilter`(-120) 验 Casdoor RS256 token 换发内部 JWT（默认 `EDGE_CASDOOR_ENABLED=false`）；前端 `capability-showcase-frontend` 接 `oidc-client-ts`（Authorization Code + PKCE），构建期 `VITE_AUTH_MODE=apikey(默认)/oidc/dual` 三态灰度、可秒回滚、apikey 零回归。**与自建账号登录并存**（非替代），默认全关、引入即安全。逐阶段进度/决策见 auth-platform `docs/plans/langchain4j-authz-integration-0714-1701/IMPLEMENTATION_PROGRESS.md` 与前端计划 `~/.claude/plans/langchain4j-platform-auth-platform-iam-iridescent-papert.md`。下方为**原始设计稿**，部分早期判断（如「仅内存令牌」后改为 sessionStorage、DR-5）以进度台账为准。
 
+> 🔭 **后续演进（已超出本设计稿范围，见 [RBAC 与公共知识库指南](rbac-and-public-kb.md) 与前端 `capability-showcase-frontend/README.md`）**：实际落地在本稿之上又推进了——**多租户登录**（方案 C：Casdoor **Shared Application** + 登录前选组织，每租户以 `<base>-org-<tenant>` 客户端登录，`aud`/`owner` 均为该 org）、边缘 **`EDGE_CASDOOR_MODE=dual|only`** 两态（`dual` 验不过透传 legacy，`only` 严格 Casdoor-only）、**部门层级知识隔离**（内部 JWT 附加 `dept` claim，向后兼容）、知识库 **`RAG_AUTHZ_MODE=disabled|shadow|enforce`** 文档级细粒度授权（接 auth-platform）。因此 §10「待澄清」的 **Q1（IdP 选型）/ Q2（claim 映射）现已有答案**：IdP = **Casdoor**，`tenant ← owner`（=租户/org）、身份组 ← `groups`、业务 scope ← `permissions`（∩ 固定 allowlist）。
+
 > ⚠️ **现状说明**：平台同时保留**自建账号登录**（`auth-service` 账号密码 → 会话 JWT + 刷新 cookie，边缘 `SessionBearerAuthFilter` 换发内部 JWT，见 [RBAC 与公共知识库指南](rbac-and-public-kb.md)）。故下文「结论先行」中「`ApiKeyToInternalTokenFilter` 是全平台唯一签发内部 JWT 的地方」已**不再成立**——现有三个签发点：`CasdoorTokenExchangeFilter`(Casdoor Bearer, -120)、`SessionBearerAuthFilter`(会话 Bearer, -110)、`ApiKeyToInternalTokenFilter`(api-key, -100)；边缘 CORS 已改为**显式白名单**（含 `Authorization`/`If-Match`）+ `allowCredentials=true`。
 
 > 状态：**已落地（原方案草案已实现，见上）**
@@ -148,6 +150,9 @@
 ## 5. 文件级改动（File-Level Changes）
 
 ### 5.1 后端（`edge-gateway` + 少量 `platform-security` 复用）
+
+> ⚠️ **实现差异（以 shipped 为准）**：下表按原设计命名新增 filter 为 `OidcBearerAuthFilter`（order **-110**）；**实际落地的实现是 `CasdoorTokenExchangeFilter`（order -120）**，早于 `SessionBearerAuthFilter`(-110) / `ApiKeyToInternalTokenFilter`(-100)（三个内部 JWT 签发点见顶部 banner）。下表保留原设计描述以存档，落地时以此对照。
+
 | 文件 | 改动 |
 |---|---|
 | `edge-gateway/.../OidcBearerAuthFilter.java`（新，`GlobalFilter`，order -110，**在 `ApiKeyToInternalTokenFilter(-100)` 之前**） | **① 无条件剥离入站 `X-Internal-Token`（防伪，C2 关键）**——外部绝不可自带内部令牌。② 若有 `Authorization: Bearer` → 校验 IdP JWT（JWKS）→ 映射 claims → mint 内部 JWT 注入 `X-Internal-Token` → 剥 `Authorization`（`dual` 模式再剥 `X-Api-Key`）→ `exchange.getAttributes().put("oidc.authenticated", true)` → 放行。③ **无 Bearer 则原样透传**（已剥内部令牌），交给 `ApiKeyToInternalTokenFilter` 走 `X-Api-Key`。校验失败（错 `iss/aud`、过期、验签失败）→ 401。|

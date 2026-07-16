@@ -43,8 +43,8 @@
 - [钉钉知识库客服接入指南](互操作渠道/dingtalk-guide.md)：钉钉群 @机器人 → 查知识库 → 机器人回复；镜像飞书事件桥、机器人发消息 API 回复、无命中转人工兜底。
 
 **平台工程（横切）**
-- [登录、RBAC 与公共知识库指南](平台工程/rbac-and-public-kb.md)：auth-service 账号密码登录 → 会话令牌 + 刷新 cookie、边缘 `SessionBearerAuthFilter` 换发内部 JWT、角色→scope 展开、`role-admin`/`public-ingest` 平台 scope、`/auth/admin/**` 管理面（If-Match 乐观锁）、`__public__` 公共/共享知识库。
-- [公网化 OIDC 改造方案](平台工程/公网化-OIDC-改造方案.md)：更早期的备选路线草案（外部 IdP 替代自建登录）；当前已由 auth-service 自建会话登录落地，本文作历史备选保留、未实施。
+- [登录、RBAC 与公共知识库指南](平台工程/rbac-and-public-kb.md)：auth-service 账号密码登录 → 会话令牌 + 刷新 cookie、边缘 `SessionBearerAuthFilter` 换发内部 JWT、角色→scope 展开、`role-admin`/`public-ingest` 平台 scope、`/auth/admin/**` 管理面（If-Match 乐观锁）、`__public__` 公共/共享知识库；另含**外接 auth-platform 的文档级 ReBAC / 部门层级隔离与 Casdoor 多租户 SSO 登录**（均默认关，见文中授权章节）。
+- [公网化 OIDC 改造方案](平台工程/公网化-OIDC-改造方案.md)：外部 IdP（Casdoor）SSO 落地方案——**已落地（Casdoor SSO）**：edge `CasdoorTokenExchangeFilter` 验 Casdoor JWT 换发内部 JWT（`edge.casdoor.enabled` 默认关、`dual`/`only` 双模）+ 前端方案 C 多租户登录（Shared Application + 选组织）+ 接 SpiceDB 文档级 ReBAC；与 auth-service 自建会话登录并存，均默认关、引入即安全。
 - [事件总线与终态可靠投递(EOS)指南](平台工程/eventbus-guide.md)：事务性 outbox + relay + 消费侧去重 = effective exactly-once（workflow/async-task 两侧）。
 - [可观测性指南](平台工程/observability-guide.md)：跨服务 traceId 透传、OTel GenAI span（Spring Boot 原生 tracing 开关）、Prometheus 指标、`/actuator/{tokenbudget,cost}`。
 - [成本归因与配额指南](平台工程/cost-attribution.md)：per-tenant USD 成本归因 + token 预算，redis 默认的分布式计数（水平扩容正确性）、`/actuator/{tokenbudget,cost}`。
@@ -57,7 +57,7 @@
 
 ## 当前定位
 
-`langchain4j-platform` 是从原单体 `LangChain4j_project` 拆分出来的微服务平台。业务 API 统一从 `edge-gateway` 进入（api-key **或** 登录会话 Bearer → 内部 JWT），所有 LLM 调用统一走 LiteLLM/OpenAI-compatible 网关。当前覆盖 auth（登录 + RBAC）、conversation、knowledge、agent、analytics、workflow、async-task、channel、interop、eval、vision、voice 等限界上下文，配套 config-server 配置中心、platform-eventbus 事件总线（Kafka 事务性 outbox + relay 的可靠终态投递），RAG 检索接 Qdrant 向量库 + Elasticsearch(smartcn) 全文混排，另有前后端分离的能力展示前端 `capability-showcase-frontend`。
+`langchain4j-platform` 是从原单体 `LangChain4j_project` 拆分出来的微服务平台。业务 API 统一从 `edge-gateway` 进入（api-key **或** 登录会话 Bearer **或** Casdoor OIDC Bearer → 内部 JWT，后者默认关），所有 LLM 调用统一走 LiteLLM/OpenAI-compatible 网关。当前覆盖 auth（登录 + RBAC）、conversation、knowledge、agent、analytics、workflow、async-task、channel、interop、eval、vision、voice 等限界上下文，配套 config-server 配置中心、platform-eventbus 事件总线（Kafka 事务性 outbox + relay 的可靠终态投递），RAG 检索接 Qdrant 向量库 + Elasticsearch(smartcn) 全文混排，另有前后端分离的能力展示前端 `capability-showcase-frontend`。授权侧除内建 RBAC/多租户硬隔离外，已落地**外接 auth-platform（Casdoor 身份 + SpiceDB ReBAC）**：Casdoor 多租户 SSO 登录（方案 C）+ RAG 文档/部门层级细粒度授权（`app.rag.authz.mode`，默认 `disabled`），均默认关、引入即安全。
 
 ## 文档维护原则
 

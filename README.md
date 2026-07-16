@@ -9,7 +9,7 @@
 ```
 showcase-frontend(:8093) ─┐
 client ──X-Api-Key/Bearer──▶ edge-gateway (Spring Cloud Gateway)
-                          │  会话 Bearer 或 api-key → 签发短时内部 JWT(X-Internal-Token)
+                          │  Casdoor SSO / 会话 Bearer / api-key → 签发短时内部 JWT(X-Internal-Token)
                           ▼
                   ┌───────────────── 各微服务 ─────────────────┐
    auth(登录/RBAC) / conversation / knowledge / agent / analytics /
@@ -21,7 +21,7 @@ client ──X-Api-Key/Bearer──▶ edge-gateway (Spring Cloud Gateway)
 ```
 
 - **两层网关分工**：`edge-gateway` 管业务 API 路由/鉴权；`LiteLLM` 管 LLM provider 路由/failover。
-- **两种对外凭据**：`X-Api-Key` 或登录会话 `Authorization: Bearer`（`auth-service` 签发）；边缘统一换发内部 JWT，下游只认 JWT（`platform-security`），对登录 vs api-key 无感知。
+- **三种对外凭据**：`X-Api-Key`、登录会话 `Authorization: Bearer`（`auth-service` 签发）、或 **Casdoor SSO Bearer**（`edge.casdoor.enabled` 默认关，JWKS 验签，支持多租户登录）；边缘统一换发内部 JWT，下游只认 JWT（`platform-security`），对凭据来源无感知。
 
 ## 模块
 
@@ -38,7 +38,7 @@ client ──X-Api-Key/Bearer──▶ edge-gateway (Spring Cloud Gateway)
 | `conversation-service` | 服务 | `/chat`（可选 RAG 增强）+ `/chat/stream` SSE 流式 + `/chat/auto` 意图路由 + `/chat/vision` 视觉对话 + `/chat/mcp` MCP 工具对话 + `/chat/cascade` 级联模型 + `/chat/memory`·`/memory/profile` 长期画像 + `/extract` 结构化抽取；多轮记忆、PII/注入护栏可选开启 |
 | `workflow-service` | 服务 | `/workflow/**` Flowable 退款审批流 + outbox |
 | `analytics-service` | 服务 | `/chat/sql`、`/analytics/sql` NL2SQL / ChatBI；`/analytics/schema/tables`(+`/{table}`) 按需探表（供数据分析智能体） |
-| `knowledge-service` | 服务 | `/rag/documents/**` 文档上传/列表/删除 + `/rag/query` 四路混排（向量 + 内存关键词 + Elasticsearch BM25 全文 + 图谱，RRF 融合，可选 rerank / query-expansion / contextual / HanLP 分词）；`/rag/image*` 多模态；`/rag/graph/**` GraphRAG；`/rag/config` 运行时配置 + 公共/共享知识库；`/rag/obsidian/import` Obsidian 导入 |
+| `knowledge-service` | 服务 | `/rag/documents/**` 文档上传/列表/删除 + `/rag/query` 四路混排（向量 + 内存关键词 + Elasticsearch BM25 全文 + 图谱，RRF 融合，可选 rerank / query-expansion / contextual / HanLP 分词）；`/rag/image*` 多模态；`/rag/graph/**` GraphRAG；`/rag/config` 运行时配置 + 公共/共享知识库；`/rag/obsidian/import` Obsidian 导入；可选**文档级 ReBAC 授权**（委托外部 auth-platform，`RAG_AUTHZ_MODE`=disabled/shadow/enforce 默认关，含部门层级隔离 + 单篇分享） |
 | `agent-service` | 服务 | `/agent/run`(+`/async`) 深度 Agent 编排 + `/agent/tasks/**` SSE；`/agent/dag/**` 多 Agent DAG（含自动规划/重规划）；`/agent/analyst/run`(+`/async`) 数据分析智能体（DAG 编排：探表→取数→计算→解读）；`/agent/process/run`(+`/async`) 业务流程智能体（人在环，默认关）；`/agent/chain` 提示词链、`/agent/vote` 投票自一致、`/agent/reflexive`(+`/stream`) Reflexion 自反思；动作跨服务调用 knowledge / analytics / vision |
 | `async-task-service` | 服务 | `/async/tasks/**` 通用任务状态、SSE 断点续订、取消与 webhook 通知中心；后续 agent/workflow 会逐步切到该服务 |
 | `channel-service` | 服务 | `/channel/**` 渠道 ACL：webhook/Feishu/voice 出站、async-task/workflow callback、出入站签名校验；`/channel/dingtalk/events`·`/channel/feishu/events` 入站客服桥；可选 Kafka event |
@@ -46,7 +46,7 @@ client ──X-Api-Key/Bearer──▶ edge-gateway (Spring Cloud Gateway)
 | `eval-service` | 服务 | `/eval/**` 外部回归测试客户端，可执行 HTTP target case、加载 baseline suite、做响应/oracle 断言并输出 JSON report |
 | `vision-service` | 服务 | `/vision/caption`·`/vision/describe` 图像描述（多模态，JSON 或 multipart 上传）；默认关（`VISION_ENABLED=false`） |
 | `voice-service` | 服务 | `/voice/transcribe` 转写 + `/voice/chat`(+`/stream`) 语音闭环 ASR(whisper)→`/chat`→TTS；默认关（`VOICE_ENABLED=false`） |
-| `edge-gateway` | 服务 | 边缘 API 网关：入站凭证 → 换发内部 JWT（`X-Internal-Token`）转发下游。三个签发 filter：`CasdoorTokenExchangeFilter`(Casdoor Bearer, -120，默认关) / `SessionBearerAuthFilter`(会话 Bearer, -110) / `ApiKeyToInternalTokenFilter`(X-Api-Key, -100)；限流 + CORS 白名单 |
+| `edge-gateway` | 服务 | 边缘 API 网关：入站凭证 → 换发内部 JWT（`X-Internal-Token`）转发下游。三个签发 filter：`CasdoorTokenExchangeFilter`(Casdoor Bearer, -120，默认关) / `SessionBearerAuthFilter`(会话 Bearer, -110) / `ApiKeyToInternalTokenFilter`(X-Api-Key, -100)。Casdoor 灰度 `EDGE_CASDOOR_MODE`=DUAL(默认，Casdoor 或回退老路)/ONLY(仅 Casdoor)；多租户登录方案 C（Casdoor Shared Application + 选 org，前端按 org 用 `<base>-org-<tenant>` 客户端，edge 校验 `<base>-org-*` aud 家族 + owner 绑定）。限流 + CORS 白名单 |
 
 > 后续继续加固 `channel`/`interop`/`eval` 的真实适配逻辑，并继续加固 `knowledge`/`async-task` 的持久化和跨服务协议。
 
@@ -552,3 +552,4 @@ mvn -pl edge-gateway spring-boot:run           # :8080
 
 - **租户传播**：不带 `X-Api-Key` → 网关 401；带合法 key → 响应里 `tenantId`/`userId` 为该 key 绑定的租户。
 - **单测**：`mvn test`（含 `InternalTokenTest` JWT 签发/校验/过期/篡改）。
+- **文档级授权 / SSO（默认全关，需外部 auth-platform + Casdoor）**：`RAG_AUTHZ_MODE=enforce` + `EDGE_CASDOOR_ENABLED=true` + `EDGE_CASDOOR_MODE=only` 后跑 `bash deploy/smoke-rag-tenant-authz.sh`（跨服务 E2E：Casdoor 登录 → 文档级 ReBAC 过滤 → 租户/部门隔离断言）。授权模型见 auth-platform 仓库 `docs/authz-department-model.md`。

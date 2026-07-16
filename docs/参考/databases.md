@@ -108,10 +108,105 @@ mvn -pl knowledge-service spring-boot:run
 
 依赖 DB 的单测统一用内存 H2，无 Testcontainers、不占端口、无账号。测试与被测代码同包，纯 POJO 单测直接 new 组件注入 mock。
 
+## 七、知识入库写入链路（一份文档落到哪几个存储）
+
+前面各节按「单个存储」列凭据；本节反过来，给一张**一次文档入库同时扇出到哪几处**的总表。上传入口是 `knowledge-service` 的
+`DocumentService.upload()`（`knowledge-service/.../lifecycle/DocumentService.java`）。**一份文档不是只进一个库**——它按下表并行写入多个后端（默认全量 compose）：
+
+| # | 存储 | 存什么 | 默认后端 | 落库开关 / 门控 | 代码扇出点（`DocumentService`） |
+|---|---|---|---|---|---|
+| 1 | **向量库** | 每个 chunk 的 embedding + 正文，`collection-per-tenant` 隔离 | **Qdrant**（第三节） | `RAG_VECTOR_STORE_PROVIDER=qdrant` | `storeRouter.forTenant(...).addAll(embeddings, segments)` |
+| 2 | 明文镜像（**进程内内存，非外部库**） | 明文分块，供内存 keyword 检索兜底 | `DocumentMirror`（`ConcurrentHashMap`） | 恒开，不可关 | `documentMirror.add(segments)` |
+| 3 | **Elasticsearch** | 同一批 chunk 的 BM25 全文倒排，索引 `knowledge_segments_text`，smartcn 中文分析 | **ES :9200**（第四节） | `RAG_ES_ENABLED=true`（默认开）；关时为 `NoopSegmentIndexer` 零副作用 | `segmentIndexer.index(segments)` |
+| 4 | **图谱库** | GraphRAG 抽出的实体/关系三元组 | **MySQL** 库 `knowledge_graph`（第一节） | `RAG_GRAPH_ENABLED=true` + `RAG_GRAPH_STORE=jdbc`（compose 默认）；关时 `graphIngestor==null` 跳过 | `graphIngestor.ingest(segments)` |
+| 5 | **文档登记 registry** | 文档级元数据/版本目录（`list`/`get`/覆盖判定） | **Redis** key `rag:docs:<tenant>`（第二节） | `RAG_REGISTRY_STORE=redis`（默认）；可退 `in-memory` | `registry.put(info)` |
+| 6 | **SpiceDB（授权关系，外部 `auth-platform`）** | 不是内容，是「谁能看」——文档 `owner` + `home_dept`（上传人部门）关系元组 | 外部 `auth-platform-server` :8200 → SpiceDB | 仅 `app.rag.authz.mode=shadow`/`enforce`；且仅**新建**文档写（同名覆盖保留原 owner，不夺权）。默认 `disabled` 不写 | `knowledgeAuthz.onDocumentCreated(...)` |
+
+其中 1–4 是代码注释里说的「**四个 sink**」（向量 + 内存镜像 + ES + 图谱），5、6 另算。embedding provider（`hash` 64 维 / `ollama` nomic 768 维等）决定的是**写进向量库的内容**，本身不是一处存储。
+
+### 全部按 `tenantId` 同源分区
+
+入库时给每个 chunk 打的 metadata 是 `tenantId` / `docId` / `displayName` / `file_name` / `version` / `category`（enforce 下另由 SpiceDB 关系带上 `home_dept` 部门归属）。**上面每一处 sink 的隔离键都从这同一份 `tenantId`（及 category/部门）派生**——也就是说一份文档在 6 处存储里的「位置」是一致的，由入库那一刻的归属元数据统一决定。
+
+### 删除会逐个 sink 撤干净（fail-closed 顺序）
+
+`DocumentService.delete()` 是上传的逆操作，按**先撤权、再删数据**的安全顺序清理每一处（撤关系抛错即中止，宁留数据不留悬空权限）：
+
+1. `knowledgeAuthz.onDocumentDeleted(...)` → 撤 SpiceDB 关系（enforce/shadow 时）；
+2. `deleteInternal()` → 向量 `removeAll(tenantId+docId filter)`、`DocumentMirror.removeWhere`、`segmentIndexer.deleteByDoc`、`graphIngestor.removeBySourcePrefix`；
+3. `registry.remove(...)` → 删 registry 记录。
+
+### 由此推论：文档「放错位置」怎么修
+
+因为一份文档在这 6 处存储里的位置**同源于入库时的 `tenantId`/`category`/`home_dept`**，一旦归属放错（错租户 / 错分类 / 错部门），是**所有存储一起一致地放错**，不是某一个库的局部问题。所以治本办法是**在源头改归属后重灌**，而不是去调某一路检索（如只改 ES 阈值 / 向量 minScore）打补丁：
+
+```bash
+# 1) 找到错放的文档，2) 一键删干净（delete 会逐个 sink 撤：向量/镜像/ES/图谱/registry/SpiceDB）
+GET  /rag/documents            # 列当前租户文档
+DELETE /rag/documents/{docId}  # 逐 sink 清理
+# 3) 用正确的租户/分类/部门身份重新上传
+POST /rag/documents
+```
+
+在单个 store 上调参只能「别让无关文档冒头」，救不回错误的归属，还会让 6 处存储彼此漂移。
+
+## 八、知识查询读取链路（查了几个库 + 打分 / 排序 / rerank）
+
+§七 是写入扇出；本节是它的镜像——一次 `POST /rag/query` **并行查哪几个存储**，以及召回后**怎么打分、排序、重排**。
+编排器是 `KnowledgeQueryService.query()`（`knowledge-service/.../KnowledgeQueryService.java`）。
+
+### 8.1 并行召回：最多查 4 路源（3 个外部库 + 1 处内存）
+
+查询按**固定顺序**（顺序仅对 `weighted_max` 有意义）扇出到各启用的 `RetrievalSource`，各源都强制按 `tenantId`（+可选 `category`）隔离：
+
+| 顺序 | 源 | 查哪个存储 | 召回什么 / 打什么分 | 启用开关 |
+|---|---|---|---|---|
+| 1 | **vector** (`VectorRetrievalSource`) | **向量库**（Qdrant，§三） | 用**查询扩展后的全部 variants** 多路 ANN 召回；分=归一化相关度 [0,1]（cosine，不相关≈0.5） | 恒开 |
+| 2 | **keyword** (`InMemoryKeywordRetrievalSource`) | **进程内 `DocumentMirror`**（非外部库，§七#2） | 内存 BM25 近似；分=BM25 量纲 | `app.rag.hybrid.enabled=true`（默认开） |
+| 3 | **es** (`EsKeywordRetrievalSource`) | **Elasticsearch**（§四） | 真 BM25 全文（smartcn 中文分析）；分=ES `_score` | `RAG_ES_ENABLED=true` 且 `es.query-enabled`（默认开） |
+| 4 | **graph** (`GraphRetrievalSource`) | **图谱库**（MySQL `knowledge_graph`，§一） | GraphRAG 三元组命中；**多为无 `docId` 命中** | `RAG_GRAPH_INCLUDE_IN_QUERY=true`（默认随 graph.enabled） |
+
+> **registry(Redis) 与 SpiceDB 不在召回路里**：Redis 只服务 `list`/`get` 文档元数据端点；SpiceDB 只在下面第 6 步授权过滤时被 `checkBulk` 查询。rerank 用的是 LLM 网关（DeepSeek）或 Jina 云 API，也不是数据库。
+
+### 8.2 全流程七步
+
+```text
+POST /rag/query ─▶ KnowledgeQueryService.query()
+ 1. 解析 topK(默认 5) / minScore(默认 0.0)；快照身份 TenantContext(tenantId,userId)
+ 2. 候选池 poolLimit = topK × max(1, rerank 放大倍数)         # 授权开启时改为「有界 overfetch」：倍数取 max 不相乘，封顶 maxCandidates
+ 3. 查询扩展 QueryExpander.expand → variants(原 query + 变体)   # 默认 Noop=仅原 query
+ 4. 四路并行召回（8.1）→ 每源一个 hit 列表
+ 5. HybridFusionService.fuse(groups, strategy, rrfK) → 融合、按分降序、【不截断】
+ 6. filterReadable(...) 授权过滤（融合后、重排前）              # 默认 disabled 直通
+ 7. Reranker.rerank(query, candidates, topK) → 截断到 topK 返回
+```
+
+### 8.3 融合打分（第 5 步）：两种策略，分的含义完全不同
+
+`FusionStrategy.effectiveDefault`：**ES 真正参与查询 → 默认 `RRF`**；ES 关闭/只写不查 → `weighted_max`。
+
+- **`weighted_max`**（`fuseWeightedMax`）：`LinkedHashMap` 合并——同源同 chunk 取 `keepHigher`，跨源同 chunk 取 **max 分并标 `hybrid`**，图谱按自身 id `putIfAbsent`。**保留各源原始分量纲**（cosine 与 BM25 不可比，靠顺序与 max 兜底）。
+- **`RRF`**（`fuseRrf`，`rrfK=60`）：各源先按 `mergeKey` 去重取最高分、再定名次，`score += 1/(k+rank)`，命中多源者标 `hybrid`。**免疫 BM25/余弦量纲差**，但结果 **`Hit.score = Σ 1/(60+rank) ≈ 0.01~0.05` 是「名次分」不是相关度**。
+
+### 8.4 排序 / 重排（第 7 步）与三个反直觉的坑
+
+`Reranker` 默认 `NoopReranker`（不重排，直接取融合序前 topK）。开启（`app.rag.rerank.enabled=true`，`type=llm|jina`）后：先按 `candidate-multiplier`（默认 3）多召回候选，用判官模型给每个候选打 0..1 相关分，**过滤掉 `< min-score` 的**，按分降序 `limit(topK)`。
+
+调检索质量时**极易踩**的三点（详见调参备忘）：
+
+1. **`RAG_QUERY_MIN_SCORE`（第 1 步的 `minScore`）只作用于 vector 源**（见 `RetrievalRequest.minScore` 注释：「仅向量源使用；关键词/图谱/ES 不适用」）。调高它**拦不住** ES/关键词/图谱通道进来的文档。它比的是归一化相关度（不相关≈0.5），故默认 0.0 全放行。
+2. **RRF 下的 `Hit.score` 是名次分（0.01~0.05），不能拿它卡阈值**；且**重排不改写这个显示分**（rerank 只影响顺序与截断，`Hit.score` 仍是融合分）。
+3. **真正的相关度地板是 `RAG_RERANK_MIN_SCORE`**（`LlmReranker`/`JinaReranker` 截断前 `filter(score >= minScore)`）。**不设时 topK 是硬数量、无相关度地板** → topK 大于相关文档数必被 filler 凑满（「topK=1 出对的、topK=5 冒无关」是设计使然）。设了阈值后 **topK 变「上限」**。compose 默认 0.5，但 DeepSeek 判官偏松，**建议 0.7**。另注意 rerank 单候选打分失败会退回其（很低的）融合分——偏精确度的 fail-closed。
+
+> 另一常被误当阈值问题的根因：**该文档压根不该在这个 tenant 的 KB**（放错库，见 §七末）。调阈值只能压住症状，治本是 `DELETE /rag/documents/{docId}` 后按正确归属重灌。
+
+完整 API、四路混排开关、GraphRAG 与查询扩展/上下文分块见 [RAG 接入指南](../对话与检索/rag-guide.md) 第 1、6 节。
+
 ## 相关文档
 
 - [部署指南](../平台工程/deployment-guide.md)：docker-compose、k8s/Helm、External Secrets、Config Server。
 - [运行与配置手册](operations.md)：本地启动、环境变量全量、验证与排障。
 - [架构文档](架构文档.md)：服务边界、数据边界、事件流。
 - [RAG 接入指南](../对话与检索/rag-guide.md)：向量库 provider、collection-per-tenant 隔离、GraphRAG。
+- [向量检索：ANN 与 RRF](../对话与检索/向量检索-ann与rrf.md)：各向量库的 ANN 索引/实现（§三配套原理）、RRF 融合的含义与用法（§八配套原理）。
 - [NL2SQL 指南](../对话与检索/nl2sql-guide.md)：只读连接、SQL 安全护栏、多租户库隔离。

@@ -16,7 +16,7 @@ docs/                   项目文档
 
 - 登录 / 会话 / RBAC：`auth-service`
 - 对话编排：`conversation-service`
-- 知识库/RAG（四路混排 ES）/GraphRAG：`knowledge-service`
+- 知识库/RAG（四路混排 ES）/GraphRAG：`knowledge-service`（文档级 ReBAC 判权委派外部 auth-platform，默认关）
 - Agent/DAG：`agent-service`
 - 通用异步状态：`async-task-service`
 - 审批流程：`workflow-service`
@@ -92,6 +92,7 @@ docker compose -f deploy/docker-compose.yml config
 - 外部只进入 `edge-gateway`。
 - 下游服务只认 `X-Internal-Token`。
 - scope 判断放在实际拥有资源的服务里。
+- 文档级细粒度授权（ReBAC）委派**外部 auth-platform IAM**（SpiceDB）：`knowledge-service` 经 SDK `@CheckAccess` 判权，超出本平台的 scope 模型（scope 管「能不能调这类接口」，ReBAC 管「能不能看这份文档」）；**默认关**（`RAG_AUTHZ_MODE=disabled`），仅 enforce 档真过滤。身份侧另有默认关的 Casdoor SSO（edge Bearer 换发内部 JWT，带可选 `dept` claim 供部门级隔离）。
 - webhook 不转发内部 JWT。
 - code execution、browser、MCP 等高风险能力默认关闭。
 
