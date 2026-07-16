@@ -228,6 +228,16 @@ services:
       RAG_RANKING_VECTOR_WEIGHT: ${RAG_RANKING_VECTOR_WEIGHT:-1.0}
       RAG_RANKING_KEYWORD_WEIGHT: ${RAG_RANKING_KEYWORD_WEIGHT:-1.0}
       RAG_RANKING_GRAPH_WEIGHT: ${RAG_RANKING_GRAPH_WEIGHT:-1.0}
+      # ── 检索质量：相关性下限 + 重排（避免无阈值 top-k 凑数返回不相关文档，如零售查询命中 SSO 手册）──
+      # min-score 只作用于向量源，比较 langchain4j 归一化相关度 [0,1]（cosine ≈ (cos+1)/2，不相关≈0.5）。
+      # 0.6 为起点：先跑一次看真实命中分数（响应/日志），把 floor 卡在“真相关分”与“凑数分”之间；过高会返回空。
+      RAG_QUERY_MIN_SCORE: ${RAG_QUERY_MIN_SCORE:-0.6}
+      # 重排（默认关）：type=llm 复用共享 temp=0 网关模型给候选打分重排，精排掉残余 filler（覆盖全部通道，不止向量）。
+      # 需 LiteLLM 可达；每次查询多一次 LLM 调用（延迟/成本↑，候选池 = top-k × RAG_RERANK_CANDIDATE_MULTIPLIER）。
+      RAG_RERANK_ENABLED: ${RAG_RERANK_ENABLED:-true}
+      # 重排相关性阈值(0..1)：低于此分的候选丢弃 → topK 成为"上限"，不再凑数返回不相关文档（方案③）。
+      # 0.5 为起点：先看日志/响应里的真实 rerank 分，把它卡在“真相关分”与“凑数分”之间；过高会返回空。
+      RAG_RERANK_MIN_SCORE: ${RAG_RERANK_MIN_SCORE:-0.5}
       RAG_GRAPH_ENABLED: ${RAG_GRAPH_ENABLED:-true}
       RAG_GRAPH_STORE: ${RAG_GRAPH_STORE:-jdbc}
       RAG_GRAPH_INCLUDE_IN_QUERY: ${RAG_GRAPH_INCLUDE_IN_QUERY:-${RAG_GRAPH_ENABLED:-true}}
@@ -453,7 +463,7 @@ services:
         VITE_DEMO_PASSWORD: ${SHOWCASE_DEMO_PASSWORD:-demo12345}
         # ③ 阶段④ Casdoor OIDC（构建期烘焙、可秒回滚）：默认 apikey（引入即安全，走现状 X-Api-Key/会话 Bearer）。
         # 切 oidc/dual 前须先开后端 EDGE_CASDOOR_ENABLED=true（DR-11 顺序约束），否则 Casdoor Bearer 落到会话 filter 全 401。
-        VITE_AUTH_MODE: ${SHOWCASE_AUTH_MODE:-apikey}
+        VITE_AUTH_MODE: ${SHOWCASE_AUTH_MODE:-oidc}
         VITE_CASDOOR_ISSUER: ${SHOWCASE_CASDOOR_ISSUER:-http://localhost:8000}
         # client_id 必须 = edge.casdoor.audiences（否则 aud 校验 401）。
         VITE_CASDOOR_CLIENT_ID: ${SHOWCASE_CASDOOR_CLIENT_ID:-ragshared0client00000001}
@@ -494,10 +504,10 @@ services:
       # ③ Casdoor SSO（阶段④联调）。默认关，引入即安全。开启后 edge 验 Casdoor access token → 换发内部 JWT。
       # 注：JWKS 拉取用 host.docker.internal（edge 与 casdoor 不同 docker 网络）；issuer 保持 localhost:8000
       # 以匹配 token 的 iss（issuer 校验是字符串比较，不发网络请求）。audiences=auth-console client_id。
-      EDGE_CASDOOR_ENABLED: ${EDGE_CASDOOR_ENABLED:-false}
+      EDGE_CASDOOR_ENABLED: ${EDGE_CASDOOR_ENABLED:-true}
       # 认证模式：dual（灰度，验不过透传 legacy）| only（严格 Casdoor-only，非 open path 无有效 token → 401）。
       # 最终验收切 only；保留 dual 作应急回滚窗口。仅 EDGE_CASDOOR_ENABLED=true 时生效。
-      EDGE_CASDOOR_MODE: ${EDGE_CASDOOR_MODE:-dual}
+      EDGE_CASDOOR_MODE: ${EDGE_CASDOOR_MODE:-only}
       CASDOOR_ISSUER: ${CASDOOR_ISSUER:-http://localhost:8000}
       CASDOOR_JWKS: ${CASDOOR_JWKS:-http://host.docker.internal:8000/.well-known/jwks}
       # 多 audience（设计 §10.2）：前端 auth-console(PKCE) + 机器 service app(app-built-in, client_credentials/password)。
