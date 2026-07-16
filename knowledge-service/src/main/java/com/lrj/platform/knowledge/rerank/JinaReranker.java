@@ -16,10 +16,20 @@ public class JinaReranker implements Reranker {
 
     private final ScoringModel scoringModel;
     private final int multiplier;
+    private final double minScore;
 
     public JinaReranker(ScoringModel scoringModel, int multiplier) {
+        this(scoringModel, multiplier, 0.0);
+    }
+
+    /**
+     * @param minScore 相关性阈值：Jina 打分严格低于此值的候选在截断到 topK <b>前</b>被丢弃。{@code 0} = 不设阈值。
+     *                 仅对成功打分的候选生效；打分服务整体不可用时退回初始顺序、不按阈值丢弃（fail-open，不因外部故障丢结果）。
+     */
+    public JinaReranker(ScoringModel scoringModel, int multiplier, double minScore) {
         this.scoringModel = scoringModel;
         this.multiplier = Math.max(1, multiplier);
+        this.minScore = Math.max(0.0, minScore);
     }
 
     @Override
@@ -48,6 +58,7 @@ public class JinaReranker implements Reranker {
             scored.add(new Scored(candidates.get(i), s));
         }
         return scored.stream()
+                .filter(s -> s.score() >= minScore)
                 .sorted(Comparator.comparingDouble(Scored::score).reversed())
                 .limit(topK)
                 .map(Scored::hit)

@@ -15,10 +15,22 @@ public class LlmReranker implements Reranker {
 
     private final RelevanceScorer scorer;
     private final int multiplier;
+    private final double minScore;
 
     public LlmReranker(RelevanceScorer scorer, int multiplier) {
+        this(scorer, multiplier, 0.0);
+    }
+
+    /**
+     * @param minScore 相关性阈值（0..1）：rerank 打分严格低于此值的候选在截断到 topK <b>前</b>被丢弃，
+     *                 从而"要 N 个也只出相关的"。{@code 0} = 不设阈值（保留原行为）。
+     *                 注意：单个候选打分失败会退回其融合分（很低），故设了阈值时打分失败的候选大概率被滤除
+     *                 （偏精确度的 fail-closed）。阈值过高可能返回空——这是"无够相关文档"的预期。
+     */
+    public LlmReranker(RelevanceScorer scorer, int multiplier, double minScore) {
         this.scorer = scorer;
         this.multiplier = Math.max(1, multiplier);
+        this.minScore = Math.max(0.0, minScore);
     }
 
     @Override
@@ -30,6 +42,7 @@ public class LlmReranker implements Reranker {
     public List<Hit> rerank(String query, List<Hit> candidates, int topK) {
         return candidates.stream()
                 .map(hit -> new Scored(hit, safeScore(query, hit)))
+                .filter(s -> s.score() >= minScore)
                 .sorted(Comparator.comparingDouble(Scored::score).reversed())
                 .limit(topK)
                 .map(Scored::hit)

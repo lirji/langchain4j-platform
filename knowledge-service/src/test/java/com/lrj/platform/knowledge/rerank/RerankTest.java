@@ -1,6 +1,9 @@
 package com.lrj.platform.knowledge.rerank;
 
 import com.lrj.platform.knowledge.KnowledgeQueryService.Hit;
+import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.model.output.Response;
+import dev.langchain4j.model.scoring.ScoringModel;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -50,6 +53,48 @@ class RerankTest {
         assertThat(new LlmReranker((q, t) -> 0.5, 0).retrieveMultiplier()).isEqualTo(1);
         assertThat(new LlmReranker((q, t) -> 0.5, 4).retrieveMultiplier()).isEqualTo(4);
         assertThat(new NoopReranker().retrieveMultiplier()).isEqualTo(1);
+    }
+
+    @Test
+    void llm_minScore_dropsBelowThreshold_topKBecomesCeiling() {
+        // filler 初始分更高，但 scorer 判它无关(0.1)；minScore=0.5 → filler 被丢，topK=5 也只出 1 条相关的
+        List<Hit> candidates = List.of(
+                hit("filler", 0.9, "unrelated filler text"),
+                hit("relevant", 0.2, "the phoenix marker doc"));
+        RelevanceScorer scorer = (q, t) -> t.contains("phoenix") ? 0.9 : 0.1;
+        List<Hit> out = new LlmReranker(scorer, 3, 0.5).rerank("phoenix", candidates, 5);
+        assertThat(out).extracting(Hit::id).containsExactly("relevant");
+    }
+
+    @Test
+    void llm_allBelowThreshold_returnsEmpty() {
+        List<Hit> candidates = List.of(hit("a", 0.9, "x"), hit("b", 0.8, "y"));
+        List<Hit> out = new LlmReranker((q, t) -> 0.2, 3, 0.5).rerank("q", candidates, 5);
+        assertThat(out).isEmpty();
+    }
+
+    @Test
+    void llm_minScoreZero_keepsAll_backwardCompatible() {
+        List<Hit> candidates = List.of(hit("a", 0.9, "x"), hit("b", 0.8, "y"));
+        List<Hit> out = new LlmReranker((q, t) -> 0.0, 3, 0.0).rerank("q", candidates, 5);
+        assertThat(out).extracting(Hit::id).containsExactlyInAnyOrder("a", "b");
+    }
+
+    @Test
+    void jina_minScore_dropsBelowThreshold() {
+        List<Hit> candidates = List.of(
+                hit("filler", 0.9, "unrelated"),
+                hit("relevant", 0.2, "phoenix"));
+        ScoringModel model = new ScoringModel() {
+            @Override
+            public Response<List<Double>> scoreAll(List<TextSegment> segments, String query) {
+                return Response.from(segments.stream()
+                        .map(s -> s.text().contains("phoenix") ? 0.9 : 0.1)
+                        .toList());
+            }
+        };
+        List<Hit> out = new JinaReranker(model, 3, 0.5).rerank("phoenix", candidates, 5);
+        assertThat(out).extracting(Hit::id).containsExactly("relevant");
     }
 
     @Test

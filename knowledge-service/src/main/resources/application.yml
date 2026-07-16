@@ -172,6 +172,9 @@ app:
       enabled: ${RAG_RERANK_ENABLED:false}
       type: ${RAG_RERANK_TYPE:llm}                # llm | jina
       candidate-multiplier: ${RAG_RERANK_CANDIDATE_MULTIPLIER:3}
+      # 相关性阈值(0..1)：rerank 打分低于此值的候选在截断到 topK 前丢弃 —— 让 topK 成为"上限"而非"必凑满"。
+      # 0=不设阈值(库默认，行为不变)。仅真实重排器(llm/jina)生效；过高可能返回空(=无够相关文档)。
+      min-score: ${RAG_RERANK_MIN_SCORE:0.0}
       jina:
         api-key: ${JINA_API_KEY:}
         model-name: ${RAG_RERANK_JINA_MODEL:jina-reranker-v2-base-multilingual}

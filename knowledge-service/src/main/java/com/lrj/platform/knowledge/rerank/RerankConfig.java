@@ -19,6 +19,7 @@ import org.springframework.context.annotation.Configuration;
  * app.rag.rerank.enabled=true
  * app.rag.rerank.type=llm|jina
  * app.rag.rerank.candidate-multiplier=3   # 召回放大倍数（rerank 候选池）
+ * app.rag.rerank.min-score=0.0            # 相关性阈值(0..1)：rerank 分低于此值的候选丢弃；0=不设阈值
  * </pre>
  */
 @Configuration
@@ -35,11 +36,12 @@ public class RerankConfig {
     @Bean
     @ConditionalOnExpression("${app.rag.rerank.enabled:false} and '${app.rag.rerank.type:llm}'.equals('llm')")
     Reranker llmReranker(ChatModel knowledgeChatModel,
-                         @Value("${app.rag.rerank.candidate-multiplier:3}") int multiplier) {
-        log.info("RAG rerank: llm-as-judge enabled (candidate x{})", multiplier);
+                         @Value("${app.rag.rerank.candidate-multiplier:3}") int multiplier,
+                         @Value("${app.rag.rerank.min-score:0.0}") double minScore) {
+        log.info("RAG rerank: llm-as-judge enabled (candidate x{}, min-score={})", multiplier, minScore);
         RelevanceScorer scorer = (query, text) -> parseScore(
                 knowledgeChatModel.chat(scorePrompt(query, text)));
-        return new LlmReranker(scorer, multiplier);
+        return new LlmReranker(scorer, multiplier, minScore);
     }
 
     @Bean
@@ -47,13 +49,14 @@ public class RerankConfig {
     Reranker jinaReranker(
             @Value("${app.rag.rerank.jina.api-key:${JINA_API_KEY:}}") String apiKey,
             @Value("${app.rag.rerank.jina.model-name:jina-reranker-v2-base-multilingual}") String modelName,
-            @Value("${app.rag.rerank.candidate-multiplier:3}") int multiplier) {
-        log.info("RAG rerank: jina enabled model={} (candidate x{})", modelName, multiplier);
+            @Value("${app.rag.rerank.candidate-multiplier:3}") int multiplier,
+            @Value("${app.rag.rerank.min-score:0.0}") double minScore) {
+        log.info("RAG rerank: jina enabled model={} (candidate x{}, min-score={})", modelName, multiplier, minScore);
         ScoringModel scoringModel = JinaScoringModel.builder()
                 .apiKey(apiKey)
                 .modelName(modelName)
                 .build();
-        return new JinaReranker(scoringModel, multiplier);
+        return new JinaReranker(scoringModel, multiplier, minScore);
     }
 
     /** LLM 打分提示：只输出 0..1 的一个小数表示相关性。 */
