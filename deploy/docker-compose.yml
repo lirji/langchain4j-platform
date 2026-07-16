@@ -455,8 +455,7 @@ services:
       args:
         VITE_EDGE_BASE_URL: ${SHOWCASE_EDGE_BASE_URL:-http://localhost:8080}
         # VITE_AUTH_BASE_URL 留空：/auth/* 走 nginx 同源反代到网关（第一方 httpOnly cookie，SameSite=Lax，无需跨域）。
-        # RBAC 控制台 kill switch（默认开；真正可用仍受 role-admin scope / 运行时 /rag/config 约束）。
-        VITE_RBAC_CONSOLE_ENABLED: ${SHOWCASE_RBAC_CONSOLE_ENABLED:-true}
+        # 共享库 UI kill switch（默认开；真正可用仍受运行时 /rag/config 约束）。
         VITE_SHARED_KB_UI_ENABLED: ${SHOWCASE_SHARED_KB_UI_ENABLED:-true}
         # demo 一键登录：本地演示可开并注入口令；生产置 false / 留空口令，产物即不含明文口令。
         VITE_DEMO_LOGIN_ENABLED: ${SHOWCASE_DEMO_LOGIN_ENABLED:-true}

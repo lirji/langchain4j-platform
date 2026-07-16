@@ -7,14 +7,11 @@ import Breadcrumb from './Breadcrumb.vue'
 import DensityToggle from './DensityToggle.vue'
 import { useUiStore } from '../../stores/ui'
 import { useHistoryStore } from '../../stores/history'
-import { usePermission } from '../../composables/usePermission'
 import { useIsDesktop } from '../../composables/useIsDesktop'
 import { CATALOG_URL } from '../../config'
 
 const ui = useUiStore()
 const history = useHistoryStore()
-// 管理入口可见性：与侧栏/命令面板同一 permission 源（Bearer role-admin + 构建开关）。
-const { canAdmin } = usePermission()
 const { isDesktop } = useIsDesktop()
 
 // 中屏以下的溢出菜单（⋯）：收纳次要项。
@@ -77,15 +74,6 @@ const navToggleLabel = computed(() => (navExpanded.value ? '收起导航菜单' 
     </button>
 
     <div class="header__inline">
-      <RouterLink
-        v-if="canAdmin"
-        :to="{ name: 'admin-users' }"
-        class="header__admin"
-        title="平台管理中心（用户 / 角色）"
-      >
-        <span aria-hidden="true">⚙</span>
-        <span class="header__admin-text">管理中心</span>
-      </RouterLink>
       <button
         type="button"
         class="header__icon"
@@ -124,15 +112,6 @@ const navToggleLabel = computed(() => (navExpanded.value ? '收起导航菜单' 
         ⋯
       </button>
       <div v-if="moreOpen" class="header__pop" role="menu">
-        <RouterLink
-          v-if="canAdmin"
-          role="menuitem"
-          class="header__pop-item"
-          :to="{ name: 'admin-users' }"
-          @click="closeMore()"
-        >
-          ⚙ 管理中心
-        </RouterLink>
         <button
           type="button"
           role="menuitem"
@@ -277,27 +256,6 @@ const navToggleLabel = computed(() => (navExpanded.value ? '收起导航菜单' 
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-}
-/* 管理中心入口：主色描边药丸，仅 role-admin 出现（canAdmin 同源门禁） */
-.header__admin {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: var(--control-h);
-  padding: 0 12px;
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-medium);
-  color: var(--primary);
-  background: var(--primary-soft);
-  border: 1px solid var(--primary-border);
-  border-radius: var(--radius);
-}
-.header__admin:hover {
-  text-decoration: none;
-  background: var(--surface-3);
-}
-.header__admin.router-link-active {
-  box-shadow: inset 0 0 0 1px var(--primary);
 }
 .header__icon {
   position: relative;

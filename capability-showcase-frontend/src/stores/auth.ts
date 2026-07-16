@@ -57,8 +57,6 @@ export const useAuthStore = defineStore('auth', () => {
   function hasAllScopes(scopes: string[]): boolean {
     return scopes.every((s) => scopeSet.value.has(s))
   }
-  /** 是否平台管理员（持 role-admin 有效 scope）——管理入口可见性与守卫的单一判据。 */
-  const isAdmin = computed(() => scopeSet.value.has('role-admin'))
 
   /** 单飞句柄：非 null 时表示有一次 refresh 正在进行，并发者复用之。 */
   let refreshing: Promise<string | null> | null = null
@@ -160,7 +158,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   /**
    * 登出：撤销会话（失败也本地清态）。本地敏感态清理在此统一收口（#12），使所有登出入口
-   * （AuthControl 顶栏、ForbiddenView 重新登录）行为一致，不遗漏：
+   * 行为一致，不遗漏：
    * - `session.clearApiKey()`：清 api-key 覆盖，避免残留继续可执行。
    * - `history.clear()`：清请求历史（含 prompt/PII）。
    * 只清 api-key/history，**不**在此清 OIDC User——signOutRedirect 内部先取 id_token 作 hint 再 removeUser（DR-3/L5）。
@@ -252,7 +250,6 @@ export const useAuthStore = defineStore('auth', () => {
     publicConfig,
     isAuthenticated,
     username,
-    isAdmin,
     hasScope,
     hasAllScopes,
     login,

@@ -230,7 +230,7 @@ live discovery（`INTEROP_DISCOVERY_ENABLED`）默认关，下游不可达时确
 - **登录/会话**：`POST /auth/login`（账号密码 → 会话 accessToken 60min + httpOnly 刷新 cookie 7d）、`POST /auth/refresh`（一次性轮转）、`POST /auth/logout`、`GET /auth/me`、`GET /auth/public-config`、`POST /auth/register`（自助注册，默认关）。前 5 个 + register 在边缘免鉴权放行。
 - **RBAC**：种子角色 `viewer/editor/analyst/approver/admin`；有效 scopes = 角色展开 ∪ 直配，签发令牌时展开。新增平台 scope `role-admin`（管理面门禁）、`public-ingest`（写公共库），只经 admin 角色获得、不挂 api-key。
 - **管理面**：`/auth/admin/{users,roles}/**`（`role-admin` scope），写端点受 `admin-writes-enabled`（关→503）+ `If-Match` 乐观锁（428/412）。护栏禁止移除最后一个 role-admin、删被引用角色（409）。
-- **前端 RBAC 控制台**：能力展示前端据登录 scope 显隐 RBAC 控制台与 RAG 租户/共享双视图（`VITE_RBAC_CONSOLE_ENABLED` / `VITE_SHARED_KB_UI_ENABLED` kill switch）。
+- **前端**：能力展示前端已移除内置 RBAC 管理控制台（平台管理统一由 Casdoor + auth-platform 承担）；RAG 租户/共享双视图保留（`VITE_SHARED_KB_UI_ENABLED` kill switch）。
 - **（已落地，默认关）Casdoor OIDC SSO**：`edge-gateway` 的 `CasdoorTokenExchangeFilter`（order `-120`，最早）用 Casdoor JWKS 验 `Authorization: Bearer` 后换发内部 JWT。由 `EDGE_CASDOOR_ENABLED=false`（默认）门控；`EDGE_CASDOOR_MODE=dual(默认)/only` 两档——`dual` 灰度期 Casdoor 验过即换发、验不过透传给 legacy(session/api-key) filter，`only` 严格 Casdoor-only（非 open path 无有效 token → 401、不回落，tenant 恒取 owner）。
 - **（已落地，默认关）多租户登录（方案 C：Casdoor Shared Application + 选组织）**：前端 `LoginView` 登录前先选/输租户(=Casdoor org)，`getUserManager(tenant)` 用 shared app 的 `<base>-org-<tenant>` 客户端（base client_id 默认 `ragshared0client00000001`，`VITE_CASDOOR_CLIENT_ID`），每 org token `aud=<base>-org-<org>`、`owner=org`。前端登录模式 `VITE_AUTH_MODE=apikey(默认)/oidc/dual`。
 - **（默认关）SpiceDB 文档级授权 + 部门身份链**：`RAG_AUTHZ_MODE=enforce` 时 RAG 检索接 `auth-platform`(SpiceDB ReBAC) 按 `view` 权过滤（见场景 ①）。身份链：Casdoor 嵌套 group → edge 推导部门 → `dept` claim → `TenantContext.department`，供文档按上传人部门（`home_dept`）隔离。

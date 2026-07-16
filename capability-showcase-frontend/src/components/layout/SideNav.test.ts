@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory, type Router } from 'vue-router'
@@ -8,13 +8,6 @@ import { useUiStore } from '../../stores/ui'
 import { loadCatalog } from '../../test/fixtures'
 import SideNav from './SideNav.vue'
 
-// 受控 canAdmin（管理入口门禁），避免拉起真实 auth/session。
-const admin = vi.hoisted(() => ({ value: false }))
-vi.mock('../../composables/usePermission', async () => {
-  const { computed } = await import('vue')
-  return { usePermission: () => ({ canAdmin: computed(() => admin.value) }) }
-})
-
 const stub = { template: '<div />' }
 function makeRouter(): Router {
   return createRouter({
@@ -23,8 +16,6 @@ function makeRouter(): Router {
       { path: '/', name: 'overview', component: stub },
       { path: '/m/:moduleId', name: 'module', component: stub },
       { path: '/m/:moduleId/:capId', name: 'capability', component: stub },
-      { path: '/admin/users', name: 'admin-users', component: stub },
-      { path: '/admin/roles', name: 'admin-roles', component: stub },
     ],
   })
 }
@@ -41,7 +32,6 @@ async function mountNav(path = '/') {
 beforeEach(() => {
   setActivePinia(createPinia())
   useCatalogStore().catalog = loadCatalog()
-  admin.value = false
   localStorage.clear()
 })
 
@@ -70,22 +60,6 @@ describe('SideNav · 结构渲染', () => {
   })
 })
 
-describe('SideNav · 管理入口门禁（三处同源）', () => {
-  it('canAdmin=false 时不渲染平台管理', async () => {
-    admin.value = false
-    const wrapper = await mountNav('/')
-    expect(wrapper.text()).not.toContain('平台管理')
-  })
-  it('canAdmin=true 时渲染平台管理 + 用户/角色管理', async () => {
-    admin.value = true
-    const wrapper = await mountNav('/')
-    const text = wrapper.text()
-    expect(text).toContain('平台管理')
-    expect(text).toContain('用户管理')
-    expect(text).toContain('角色管理')
-  })
-})
-
 describe('SideNav · 唯一 active 与祖先可见', () => {
   it('总览路由：总览高亮，无模块 current（不双亮）', async () => {
     const wrapper = await mountNav('/')
@@ -104,12 +78,6 @@ describe('SideNav · 唯一 active 与祖先可见', () => {
     expect(wrapper.text()).toContain(firstCap.title)
   })
 
-  it('管理深链（无 moduleId）不误亮总览、也无模块 current', async () => {
-    admin.value = true
-    const wrapper = await mountNav('/admin/users')
-    expect(wrapper.find('.nav__overview.active').exists()).toBe(false)
-    expect(wrapper.find('.mod--current').exists()).toBe(false)
-  })
 })
 
 describe('SideNav · 收藏', () => {

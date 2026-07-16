@@ -1,14 +1,9 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory, type Router } from 'vue-router'
 import { useUiStore } from '../../stores/ui'
 import AppHeader from './AppHeader.vue'
-
-vi.mock('../../composables/usePermission', async () => {
-  const { computed } = await import('vue')
-  return { usePermission: () => ({ canAdmin: computed(() => false) }) }
-})
 
 const stub = { template: '<div />' }
 function makeRouter(): Router {

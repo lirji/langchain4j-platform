@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { useSessionStore } from '../../stores/session'
 import { AUTH_MODE } from '../../config'
@@ -8,17 +8,7 @@ import ApiKeyInput from './ApiKeyInput.vue'
 
 const auth = useAuthStore()
 const session = useSessionStore()
-const route = useRoute()
 const router = useRouter()
-
-/**
- * 管理域路由（meta.requiredScopes 非空）时隐藏 api-key 入口——避免"填了 Key 就能做平台级操作"的
- * 身份混淆（管理中心恒用账号会话 Bearer，见 03 §1.3）。
- */
-const onAdminRoute = computed(() => {
-  const rs = route.meta?.requiredScopes
-  return Array.isArray(rs) && rs.length > 0
-})
 
 /**
  * 是否展示 api-key 直连入口（#2）：纯 oidc 模式隐藏——Casdoor 是唯一凭证，client.ts 只发 Bearer，
@@ -66,7 +56,7 @@ async function doLogout(): Promise<void> {
         </span>
       </span>
 
-      <details v-if="!onAdminRoute && showApiKeyUi" class="authctl__adv">
+      <details v-if="showApiKeyUi" class="authctl__adv">
         <summary class="authctl__advbtn" title="高级：直连 API Key（可选覆盖登录会话）">高级</summary>
         <div class="authctl__panel">
           <p class="authctl__hint">可选：填写 X-Api-Key 以指定凭证直连（存在时覆盖登录会话）。</p>
@@ -76,7 +66,7 @@ async function doLogout(): Promise<void> {
 
       <button type="button" class="authctl__btn" @click="doLogout">登出</button>
 
-      <!-- API Key 覆盖登录会话：高对比警告 + 一键清除（管理中心仍只用账号会话）。 -->
+      <!-- API Key 覆盖登录会话：高对比警告 + 一键清除。 -->
       <div
         v-if="session.apiKeyOverridesBearer"
         class="authctl__warn"
@@ -85,7 +75,7 @@ async function doLogout(): Promise<void> {
       >
         <span class="authctl__warn-text">
           <span aria-hidden="true">⚠</span>
-          能力请求将用 API Key，账号权限预判暂停（以服务端结果为准）。管理中心仍只用账号会话。
+          能力请求将用 API Key，账号权限预判暂停（以服务端结果为准）。
         </span>
         <button type="button" class="authctl__warn-clear" @click="session.clearApiKey()">
           清除 Key
@@ -95,7 +85,7 @@ async function doLogout(): Promise<void> {
 
     <template v-else>
       <RouterLink class="authctl__btn authctl__btn--primary" :to="{ name: 'login' }">登录</RouterLink>
-      <details v-if="!onAdminRoute && showApiKeyUi" class="authctl__adv">
+      <details v-if="showApiKeyUi" class="authctl__adv">
         <summary class="authctl__advbtn" title="高级：直连 API Key">API Key</summary>
         <div class="authctl__panel">
           <p class="authctl__hint">未登录也可用 X-Api-Key 直连（老流程）。</p>

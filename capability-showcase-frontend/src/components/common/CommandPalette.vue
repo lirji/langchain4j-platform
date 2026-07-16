@@ -6,7 +6,6 @@ import { useCatalogStore } from '../../stores/catalog'
 import { useFavoritesStore } from '../../stores/favorites'
 import { useHistoryStore } from '../../stores/history'
 import { useFocusTrap } from '../../composables/useFocusTrap'
-import { usePermission } from '../../composables/usePermission'
 import type { Capability } from '../../types/catalog'
 import { stateTone } from '../../config/stateMeta'
 import MethodBadge from '../capability/badges/MethodBadge.vue'
@@ -21,8 +20,6 @@ const catalog = useCatalogStore()
 const favorites = useFavoritesStore()
 const history = useHistoryStore()
 const router = useRouter()
-// 管理入口可见性：与顶栏/侧栏同一 permission 源，避免"一处隐藏一处可点"的旁路。
-const { canAdmin } = usePermission()
 
 const query = ref('')
 const activeIndex = ref(0)
@@ -127,44 +124,6 @@ const actions = computed<CmdAction[]>(() => {
     },
   },
   ]
-  // 管理入口动作：仅 role-admin 收录（fuzzy 亦搜不到），与侧栏/顶栏同源门禁。
-  if (canAdmin.value) {
-    items.push(
-      {
-        kind: 'action',
-        key: 'act.admin',
-        label: '打开管理中心',
-        hint: '用户 / 角色',
-        icon: '⚙',
-        run: () => {
-          void router.push({ name: 'admin-users' })
-          ui.closeCmdk()
-        },
-      },
-      {
-        kind: 'action',
-        key: 'act.admin.users',
-        label: '用户管理',
-        hint: '管理中心',
-        icon: '👥',
-        run: () => {
-          void router.push({ name: 'admin-users' })
-          ui.closeCmdk()
-        },
-      },
-      {
-        kind: 'action',
-        key: 'act.admin.roles',
-        label: '角色管理',
-        hint: '管理中心',
-        icon: '🛡',
-        run: () => {
-          void router.push({ name: 'admin-roles' })
-          ui.closeCmdk()
-        },
-      },
-    )
-  }
   return items
 })
 

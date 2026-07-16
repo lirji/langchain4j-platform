@@ -96,20 +96,19 @@ describe('auth store', () => {
     expect(auth.bootstrapDone).toBe(true)
   })
 
-  it('hasScope / isAdmin 随 user 整体替换重算', async () => {
+  it('hasScope 随 user 整体替换重算', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonRes(200, SESSION)))) // scopes=['chat']
     const auth = useAuthStore()
     await auth.login('alice', 'pw')
     expect(auth.hasScope('chat')).toBe(true)
     expect(auth.hasScope('role-admin')).toBe(false)
-    expect(auth.isAdmin).toBe(false)
-    // refresh 返回含 role-admin → isAdmin 重算为 true（scopeSet 依赖 user 整体替换）
+    // refresh 返回含 role-admin → hasScope 重算为 true（scopeSet 依赖 user 整体替换）
     vi.stubGlobal(
       'fetch',
       vi.fn(() => Promise.resolve(jsonRes(200, { ...SESSION, user: { ...SESSION.user, scopes: ['chat', 'role-admin'] } }))),
     )
     await auth.refresh()
-    expect(auth.isAdmin).toBe(true)
+    expect(auth.hasScope('role-admin')).toBe(true)
     expect(auth.hasAllScopes(['chat', 'role-admin'])).toBe(true)
   })
 

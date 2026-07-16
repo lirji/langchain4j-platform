@@ -5,7 +5,6 @@ import { storeToRefs } from 'pinia'
 import { useCatalogStore } from '../../stores/catalog'
 import { useUiStore } from '../../stores/ui'
 import { useFavoritesStore } from '../../stores/favorites'
-import { usePermission } from '../../composables/usePermission'
 import { buildNavigationModel, type NavModuleVM } from '../../navigation/navigationModel'
 import { STATE_META, STATE_ORDER } from '../../config/stateMeta'
 import NavGroupSection from './navigation/NavGroupSection.vue'
@@ -16,24 +15,21 @@ import DensityToggle from './DensityToggle.vue'
 /**
  * 侧栏编排容器：只负责连接 store/route、搜索框、折叠/展开状态、焦点与子组件装配。
  * 纯导航建模在 navigationModel（可单测）；三级渲染在 NavGroupSection/NavModuleRow/NavCapabilityRow。
- * 唯一主 active：总览用 route.name、管理用路径前缀、模块/能力用 params —— 互不误亮。
+ * 唯一主 active：总览用 route.name、模块/能力用 params —— 互不误亮。
  */
 const catalog = useCatalogStore()
 const ui = useUiStore()
 const favorites = useFavoritesStore()
 const route = useRoute()
-const { canAdmin } = usePermission()
 const { modules } = storeToRefs(catalog)
 
 const FAV_GROUP_ID = '__fav'
 const GROUP_STATE_KEY = 'showcase.navGroups'
 
-// ── 当前路由 → 唯一 active 判定（总览/管理不再借 !moduleId 误亮）──
+// ── 当前路由 → 唯一 active 判定（总览不再借 !moduleId 误亮）──
 const activeModuleId = computed(() => String(route.params.moduleId ?? ''))
 const activeCapId = computed(() => String(route.params.capId ?? ''))
 const isOverview = computed(() => route.name === 'overview')
-const isAdminUsers = computed(() => route.path.startsWith('/admin/users'))
-const isAdminRoles = computed(() => route.path.startsWith('/admin/roles'))
 
 const model = computed(() =>
   buildNavigationModel({
@@ -132,33 +128,6 @@ function clearFilter(): void {
         </span>
         总览 Overview
       </RouterLink>
-
-      <!-- 平台管理：仅 role-admin（canAdmin）出现，静态（不折叠），slate 强调 -->
-      <section v-if="canAdmin" class="nav__admin" data-accent="slate">
-        <div class="nav__admin-head">
-          <span class="nav__grp-bar" aria-hidden="true" />
-          <span class="nav__grp-label">平台管理</span>
-          <span class="nav__admin-tag">仅管理员</span>
-        </div>
-        <ul class="nav__admin-list">
-          <li>
-            <RouterLink :to="{ name: 'admin-users' }" class="nav__admin-link" :class="{ active: isAdminUsers }" :aria-current="isAdminUsers ? 'page' : undefined" @click="onNavigate">
-              <span class="nav__admin-chip" aria-hidden="true">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3" /><path d="M3.5 19.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5" /><path d="M16 5.5a3 3 0 0 1 0 6" /><path d="M17.5 14.6c2.2.4 3.9 2.1 3.9 4.9" /></svg>
-              </span>
-              <span class="nav__admin-name">用户管理</span>
-            </RouterLink>
-          </li>
-          <li>
-            <RouterLink :to="{ name: 'admin-roles' }" class="nav__admin-link" :class="{ active: isAdminRoles }" :aria-current="isAdminRoles ? 'page' : undefined" @click="onNavigate">
-              <span class="nav__admin-chip" aria-hidden="true">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l7 2.6v5.4c0 4.2-2.9 7-7 8.5-4.1-1.5-7-4.3-7-8.5V6.1z" /><path d="M9.3 12l1.9 1.9 3.5-3.7" /></svg>
-              </span>
-              <span class="nav__admin-name">角色管理</span>
-            </RouterLink>
-          </li>
-        </ul>
-      </section>
 
       <!-- 收藏虚拟分组：gold 强调，扁平能力行 -->
       <section v-if="model.favorites.length" class="nav__fav" data-accent="gold">
@@ -313,14 +282,7 @@ function clearFilter(): void {
   box-shadow: inset 0 0 0 1px var(--primary-border);
 }
 
-/* 分组通用小件（组头色条/标签/计数），复用于 admin/fav 与 NavGroupSection 保持一致视觉 */
-.nav__grp-bar {
-  width: 3px;
-  height: 13px;
-  flex: 0 0 auto;
-  border-radius: var(--radius-pill);
-  background: var(--g);
-}
+/* 分组通用小件（组头标签/计数），复用于 fav 与 NavGroupSection 保持一致视觉 */
 .nav__grp-label {
   flex: 1;
   min-width: 0;
@@ -337,75 +299,6 @@ function clearFilter(): void {
   font-size: var(--nav-fs);
   color: var(--text-subtle);
   font-variant-numeric: tabular-nums;
-}
-
-/* 平台管理 */
-.nav__admin {
-  margin-top: var(--space-3);
-}
-.nav__admin-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px 4px;
-}
-.nav__admin-tag {
-  flex: 0 0 auto;
-  font-size: 10px;
-  font-weight: var(--fw-semibold);
-  color: var(--g-text);
-  background: var(--g-soft);
-  padding: 1px 7px;
-  border-radius: var(--radius-pill);
-}
-.nav__admin-list {
-  list-style: none;
-  margin: 4px 0 0;
-  padding: 0;
-}
-.nav__admin-link {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
-  color: var(--text);
-  border-radius: var(--radius);
-  text-decoration: none;
-  margin-bottom: 2px;
-}
-.nav__admin-link:hover {
-  background: var(--surface-2);
-  text-decoration: none;
-}
-.nav__admin-chip {
-  width: var(--nav-chip);
-  height: var(--nav-chip);
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  background: var(--g-soft);
-  color: var(--g);
-}
-.nav__admin-name {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--nav-fs);
-  font-weight: var(--fw-semibold);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.nav__admin-link.active {
-  background: var(--g-soft);
-}
-.nav__admin-link.active .nav__admin-name {
-  color: var(--g-text);
-}
-.nav__admin-link.active .nav__admin-chip {
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--g-line);
 }
 
 /* 收藏 */

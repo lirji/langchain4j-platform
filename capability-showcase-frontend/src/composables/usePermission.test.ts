@@ -37,12 +37,3 @@ describe('usePermission.evaluate', () => {
     expect(v.missingScopes).toEqual(['role-admin', 'ingest'])
   })
 })
-
-describe('usePermission.canAdmin', () => {
-  it('仅 Bearer role-admin 时为真（api-key 不参与）', () => {
-    loginAs(['chat'])
-    expect(usePermission().canAdmin.value).toBe(false)
-    loginAs(['chat', 'role-admin'])
-    expect(usePermission().canAdmin.value).toBe(true)
-  })
-})

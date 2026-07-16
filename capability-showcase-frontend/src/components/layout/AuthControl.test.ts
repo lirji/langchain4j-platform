@@ -7,7 +7,7 @@ import { useSessionStore } from '../../stores/session'
 import AuthControl from './AuthControl.vue'
 
 // 隔离真实 router：AuthControl → ApiKeyInput → catalog store → api/client → authorizedFetch → ../router，
-// 真实 router 会懒加载尚未创建的 admin/register 视图，故按既有约定 mock 掉。
+// 真实 router 会懒加载尚未创建的 register 视图，故按既有约定 mock 掉。
 vi.mock('../../router', () => ({
   router: { currentRoute: { value: { name: 'overview', fullPath: '/' } }, replace: vi.fn(), push: vi.fn() },
   sanitizeRedirect: () => null,
@@ -19,12 +19,6 @@ function makeRouter(): Router {
     routes: [
       { path: '/', name: 'overview', component: { template: '<div/>' } },
       { path: '/login', name: 'login', component: { template: '<div/>' } },
-      {
-        path: '/admin/users',
-        name: 'admin-users',
-        meta: { requiredScopes: ['role-admin'] },
-        component: { template: '<div/>' },
-      },
     ],
   })
 }
@@ -70,21 +64,5 @@ describe('AuthControl', () => {
 
     expect(session.hasApiKey).toBe(false)
     expect(wrapper.find('.authctl__warn').exists()).toBe(false)
-  })
-
-  it('管理路由（meta.requiredScopes）隐藏 api-key 入口，避免身份混淆', async () => {
-    const auth = useAuthStore()
-    auth.accessToken = 'tok'
-    auth.user = { username: 'alice', tenant: 'acme', scopes: ['role-admin'] }
-    const { wrapper, router } = await mountAuth()
-
-    // 普通路由：高级（api-key）入口存在
-    expect(wrapper.find('.authctl__adv').exists()).toBe(true)
-
-    await router.push('/admin/users')
-    await wrapper.vm.$nextTick()
-
-    // 管理路由：api-key 入口隐藏
-    expect(wrapper.find('.authctl__adv').exists()).toBe(false)
   })
 })

@@ -1,11 +1,10 @@
 import { computed } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useSessionStore } from '../stores/session'
-import { RBAC_CONSOLE_ENABLED } from '../config'
 import { loginHintText, missingScopeText } from '../utils/authPrompt'
 
 /**
- * 权限裁决单一入口——供 gate、管理入口可见性、能力缺权说明共用，避免"通用 runner 与专用页面裁决漂移"。
+ * 权限裁决单一入口——供 gate、能力缺权说明共用，避免"通用 runner 与专用页面裁决漂移"。
  *
  * 三种凭证模式：
  * - none：无凭证 → need-login。
@@ -59,14 +58,7 @@ export function usePermission() {
   }
 
   const credentialMode = computed(() => session.credentialMode)
-  /**
-   * 管理入口可见性：Bearer role-admin + 构建开关。**必须 credentialMode==='bearer'**——
-   * api-key 覆盖登录会话时管理入口消失（§7.2；管理域 Bearer-only，避免"填了 Key 就冒出管理菜单"的身份混淆）。
-   */
-  const canAdmin = computed(
-    () => auth.isAdmin && session.credentialMode === 'bearer' && RBAC_CONSOLE_ENABLED,
-  )
   const apiKeyOverridesBearer = computed(() => session.apiKeyOverridesBearer)
 
-  return { evaluate, hasScope: auth.hasScope, credentialMode, canAdmin, apiKeyOverridesBearer }
+  return { evaluate, hasScope: auth.hasScope, credentialMode, apiKeyOverridesBearer }
 }

@@ -59,7 +59,7 @@ describe('auth store —— OIDC 驱动', () => {
     expect(token).toBe('cas-tok-admin')
     expect(auth.accessToken).toBe('cas-tok-admin')
     expect(auth.isAuthenticated).toBe(true)
-    expect(auth.isAdmin).toBe(true)
+    expect(auth.hasScope('role-admin')).toBe(true)
     expect(auth.user?.tenant).toBe('built-in')
     // 令牌绝不落 localStorage 不变量（DR-5 下 oidc 真相源在 sessionStorage，故此处只断言 localStorage；
     // 本套件 oidc 模块整体被 mock、真实 userStore 不运行，断言 sessionStorage 为空只是 mock 假象、无意义，故删）。

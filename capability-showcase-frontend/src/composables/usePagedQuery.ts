@@ -3,7 +3,7 @@ import { humanizeError, isAbortError } from '../api/errors'
 
 /**
  * 通用分页查询：封装筛选防抖、请求中止、**乱序响应保护**（单调序号只认最新一次）。
- * 被 adminUsers store 复用，也可被 RAG 文档列表等视图直接用。
+ * 可被 RAG 文档列表等分页视图直接用。
  *
  * 乱序保护是核心：快速切页/改筛选时，慢请求可能后到；用单调 `seq` 只接受最新一次的结果，
  * 并 `AbortController` 中止在途；组件卸载 `onScopeDispose` 中止，杜绝 setState-after-unmount。
