@@ -36,3 +36,22 @@ export function credentialNoun(mode: 'bearer' | 'api-key' | 'none' | undefined):
   if (mode === 'bearer') return AUTH_MODE === 'apikey' ? '登录会话' : 'Casdoor 登录'
   return '凭证'
 }
+
+/**
+ * 缺失 scope 的「补救」提示，按构建期 {@link AUTH_MODE} 出词（与其它文案同源，避免漂移）。
+ *
+ * 关键：Casdoor（oidc/dual）身份的 scope 来自 token 的 `permissions` claim，由 Casdoor 授权——
+ * 可经角色 / 组或**直接授给用户**，并非必然「由角色授予」；且补救应指向 **Casdoor 后台**，而非本平台的
+ * RBAC 角色控制台（后者只管 auth-service 账号，对 Casdoor 身份零作用）。仅 apikey 模式是 auth-service 角色模型。
+ */
+export function missingScopeText(missing: string[]): string {
+  const scopes = missing.join(' / ')
+  switch (AUTH_MODE) {
+    case 'oidc':
+      return `当前账号缺少 ${scopes} scope。该 scope 由 Casdoor 授权，请联系管理员在 Casdoor 为你的账号授予对应权限（可经角色 / 组或直接授予）。`
+    case 'dual':
+      return `当前账号缺少 ${scopes} scope。若用 Casdoor 登录，请联系管理员在 Casdoor 授予对应权限（角色 / 组或直接授予）；若用平台账号登录，请联系管理员授予含该 scope 的角色。`
+    default:
+      return `当前账号缺少 ${scopes} scope（由角色授予），请联系管理员授予对应角色。`
+  }
+}

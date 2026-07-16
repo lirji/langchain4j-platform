@@ -1,5 +1,5 @@
 import type { Capability } from '../types/catalog'
-import { needCredentialText, credentialNoun } from './authPrompt'
+import { needCredentialText, credentialNoun, missingScopeText } from './authPrompt'
 
 export interface GateContext {
   /** 是否具备可执行凭证：已登录会话 或 已填写 API Key（调用方传 session.hasCredential）。 */
@@ -51,7 +51,7 @@ export function executionGate(cap: Capability, ctx: GateContext): GateResult {
       if (missing.length) {
         return {
           allowed: false,
-          reason: `当前账号缺少 ${missing.join(' / ')} scope（由角色授予），请联系管理员授予对应角色。`,
+          reason: missingScopeText(missing),
         }
       }
       return { allowed: true }

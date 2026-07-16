@@ -2,7 +2,7 @@ import { computed } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useSessionStore } from '../stores/session'
 import { RBAC_CONSOLE_ENABLED } from '../config'
-import { loginHintText } from '../utils/authPrompt'
+import { loginHintText, missingScopeText } from '../utils/authPrompt'
 
 /**
  * 权限裁决单一入口——供 gate、管理入口可见性、能力缺权说明共用，避免"通用 runner 与专用页面裁决漂移"。
@@ -53,7 +53,7 @@ export function usePermission() {
           allowed: false,
           reason: 'missing-scope',
           missingScopes: missing,
-          message: `当前账号缺少 scope：${missing.join(' / ')}（由角色授予）。`,
+          message: missingScopeText(missing),
         }
       : { allowed: true, reason: 'ok', missingScopes: [], message: '' }
   }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { needCredentialText, loginHintText, credentialNoun } from './authPrompt'
+import { needCredentialText, loginHintText, credentialNoun, missingScopeText } from './authPrompt'
 
 // AUTH_MODE 用 getter：authPrompt 在函数体内读它，故翻 cfg.mode 即可切模式，无需 resetModules。
 const cfg = vi.hoisted(() => ({ mode: 'apikey' as 'apikey' | 'oidc' | 'dual' }))
@@ -36,5 +36,28 @@ describe('authPrompt', () => {
     cfg.mode = 'apikey'
     expect(credentialNoun('bearer')).toBe('登录会话')
     expect(credentialNoun('none')).toBe('凭证')
+  })
+
+  it('missingScopeText 按模式出补救词：oidc 指向 Casdoor、不误导去授予角色', () => {
+    // 始终带上缺失的 scope 名。
+    expect(missingScopeText(['public-ingest'])).toContain('public-ingest')
+
+    // apikey：auth-service 角色模型，保留「由角色授予/授予对应角色」。
+    cfg.mode = 'apikey'
+    expect(missingScopeText(['public-ingest'])).toContain('由角色授予')
+    expect(missingScopeText(['public-ingest'])).toContain('授予对应角色')
+
+    // oidc：Casdoor 授权，绝不把用户指向平台角色控制台。
+    cfg.mode = 'oidc'
+    const oidc = missingScopeText(['public-ingest'])
+    expect(oidc).toContain('Casdoor')
+    expect(oidc).not.toContain('授予对应角色')
+    expect(oidc).not.toContain('由角色授予')
+
+    // dual：两条路径都提（Casdoor 或平台账号）。
+    cfg.mode = 'dual'
+    const dual = missingScopeText(['public-ingest'])
+    expect(dual).toContain('Casdoor')
+    expect(dual).toContain('平台账号')
   })
 })
