@@ -24,7 +24,7 @@ platform:
 
 app:
   workflow:
-    enabled: ${WORKFLOW_ENABLED:false}
+    enabled: ${WORKFLOW_ENABLED:true}
     datasource:
       url: ${WORKFLOW_DB_URL:jdbc:mysql://localhost:3306/flowable?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}
       username: ${WORKFLOW_DB_USER:root}

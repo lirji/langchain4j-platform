@@ -263,8 +263,8 @@ services:
       QDRANT_PORT: 6334
       QDRANT_COLLECTION_NAME: knowledge_segments
       RAG_REGISTRY_STORE: ${RAG_REGISTRY_STORE:-redis}
-      # 公共/共享知识库（默认关闭）：开启后查询在隔离查各自租户基础上并入 __public__ 公共分区。
-      RAG_PUBLIC_ENABLED: ${RAG_PUBLIC_ENABLED:-false}
+      # 公共/共享知识库（默认开启）：查询在隔离查各自租户基础上并入 __public__ 公共分区。回滚设 RAG_PUBLIC_ENABLED=false。
+      RAG_PUBLIC_ENABLED: ${RAG_PUBLIC_ENABLED:-true}
       # ── 细粒度授权（接 auth-platform / SpiceDB ReBAC）。默认 disabled（与接入前逐字一致）──
       # disabled | shadow（照写关系、读双算记差异但不拦截，灰度观测）| enforce（读按 ReBAC 真过滤）。
       # 灰度顺序：disabled → shadow（观测 knowledge.authz.* 指标）→ 单租户 enforce → 扩大。切回 shadow 即回滚。
@@ -355,12 +355,12 @@ services:
       AGENT_MCP_ENABLED: ${AGENT_MCP_ENABLED:-false}
       AGENT_MCP_TRANSPORT: ${AGENT_MCP_TRANSPORT:-http}
       AGENT_MCP_HTTP_URL: ${AGENT_MCP_HTTP_URL:-http://host.docker.internal:3001/mcp}
-      AGENT_VISION_ENABLED: ${AGENT_VISION_ENABLED:-false}
+      AGENT_VISION_ENABLED: ${AGENT_VISION_ENABLED:-true}
       VISION_BASE_URL: http://vision-service:8090
       AGENT_TASK_WEBHOOK_ENABLED: ${AGENT_TASK_WEBHOOK_ENABLED:-true}
       AGENT_TASK_WEBHOOK_MAX_ATTEMPTS: ${AGENT_TASK_WEBHOOK_MAX_ATTEMPTS:-3}
       AGENT_TASK_WEBHOOK_BACKOFF: ${AGENT_TASK_WEBHOOK_BACKOFF:-250ms}
-      AGENT_ASYNC_EXTERNAL_ENABLED: ${AGENT_ASYNC_EXTERNAL_ENABLED:-false}
+      AGENT_ASYNC_EXTERNAL_ENABLED: ${AGENT_ASYNC_EXTERNAL_ENABLED:-true}
       AGENT_ASYNC_EXTERNAL_AUTHORITATIVE: ${AGENT_ASYNC_EXTERNAL_AUTHORITATIVE:-false}
       AGENT_ASYNC_EXTERNAL_MIRROR_WEBHOOK: ${AGENT_ASYNC_EXTERNAL_MIRROR_WEBHOOK:-false}
       AGENT_ASYNC_WORKER_ID: ${AGENT_ASYNC_WORKER_ID:-agent-service}

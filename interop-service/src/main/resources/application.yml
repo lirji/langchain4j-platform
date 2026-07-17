@@ -18,7 +18,7 @@ app:
     stream-read-timeout: ${INTEROP_STREAM_READ_TIMEOUT:120s}
     # live capability discovery：默认关（静态 registry，零下游依赖）。开启后懒加载 + TTL 拉取，
     # 下游不可达确定性回退静态默认。
-    discovery-enabled: ${INTEROP_DISCOVERY_ENABLED:false}
+    discovery-enabled: ${INTEROP_DISCOVERY_ENABLED:true}
     capability-ttl: ${INTEROP_CAPABILITY_TTL:60s}
     a2a:
       agent-name: ${INTEROP_A2A_AGENT_NAME:langchain4j-platform}
