@@ -12,6 +12,8 @@ import CapabilityHeader from './CapabilityHeader.vue'
 import DynamicForm from '../form/DynamicForm.vue'
 import ResponseViewer from './ResponseViewer.vue'
 import SseConsole from './SseConsole.vue'
+import SseStageConsole from './SseStageConsole.vue'
+import SseEventTimeline from './SseEventTimeline.vue'
 import CopyButton from '../common/CopyButton.vue'
 
 const props = defineProps<{ cap: Capability }>()
@@ -49,15 +51,27 @@ const canLoadExample = computed(
     ),
 )
 
-/** 把参数级默认 / 示例 + 整体 example（JSON 字符串）合并为一组表单值（仅回填，不改 run）。 */
-function buildExampleValues(): FormValues {
+/** 示例预设：优先 examples[]（多示例 chip），否则退化为单个 example，无则空。 */
+const presets = computed(() => {
+  const list = props.cap.examples
+  if (Array.isArray(list) && list.length) {
+    return list.filter((e) => e && typeof e.body === 'string')
+  }
+  if (props.cap.example) return [{ label: '载入示例', body: props.cap.example }]
+  return []
+})
+/** 多于一个预设时渲染 chip 行；否则沿用单个「载入示例」按钮。 */
+const hasMultiplePresets = computed(() => presets.value.length > 1)
+
+/** 把参数级默认 / 示例 + 请求体（JSON 字符串，缺省取 cap.example）合并为一组表单值（仅回填，不改 run）。 */
+function buildExampleValues(bodyJson?: string): FormValues {
   const next: FormValues = { ...values.value }
   for (const p of props.cap.params) {
     if (p.type === 'file') continue // 文件无法程序化回填
     if (p.example != null) next[p.name] = coerceForField(p, p.example)
     else if (p.defaultValue !== undefined && p.defaultValue !== null) next[p.name] = p.defaultValue
   }
-  const parsed = tryParseJson(props.cap.example)
+  const parsed = tryParseJson(bodyJson ?? props.cap.example)
   if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
     const body = parsed as Record<string, unknown>
     for (const p of props.cap.params) {
@@ -83,9 +97,14 @@ function coerceForField(p: ParamSpec, value: unknown): unknown {
   return value
 }
 
-function loadExample(): void {
-  if (!canLoadExample.value) return
-  values.value = buildExampleValues()
+function loadExample(bodyJson?: string): void {
+  if (bodyJson === undefined && !canLoadExample.value) return
+  values.value = buildExampleValues(bodyJson)
+}
+
+/** 点选某个命名预设：把其请求体载入表单。 */
+function loadPreset(preset: { body: string }): void {
+  loadExample(preset.body)
 }
 
 function newHistoryId(): string {
@@ -197,15 +216,35 @@ function onKeydown(e: KeyboardEvent): void {
               {{ showCurl ? '隐藏' : '预览' }} curl
             </button>
             <button
+              v-if="!hasMultiplePresets"
               type="button"
               class="btn btn--ghost"
               :disabled="!canLoadExample"
               title="用目录示例 / 默认值填充表单"
-              @click="loadExample"
+              @click="loadExample()"
             >
               载入示例
             </button>
           </template>
+        </div>
+
+        <div
+          v-if="!run.running.value && hasMultiplePresets"
+          class="runner__presets"
+          role="group"
+          aria-label="示例预设"
+        >
+          <span class="runner__presets-label">示例：</span>
+          <button
+            v-for="(p, i) in presets"
+            :key="i"
+            type="button"
+            class="btn btn--ghost btn--chip"
+            :title="p.description || '一键把此示例载入表单'"
+            @click="loadPreset(p)"
+          >
+            {{ p.label }}
+          </button>
         </div>
 
         <p v-if="!gate.allowed && gate.reason" class="runner__reason" role="status">
@@ -227,8 +266,26 @@ function onKeydown(e: KeyboardEvent): void {
         <h2 class="runner__h">响应</h2>
         <div class="runner__res-body">
           <SseConsole
-            v-if="run.isSse.value"
+            v-if="run.isSse.value && run.streamShape.value === 'token'"
             :tokens="run.sse.tokens"
+            :events="run.sse.events"
+            :status="run.sse.status"
+            :note="run.sse.note"
+            :error="run.errorMessage.value"
+            :elapsed-ms="run.elapsedMs.value"
+            :trace-id="run.traceId.value"
+          />
+          <SseStageConsole
+            v-else-if="run.isSse.value && run.isReflexion.value"
+            :events="run.sse.events"
+            :status="run.sse.status"
+            :note="run.sse.note"
+            :error="run.errorMessage.value"
+            :elapsed-ms="run.elapsedMs.value"
+            :trace-id="run.traceId.value"
+          />
+          <SseEventTimeline
+            v-else-if="run.isSse.value"
             :events="run.sse.events"
             :status="run.sse.status"
             :note="run.sse.note"
@@ -301,6 +358,22 @@ function onKeydown(e: KeyboardEvent): void {
   gap: 6px;
   font-size: var(--fs-sm);
   color: var(--danger);
+}
+.runner__presets {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.runner__presets-label {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.btn--chip {
+  padding: 3px 10px;
+  font-size: var(--fs-sm);
+  border-radius: 999px;
 }
 .runner__reason {
   margin-top: var(--space-2);

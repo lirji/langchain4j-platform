@@ -4,7 +4,7 @@ import type { RunResult } from '../types/api'
 import type { FormValues } from '../utils/validation'
 import type { SseEvent } from '../api/sse'
 import { isStreamingKind, runCapability } from '../api/client'
-import { streamCapability } from '../api/sse'
+import { streamCapability, sseStreamShape, isReflexionStream } from '../api/sse'
 import { ApiError, humanizeError, isAbortError } from '../api/errors'
 import { executionGate } from '../utils/gate'
 import { useSessionStore } from '../stores/session'
@@ -43,6 +43,10 @@ export function useCapabilityRun(capSource: MaybeRefOrGetter<Capability>) {
 
   const cap = computed(() => toValue(capSource))
   const isSse = computed(() => isStreamingKind(cap.value.requestKind))
+  // 流形态：token 流走 SseConsole 拼接视图；stage 流（命名事件流）走专用渲染。
+  const streamShape = computed(() => sseStreamShape(cap.value))
+  // stage 流子类：反思式（含 answer+critique）走 SseStageConsole，其余走通用 SseEventTimeline。
+  const isReflexion = computed(() => isReflexionStream(cap.value))
   const running = computed(() => phase.value === 'running' || phase.value === 'streaming')
 
   function resetOutputs(): void {
@@ -175,6 +179,8 @@ export function useCapabilityRun(capSource: MaybeRefOrGetter<Capability>) {
     elapsedMs,
     sse,
     isSse,
+    streamShape,
+    isReflexion,
     running,
     run,
     abort,

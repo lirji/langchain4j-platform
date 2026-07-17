@@ -14,6 +14,33 @@ export interface SseEvent {
 }
 
 /**
+ * SSE 流形态：
+ * - `'token'` 逐字流（后端逐 token 以无名 `message` 事件下发，走 SseConsole 拼接视图）。
+ * - `'stage'` 阶段事件流（后端按阶段发命名事件，如反思编排的 attempt-start/answer/critique/done，
+ *   走 SseStageConsole 按轮次渲染）。
+ *
+ * 判定依据 = manifest 的 `sseEvents` 是否含 `'message'`。向后兼容：未声明 / 空 / 含 message → `token`
+ * （保持现状，不影响 chat.stream 等真 token 流）；仅「非空且不含 message」→ `stage`。
+ */
+export type SseStreamShape = 'token' | 'stage'
+
+export function sseStreamShape(cap: Capability): SseStreamShape {
+  const events = cap.sseEvents
+  if (!events || events.length === 0) return 'token'
+  return events.includes('message') ? 'token' : 'stage'
+}
+
+/**
+ * stage 流的渲染子类判定：`sseEvents` 同时含 `answer` + `critique` 语义事件 → 反思式
+ * （走 SseStageConsole 的答案/评分渲染）；否则为通用命名事件流（如任务状态快照流，走 SseEventTimeline）。
+ * 声明式判据（按事件语义，不 hardcode 能力 id），便于将来新增其它 stage 流时自动归类。
+ */
+export function isReflexionStream(cap: Capability): boolean {
+  const e = cap.sseEvents
+  return !!e && e.includes('answer') && e.includes('critique')
+}
+
+/**
  * 增量 SSE 帧解析器（纯逻辑，不依赖 fetch，便于单测）。
  *
  * 处理要点：

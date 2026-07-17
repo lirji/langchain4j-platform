@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { SseParser, consumeSseStream, type SseEvent } from './sse'
+import { SseParser, consumeSseStream, sseStreamShape, isReflexionStream, type SseEvent } from './sse'
+import type { Capability } from '../types/catalog'
 
 function streamFromChunks(chunks: string[]): ReadableStream<Uint8Array> {
   const enc = new TextEncoder()
@@ -118,5 +119,49 @@ describe('consumeSseStream', () => {
       onEvent: (ev) => events.push(ev),
     })
     expect(events.map((e) => e.event)).toEqual(['message', 'error'])
+  })
+})
+
+describe('sseStreamShape', () => {
+  const capWith = (sseEvents?: string[]): Capability => ({ sseEvents }) as unknown as Capability
+
+  it('含 message → token（真逐字流，保持现状）', () => {
+    expect(sseStreamShape(capWith(['message', 'done', 'error']))).toBe('token')
+    expect(sseStreamShape(capWith(['message', 'done', 'error', 'blocked', 'grounding-warning']))).toBe(
+      'token',
+    )
+  })
+
+  it('未声明 sseEvents → token（向后兼容）', () => {
+    expect(sseStreamShape(capWith(undefined))).toBe('token')
+  })
+
+  it('空数组 → token', () => {
+    expect(sseStreamShape(capWith([]))).toBe('token')
+  })
+
+  it('非空且不含 message → stage（反思编排等阶段事件流）', () => {
+    expect(sseStreamShape(capWith(['attempt-start', 'answer', 'critique', 'done']))).toBe('stage')
+    expect(sseStreamShape(capWith(['done', 'error']))).toBe('stage')
+  })
+})
+
+describe('isReflexionStream', () => {
+  const capWith = (sseEvents?: string[]): Capability => ({ sseEvents }) as unknown as Capability
+
+  it('含 answer+critique → true（反思式，走 SseStageConsole）', () => {
+    expect(isReflexionStream(capWith(['attempt-start', 'answer', 'critique', 'done']))).toBe(true)
+  })
+
+  it('任务状态流（无 answer/critique）→ false（通用事件流，走 SseEventTimeline）', () => {
+    expect(
+      isReflexionStream(capWith(['PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED'])),
+    ).toBe(false)
+  })
+
+  it('未声明 / 仅含其一 → false', () => {
+    expect(isReflexionStream(capWith(undefined))).toBe(false)
+    expect(isReflexionStream(capWith(['answer']))).toBe(false)
+    expect(isReflexionStream(capWith(['critique']))).toBe(false)
   })
 })

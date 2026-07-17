@@ -27,6 +27,13 @@ modules:
           - { name: message, in: body, type: text, required: true, label: 消息, placeholder: "你好，用一句话介绍这个平台" }
           - { name: category, in: body, type: string, required: false, label: 类目(可选), help: "限定 RAG 检索到该 metadata.category 的文档" }
         example: '{"message":"用一句话介绍这个平台"}'
+        examples:
+          - label: "自我介绍"
+            body: '{"message":"用一句话介绍这个平台"}'
+          - label: "写代码"
+            body: '{"message":"用 Java 写一个快速排序，并解释时间复杂度"}'
+          - label: "限定类目检索"
+            body: '{"message":"退款政策是怎样的？","category":"policy"}'
         requiredScopes: []
         featureFlag: null
         featureFlagDefault: true
@@ -47,6 +54,13 @@ modules:
           - { name: message, in: body, type: text, required: true, label: 消息, placeholder: "帮我总结一下 RAG 的流程" }
           - { name: category, in: body, type: string, required: false, label: 类目(可选) }
         example: '{"message":"帮我总结一下 RAG 的流程"}'
+        examples:
+          - label: "总结 RAG"
+            body: '{"message":"帮我总结一下 RAG 的流程"}'
+          - label: "通俗讲解"
+            body: '{"message":"用通俗的比喻解释什么是向量数据库"}'
+          - label: "长文生成"
+            body: '{"message":"写一段 200 字的产品介绍，突出多模型网关能力"}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
@@ -66,6 +80,13 @@ modules:
           - { name: type, in: query, type: string, required: false, label: 抽取类型, defaultValue: "ticket" }
           - { name: text, in: body, type: text, required: true, label: 待抽取文本, placeholder: "用户反馈：登录页在手机上打不开，很急" }
         example: '{"text":"用户反馈：登录页在手机上打不开，很急"}'
+        examples:
+          - label: "工单-登录问题"
+            body: '{"text":"用户反馈：登录页在手机上打不开，很急"}'
+          - label: "工单-支付失败"
+            body: '{"text":"客户说下单后一直提示支付失败，已经试了三次，要求尽快处理"}'
+          - label: "工单-功能建议"
+            body: '{"text":"希望能支持导出 Excel，现在只能一条条复制，太麻烦了"}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
@@ -84,6 +105,13 @@ modules:
           - { name: message, in: body, type: text, required: true, label: 消息, placeholder: "帮我查下退款政策" }
           - { name: category, in: body, type: string, required: false, label: 类目(可选) }
         example: '{"message":"帮我查下退款政策"}'
+        examples:
+          - label: "查政策(路由检索)"
+            body: '{"message":"帮我查下退款政策"}'
+          - label: "闲聊"
+            body: '{"message":"今天心情不错，随便聊聊吧"}'
+          - label: "让它算"
+            body: '{"message":"帮我算一下 128 乘以 56 等于多少"}'
         requiredScopes: []
         featureFlag: app.conversation.router.enabled
         featureFlagDefault: true
@@ -101,6 +129,13 @@ modules:
         params:
           - { name: message, in: body, type: text, required: true, label: 消息, placeholder: "解释一下量子纠缠" }
         example: '{"message":"解释一下量子纠缠"}'
+        examples:
+          - label: "简单问题(便宜模型即可)"
+            body: '{"message":"中国的首都是哪里？"}'
+          - label: "难题(触发升级)"
+            body: '{"message":"解释一下量子纠缠，并举一个能理解的例子"}'
+          - label: "代码题"
+            body: '{"message":"用 Python 实现 LRU 缓存，并说明各操作复杂度"}'
         requiredScopes: []
         featureFlag: app.chat.cascade.enabled
         featureFlagDefault: true
@@ -118,6 +153,13 @@ modules:
         params:
           - { name: message, in: body, type: text, required: true, label: 消息, placeholder: "现在几点？" }
         example: '{"message":"现在几点？"}'
+        examples:
+          - label: "问时间"
+            body: '{"message":"现在几点？"}'
+          - label: "问日期"
+            body: '{"message":"今天是星期几，距离下个月一号还有几天？"}'
+          - label: "显式用工具"
+            body: '{"message":"用可用的工具查一下当前时间并换算成 UTC"}'
         requiredScopes: []
         featureFlag: app.conversation.mcp.enabled
         featureFlagDefault: false
@@ -136,6 +178,13 @@ modules:
           - { name: chatId, in: query, type: string, required: false, label: 会话ID, defaultValue: "default" }
           - { name: message, in: body, type: text, required: true, label: 消息, placeholder: "记住我喜欢简洁的回答" }
         example: '{"message":"记住我喜欢简洁的回答"}'
+        examples:
+          - label: "记住偏好"
+            body: '{"message":"记住我喜欢简洁的回答"}'
+          - label: "陈述身份"
+            body: '{"message":"我是华东区的销售负责人，平时偏好用邮件联系"}'
+          - label: "唤起记忆"
+            body: '{"message":"根据你对我的了解，推荐一个适合我的沟通方式"}'
         requiredScopes: []
         featureFlag: app.conversation.memory.profile.enabled
         featureFlagDefault: true
@@ -212,6 +261,13 @@ modules:
           - { name: minScore, in: body, type: number, required: false, label: 最低分, min: 0, max: 1 }
           - { name: category, in: body, type: string, required: false, label: 类目 }
         example: '{"query":"退款政策是什么？","topK":5}'
+        examples:
+          - label: "查退款政策"
+            body: '{"query":"退款政策是什么？","topK":5}'
+          - label: "带类目过滤"
+            body: '{"query":"审批流程是怎样的？","topK":5,"category":"policy"}'
+          - label: "高精度检索"
+            body: '{"query":"平台支持哪些向量库？","topK":3,"minScore":0.5}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
@@ -261,6 +317,13 @@ modules:
           - { name: text, in: body, type: text, required: true, label: 正文 }
           - { name: category, in: body, type: string, required: false, label: 类目 }
         example: '{"title":"退款政策","text":"下单 7 天内可无理由退款……","category":"policy"}'
+        examples:
+          - label: "退款政策"
+            body: '{"title":"退款政策","text":"下单 7 天内可无理由退款，需保持商品完好；生鲜类不支持退货。","category":"policy"}'
+          - label: "产品说明"
+            body: '{"title":"平台简介","text":"本平台把多种 AI 能力统一收进一个网关，按逻辑模型名路由到不同 provider。","category":"product"}'
+          - label: "FAQ"
+            body: '{"title":"常见问题","text":"问：如何切换模型？答：改 LiteLLM 配置里的映射即可，应用侧无需改动。","category":"faq"}'
         requiredScopes: [ingest]
         featureFlagDefault: true
         riskLevel: caution
@@ -279,6 +342,13 @@ modules:
           - { name: text, in: body, type: text, required: true, label: 正文 }
           - { name: category, in: body, type: string, required: false, label: 类目 }
         example: '{"title":"全租户公告","text":"共享知识库示例文本……","category":"policy"}'
+        examples:
+          - label: "全租户公告"
+            body: '{"title":"全租户公告","text":"共享知识库对所有租户可读，请勿上传敏感数据。","category":"notice"}'
+          - label: "通用条款"
+            body: '{"title":"通用服务条款","text":"所有租户共享的服务条款示例文本。","category":"policy"}'
+          - label: "术语表"
+            body: '{"title":"术语表","text":"RAG：检索增强生成；Embedding：把文本转成向量。","category":"glossary"}'
         requiredScopes: [public-ingest]
         featureFlagDefault: true
         riskLevel: caution
@@ -287,12 +357,14 @@ modules:
       - id: rag.documents.list
         module: rag
         title: 文档列表
-        description: "GET /rag/documents，列出当前租户文档。"
+        description: "GET /rag/documents，列出当前租户文档。带 page 时返回分页信封 { items, page, size, total, totalPages }。"
         method: GET
         path: /rag/documents
         requestKind: none
         responseKind: json
-        params: []
+        params:
+          - { name: page, in: query, type: integer, required: false, label: 页码, defaultValue: 1, min: 1, help: "1-based；带此参数即返回分页信封，越界自动 clamp" }
+          - { name: size, in: query, type: integer, required: false, label: 页大小, defaultValue: 10, min: 1, max: 100, help: "缺省 10，上限 100" }
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
@@ -355,6 +427,13 @@ modules:
         params:
           - { name: query, in: body, type: text, required: true, label: 查询, placeholder: "谁负责退款审批？" }
         example: '{"query":"谁负责退款审批？"}'
+        examples:
+          - label: "谁负责审批"
+            body: '{"query":"谁负责退款审批？"}'
+          - label: "关系查询"
+            body: '{"query":"退款政策和哪些部门相关？"}'
+          - label: "实体关联"
+            body: '{"query":"和订单相关的实体有哪些？"}'
         requiredScopes: []
         featureFlag: app.rag.graph.enabled
         featureFlagDefault: true
@@ -399,6 +478,13 @@ modules:
           - { name: goal, in: body, type: text, required: true, label: 目标, placeholder: "查一下今天的日期并算出距离年底还有多少天" }
           - { name: webhookUrl, in: body, type: string, required: false, label: 回调URL(可选) }
         example: '{"goal":"查一下今天的日期并算出距离年底还有多少天"}'
+        examples:
+          - label: "算日期天数"
+            body: '{"goal":"查一下今天的日期并算出距离年底还有多少天"}'
+          - label: "查订单"
+            body: '{"goal":"查询订单号 A100 的状态、金额和下单时间"}'
+          - label: "检索并总结"
+            body: '{"goal":"从知识库检索平台的 RAG 能力，并用要点总结"}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
@@ -417,6 +503,13 @@ modules:
           - { name: goal, in: body, type: text, required: true, label: 目标 }
           - { name: webhookUrl, in: body, type: string, required: false, label: 回调URL(可选) }
         example: '{"goal":"分三步总结这个平台的能力"}'
+        examples:
+          - label: "多步总结"
+            body: '{"goal":"分三步总结这个平台的能力"}'
+          - label: "查订单算差额"
+            body: '{"goal":"查询订单 A100 与 A101 的金额并算出差额"}'
+          - label: "带回调"
+            body: '{"goal":"检索并总结平台的多智能体编排能力","webhookUrl":"https://webhook.site/your-uuid"}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
@@ -466,7 +559,9 @@ modules:
         riskLevel: safe
         state: ready
         executableByDefault: true
-        sseEvents: [message, done, error]
+        # 任务状态快照流：后端按状态名发命名事件（AgentTaskStatus）+ 动态进度事件名，从不发 message。
+        # 不含 message → 前端判为 stage 流，走通用 SseEventTimeline（避免误卡「等待首个 token」）。
+        sseEvents: [PENDING, RUNNING, SUCCEEDED, FAILED, CANCELLED]
         tags: [sse]
       - id: agent.tasks.cancel
         module: agent
@@ -492,10 +587,17 @@ modules:
         requestKind: json
         responseKind: json
         params:
-          - { name: goal, in: body, type: text, required: false, label: 目标 }
-          - { name: tasks, in: body, type: json, required: false, label: "任务 DAG(JSON 数组)", placeholder: '[{"id":"t1","goal":"..."}]' }
+          - { name: goal, in: body, type: text, required: true, label: 目标 }
+          - { name: tasks, in: body, type: json, required: true, label: "任务 DAG(JSON 数组)", help: "每个节点字段：id / description(任务描述) / dependsOn(前置任务 id 列表)", placeholder: '[{"id":"t1","description":"...","dependsOn":[]}]' }
           - { name: webhookUrl, in: body, type: string, required: false, label: 回调URL(可选) }
-        example: '{"goal":"调研并总结平台能力"}'
+        example: '{"goal":"调研并输出平台 RAG 能力一页说明","tasks":[{"id":"t1","description":"检索并汇总平台 RAG 的混合检索/GraphRAG/多模态能力点","dependsOn":[]},{"id":"t2","description":"基于 t1 的能力点整理成结构化清单","dependsOn":["t1"]},{"id":"t3","description":"把 t2 的清单改写成面向非技术读者的一段说明","dependsOn":["t2"]}]}'
+        examples:
+          - label: "线性三步"
+            body: '{"goal":"调研并输出平台 RAG 能力一页说明","tasks":[{"id":"t1","description":"检索并汇总平台 RAG 的混合检索/GraphRAG/多模态能力点","dependsOn":[]},{"id":"t2","description":"基于 t1 的能力点整理成结构化清单","dependsOn":["t1"]},{"id":"t3","description":"把 t2 的清单改写成面向非技术读者的一段说明","dependsOn":["t2"]}]}'
+          - label: "扇出并行+汇总"
+            body: '{"goal":"调研平台的检索与授权能力并产出能力清单","tasks":[{"id":"retrieval","description":"检索并总结平台的混合检索、GraphRAG、rerank、多模态检索能力","dependsOn":[]},{"id":"authz","description":"检索并总结知识库的租户隔离、共享库、文档级 ReBAC 授权机制","dependsOn":[]},{"id":"merge","description":"综合 retrieval 与 authz 的结果，去重并归纳成结构化能力清单","dependsOn":["retrieval","authz"]},{"id":"writeup","description":"把 merge 的清单改写成一段面向业务方的能力说明","dependsOn":["merge"]}]}'
+          - label: "退款规则分析"
+            body: '{"goal":"分析退款审批规则并给出运营建议","tasks":[{"id":"t1","description":"从知识库检索退款审批规则要点","dependsOn":[]},{"id":"t2","description":"基于 t1 的规则总结潜在运营风险","dependsOn":["t1"]},{"id":"t3","description":"基于 t1 和 t2 给出简短改进建议","dependsOn":["t1","t2"]}]}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
@@ -512,6 +614,13 @@ modules:
         params:
           - { name: goal, in: body, type: text, required: true, label: 目标, placeholder: "对比三家云厂商的对象存储定价" }
         example: '{"goal":"对比三家云厂商的对象存储定价"}'
+        examples:
+          - label: "云存储选型"
+            body: '{"goal":"对比三家云厂商的对象存储定价，并给出选型建议"}'
+          - label: "编排选型"
+            body: '{"goal":"对比 ReAct、DAG、投票、反思四种编排的适用场景并给出选型建议"}'
+          - label: "RAG 一页说明"
+            body: '{"goal":"调研并输出平台 RAG 能力一页说明"}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
@@ -526,10 +635,17 @@ modules:
         requestKind: json
         responseKind: json
         params:
-          - { name: goal, in: body, type: text, required: false, label: 目标 }
-          - { name: tasks, in: body, type: json, required: false, label: "任务 DAG(JSON 数组)" }
+          - { name: goal, in: body, type: text, required: true, label: 目标 }
+          - { name: tasks, in: body, type: json, required: true, label: "任务 DAG(JSON 数组)", help: "每个节点字段：id / description(任务描述) / dependsOn(前置任务 id 列表)", placeholder: '[{"id":"t1","description":"...","dependsOn":[]}]' }
           - { name: webhookUrl, in: body, type: string, required: false, label: 回调URL(可选) }
-        example: '{"goal":"调研并总结平台能力"}'
+        example: '{"goal":"调研并输出平台 RAG 能力一页说明","tasks":[{"id":"t1","description":"检索并汇总平台 RAG 的混合检索/GraphRAG/多模态能力点","dependsOn":[]},{"id":"t2","description":"基于 t1 的能力点整理成结构化清单","dependsOn":["t1"]},{"id":"t3","description":"把 t2 的清单改写成面向非技术读者的一段说明","dependsOn":["t2"]}]}'
+        examples:
+          - label: "线性三步"
+            body: '{"goal":"调研并输出平台 RAG 能力一页说明","tasks":[{"id":"t1","description":"检索并汇总平台 RAG 的混合检索/GraphRAG/多模态能力点","dependsOn":[]},{"id":"t2","description":"基于 t1 的能力点整理成结构化清单","dependsOn":["t1"]},{"id":"t3","description":"把 t2 的清单改写成面向非技术读者的一段说明","dependsOn":["t2"]}]}'
+          - label: "扇出并行+汇总"
+            body: '{"goal":"调研平台的检索与授权能力并产出能力清单","tasks":[{"id":"retrieval","description":"检索并总结平台的混合检索、GraphRAG、rerank、多模态检索能力","dependsOn":[]},{"id":"authz","description":"检索并总结知识库的租户隔离、共享库、文档级 ReBAC 授权机制","dependsOn":[]},{"id":"merge","description":"综合 retrieval 与 authz 的结果，去重并归纳成结构化能力清单","dependsOn":["retrieval","authz"]}]}'
+          - label: "带回调"
+            body: '{"goal":"调研平台的多智能体编排能力","tasks":[{"id":"a","description":"列举 ReAct/DAG/链/投票/反思等编排模式及适用场景","dependsOn":[]},{"id":"b","description":"基于 a 给出各模式的选型对照表","dependsOn":["a"]}],"webhookUrl":"https://webhook.site/your-uuid"}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
@@ -546,6 +662,13 @@ modules:
         params:
           - { name: goal, in: body, type: text, required: true, label: 目标 }
         example: '{"goal":"对比三家云厂商的对象存储定价"}'
+        examples:
+          - label: "云存储选型"
+            body: '{"goal":"对比三家云厂商的对象存储定价，并给出选型建议"}'
+          - label: "编排选型"
+            body: '{"goal":"对比 ReAct、DAG、投票、反思四种编排的适用场景并给出选型建议"}'
+          - label: "带回调"
+            body: '{"goal":"调研并输出平台 RAG 能力一页说明","webhookUrl":"https://webhook.site/your-uuid"}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
@@ -554,7 +677,7 @@ modules:
       - id: agent.chain
         module: agent
         title: 链式编排
-        description: "POST /agent/chain，ChainRunRequest(input)。未配置 app.agent.chaining.steps 时返回 400。"
+        description: "POST /agent/chain，ChainRunRequest(input)。默认链：翻译→总结（服务端预定义 app.agent.chaining.steps，步骤不由请求方决定）。"
         method: POST
         path: /agent/chain
         requestKind: json
@@ -562,6 +685,13 @@ modules:
         params:
           - { name: input, in: body, type: text, required: true, label: 输入, placeholder: "把这段话翻译成英文再总结" }
         example: '{"input":"把这段话翻译成英文再总结"}'
+        examples:
+          - label: "翻译再总结"
+            body: '{"input":"把这段话翻译成英文再总结：本平台把多个 AI 能力统一收进一个网关，按需路由到不同模型。"}'
+          - label: "提取要点"
+            body: '{"input":"从下面客服对话里提取问题类型、紧急度和处理建议：客户说登录页在手机上打不开，很急"}'
+          - label: "改写润色"
+            body: '{"input":"把这句需求改写得更正式、更清晰：这功能要快点上线别拖了"}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
@@ -579,6 +709,13 @@ modules:
           - { name: question, in: body, type: text, required: true, label: 问题, placeholder: "17 是质数吗？" }
           - { name: n, in: body, type: integer, required: false, label: 采样路数, defaultValue: 3, min: 1, max: 9 }
         example: '{"question":"17 是质数吗？","n":3}'
+        examples:
+          - label: "质数判断(3路)"
+            body: '{"question":"17 是质数吗？","n":3}'
+          - label: "数值比较(5路)"
+            body: '{"question":"9.11 和 9.9 哪个大？","n":5}'
+          - label: "情感判定(5路)"
+            body: '{"question":"这句话是正面还是负面：这产品比我想象的好用多了","n":5}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
@@ -595,6 +732,13 @@ modules:
         params:
           - { name: question, in: body, type: text, required: true, label: 问题, placeholder: "写一个判断回文的函数" }
         example: '{"question":"写一个判断回文的函数"}'
+        examples:
+          - label: "写函数"
+            body: '{"question":"写一个判断回文的函数，并给出边界用例"}'
+          - label: "算法题"
+            body: '{"question":"用 O(n) 时间求数组中出现次数超过一半的元素，并解释思路"}'
+          - label: "推理题"
+            body: '{"question":"笼子里有鸡和兔共 35 头 94 足，各几只？给出推导过程"}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
@@ -611,12 +755,21 @@ modules:
         params:
           - { name: question, in: body, type: text, required: true, label: 问题, placeholder: "写一个判断回文的函数" }
         example: '{"question":"写一个判断回文的函数"}'
+        examples:
+          - label: "写函数"
+            body: '{"question":"写一个判断回文的函数，并给出边界用例"}'
+          - label: "算法题"
+            body: '{"question":"用 O(n) 时间求数组中出现次数超过一半的元素，并解释思路"}'
+          - label: "推理题"
+            body: '{"question":"笼子里有鸡和兔共 35 头 94 足，各几只？给出推导过程"}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
         state: ready
         executableByDefault: true
-        sseEvents: [message, done, error]
+        # 反思流式为「阶段事件流」（非逐 token）：后端按轮次发命名事件，从不发 message。
+        # 前端据此判定为 stage 流并走 SseStageConsole；若误列 message 会被当 token 流卡在「等待首个 token」。
+        sseEvents: [attempt-start, answer, critique, done, error]
         tags: [sse]
       - id: agent.analyst.run
         module: agent
@@ -627,8 +780,15 @@ modules:
         requestKind: json
         responseKind: json
         params:
-          - { name: question, in: body, type: text, required: true, label: 问题, placeholder: "各类目文档数量分布如何？" }
-        example: '{"question":"各类目文档数量分布如何？"}'
+          - { name: goal, in: body, type: text, required: true, label: 问题, placeholder: "各类目文档数量分布如何？" }
+        example: '{"goal":"各类目文档数量分布如何？"}'
+        examples:
+          - label: "类目分布"
+            body: '{"goal":"各类目文档数量分布如何？"}'
+          - label: "Top5 退款客户"
+            body: '{"goal":"上月退款金额 top5 的客户是谁，各退多少，占总退款额多少？"}'
+          - label: "订单趋势"
+            body: '{"goal":"最近 7 天每天的订单量和金额趋势如何？"}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
@@ -643,8 +803,15 @@ modules:
         requestKind: json
         responseKind: json
         params:
-          - { name: question, in: body, type: text, required: true, label: 问题 }
-        example: '{"question":"各类目文档数量分布如何？"}'
+          - { name: goal, in: body, type: text, required: true, label: 问题 }
+        example: '{"goal":"各类目文档数量分布如何？"}'
+        examples:
+          - label: "类目分布"
+            body: '{"goal":"各类目文档数量分布如何？"}'
+          - label: "Top5 退款客户"
+            body: '{"goal":"上月退款金额 top5 的客户是谁，各退多少，占总退款额多少？"}'
+          - label: "订单趋势"
+            body: '{"goal":"最近 7 天每天的订单量和金额趋势如何？"}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
@@ -659,8 +826,15 @@ modules:
         requestKind: json
         responseKind: json
         params:
-          - { name: message, in: body, type: text, required: true, label: 输入, placeholder: "发起一笔退款并走审批" }
-        example: '{"message":"发起一笔退款并走审批"}'
+          - { name: goal, in: body, type: text, required: true, label: 输入, placeholder: "发起一笔退款并走审批" }
+        example: '{"goal":"发起一笔退款并走审批"}'
+        examples:
+          - label: "发起退款审批"
+            body: '{"goal":"发起一笔退款并走审批"}'
+          - label: "指定订单退款"
+            body: '{"goal":"给订单 A100 发起 200 元退款，理由是商品损坏，并提交审批"}'
+          - label: "查待办审批"
+            body: '{"goal":"帮我看看有哪些待我审批的退款，并说明各自金额"}'
         requiredScopes: []
         featureFlag: app.agent.workflow.enabled
         featureFlagDefault: true
@@ -676,8 +850,15 @@ modules:
         requestKind: json
         responseKind: json
         params:
-          - { name: message, in: body, type: text, required: true, label: 输入 }
-        example: '{"message":"发起一笔退款并走审批"}'
+          - { name: goal, in: body, type: text, required: true, label: 输入 }
+        example: '{"goal":"发起一笔退款并走审批"}'
+        examples:
+          - label: "发起退款审批"
+            body: '{"goal":"发起一笔退款并走审批"}'
+          - label: "指定订单退款"
+            body: '{"goal":"给订单 A100 发起 200 元退款，理由是商品损坏，并提交审批"}'
+          - label: "查待办审批"
+            body: '{"goal":"帮我看看有哪些待我审批的退款，并说明各自金额"}'
         requiredScopes: []
         featureFlag: app.agent.workflow.enabled
         featureFlagDefault: true
@@ -708,6 +889,13 @@ modules:
           - { name: input, in: body, type: json, required: false, label: 输入(JSON对象), placeholder: '{"foo":"bar"}' }
           - { name: webhookUrl, in: body, type: string, required: false, label: 回调URL(可选) }
         example: '{"kind":"demo","input":{"foo":"bar"}}'
+        examples:
+          - label: "demo 任务"
+            body: '{"kind":"demo","input":{"foo":"bar"}}'
+          - label: "报告生成"
+            body: '{"kind":"report.generate","input":{"reportId":"R-2026-07","format":"pdf"}}'
+          - label: "邮件发送"
+            body: '{"kind":"email.send","input":{"to":"user@example.com","subject":"月报"}}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
@@ -758,6 +946,13 @@ modules:
           - { name: error, in: body, type: string, required: false, label: 错误信息 }
           - { name: workerId, in: body, type: string, required: false, label: WorkerID }
         example: '{"status":"RUNNING"}'
+        examples:
+          - label: "标记运行中"
+            body: '{"status":"RUNNING"}'
+          - label: "标记成功"
+            body: '{"status":"SUCCEEDED"}'
+          - label: "标记失败"
+            body: '{"status":"FAILED"}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: caution
@@ -776,6 +971,13 @@ modules:
           - { name: workerId, in: body, type: string, required: true, label: WorkerID, placeholder: "worker-1" }
           - { name: leaseSeconds, in: body, type: integer, required: false, label: 租约秒数, defaultValue: 30 }
         example: '{"workerId":"worker-1","leaseSeconds":30}'
+        examples:
+          - label: "抢占 30s"
+            body: '{"workerId":"worker-1","leaseSeconds":30}'
+          - label: "抢占 60s"
+            body: '{"workerId":"worker-2","leaseSeconds":60}'
+          - label: "短租约 10s"
+            body: '{"workerId":"worker-3","leaseSeconds":10}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: caution
@@ -811,7 +1013,9 @@ modules:
         riskLevel: safe
         state: ready
         executableByDefault: true
-        sseEvents: [message, done, error]
+        # 任务状态快照流：后端按状态名发命名事件（AsyncTaskStatus），从不发 message。
+        # 不含 message → 前端判为 stage 流，走通用 SseEventTimeline（避免误卡「等待首个 token」）。
+        sseEvents: [PENDING, RUNNING, SUCCEEDED, FAILED, CANCELLED]
         tags: [sse]
       - id: async.deadletter
         module: tasks
@@ -878,6 +1082,13 @@ modules:
         params:
           - { name: question, in: body, type: text, required: true, label: 自然语言问题, placeholder: "统计每个类目的文档数量" }
         example: '{"question":"统计每个类目的文档数量"}'
+        examples:
+          - label: "类目统计"
+            body: '{"question":"统计每个类目的文档数量"}'
+          - label: "客户订单汇总"
+            body: '{"question":"统计每个客户的订单总金额，取前 10"}'
+          - label: "时间趋势"
+            body: '{"question":"最近 30 天每天的订单量"}'
         requiredScopes: []
         featureFlag: app.nl2sql.enabled
         featureFlagDefault: true
@@ -908,6 +1119,13 @@ modules:
           - { name: dedupeId, in: body, type: string, required: false, label: 幂等ID(可选,防重放) }
           - { name: webhookUrl, in: body, type: string, required: false, label: 回调URL(可选) }
         example: '{"message":"订单 A123 申请退款","dedupeId":"req-001"}'
+        examples:
+          - label: "发起退款"
+            body: '{"message":"订单 A123 申请退款","dedupeId":"req-001"}'
+          - label: "带金额理由"
+            body: '{"message":"订单 A200 申请退款 300 元，理由：商品损坏","dedupeId":"req-002"}'
+          - label: "重复去重(同 dedupeId)"
+            body: '{"message":"订单 A123 申请退款","dedupeId":"req-001"}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: caution
@@ -971,6 +1189,13 @@ modules:
           - { name: approved, in: body, type: boolean, required: true, label: 是否通过 }
           - { name: comment, in: body, type: text, required: false, label: 审批意见(可选) }
         example: '{"approved":true,"comment":"金额核对无误"}'
+        examples:
+          - label: "通过"
+            body: '{"approved":true,"comment":"金额核对无误"}'
+          - label: "驳回"
+            body: '{"approved":false,"comment":"金额与订单不符，驳回"}'
+          - label: "通过(补充说明)"
+            body: '{"approved":true,"comment":"已电话确认，同意退款"}'
         requiredScopes: [approve]
         featureFlagDefault: true
         riskLevel: caution
@@ -1026,6 +1251,13 @@ modules:
           - { name: imageBase64, in: body, type: text, required: true, label: 图片 base64 }
           - { name: mimeType, in: body, type: string, required: false, label: MIME 类型, placeholder: "image/png" }
           - { name: instruction, in: body, type: text, required: false, label: 指令, placeholder: "描述这张图" }
+        examples:
+          - label: "通用描述(指令)"
+            body: '{"instruction":"用一句话描述这张图的主要内容","mimeType":"image/png"}'
+          - label: "提取文字(指令)"
+            body: '{"instruction":"识别并提取图片中的所有文字","mimeType":"image/png"}'
+          - label: "列出物体(指令)"
+            body: '{"instruction":"列出图片里出现的物体及其大致位置","mimeType":"image/jpeg"}'
         requiredScopes: []
         featureFlag: app.vision.enabled
         featureFlagDefault: true
@@ -1060,6 +1292,13 @@ modules:
         params:
           - { name: image, in: form-data, type: file, required: true, label: 图片, accept: "image/*" }
           - { name: message, in: query, type: text, required: false, label: 消息, placeholder: "这张图里有什么？" }
+        examples:
+          - label: "问内容"
+            body: '{"message":"这张图里有什么？"}'
+          - label: "读图表"
+            body: '{"message":"这张图表说明了什么趋势？给出关键结论"}'
+          - label: "找异常"
+            body: '{"message":"图里有没有异常或需要注意的地方？"}'
         requiredScopes: []
         featureFlag: app.conversation.vision.enabled
         featureFlagDefault: true
@@ -1145,6 +1384,13 @@ modules:
         params:
           - { name: query, in: body, type: text, required: true, label: 查询, placeholder: "红色的运动鞋" }
         example: '{"query":"红色的运动鞋"}'
+        examples:
+          - label: "找运动鞋"
+            body: '{"query":"红色的运动鞋"}'
+          - label: "找风景图"
+            body: '{"query":"海边日落的风景照"}'
+          - label: "找示意图"
+            body: '{"query":"系统架构示意图"}'
         requiredScopes: []
         featureFlag: app.rag.multimodal-embedding.enabled
         featureFlagDefault: true
@@ -1229,6 +1475,13 @@ modules:
           - { name: tool, in: body, type: string, required: true, label: 工具名, placeholder: "platform.ping" }
           - { name: arguments, in: body, type: json, required: false, label: "参数(JSON 对象)", placeholder: '{}' }
         example: '{"tool":"platform.ping","arguments":{}}'
+        examples:
+          - label: "ping(无参)"
+            body: '{"tool":"platform.ping","arguments":{}}'
+          - label: "跑 Agent"
+            body: '{"tool":"platform.agent.run","arguments":{"goal":"查一下今天的日期并算出距离年底还有多少天"}}'
+          - label: "DAG 规划"
+            body: '{"tool":"platform.agent.dag.plan_run","arguments":{"goal":"对比三家云厂商的对象存储定价"}}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
@@ -1248,6 +1501,11 @@ modules:
           - { name: method, in: body, type: string, required: true, label: method, placeholder: "message/send" }
           - { name: params, in: body, type: json, required: false, label: "params(JSON，待核验)", placeholder: '{}' }
         example: '{"jsonrpc":"2.0","id":"1","method":"message/send","params":{}}'
+        examples:
+          - label: "文本消息"
+            body: '{"jsonrpc":"2.0","id":"1","method":"message/send","params":{"message":{"role":"user","parts":[{"kind":"text","text":"用一句话介绍这个平台"}]}}}'
+          - label: "带 push 回调"
+            body: '{"jsonrpc":"2.0","id":"2","method":"message/send","params":{"message":{"role":"user","parts":[{"kind":"text","text":"跑一个较久的任务并在完成后回调"}]},"configuration":{"pushNotificationConfig":{"url":"https://webhook.site/your-uuid"}}}}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
@@ -1280,6 +1538,13 @@ modules:
           - { name: topK, in: body, type: integer, required: false, label: TopK, defaultValue: 5 }
           - { name: category, in: body, type: string, required: false, label: 类目(可选) }
         example: '{"cases":[{"query":"退款政策","expectedDocIds":[]}],"topK":5}'
+        examples:
+          - label: "单用例"
+            body: '{"cases":[{"query":"退款政策","expectedDocIds":[]}],"topK":5}'
+          - label: "多用例"
+            body: '{"cases":[{"query":"退款政策","expectedDocIds":[]},{"query":"审批流程","expectedDocIds":[]}],"topK":5}'
+          - label: "带期望命中"
+            body: '{"cases":[{"query":"退款政策","expectedDocIds":["doc-1"]}],"topK":10}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
@@ -1297,6 +1562,11 @@ modules:
           - { name: targetBaseUrl, in: body, type: string, required: false, label: 目标 base URL }
           - { name: cases, in: body, type: json, required: true, label: "用例(JSON 数组)" }
         example: '{"cases":[{"input":"你好","assert":"reply"}]}'
+        examples:
+          - label: "基础断言"
+            body: '{"cases":[{"input":"你好","assert":"reply"}]}'
+          - label: "多用例"
+            body: '{"cases":[{"input":"你好","assert":"reply"},{"input":"介绍一下平台","assert":"reply"}]}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
@@ -1393,6 +1663,13 @@ modules:
           - { name: message, in: body, type: text, required: true, label: 消息内容 }
           - { name: metadata, in: body, type: json, required: false, label: "元数据(JSON)", placeholder: '{}' }
         example: '{"channel":"dingtalk","target":"chat-123","message":"你好"}'
+        examples:
+          - label: "钉钉"
+            body: '{"channel":"dingtalk","target":"chat-123","message":"你好"}'
+          - label: "飞书"
+            body: '{"channel":"feishu","target":"oc-abc","message":"审批已通过"}'
+          - label: "带元数据"
+            body: '{"channel":"dingtalk","target":"chat-123","message":"订单已发货","metadata":{"orderNo":"A100"}}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: destructive
