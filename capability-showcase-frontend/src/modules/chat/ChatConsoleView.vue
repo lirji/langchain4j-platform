@@ -167,8 +167,15 @@ function finalizeIfTerminal(phase: RunPhase): void {
     m.elapsedMs = run.elapsedMs.value || undefined
     m.traceId = run.traceId.value
     if (phase === 'error') {
-      m.error = true
-      m.text = run.errorMessage.value ?? m.text ?? '请求失败。'
+      if (sse && run.sse.tokens) {
+        // 流中途出错但已收到部分内容：保留正文（渲染 markdown），错误另起系统条提示，不抹掉已收 token。
+        m.text = run.sse.tokens
+        m.html = renderMarkdown(m.text)
+        pushSystem(`流错误：${run.errorMessage.value ?? '未知错误'}`)
+      } else {
+        m.error = true
+        m.text = run.errorMessage.value ?? m.text ?? '请求失败。'
+      }
     } else if (phase === 'aborted') {
       m.aborted = true
       if (sse) m.text = run.sse.tokens
@@ -188,10 +195,6 @@ function finalizeIfTerminal(phase: RunPhase): void {
       m.html = renderMarkdown(m.text)
     }
   })
-  // 流式正常收尾但中途出现 error 事件：把错误单独提示，不污染已渲染正文。
-  if (sse && phase === 'done' && run.errorMessage.value) {
-    pushSystem(`流错误：${run.errorMessage.value}`)
-  }
   activeAsstId.value = null
   scrollToBottom()
 }
@@ -250,6 +253,11 @@ function clearAll(): void {
   activeAsstId.value = null
   // 清空即开新会话：换 chatId，服务端对话记忆随之隔离（旧会话不再被带入）。
   chatId.value = newChatId()
+  // 画像属于旧 chatId：一并清理，并使在途画像请求失效（晚到不得写入新会话的抽屉）。
+  memSeq += 1
+  memProfile.value = null
+  memError.value = null
+  memBusy.value = false
 }
 function onComposerKey(e: KeyboardEvent): void {
   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -292,6 +300,8 @@ const memProfile = ref<string | null>(null)
 const memError = ref<string | null>(null)
 const memBusy = ref(false)
 const isMemoryMode = computed(() => modeId.value === 'chat.memory')
+// 画像请求序号：连点/清空会话（换 chatId）后，旧请求晚到不得覆盖新状态。
+let memSeq = 0
 
 async function loadProfile(): Promise<void> {
   const cap = memGetCap.value
@@ -301,6 +311,7 @@ async function loadProfile(): Promise<void> {
     memError.value = gate.reason ?? '当前不可执行。'
     return
   }
+  const my = ++memSeq
   memBusy.value = true
   memError.value = null
   try {
@@ -309,12 +320,14 @@ async function loadProfile(): Promise<void> {
       { chatId: chatId.value.trim() || 'default' },
       session.runContext(),
     )
+    if (my !== memSeq) return
     memProfile.value =
       res.data == null ? '（空画像）' : JSON.stringify(res.data, null, 2)
   } catch (e) {
+    if (my !== memSeq) return
     memError.value = humanizeError(e, cap)
   } finally {
-    memBusy.value = false
+    if (my === memSeq) memBusy.value = false
   }
 }
 async function clearProfile(): Promise<void> {
@@ -325,15 +338,18 @@ async function clearProfile(): Promise<void> {
     memError.value = gate.reason ?? '当前不可执行。'
     return
   }
+  const my = ++memSeq
   memBusy.value = true
   memError.value = null
   try {
     await runCapability(cap, { chatId: chatId.value.trim() || 'default' }, session.runContext())
+    if (my !== memSeq) return
     memProfile.value = '（已清除）'
   } catch (e) {
+    if (my !== memSeq) return
     memError.value = humanizeError(e, cap)
   } finally {
-    memBusy.value = false
+    if (my === memSeq) memBusy.value = false
   }
 }
 

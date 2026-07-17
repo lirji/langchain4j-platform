@@ -86,8 +86,16 @@ function prioTone(p?: string): 'danger' | 'warning' | 'neutral' {
   return 'neutral'
 }
 
-/** 复用 executionGate + runCapability 驱动一次动作（不手写 fetch，不绕过安全闸门）。 */
-async function exec(cap: Capability | undefined, values: FormValues, key: string): Promise<unknown> {
+/**
+ * 复用 executionGate + runCapability 驱动一次动作（不手写 fetch，不绕过安全闸门）。
+ * clearMessages=false 供动作后的静默刷新使用：刷新成功不得清掉动作自身的错误/成功提示（issue-01）。
+ */
+async function exec(
+  cap: Capability | undefined,
+  values: FormValues,
+  key: string,
+  opts: { clearMessages?: boolean } = {},
+): Promise<unknown> {
   if (!cap) return undefined
   const gate = executionGate(cap, { ...session.permissionContext(), confirmed: false })
   if (!gate.allowed) {
@@ -95,8 +103,10 @@ async function exec(cap: Capability | undefined, values: FormValues, key: string
     return undefined
   }
   busyKey.value = key
-  actionError.value = null
-  actionNote.value = null
+  if (opts.clearMessages !== false) {
+    actionError.value = null
+    actionNote.value = null
+  }
   try {
     const res = await runCapability(cap, values, session.runContext())
     return res.data
@@ -138,8 +148,9 @@ function parseInbox(data: unknown): InboxTask[] {
     .filter((t) => t.taskId)
 }
 
-async function refreshInbox(): Promise<void> {
-  const data = await exec(tasksListCap.value, {}, 'list')
+/** 拉取待办。clearMessages=false（动作后的静默刷新）不清除也不覆盖动作消息。 */
+async function loadInbox(clearMessages: boolean): Promise<void> {
+  const data = await exec(tasksListCap.value, {}, 'list', { clearMessages })
   if (data !== undefined) {
     inboxTasks.value = parseInbox(data)
     inboxLoaded.value = true
@@ -147,8 +158,13 @@ async function refreshInbox(): Promise<void> {
     if (!inboxTasks.value.some((t) => t.taskId === selectedTaskId.value)) {
       selectedTaskId.value = inboxTasks.value[0]?.taskId ?? null
     }
-    if (!inboxTasks.value.length) actionNote.value = '当前没有待办审批任务。'
+    // 空清单提示只在手动刷新时给出，避免覆盖动作成功/失败消息（issue-01）。
+    if (!inboxTasks.value.length && clearMessages) actionNote.value = '当前没有待办审批任务。'
   }
+}
+
+function refreshInbox(): Promise<void> {
+  return loadInbox(true)
 }
 
 function selectTask(taskId: string): void {
@@ -157,11 +173,11 @@ function selectTask(taskId: string): void {
 
 async function claim(taskId: string): Promise<void> {
   await exec(claimCap.value, { taskId }, `claim:${taskId}`)
-  await refreshInbox()
+  await loadInbox(false)
 }
 async function unclaim(taskId: string): Promise<void> {
   await exec(unclaimCap.value, { taskId }, `unclaim:${taskId}`)
-  await refreshInbox()
+  await loadInbox(false)
 }
 async function complete(taskId: string, approved: boolean): Promise<void> {
   const comment = comments[taskId]?.trim()
@@ -172,7 +188,7 @@ async function complete(taskId: string, approved: boolean): Promise<void> {
     actionNote.value = `任务 ${taskId} 已${approved ? '通过' : '驳回'}。`
     comments[taskId] = ''
   }
-  await refreshInbox()
+  await loadInbox(false)
 }
 
 const canAct = computed(() => session.hasCredential && busyKey.value === null)

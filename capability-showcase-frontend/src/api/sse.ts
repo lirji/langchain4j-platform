@@ -185,6 +185,12 @@ export async function consumeSseStream(
   }
 }
 
+/** streamCapability 可选项。 */
+export interface StreamOptions {
+  /** 初始 Last-Event-ID 检查点（issue-04）：手动重订阅时带上，服务端从断点续发、不从头重放。 */
+  lastEventId?: string
+}
+
 /**
  * 发起一次 SSE 调用：fetch + ReadableStream + TextDecoder（EventSource 无法带 X-Api-Key header）。
  * 返回 { abort } 供上层取消（触发 onDone('abort')）。
@@ -194,10 +200,12 @@ export function streamCapability(
   values: FormValues,
   ctx: RunContext,
   handlers: SseHandlers,
+  opts: StreamOptions = {},
 ): { abort: () => void } {
   const controller = new AbortController()
   // 记录最近事件 id：中途断流后用 Last-Event-ID 续订，让服务端从断点续发、不重复已消费的 token（DR-1）。
-  let lastEventId: string | undefined
+  // 调用方可传初始检查点（opts.lastEventId）：首次请求即带 Last-Event-ID。
+  let lastEventId: string | undefined = opts.lastEventId
   let resubscribed = false
 
   // 用指定令牌 + 可选 Last-Event-ID 重建请求并发起（复用同一 controller，使上层 abort() 始终有效）。
@@ -244,11 +252,11 @@ export function streamCapability(
   handlers.onStart?.()
   void (async () => {
     try {
-      let res = await fetchWith()
+      let res = await fetchWith(undefined, lastEventId)
       // 握手 401 且本次用的是会话 Bearer → 单飞续期 → 用新令牌重建请求，复用同一 controller 重试一次。
       if (res.status === 401 && usedBearer) {
         const newToken = await useAuthStore().refresh()
-        if (newToken) res = await fetchWith(newToken)
+        if (newToken) res = await fetchWith(newToken, lastEventId)
       }
       if (!res.ok) {
         // body 只能读一次：先取文本，再尝试 JSON。非 JSON 错误体保留原文，不丢失。

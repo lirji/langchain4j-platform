@@ -115,7 +115,11 @@ async function loadTables(): Promise<void> {
   tables.value = parseTables(data)
 }
 
+// 乱序保护（仿 RagWorkspaceView 的 detailSeq）：连点两张表时，慢的旧响应后到不得覆盖新选中表的结构。
+let describeSeq = 0
+
 async function selectTable(name: string): Promise<void> {
+  const my = ++describeSeq
   selectedTable.value = name
   describeData.value = null
   describeError.value = null
@@ -125,6 +129,7 @@ async function selectTable(name: string): Promise<void> {
   }
   describeBusy.value = true
   const { data, error } = await callCap(describeCap.value, { table: name })
+  if (my !== describeSeq) return // 已被更新的选择取代 → 丢弃陈旧结果
   describeBusy.value = false
   if (error) {
     describeError.value = error
