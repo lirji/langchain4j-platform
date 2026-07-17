@@ -58,7 +58,7 @@ app:
     # 视觉后端（独立 vision-service）。browser_see 动作双门控在 browser.enabled + vision.enabled 同时 true。
     # 默认关：不配则 browser_see 不出现在工具清单，视觉 RestTemplate/客户端也不装配。
     vision:
-      enabled: ${AGENT_VISION_ENABLED:false}
+      enabled: ${AGENT_VISION_ENABLED:true}
       base-url: ${VISION_BASE_URL:http://localhost:8090}
       read-timeout: ${AGENT_VISION_READ_TIMEOUT:60s}
     knowledge:
@@ -72,13 +72,13 @@ app:
     # 业务流程智能体（workflow-service）。默认关：不配则 refund_start/workflow_status/workflow_tasks 动作、
     # /agent/process 端点、workflow RestTemplate/客户端都不装配。read-timeout 放宽——refund/start 同步跑两次 LLM。
     workflow:
-      enabled: ${AGENT_WORKFLOW_ENABLED:false}
+      enabled: ${AGENT_WORKFLOW_ENABLED:true}
       base-url: ${WORKFLOW_BASE_URL:http://localhost:8082}
       read-timeout: ${AGENT_WORKFLOW_READ_TIMEOUT:60s}
     # 订单查询（order-service）。默认关：不配则 order_query 走 NoopOrderClient（返回 disabled），
     # orderRestTemplate 也不装配。开启后 order_query 经内部 JWT 直连 order-service 按订单号只读查、按租户隔离。
     order:
-      enabled: ${AGENT_ORDER_ENABLED:false}
+      enabled: ${AGENT_ORDER_ENABLED:true}
       base-url: ${ORDER_BASE_URL:http://localhost:8093}
     http:
       connect-timeout: ${AGENT_HTTP_CONNECT_TIMEOUT:1s}
@@ -88,7 +88,7 @@ app:
       cleanup-delay-ms: ${AGENT_TASK_CLEANUP_DELAY_MS:60000}
       cleanup-initial-delay-ms: ${AGENT_TASK_CLEANUP_INITIAL_DELAY_MS:60000}
       external:
-        enabled: ${AGENT_ASYNC_EXTERNAL_ENABLED:false}
+        enabled: ${AGENT_ASYNC_EXTERNAL_ENABLED:true}
         base-url: ${ASYNC_TASK_BASE_URL:http://localhost:8086}
         mirror-webhook: ${AGENT_ASYNC_EXTERNAL_MIRROR_WEBHOOK:false}
         authoritative: ${AGENT_ASYNC_EXTERNAL_AUTHORITATIVE:false}
@@ -103,7 +103,7 @@ app:
     dag:
       max-tasks: ${AGENT_DAG_MAX_TASKS:6}
       replan:
-        enabled: ${AGENT_DAG_REPLAN_ENABLED:false}
+        enabled: ${AGENT_DAG_REPLAN_ENABLED:true}
         max-replans: ${AGENT_DAG_REPLAN_MAX_REPLANS:1}
         threshold: ${AGENT_DAG_REPLAN_THRESHOLD:0.75}
         weights:
@@ -114,14 +114,15 @@ app:
     # steps 默认空 —— 需在此定义预定义链后端点才有内容可跑（否则 400）。
     # 每步：name / instruction（喂给 ChainLink）/ gate-min-length / gate-must-contain / gate-must-match（正则 find）。
     chaining:
-      steps: []
-        # 示例（取消注释即用）：
-        # - name: extract
-        #   instruction: 从输入中抽取关键事实，逐条列出
-        #   gate-min-length: 20
-        # - name: summarize
-        #   instruction: 把上一步的事实压缩成一句中文结论
-        #   gate-must-contain: 结论
+      # 默认演示链：翻译→总结（服务端预定义，任意输入都作为该固定管线入参）。
+      # gate-min-length 演示步间确定性 gate；对真实模型输出稳定通过、不会误短路。
+      steps:
+        - name: translate
+          instruction: 把输入内容翻译成英文，只输出译文，不要额外解释
+          gate-min-length: 10
+        - name: summarize
+          instruction: 用一句中文概括上一步英文内容的要点
+          gate-min-length: 8
     # Voting（同题并行 N 次取共识）。POST /agent/vote。
     # strategy=majority：确定性多数表决，仅适用于离散/分类题（是否合规、情感极性、单选标签等）——
     #   自由文本每次措辞不同、归一化后各自成派，几乎必然不达 min-agreement，应改用 synthesis。

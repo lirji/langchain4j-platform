@@ -24,7 +24,7 @@ platform:
 
 app:
   nl2sql:
-    enabled: ${NL2SQL_ENABLED:false}
+    enabled: ${NL2SQL_ENABLED:true}
     datasource:
       url: ${NL2SQL_DB_URL:jdbc:mysql://localhost:3306/nl2sql_demo?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useInformationSchema=true}
       readonly-url: ${NL2SQL_DB_READONLY_URL:jdbc:mysql://localhost:3306/nl2sql_demo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useInformationSchema=true}

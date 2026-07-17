@@ -30,10 +30,10 @@ platform:
 app:
   vision:
     # 总开关。默认关 → VisionModel / VisionController 全不装配，零依赖、零网络。
-    enabled: ${VISION_ENABLED:false}
+    enabled: ${VISION_ENABLED:true}
     # 视觉逻辑模型名（对应 LiteLLM model_list 里的多模态模型，如 gpt-4o-mini / qwen2.5-vl）。
     # 开启（enabled=true）但此项留空 → 启动 fail-fast 明确报错，绝不静默降级。
-    model-name: ${VISION_MODEL:}
+    model-name: ${VISION_MODEL:vision-default}
     # 看图转写/描述偏确定性，压低温度减少漂移。
     temperature: ${VISION_TEMPERATURE:0.2}
     # 单张图片字节上限，挡超大文件 OOM / 超 token。默认 10MB。

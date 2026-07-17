@@ -25,9 +25,9 @@ app:
     gate-min-agreement: ${EVAL_GATE_MIN_AGREEMENT:0.6}
     gate-runs: ${EVAL_GATE_RUNS:1}
     judge:
-      enabled: ${EVAL_JUDGE_ENABLED:false}
+      enabled: ${EVAL_JUDGE_ENABLED:true}
     embedding:
-      enabled: ${EVAL_EMBEDDING_ENABLED:false}
+      enabled: ${EVAL_EMBEDDING_ENABLED:true}
       model-name: ${EVAL_EMBEDDING_MODEL:embedding-default}
 
 platform:
