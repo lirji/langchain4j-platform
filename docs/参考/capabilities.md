@@ -7,7 +7,7 @@
 ## 访问方式与端口约定
 
 - **唯一对外入口是 `edge-gateway`（:8080）**：校验 `X-Api-Key`**或** `Authorization: Bearer <会话 accessToken>` → 签发短时内部 JWT（`X-Internal-Token`）→ 按路径路由到下游。下文所有"经网关"的业务端点都可以用 `http://localhost:8080` + api-key（或登录后的会话 Bearer）访问。
-- **服务直连端口**（本地调试/服务间调用）：conversation `:8081`、workflow `:8082`、analytics `:8083`、knowledge `:8084`、agent `:8085`、async-task `:8086`、channel `:8087`、interop `:8088`、eval `:8089`、vision `:8090`、voice `:8091`、**auth `:8092`（登录 + RBAC）**。
+- **服务直连端口**（本地调试/服务间调用）：conversation `:8081`、workflow `:8082`、analytics `:8083`、knowledge `:8084`、agent `:8085`、async-task `:8086`、channel `:8087`、interop `:8088`、eval `:8089`、vision `:8090`、voice `:8091`、**auth `:8092`（登录 + RBAC）**、order `:8093`（按订单号只读查订单，agent order_query 下游；compose 宿主机映射 8094）。
 - **前端与检索基础设施**：能力展示前端 `capability-showcase-frontend`（:8093，Vue3 静态 SPA / nginx，前后端分离，浏览器跨域直调网关）；RAG 检索基础设施 Elasticsearch（:9200，BM25 全文混排）+ Kibana（:5601，查询 UI）+ Qdrant（:6333/:6334，向量库）。
 - **不经 edge-gateway 暴露**：`config-server`（:8888，集中配置基础设施，仅服务内部经 `spring.config.import` 拉取）。
 - **默认开关基线**：两套「默认」需分清——**application.yml 裸跑默认**（多为内存/确定性/关闭，单测零外部依赖）与 **docker-compose demo 默认**（为一键体验把 RAG 持久化/ES/登录 RBAC 等打开）。下文标注以 application.yml 默认为准，并在有差异处注明 compose 覆盖。
@@ -60,6 +60,7 @@
 | 回归评测 | HTTP case/suite 执行、双跑门禁、contains/JSON-path/semantic/oracle 断言 | `/eval/**`（eval :8089） | 常开；judge/embedding 比较默认关 |
 | 多模态视觉 | 图片 caption/描述（多模态 ChatModel 经 LiteLLM），供 knowledge/agent 复用 | `/vision/caption`、`/vision/describe`（vision :8090） | `VISION_ENABLED=false`（默认整服务不装配） |
 | 语音闭环 | 音频 → ASR(whisper) → `/chat` → TTS，支持整轮 / SSE 半流式 / 纯转写 | `/voice/chat`、`/voice/chat/stream`、`/voice/transcribe`（voice :8091） | `VOICE_ENABLED=false`（默认整服务不装配） |
+| 订单查询（工具调用示例） | 按订单号确定性只读查订单（状态/金额/客户/日期），持久化 MySQL、参数化按租户隔离；供深度 Agent 的 `order_query` 动作在对话里自主调用 | `/orders/{orderNo}`（order :8093）；agent 侧 `order_query` 动作 | order-service 常开；agent 侧 `AGENT_ORDER_ENABLED=false`（默认走 Noop 降级） |
 | 审计与计量 | 审计日志、LLM audit listener、token budget、cost attribution | `platform-audit`、`platform-metering` | audit/budget 常开、cost 默认关 |
 | 可观测性 | trace id 生成与跨服务透传 | `platform-observability` | 常开 |
 | 能力展示前端 | 前后端分离的独立静态 SPA（Vue3/nginx），凭证感知导航、direct mode 跨域直调、能力五态诚实呈现、RBAC 控制台 + RAG 租户/共享双视图 | `capability-showcase-frontend`（:8093） | 独立部署；RBAC 控制台/共享库 UI 以 `VITE_*` kill switch 收口 |
@@ -70,7 +71,7 @@
 
 ### 语言与运行时 / 构建
 - **Java 21**（`maven.compiler.release=21`），全模块统一。
-- **Maven** 多模块：父 `pom.xml`（`packaging=pom`）聚合 7 个共享库 + 12 个服务（含 `auth-service`）+ edge-gateway/config-server，统一版本管理。**无 Maven wrapper**，用系统 `mvn`。前端 `capability-showcase-frontend` 是独立的 Vite/Vue3 项目，不在 Maven reactor 内。
+- **Maven** 多模块：父 `pom.xml`（`packaging=pom`）聚合 7 个共享库 + 13 个服务（含 `auth-service`、`order-service`）+ edge-gateway/config-server，统一版本管理。**无 Maven wrapper**，用系统 `mvn`。前端 `capability-showcase-frontend` 是独立的 Vite/Vue3 项目，不在 Maven reactor 内。
 - **Spring Boot 3.3.5**（`spring-boot-starter-parent`）、**Spring Cloud 2023.0.3**。
 - 打包可执行 fat jar（`spring-boot-maven-plugin`）；Docker 镜像基于 `eclipse-temurin:21-jre`。
 - **刻意未用**：JPA/Hibernate/MyBatis、Flyway/Liquibase、Lombok、任何 linter/格式化/静态分析（风格靠约定）。

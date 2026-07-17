@@ -3,7 +3,7 @@
 本手册面向本地起栈、部署与排障，覆盖前置依赖、启动命令、按能力分组的环境变量，以及常见问题。
 所有配置项均以各服务 `src/main/resources/application.yml` 和 `deploy/docker-compose.yml` 源码为准；表格里的“默认值”就是 yml 里 `${ENV:default}` 的 default，未显式给出 `${ENV}` 包装的项会标注为「属性」（只能经 config-server 或 JVM 参数设置）。
 
-平台由 **7 个共享库**（`platform-security` / `platform-observability` / `platform-gateway-client` / `platform-protocol` / `platform-audit` / `platform-metering` / `platform-eventbus`，无主类，靠自动装配自注册）加 **一批微服务**（`edge-gateway` / `config-server` / `auth` / `conversation` / `workflow` / `analytics` / `knowledge` / `agent` / `async-task` / `channel` / `interop` / `eval` / `vision` / `voice`）组成。另有前后端分离的 **`capability-showcase-frontend`**（:8093，Vue3 静态 SPA / nginx，独立部署，不属于 Maven 构建）。
+平台由 **7 个共享库**（`platform-security` / `platform-observability` / `platform-gateway-client` / `platform-protocol` / `platform-audit` / `platform-metering` / `platform-eventbus`，无主类，靠自动装配自注册）加 **一批微服务**（`edge-gateway` / `config-server` / `auth` / `conversation` / `workflow` / `analytics` / `knowledge` / `agent` / `async-task` / `channel` / `interop` / `eval` / `vision` / `voice` / `order`）组成。另有前后端分离的 **`capability-showcase-frontend`**（:8093，Vue3 静态 SPA / nginx，独立部署，不属于 Maven 构建）。
 
 两层网关：
 
@@ -91,6 +91,7 @@ mvn -pl platform-security -Dtest=InternalTokenTest test   # 单类（务必带 -
 | vision-service | 8090 | `/vision`、`/vision/**` | 多模态图像描述（caption/describe） |
 | voice-service | 8091 | `/voice`、`/voice/**` | ASR + 对话 + TTS 语音闭环 |
 | auth-service | 8092 | `/auth`、`/auth/**` | 账号登录 / 注册 / 刷新 / RBAC 管理 |
+| order-service | 8093（宿主 8094） | `/orders`、`/orders/**` | 按订单号只读查订单（agent order_query 下游）；持久化 MySQL、按租户隔离。宿主机 8093 被展示前端占用，compose 映射 8094 |
 | config-server | 8888 | 不经网关 | 集中配置分发（可选） |
 | capability-showcase-frontend | 8093 | 不经网关（浏览器跨域直调） | 能力展示前端（Vue3 静态 SPA / nginx） |
 | LiteLLM | 4000 | 不经网关 | LLM 网关 |

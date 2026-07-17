@@ -32,13 +32,14 @@ Docker 单实例 `mysql:8.4`，`MYSQL_ROOT_PASSWORD=root`、初始库 `platform`
 | knowledge-service | `knowledge_graph` | root | Docker `root` / 本地默认**空** | `RAG_GRAPH_STORE=jdbc`（compose 默认 jdbc） | GraphRAG 图谱存储 |
 | async-task-service | `async_task` | root | Docker `root` / 本地默认**空** | `ASYNC_TASK_STORE=jdbc`（compose 默认 jdbc） | 通用异步任务中心 |
 | auth-service | `auth` | root | root | `AUTH_STORE=jdbc`（compose 默认 jdbc） | 登录账号 / 角色 / role-scope / 刷新会话（`USERS`/`USER_ROLE`/`ROLES`/`ROLE_SCOPE`/`AUTH_SESSION`，仅存刷新令牌哈希） |
+| order-service | `order_service` | root | root | 恒开（服务本身即 DB 支撑） | 订单只读查询（`orders`/`customers`，`CREATE TABLE IF NOT EXISTS` + 首启种子，按 `tenant_id` 隔离）；`ORDER_SEED_DEMO=false` 关演示种子 |
 | channel-service | （去重表，指向 MySQL） | — | — | `CHANNEL_DEDUP_STORE=jdbc` | 事件去重（跨重启幂等）；默认 `memory` |
 
 连接串形如 `jdbc:mysql://localhost:3306/<库名>?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true`（Docker 内主机名为 `mysql`）。
 
 > ⚠️ **本地 vs Docker 密码不一致**：`knowledge_graph` / `async_task` 在各自 `application.yml` 的默认密码是**空串**，而 `docker-compose.yml` 显式注入 `root`。按运行方式区别对待。
 
-相关环境变量：`WORKFLOW_DB_URL/USER/PASSWORD`、`NL2SQL_DB_URL/READONLY_URL/ADMIN_USER/ADMIN_PASSWORD/READONLY_USER/READONLY_PASSWORD`、`RAG_GRAPH_DB_URL/USER/PASSWORD`、`ASYNC_TASK_DB_URL/USER/PASSWORD`、`AUTH_DB_URL/USER/PASSWORD`。
+相关环境变量：`WORKFLOW_DB_URL/USER/PASSWORD`、`NL2SQL_DB_URL/READONLY_URL/ADMIN_USER/ADMIN_PASSWORD/READONLY_USER/READONLY_PASSWORD`、`RAG_GRAPH_DB_URL/USER/PASSWORD`、`ASYNC_TASK_DB_URL/USER/PASSWORD`、`AUTH_DB_URL/USER/PASSWORD`、`ORDER_DB_URL/USER/PASSWORD`（+ `ORDER_SEED_DEMO`）。
 
 > auth-service 的**刷新会话只存 SHA-256 哈希**在 `AUTH_SESSION`（非明文令牌，非 Redis）；会话 accessToken 本身无状态（JWT，不落库）。RBAC 用户/角色/scope 是权威表 + CSV 影子列双写。
 

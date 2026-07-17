@@ -62,6 +62,7 @@
 - `rag_search`：调 knowledge-service 检索知识库，返回带 `[doc=ID]` 的片段（常开）。
 - `analytics_sql`：调 analytics-service 做 NL2SQL 只读查询，返回 SQL + 行数 + 数据 + 解读（常开）。
 - `current_time`：查当前时间，`actionInput` 填 IANA 时区（常开）。
+- `order_query`：按订单号查订单（状态/金额/客户/日期），调独立 order-service（默认关，见 [§7.10](#710-order_query--按订单号查订单默认关)）。
 - `code_exec` / `mcp_call` / `browser_*` / `browser_see`：见 [§7 动作与开关](#7-动作与开关default-多为关)。
 - `delegate`：把独立子目标派给子 Agent（受 `allow-delegation` + `max-depth` 约束）。
 
@@ -358,6 +359,8 @@ curl -s -X POST 'http://localhost:8080/chat/cascade' \
 
 ReAct 动作是「一个接口 `AgentAction` + `@ConditionalOnProperty` 可插拔实现」的注册表。默认装配的 `rag_search` / `analytics_sql` / `current_time` 在 `AGENT_ENABLED=true` 时即挂载；其余动作默认关闭，避免未配置依赖时影响 agent-service 启动。
 
+> **想让 Agent 主动调你自己的接口（如查订单）？** 写一个 `AgentAction` 注册进去即可，不改循环一行代码——手把手示例、`description()` 即工具说明书、副作用双门控、租户/trace 自动透传、以及 langchain4j 原生 `@Tool` 的对比，见 [让 Agent 主动调接口（工具调用 / 自定义动作接入）](让Agent主动调接口.md)。
+
 ### 7.1 rag_search（常开）
 
 调 knowledge-service 检索。相关配置：`app.agent.knowledge.base-url`（`KNOWLEDGE_BASE_URL`，默认 `http://localhost:8084`）、`top-k`（`AGENT_RAG_TOP_K`=5）、`min-score`（`AGENT_RAG_MIN_SCORE`=0.0）、`category`（`AGENT_RAG_CATEGORY`，默认空）。
@@ -450,6 +453,22 @@ mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install
 | `enabled` | `AGENT_WORKFLOW_ENABLED` | `false` |
 | `base-url` | `WORKFLOW_BASE_URL` | `http://localhost:8082` |
 | `read-timeout`（refund/start 同步跑两次 LLM，放宽） | `AGENT_WORKFLOW_READ_TIMEOUT` | `60s` |
+
+---
+
+### 7.10 order_query —— 按订单号查订单（默认关）
+
+按订单号做**确定性、参数化、只读**的单条订单查询：`actionInput`=订单号（如 `101`），经带租户/trace 透传的 `orderRestTemplate` 调独立 **order-service（`:8093`）** 的 `GET /orders/{orderNo}`，返回状态/金额/客户/下单日期。与 `analytics_sql` 的分工：本动作是精确单查（快、天然防注入），统计/聚合（总额/趋势/top-N）走 `analytics_sql`。
+
+- 动作本身只门控 `app.agent.enabled`（只读无副作用，默认挂载）；真正是否可用取决于注入的 `OrderClient`：`app.agent.order.enabled=true` 且 order-service 可达时用 `HttpOrderClient`，否则 `NoopOrderClient` 兜底降级为「order lookup disabled」（Http/Noop 用 `@ConditionalOnExpression` 互补，回归测 `OrderClientWiringTest`）。
+- **下游 order-service**：裸 `JdbcTemplate` 直连持久化 MySQL（独立 schema `order_service`，`CREATE TABLE IF NOT EXISTS` + 首启种子），`WHERE id=? AND tenant_id=?` 参数化按租户隔离（别的租户查同一订单号得 404），只读接口无 scope 门禁（401 由 edge 兜）。详见 [让 Agent 主动调接口](让Agent主动调接口.md)。
+
+| 属性（`app.agent.order.*`） | 环境变量 | 默认 |
+|---|---|---|
+| `enabled` | `AGENT_ORDER_ENABLED` | `false` |
+| `base-url` | `ORDER_BASE_URL` | `http://localhost:8093` |
+
+order-service 侧开关：`ORDER_DB_URL`/`ORDER_DB_USER`/`ORDER_DB_PASSWORD`（持久化 MySQL）、`ORDER_SEED_DEMO`（默认 `true`，接真库置 `false`）。
 
 ---
 

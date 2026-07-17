@@ -694,3 +694,26 @@ curl -s -X POST 'http://localhost:8080/voice/chat?chatId=u1' \
 - 经网关：是。默认关闭。
 
 > 主要开关（默认全关）：`VOICE_ENABLED=false`、`VOICE_PROVIDER=openai`、`VOICE_BASE_URL=https://api.openai.com/v1`、`VOICE_API_KEY`、`VOICE_ASR_MODEL=whisper-1`、`VOICE_TTS_MODEL=tts-1`、`VOICE_TTS_VOICE=alloy`、`VOICE_TTS_FORMAT=mp3`（决定回复音频 content-type）、`VOICE_LANGUAGE`（留空自动检测）、`VOICE_CONVERSATION_BASE_URL=http://localhost:8081`、`VOICE_STREAM_MIN_CHARS=8`、`VOICE_MAX_AUDIO_BYTES=26214400`(25MB)、`VOICE_MAX_UPLOAD=25MB`、`VOICE_TIMEOUT_SECONDS=30`。
+
+---
+
+## Order（order-service）
+
+按订单号做**确定性、参数化、只读**的单条订单查询，供深度 Agent 的 `order_query` 动作在对话里自主调用（工具调用示例）。裸 `JdbcTemplate` 直连持久化 MySQL（独立库 `order_service`），`WHERE id=? AND tenant_id=?` 按租户隔离；只读接口无 scope 门禁（401 由 edge 兜），任意合法凭证的租户可查。与 `analytics_sql`（NL2SQL 统计/聚合）的分工见 [让 Agent 主动调接口](../Agent编排/让Agent主动调接口.md)。
+
+### GET `/orders/{orderNo}`
+
+- 用途：按订单号查当前租户的订单详情。
+- 请求：路径参数 `orderNo`（如 `101`），无 body。
+- 响应：命中 → `200` + `OrderView`（`{ orderNo, customer, amount, status, createdAt }`，`amount` 为字符串如 `"1200.00"`，`status` 为中文枚举 `已支付/已发货/已取消/已退款`）；未命中或**属于别的租户** → `404`（租户隔离，不泄露存在性）。
+- 经网关：是（`/orders,/orders/**`）。order-service 恒开；agent 侧调用需 `AGENT_ORDER_ENABLED=true`（默认关，走 Noop 降级）。
+
+```bash
+# 直连 order-service（api-key 兜底 → 租户 tenantA；演示种子含 101-109）
+curl -H 'X-Api-Key: dev-key-tenantA-admin' http://localhost:8093/orders/101
+# → {"orderNo":"101","customer":"张三","amount":"1200.00","status":"已支付","createdAt":"2026-05-03"}
+curl -o /dev/null -w '%{http_code}\n' -H 'X-Api-Key: dev-key-tenantA-admin' \
+     http://localhost:8093/orders/2001   # → 404（tenantB 的单，租户隔离）
+```
+
+> 主要开关：order-service 侧 `ORDER_DB_URL`/`ORDER_DB_USER`/`ORDER_DB_PASSWORD`（持久化 MySQL）、`ORDER_SEED_DEMO=true`（默认，接真库置 false）；agent 侧 `AGENT_ORDER_ENABLED=false`、`ORDER_BASE_URL=http://localhost:8093`。compose 宿主机端口映射 `8094:8093`（8093 被展示前端占用）。

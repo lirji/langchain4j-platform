@@ -9,7 +9,8 @@
 3. [运行与配置手册](参考/operations.md)：本地启动、环境变量、验证命令和排障入口。
 4. [接口与集成速查](参考/api-reference.md)：按服务查看主要 HTTP API、鉴权方式和典型请求。
 5. [开发者指南](参考/developer-guide.md)：新增服务、跨服务 DTO、测试和提交建议。
-6. [演进路线](迁移/migration-roadmap.md) / [迁移收尾方案与排期](迁移/migration-remaining-plan.md)：历史、已落地项与剩余待办。
+6. [设计模式梳理](参考/设计模式.md)：项目落地的 GoF / 微服务 / 框架 / AI 编排模式，逐条对照真实代码，含"未使用"诚实清单与模式×模块矩阵。
+7. [演进路线](迁移/migration-roadmap.md) / [迁移收尾方案与排期](迁移/migration-remaining-plan.md)：历史、已落地项与剩余待办。
 
 ## 专题接入指南
 
@@ -31,6 +32,7 @@
 **Agent 与编排**
 - [Agent 能力与编排指南](Agent编排/agent-guide.md)：深度 Agent(ReAct)、DAG、reflexion/voting/chaining、cascade 模型级联、各 ReAct 动作与开关。
 - [工作流指南](Agent编排/workflow-guide.md)：两条「workflow」线——Flowable 退款审批业务引擎（`/workflow/**` + 三种终态通知）与 LLM 编排 5 模式（chain/routing/DAG/voting/reflexion，映射到 `/agent/**`）。
+- [让 Agent 主动调接口（工具调用 / 自定义动作接入）](Agent编排/让Agent主动调接口.md)：怎么让模型在对话里自己决定调你的接口（如查订单）。两套机制——ReAct 动作 `AgentAction`（`/agent/run`，描述驱动的可插拔注册表）vs langchain4j 原生 `@Tool`（专用助手）；含 `order_query` 手把手示例、`description()` 即工具说明书、副作用双门控、租户/trace 自动透传、`@Tool` 别做成 Spring bean 的坑。
 - [Code Interpreter 动作指南](Agent编排/code-exec.md)：agent `code_exec` 动作（默认关）；默认 subprocess 子进程隔离 + 可选 JShell、denylist/超时/输出截断与威胁模型。
 
 **多模态与语音**
@@ -46,8 +48,10 @@
 - [登录、RBAC 与公共知识库指南](平台工程/rbac-and-public-kb.md)：auth-service 账号密码登录 → 会话令牌 + 刷新 cookie、边缘 `SessionBearerAuthFilter` 换发内部 JWT、角色→scope 展开、`role-admin`/`public-ingest` 平台 scope、`/auth/admin/**` 管理面（If-Match 乐观锁）、`__public__` 公共/共享知识库；另含**外接 auth-platform 的文档级 ReBAC / 部门层级隔离与 Casdoor 多租户 SSO 登录**（均默认关，见文中授权章节）。
 - [公网化 OIDC 改造方案](平台工程/公网化-OIDC-改造方案.md)：外部 IdP（Casdoor）SSO 落地方案——**已落地（Casdoor SSO）**：edge `CasdoorTokenExchangeFilter` 验 Casdoor JWT 换发内部 JWT（`edge.casdoor.enabled` 默认关、`dual`/`only` 双模）+ 前端方案 C 多租户登录（Shared Application + 选组织）+ 接 SpiceDB 文档级 ReBAC；与 auth-service 自建会话登录并存，均默认关、引入即安全。
 - [事件总线与终态可靠投递(EOS)指南](平台工程/eventbus-guide.md)：事务性 outbox + relay + 消费侧去重 = effective exactly-once（workflow/async-task 两侧）。
+- [长任务处理指南](平台工程/长任务处理指南.md)：async-task-service 租约式任务中心（提交/lease/回报、SSE 断点续传、webhook outbox、Kafka 生命周期事件）、各服务接入现状、通用长任务模式对照与当前限制。
 - [可观测性指南](平台工程/observability-guide.md)：跨服务 traceId 透传、OTel GenAI span（Spring Boot 原生 tracing 开关）、Prometheus 指标、`/actuator/{tokenbudget,cost}`。
-- [成本归因与配额指南](平台工程/cost-attribution.md)：per-tenant USD 成本归因 + token 预算，redis 默认的分布式计数（水平扩容正确性）、`/actuator/{tokenbudget,cost}`。
+- [LiteLLM 网关能力指南](平台工程/litellm-gateway-guide.md)：spend 记账 + 管理 UI（自带 Postgres）、租户归因三档（`platform.gateway.tenant-attribution`=none/user/virtual-key，默认 none）、per-tenant virtual key 预算/TPM/RPM 硬保底、Redis 响应缓存、正式 fallback（chat-default→ollama）、LiteLLM↔Java 同 trace 的 OTel；含签发/轮换/备份/回滚 runbook 与 8 步冒烟。
+- [成本归因与配额指南](平台工程/cost-attribution.md)：per-tenant USD 成本归因 + token 预算，redis 默认的分布式计数（水平扩容正确性）、`/actuator/{tokenbudget,cost}`；与 LiteLLM spend 双轨分工见 LiteLLM 网关能力指南。
 - [评测指南](平台工程/eval-guide.md)：eval-service `/eval/**` 回归客户端、检索召回评测（Recall@k/MRR/Hit@k）、baseline suite、对冻结单体双跑 oracle 门禁。
 - [部署指南](平台工程/deployment-guide.md)：本地 docker-compose、k8s/Helm 伞状 chart、External Secrets、Service DNS、Config Server。
 - [能力展示与试用控制台](平台工程/能力展示控制台.md)：前后端分离的独立前端 `capability-showcase-frontend/`（Vue3 静态 SPA，可独立部署）；direct mode 带 X-Api-Key 跨域直调业务能力、能力五态诚实呈现、catalog 静态数据驱动；后端仅 edge-gateway 加 CORS。
