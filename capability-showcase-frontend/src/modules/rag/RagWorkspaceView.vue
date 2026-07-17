@@ -18,7 +18,7 @@ import { humanizeError } from '../../api/errors'
 import { executionGate } from '../../utils/gate'
 import { highlightSegments } from '../../utils/highlight'
 import { SHARED_KB_UI_ENABLED } from '../../config'
-import { deleteDocument, fetchRagConfig, getDocument, listDocuments } from '../../api/knowledge'
+import { deleteDocument, fetchRagConfig, getDocument, listDocumentsPaged } from '../../api/knowledge'
 import type { DocumentInfo, KnowledgeRuntimeView, Visibility } from '../../types/knowledge'
 import type { Capability } from '../../types/catalog'
 import type { FormValues } from '../../utils/validation'
@@ -130,8 +130,14 @@ async function probeRagConfig(): Promise<void> {
   }
 }
 
-// ── 文档库（改用强类型 DocumentInfo，按 tab 可见性请求）──
+// ── 文档库（改用强类型 DocumentInfo，按 tab 可见性 + 分页请求）──
 const docs = ref<DocumentInfo[]>([])
+/** 分页：租户库 / 共享库各自一套页码；切 tab 归 1。page 1-based，total/totalPages 由服务端权威回写。 */
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const
+const pageSize = ref<number>(PAGE_SIZE_OPTIONS[0])
+const page = ref(1)
+const total = ref(0)
+const totalPages = ref(1)
 const docsLoaded = ref(false)
 const docsBusy = ref(false)
 const docsError = ref<string | null>(null)
@@ -165,11 +171,14 @@ async function loadDocs(): Promise<void> {
   docsError.value = null
   docsNote.value = null
   try {
-    const result = await listDocuments(reqVis, session.runContext())
+    const result = await listDocumentsPaged(reqVis, page.value, pageSize.value, session.runContext())
     if (my !== docsSeq) return // 已被更新的请求取代 → 丢弃陈旧结果，绝不覆盖新 tab
-    docs.value = result
+    docs.value = result.items
+    page.value = result.page // 服务端 clamp 后回写（如删到末页越界会被拉回最后一页）
+    total.value = result.total
+    totalPages.value = result.totalPages
     docsLoaded.value = true
-    if (!result.length) {
+    if (!result.total) {
       docsNote.value =
         reqVis === 'public' ? '共享知识库暂无文档。' : '当前租户下暂无文档。上传后可在此管理与检索。'
     }
@@ -182,11 +191,32 @@ async function loadDocs(): Promise<void> {
   }
 }
 
-/** 切换可见性 tab：清空当前列表/详情并按新 tab 重新拉取。 */
+/** 翻页：clamp 到 [1, totalPages] 后按新页重拉；忙时忽略、同页不重复请求。 */
+async function goToPage(target: number): Promise<void> {
+  const next = Math.min(Math.max(target, 1), totalPages.value)
+  if (next === page.value || docsBusy.value) return
+  page.value = next
+  pendingDelete.value = null
+  await loadDocs()
+}
+
+/** 改每页条数：归第 1 页后重拉（总页数随之变化，回第 1 页最直观）。 */
+async function changePageSize(size: number): Promise<void> {
+  if (size === pageSize.value) return
+  pageSize.value = size
+  page.value = 1
+  pendingDelete.value = null
+  await loadDocs()
+}
+
+/** 切换可见性 tab：清空当前列表/详情、页码归 1，并按新 tab 重新拉取。 */
 async function switchTab(v: Visibility): Promise<void> {
   if (v === visibility.value) return
   visibility.value = v
   docs.value = []
+  page.value = 1
+  total.value = 0
+  totalPages.value = 1
   docsLoaded.value = false
   detailDocId.value = null
   detailData.value = null
@@ -238,8 +268,11 @@ async function confirmDelete(docId: string): Promise<void> {
 }
 
 function onUploaded(): void {
-  // 入库成功后刷新文档库（若已填凭证）。
-  if (session.hasCredential) void loadDocs()
+  // 入库成功后刷新文档库（若已填凭证）；回到第 1 页——新文档按上传时间降序排在最前，便于立即看到。
+  if (session.hasCredential) {
+    page.value = 1
+    void loadDocs()
+  }
 }
 
 // 启动时探测 rag 配置；凭证到位后再探一次（登录/填 Key 后共享分区才能出现）。
@@ -483,6 +516,42 @@ const ingestScopeHint = computed(() => {
             title="尚未加载文档"
             description="点击右上「刷新文档」拉取当前租户文档。"
           />
+
+          <!-- 分页控件（仅当前 tab 有文档时出现；页码 / 总数服务端权威） -->
+          <nav v-if="docsLoaded && total > 0" class="rag__pager" aria-label="文档分页">
+            <button
+              type="button"
+              class="btn btn--ghost btn--sm"
+              :disabled="page <= 1 || docsBusy"
+              @click="goToPage(page - 1)"
+            >
+              上一页
+            </button>
+            <span class="rag__pager-info" aria-live="polite">
+              第 {{ page }} / {{ totalPages }} 页 · 共 {{ total }} 条
+            </span>
+            <button
+              type="button"
+              class="btn btn--ghost btn--sm"
+              :disabled="page >= totalPages || docsBusy"
+              @click="goToPage(page + 1)"
+            >
+              下一页
+            </button>
+            <label class="rag__pager-size">
+              每页
+              <select
+                class="form-control"
+                :value="pageSize"
+                :disabled="docsBusy"
+                aria-label="每页条数"
+                @change="changePageSize(Number(($event.target as HTMLSelectElement).value))"
+              >
+                <option v-for="n in PAGE_SIZE_OPTIONS" :key="n" :value="n">{{ n }}</option>
+              </select>
+              条
+            </label>
+          </nav>
 
           <!-- 文档详情 -->
           <div v-if="detailDocId" class="rag__detail" aria-live="polite">
@@ -757,6 +826,33 @@ const ingestScopeHint = computed(() => {
   margin-top: 4px;
   font-size: var(--fs-xs);
   color: var(--text-subtle);
+}
+
+/* 分页控件 */
+.rag__pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+.rag__pager-info {
+  font-size: var(--fs-xs);
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+.rag__pager-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-xs);
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+.rag__pager-size .form-control {
+  width: auto;
+  padding: 2px 6px;
+  font-size: var(--fs-xs);
 }
 
 /* 入库可见性选择 */

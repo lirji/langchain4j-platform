@@ -37,6 +37,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -295,16 +296,44 @@ public class DocumentService {
         return list(false);
     }
 
+    /** 页大小默认与上限（分页信封用）：调用方传 &lt;=0 取默认，超上限截断为上限。 */
+    static final int DEFAULT_PAGE_SIZE = 10;
+    static final int MAX_PAGE_SIZE = 100;
+
     /**
      * @param shared true 时列共享库保留分区（tenantId={@link PublicKb#TENANT_ID}）的文档元数据，
      *               而非调用方租户；共享元数据读取不需特殊 scope（由 controller 关口决定）。
+     *               返回结果已按 {@code uploadedAt} 降序、{@code docId} 升序稳定排序（分页翻页需确定序）。
      */
     public List<DocumentInfo> list(boolean shared) {
-        List<DocumentInfo> all = registry.list(partition(shared));
+        return sorted(readable(shared, registry.list(partition(shared))));
+    }
+
+    /**
+     * 分页版列表：在租户隔离 + 文档级授权过滤 <strong>之后</strong>做内存切片，因此 {@code total} 是
+     * "调用方可见"的总条数，翻页语义与 {@link #list(boolean)} 完全一致。page 1-based，越界自动 clamp。
+     *
+     * @param shared 同 {@link #list(boolean)}
+     * @param page   请求页码（1-based）；&lt;1 视为 1，超出总页数 clamp 到最后一页
+     * @param size   请求页大小；&lt;=0 取 {@link #DEFAULT_PAGE_SIZE}，超 {@link #MAX_PAGE_SIZE} 截断
+     */
+    public PagedDocuments listPaged(boolean shared, int page, int size) {
+        List<DocumentInfo> all = list(shared); // 已过滤 + 已排序
+        int safeSize = size <= 0 ? DEFAULT_PAGE_SIZE : Math.min(size, MAX_PAGE_SIZE);
+        long total = all.size();
+        int totalPages = total == 0 ? 1 : (int) ((total + safeSize - 1) / safeSize);
+        int safePage = Math.min(Math.max(page, 1), totalPages);
+        int from = (safePage - 1) * safeSize;
+        int to = (int) Math.min((long) from + safeSize, total);
+        List<DocumentInfo> items = from >= total ? List.of() : List.copyOf(all.subList(from, to));
+        return new PagedDocuments(items, safePage, safeSize, total, totalPages);
+    }
+
+    /** 列表读判权：shadow 记 would_filter 并返回全集；enforce 过滤为可 view 子集（默认 Noop 恒放行）。 */
+    private List<DocumentInfo> readable(boolean shared, List<DocumentInfo> all) {
         if (shared || !knowledgeAuthz.enabled() || all.isEmpty()) {
             return all;
         }
-        // 列表读判权：shadow 记 would_filter 并返回全集；enforce 过滤为可 view 子集（默认 Noop 恒放行）。
         String tenantId = partition(shared);
         Set<String> docIds = all.stream().map(DocumentInfo::docId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
@@ -313,6 +342,19 @@ public class DocumentService {
             return all;
         }
         return all.stream().filter(d -> readable.contains(d.docId())).toList();
+    }
+
+    /**
+     * 稳定排序：最近上传优先（{@code uploadedAt} 降序），同刻以 {@code docId} 升序兜底。
+     * registry 底层（内存 map / Redis HVALS）迭代序不确定，分页翻页必须有确定序，否则同一文档可能在多页重复/漏出。
+     */
+    private static List<DocumentInfo> sorted(List<DocumentInfo> docs) {
+        return docs.stream()
+                .sorted(Comparator
+                        .comparing(DocumentInfo::uploadedAt,
+                                Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(DocumentInfo::docId))
+                .toList();
     }
 
     public Optional<DocumentInfo> get(String docId) {
