@@ -160,6 +160,91 @@ curl -s -X POST 'http://localhost:8080/agent/dag/plan-run' \
   -d '{"goal":"分析退款审批规则，并给出运营建议"}'
 ```
 
+### 请求示例大全（含字段校验与前端表单用法）
+
+> 这些示例既可用 curl 直调网关，也可直接粘进**能力展示控制台**的「多 Agent DAG」表单（`goal` 填目标，`tasks` 字段粘 JSON 数组，`webhookUrl` 可选）。
+
+**字段契约（`AgentDagTask`）与校验坑**——请求前对照，避免 400：
+
+| 节点字段 | 必填 | 说明 |
+|---|---|---|
+| `id` | ✅ | 任务唯一 id；**重复 → 400** `duplicate task id` |
+| `description` | ✅ | 任务描述。**注意是 `description`，不是 `goal`**；写成 `goal` 会报 400 `task description is required` |
+| `dependsOn` | 可选 | 前置任务 id 列表；据此拓扑分层、**同层并行**；成环 → 400 `task graph contains a cycle`；依赖不存在的 id → 静默忽略 |
+
+顶层还要求：`goal` 非空（否则 400 `goal is required`）、`tasks` 非空（否则 400 `tasks are required`）、任务数 ≤ `AGENT_DAG_MAX_TASKS`（默认 6，超出 400 `too many tasks`）。
+
+**示例 A · 最省事：自动规划**（`/agent/dag/plan-run`，只给目标，Planner 自动拆 DAG）
+
+```json
+{ "goal": "对比三家主流云厂商的对象存储定价，并给出选型建议" }
+```
+
+**示例 B · 手写线性 DAG**（`/agent/dag/run`，`t1→t2→t3` 顺序依赖）
+
+```json
+{
+  "goal": "调研并输出平台 RAG 能力一页说明",
+  "tasks": [
+    {"id":"t1","description":"检索并汇总平台 RAG 的混合检索/GraphRAG/多模态能力点","dependsOn":[]},
+    {"id":"t2","description":"基于 t1 的能力点整理成结构化清单","dependsOn":["t1"]},
+    {"id":"t3","description":"把 t2 的清单改写成面向非技术读者的一段说明","dependsOn":["t2"]}
+  ]
+}
+```
+分层：`[[t1],[t2],[t3]]`。
+
+**示例 C · 扇出并行 + 汇总**（最能体现「多 Agent」：`retrieval`、`authz` 无依赖 → 同层并行，`merge` 汇总，`writeup` 成稿）
+
+```json
+{
+  "goal": "调研平台的检索与授权能力并产出能力清单",
+  "tasks": [
+    {"id":"retrieval","description":"检索并总结平台的混合检索、GraphRAG、rerank、多模态检索能力","dependsOn":[]},
+    {"id":"authz","description":"检索并总结知识库的租户隔离、共享库、文档级 ReBAC 授权机制","dependsOn":[]},
+    {"id":"merge","description":"综合 retrieval 与 authz 的结果，去重并归纳成结构化能力清单","dependsOn":["retrieval","authz"]},
+    {"id":"writeup","description":"把 merge 的清单改写成一段面向业务方的能力说明","dependsOn":["merge"]}
+  ]
+}
+```
+分层：`[["retrieval","authz"],["merge"],["writeup"]]`——第 0 层两任务并行。
+
+**示例 D · 带完成回调**（在示例 B/C 的请求体里加 `webhookUrl`；异步完成后回推结果）
+
+```json
+{
+  "goal": "调研平台的多智能体编排能力",
+  "tasks": [
+    {"id":"a","description":"列举 ReAct/DAG/链/投票/反思等编排模式及适用场景","dependsOn":[]},
+    {"id":"b","description":"基于 a 给出各模式的选型对照表","dependsOn":["a"]}
+  ],
+  "webhookUrl": "https://webhook.site/your-uuid"
+}
+```
+
+**示例 E · 异步执行 + 观测**（`/agent/dag/run/async`，请求体同 B/C，返回 `202` + `taskId`）
+
+```bash
+# 1) 提交（返回 202 + AgentAsyncTask，含 taskId）
+TASK=$(curl -s -X POST 'http://localhost:8080/agent/dag/run/async' \
+  -H 'X-Api-Key: dev-key-acme' -H 'Content-Type: application/json' \
+  -d '{"goal":"调研平台的检索与授权能力并产出能力清单","tasks":[
+        {"id":"retrieval","description":"总结混合检索/GraphRAG/多模态能力","dependsOn":[]},
+        {"id":"authz","description":"总结租户隔离/共享库/文档级授权","dependsOn":[]},
+        {"id":"merge","description":"综合两者去重成结构化能力清单","dependsOn":["retrieval","authz"]}
+      ]}' | sed -n 's/.*"taskId":"\([^"]*\)".*/\1/p')
+
+# 2) 轮询详情
+curl -s "http://localhost:8080/agent/tasks/$TASK" -H 'X-Api-Key: dev-key-acme'
+
+# 3) 或订阅 SSE 看分层执行进度（dag-planned / dag-levels / dag-worker-result …）
+curl -sN "http://localhost:8080/agent/tasks/$TASK/stream" -H 'X-Api-Key: dev-key-acme'
+```
+
+> 前端展示台上：提交异步后会给出 taskId 深链，直接跳「Agent 任务流 (SSE)」即可看上面这些 `dag-*` 阶段事件实时刷新。
+
+**响应结构**（同步 `/agent/dag/run` 的 `AgentDagRunReply`）：`goal`、`levels`（拓扑分层的 id 列表）、`taskResults[]`（每个子任务的 ReAct 产物）、`synthesis`（综合答案）、`attempts[]` 与 `acceptedByThreshold`（开启 replan 时记录每次尝试与是否达判官阈值，见上「Critic / Replan」）。
+
 ### 数据分析智能体（analyst）—— `/agent/analyst/run`
 
 数据分析智能体是 DAG 的一个「数据分析人设」入口：它不改 DAG 引擎，只是换用一个**数据分析专用 Planner**（`DataAnalystPlanner`），把自然语言数据问题拆成「探表 → 取数 → 计算 → 解读」子任务，再交给同一套 `AgentDagService`（拓扑分层 / 并行 worker / synthesis / 可选 critic+replan）执行。每个 DAG worker 都是一个能调 `schema_explore`（按需探表）、`analytics_sql`（只读取数）、`code_exec`（精确二次计算，默认关）的 ReAct agent。
