@@ -68,6 +68,16 @@ public class GatewayChatModelFactory {
         return build(props.getModelName(), 0.0);
     }
 
+    /**
+     * JSON mode 变体（response_format=json_object）：供每步必须产出合法 JSON 的结构化 AiService
+     * （如 ReAct 决策核心）使用 —— 模型侧强制输出合法 JSON，字段值里的裸英文引号不再打断
+     * Jackson 解析。要求端点/上游模型支持 OpenAI json_object（DeepSeek 支持，LiteLLM 透传）。
+     */
+    public ChatModel buildJsonMode() {
+        return new TenantAwareChatModel(buildBase(props.getModelName(), props.getTemperature(), true),
+                props.getTenantAttribution(), identities);
+    }
+
     /** 指定逻辑模型名 + 温度（模型名对应 LiteLLM model_list 里的 model_name）。 */
     public ChatModel build(String modelName, Double temperature) {
         return new TenantAwareChatModel(buildBase(modelName, temperature),
@@ -90,6 +100,10 @@ public class GatewayChatModelFactory {
     }
 
     private OpenAiChatModel buildBase(String modelName, Double temperature) {
+        return buildBase(modelName, temperature, false);
+    }
+
+    private OpenAiChatModel buildBase(String modelName, Double temperature, boolean jsonMode) {
         OpenAiChatModel.OpenAiChatModelBuilder builder = OpenAiChatModel.builder()
                 .baseUrl(props.getBaseUrl())
                 .apiKey(props.getApiKey())
@@ -100,6 +114,9 @@ public class GatewayChatModelFactory {
                 .listeners(listeners)
                 .logRequests(props.isLogRequests())
                 .logResponses(props.isLogResponses());
+        if (jsonMode) {
+            builder.responseFormat("json_object");
+        }
         if (requestHeadersSupplier != null) {
             builder.customHeaders(requestHeadersSupplier);
         }
