@@ -11,6 +11,7 @@
  * 深链（capId 存在）沿用通用 CapabilityRunner。执行统一经 executionGate + runCapability。
  */
 import { computed, onMounted, ref, watch } from 'vue'
+import { useAbortable } from '../../composables/useAbortable'
 import { useCatalogStore } from '../../stores/catalog'
 import { useSessionStore } from '../../stores/session'
 import { runCapability } from '../../api/client'
@@ -64,6 +65,11 @@ const sharedUploadRunners = computed<Capability[]>(() =>
 const graphRunners = computed<Capability[]>(() =>
   [graphQueryCap.value, graphEntitiesCap.value].filter((c): c is Capability => !!c),
 )
+/** GraphRAG 是否未启用（issue-13）：以目录 state 为事实源，不硬编码「未启用」文案。 */
+const graphOff = computed(() => graphRunners.value.some((c) => c.state === 'flag-off'))
+const graphFlag = computed(
+  () => graphRunners.value.find((c) => c.featureFlag)?.featureFlag ?? 'app.rag.graph.enabled',
+)
 
 function asStr(v: unknown): string | undefined {
   if (v == null) return undefined
@@ -85,16 +91,17 @@ function firstArray(data: unknown, keys: string[]): unknown[] | null {
   return null
 }
 
-// ── 通用一次性调用（复用 executionGate + runCapability）──
+// ── 通用一次性调用（复用 executionGate + runCapability；可选 AbortSignal 供卸载中止）──
 async function callCap(
   cap: Capability | undefined,
   values: FormValues,
+  signal?: AbortSignal,
 ): Promise<{ data?: unknown; error?: string }> {
   if (!cap) return { error: '能力不在目录中。' }
   const gate = executionGate(cap, { ...session.permissionContext(), confirmed: false })
   if (!gate.allowed) return { error: gate.reason ?? '当前不可执行。' }
   try {
-    const res = await runCapability(cap, values, session.runContext())
+    const res = await runCapability(cap, values, session.runContext(signal))
     return { data: res.data }
   } catch (e) {
     return { error: humanizeError(e, cap) }
@@ -297,6 +304,8 @@ interface Hit {
   raw: unknown
 }
 const query = ref('')
+/** 提交时的查询快照（issue-12）：命中高亮只跟随本批结果对应的查询，请求期间改输入不影响已回结果。 */
+const submittedQuery = ref('')
 const topK = ref<number | null>(5)
 const minScore = ref<number | null>(null)
 const category = ref('')
@@ -304,13 +313,34 @@ const searchBusy = ref(false)
 const searchError = ref<string | null>(null)
 const searchResult = ref<unknown>(null)
 const searched = ref(false)
+// 检索请求的 AbortController：新检索中止旧请求，组件卸载自动中止（issue-15）。
+const searchAbort = useAbortable()
+
+/** TopK/最低分边界校验（issue-08）：越界禁发并显示字段错误，不依赖 HTML min/max。 */
+const topKError = computed(() => {
+  if (topK.value == null) return null
+  return Number.isInteger(topK.value) && topK.value >= 1 && topK.value <= 50
+    ? null
+    : 'TopK 不能小于 1 或大于 50。'
+})
+const minScoreError = computed(() => {
+  if (minScore.value == null) return null
+  return Number.isFinite(minScore.value) && minScore.value >= 0 && minScore.value <= 1
+    ? null
+    : '最低分需在 0..1 之间。'
+})
 
 const queryGate = computed(() => {
   if (!queryCap.value) return { allowed: false, reason: '未找到检索能力。' }
   return executionGate(queryCap.value, { ...session.permissionContext() })
 })
 const canSearch = computed(
-  () => queryGate.value.allowed && !searchBusy.value && query.value.trim().length > 0,
+  () =>
+    queryGate.value.allowed &&
+    !searchBusy.value &&
+    query.value.trim().length > 0 &&
+    !topKError.value &&
+    !minScoreError.value,
 )
 
 function parseHits(data: unknown): Hit[] | null {
@@ -341,19 +371,24 @@ function fmtScore(s?: number): string {
   return s == null ? '—' : s.toFixed(3)
 }
 function segmentsFor(text: string): { text: string; hit: boolean }[] {
-  return highlightSegments(text, query.value)
+  // 用提交快照高亮（issue-12）：结果与其对应查询绑定，请求期间编辑输入不改变已回结果的高亮。
+  return highlightSegments(text, submittedQuery.value)
 }
 
 async function runSearch(): Promise<void> {
   if (!canSearch.value) return
+  const trimmed = query.value.trim()
+  submittedQuery.value = trimmed
   searchBusy.value = true
   searchError.value = null
   searchResult.value = null
-  const values: FormValues = { query: query.value.trim() }
+  const values: FormValues = { query: trimmed }
   if (topK.value != null) values.topK = topK.value
   if (minScore.value != null) values.minScore = minScore.value
   if (category.value.trim()) values.category = category.value.trim()
-  const { data, error } = await callCap(queryCap.value, values)
+  // fresh()：新检索中止上一次仍在途的检索；组件卸载时 useAbortable 自动中止（issue-15）。
+  const controller = searchAbort.fresh()
+  const { data, error } = await callCap(queryCap.value, values, controller.signal)
   searchBusy.value = false
   searched.value = true
   if (error) {
@@ -631,6 +666,9 @@ const ingestScopeHint = computed(() => {
                 <input v-model="category" class="form-control" type="text" placeholder="可选" />
               </label>
             </div>
+            <p v-if="topKError" class="rag__field-err" role="alert">{{ topKError }}</p>
+            <p v-if="minScoreError" class="rag__field-err" role="alert">{{ minScoreError }}</p>
+
             <div class="rag__search-actions">
               <button type="button" class="btn btn--primary" :disabled="!canSearch" @click="runSearch">
                 {{ searchBusy ? '检索中…' : '检索' }}
@@ -720,17 +758,17 @@ const ingestScopeHint = computed(() => {
       </div>
     </WorkbenchSection>
 
-    <!-- GraphRAG（flag-off，诚实锁定） -->
+    <!-- GraphRAG：文案按目录 state 动态呈现（ready 可执行；flag-off 诚实锁定） -->
     <WorkbenchSection
       v-if="graphRunners.length"
       title="GraphRAG（图谱增强）"
-      subtitle="基于实体关系图的检索增强。需开启 feature flag 后方可执行。"
+      :subtitle="graphOff ? '基于实体关系图的检索增强。需开启 feature flag 后方可执行。' : '基于实体关系图的检索增强。'"
       collapsible
       :default-open="false"
     >
       <template #notice>
-        <InfoNote tone="neutral">
-          <strong>未启用：</strong>需开启 <code>app.rag.graph.enabled=true</code>。未启用时仅可预览 / 复制 curl，执行将被闸门拦截。
+        <InfoNote v-if="graphOff" tone="neutral">
+          <strong>未启用：</strong>需开启 <code>{{ graphFlag }}=true</code>。未启用时仅可预览 / 复制 curl，执行将被闸门拦截。
         </InfoNote>
       </template>
       <div class="rag__runners">
@@ -969,6 +1007,11 @@ const ingestScopeHint = computed(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+.rag__field-err {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--danger);
 }
 .rag__field {
   display: flex;

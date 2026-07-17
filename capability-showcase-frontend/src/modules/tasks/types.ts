@@ -13,4 +13,6 @@ export interface TrackedTask {
   subscribes?: number
   /** 最近一个 SSE 事件的 id —— 即 Last-Event-ID 断点续订检查点。 */
   lastEventId?: string
+  /** 事件缓存达到上限后被丢弃的事件数（有界缓存，防长流内存膨胀）。 */
+  dropped?: number
 }

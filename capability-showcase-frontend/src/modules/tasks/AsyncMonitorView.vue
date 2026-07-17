@@ -47,6 +47,12 @@ const gridCaps = computed(() =>
 
 const tasks = ref<TrackedTask[]>([])
 const streamHandles = new Map<string, { abort: () => void }>()
+// 每任务订阅代号（issue-05）：重订阅后旧订阅的回调凭代号失效，不得改写新订阅状态。
+const streamGens = new Map<string, number>()
+// 每任务刷新序号（issue-16）：连点刷新时旧响应晚到不得覆盖新状态。
+const refreshSeqs = new Map<string, number>()
+/** 单任务事件缓存上限（issue-06）：与 useCapabilityRun 的 MAX_EVENTS 对齐，超出计入 dropped。 */
+const MAX_TASK_EVENTS = 2000
 
 function nowStr(): string {
   return new Date().toLocaleTimeString()
@@ -93,10 +99,14 @@ function findCap(id: string): Capability | undefined {
 async function refreshTask(id: string): Promise<void> {
   const getCap = findCap('async.get')
   if (!getCap || !session.hasCredential) return
+  const my = (refreshSeqs.get(id) ?? 0) + 1
+  refreshSeqs.set(id, my)
   try {
     const res = await runCapability(getCap, { taskId: id }, session.runContext())
+    if (refreshSeqs.get(id) !== my) return // 已被更新的刷新取代 → 丢弃旧结果
     ingest(res.data)
   } catch (e) {
+    if (refreshSeqs.get(id) !== my) return
     upsert(id, { error: humanizeError(e, getCap) })
   }
 }
@@ -117,25 +127,46 @@ function streamTask(id: string): void {
   const streamCap = findCap('async.stream')
   if (!streamCap || !session.hasCredential) return
   streamHandles.get(id)?.abort()
+  const gen = (streamGens.get(id) ?? 0) + 1
+  streamGens.set(id, gen)
+  const current = () => streamGens.get(id) === gen // 旧订阅回调失效（issue-05）
   const t = upsert(id, { streaming: true, error: null })
   // 记录订阅次数：第 2 次起视为重连（重新订阅）。lastEventId 即 Last-Event-ID 续订检查点。
   t.subscribes = (t.subscribes ?? 0) + 1
-  const handle = streamCapability(streamCap, { taskId: id }, session.runContext(), {
-    onEvent: (ev) => {
-      t.events.push(ev)
-      if (ev.id) t.lastEventId = ev.id
-      const parsed = tryParseJson(ev.data)
-      if (parsed && typeof parsed === 'object' && 'status' in parsed) {
-        const s = (parsed as Record<string, unknown>).status
-        if (typeof s === 'string') upsert(id, { status: s })
-      }
+  const handle = streamCapability(
+    streamCap,
+    { taskId: id },
+    session.runContext(),
+    {
+      onEvent: (ev) => {
+        if (!current()) return
+        // 有界缓存（issue-06）：超出上限只计 dropped，不再无限增长。
+        if (t.events.length >= MAX_TASK_EVENTS) t.dropped = (t.dropped ?? 0) + 1
+        else t.events.push(ev)
+        if (ev.id) t.lastEventId = ev.id
+        const parsed = tryParseJson(ev.data)
+        if (parsed && typeof parsed === 'object' && 'status' in parsed) {
+          const s = (parsed as Record<string, unknown>).status
+          if (typeof s === 'string') upsert(id, { status: s })
+        }
+      },
+      onNamed: (name, data) => {
+        if (!current()) return
+        if (name === 'error') upsert(id, { error: data || '流式错误' })
+      },
+      onError: (e) => {
+        if (!current()) return
+        upsert(id, { error: humanizeError(e, streamCap) })
+      },
+      onDone: () => {
+        if (!current()) return
+        upsert(id, { streaming: false })
+        streamHandles.delete(id) // 终态释放 handle
+      },
     },
-    onNamed: (name, data) => {
-      if (name === 'error') upsert(id, { error: data || '流式错误' })
-    },
-    onError: (e) => upsert(id, { error: humanizeError(e, streamCap) }),
-    onDone: () => upsert(id, { streaming: false }),
-  })
+    // 手动重订阅带上检查点（issue-04）：服务端从断点续发，事件不重复。
+    { lastEventId: t.lastEventId },
+  )
   streamHandles.set(id, handle)
 }
 

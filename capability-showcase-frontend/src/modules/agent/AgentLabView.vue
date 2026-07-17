@@ -128,11 +128,37 @@ const webhookUrl = ref('')
 const tasksText = ref('')
 const voteN = ref<number | null>(3)
 
+/** 任务 DAG 字段错误：填了但不是合法 JSON 数组（issue-07）。 */
+const tasksError = computed(() => {
+  if (!showTasks.value || !tasksText.value.trim()) return null
+  try {
+    return Array.isArray(JSON.parse(tasksText.value)) ? null : '任务 DAG 不是合法的 JSON 数组。'
+  } catch {
+    return '任务 DAG 不是合法的 JSON 数组。'
+  }
+})
+/** 投票采样路数字段错误：越界/非整数（issue-08）。 */
+const voteNError = computed(() => {
+  if (!showVoteN.value || voteN.value == null) return null
+  return Number.isInteger(voteN.value) && voteN.value >= 1 && voteN.value <= 9
+    ? null
+    : '采样路数 n 需为 1..9 的整数。'
+})
+
 const canSend = computed(() => {
-  if (!activeGate.value.allowed || run.running.value) return false
-  const primaryFilled = goalText.value.trim().length > 0
-  const tasksFilled = showTasks.value && tasksText.value.trim().length > 0
-  return primaryFilled || tasksFilled
+  const cap = activeCap.value
+  if (!cap || !activeGate.value.allowed || run.running.value) return false
+  if (tasksError.value || voteNError.value) return false
+  // 按目录 required 声明逐项校验（issue-07：DAG 的 goal 与 tasks 都是 required，缺一不可）。
+  for (const p of cap.params) {
+    if (!p.required) continue
+    if (p.name === primaryParam.value?.name && !goalText.value.trim()) return false
+    if (p.name === 'tasks' && !tasksText.value.trim()) return false
+    if (p.name === 'n' && voteN.value == null) return false
+    if (p.name === 'webhookUrl' && !webhookUrl.value.trim()) return false
+  }
+  // 保持既有底线：至少填了主输入或任务 DAG，不允许全空提交。
+  return goalText.value.trim().length > 0 || (showTasks.value && tasksText.value.trim().length > 0)
 })
 
 function buildValues(cap: Capability): FormValues {
@@ -214,6 +240,13 @@ const showRunnerFallback = computed(
   () => !run.isSse.value && !showAsyncPanel.value && !showSteps.value,
 )
 const showRawUnder = ref(false)
+
+// 切换执行模式即重置结果区（issue-09）：旧结果不得按新模式重新解释
+// （如把旧同步响应的 id 当作新异步模式的 taskId 展示「已提交」）。模式按钮在 running 时已禁用，reset 不会打断执行中的请求。
+watch(modeId, () => {
+  run.reset()
+  showRawUnder.value = false
+})
 
 const streamCap = computed(() => catalog.capabilityById('agent.tasks.stream'))
 
@@ -327,6 +360,9 @@ const moreCaps = computed<Capability[]>(() =>
             />
           </label>
         </div>
+
+        <p v-if="tasksError" class="ag__gate" role="alert">{{ tasksError }}</p>
+        <p v-if="voteNError" class="ag__gate" role="alert">{{ voteNError }}</p>
 
         <p v-if="!activeGate.allowed && activeGate.reason" class="ag__gate" role="status">
           {{ activeGate.reason }}

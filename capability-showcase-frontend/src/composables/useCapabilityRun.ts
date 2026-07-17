@@ -40,6 +40,9 @@ export function useCapabilityRun(capSource: MaybeRefOrGetter<Capability>) {
   let controller: AbortController | null = null
   let streamHandle: { abort: () => void } | null = null
   let startedAt = 0
+  // 执行代号：每次 run/reset 递增；旧一轮的异步回调（onDone/onError/晚到响应）凭代号失效，
+  // 不得回写新一轮（或已 reset 的空闲）状态。
+  let generation = 0
 
   const cap = computed(() => toValue(capSource))
   const isSse = computed(() => isStreamingKind(cap.value.requestKind))
@@ -62,6 +65,7 @@ export function useCapabilityRun(capSource: MaybeRefOrGetter<Capability>) {
   }
 
   function reset(): void {
+    generation += 1
     abort()
     resetOutputs()
     phase.value = 'idle'
@@ -77,27 +81,35 @@ export function useCapabilityRun(capSource: MaybeRefOrGetter<Capability>) {
       effectiveScopes: pc.effectiveScopes,
     })
     if (!gate.allowed) {
+      generation += 1
+      abort()
       resetOutputs()
       errorMessage.value = gate.reason ?? '当前不可执行。'
       phase.value = 'error'
       return
     }
+    // 新一轮开始：先失效并中止上一轮（防御性——UI 已禁用 run-while-running，但组合式函数自身要安全）。
+    generation += 1
+    const gen = generation
+    abort()
     resetOutputs()
     startedAt = Date.now()
-    if (isSse.value) runStream(values)
-    else await runOnce(values)
+    if (isSse.value) runStream(values, gen)
+    else await runOnce(values, gen)
   }
 
-  async function runOnce(values: FormValues): Promise<void> {
+  async function runOnce(values: FormValues, gen: number): Promise<void> {
     phase.value = 'running'
     controller = new AbortController()
     try {
       const res = await runCapability(cap.value, values, session.runContext(controller.signal))
+      if (gen !== generation) return
       result.value = res
       httpStatus.value = res.status
       traceId.value = res.traceId ?? null
       phase.value = 'success'
     } catch (e) {
+      if (gen !== generation) return
       if (isAbortError(e)) {
         phase.value = 'aborted'
         errorMessage.value = '已取消本次请求。'
@@ -110,27 +122,31 @@ export function useCapabilityRun(capSource: MaybeRefOrGetter<Capability>) {
         phase.value = 'error'
       }
     } finally {
-      elapsedMs.value = Date.now() - startedAt
+      if (gen === generation) elapsedMs.value = Date.now() - startedAt
     }
   }
 
-  function runStream(values: FormValues): void {
+  function runStream(values: FormValues, gen: number): void {
     phase.value = 'streaming'
     sse.status = 'streaming'
     // 流内业务 error 事件：流可能正常收尾（onDone('complete')），但语义是失败，需据此改终态。
     let streamHadError = false
     streamHandle = streamCapability(cap.value, values, session.runContext(), {
       onOpen: (res) => {
+        if (gen !== generation) return
         httpStatus.value = res.status
         traceId.value = res.headers.get('X-Trace-Id')
       },
       onToken: (token) => {
+        if (gen !== generation) return
         sse.tokens += token
       },
       onEvent: (ev) => {
+        if (gen !== generation) return
         if (sse.events.length < MAX_EVENTS) sse.events.push(ev)
       },
       onNamed: (name, data) => {
+        if (gen !== generation) return
         if (name === 'error') {
           streamHadError = true
           errorMessage.value = data || '流式过程中发生错误。'
@@ -141,10 +157,12 @@ export function useCapabilityRun(capSource: MaybeRefOrGetter<Capability>) {
         }
       },
       onError: (e) => {
+        if (gen !== generation) return
         if (e instanceof ApiError) httpStatus.value = e.status
         errorMessage.value = humanizeError(e, cap.value)
       },
       onDone: (reason) => {
+        if (gen !== generation) return
         elapsedMs.value = Date.now() - startedAt
         if (reason === 'abort') {
           sse.status = 'aborted'

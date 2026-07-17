@@ -44,22 +44,25 @@ describe('AgentLabView', () => {
     expect(text).toContain('更多能力：任务管理')
   })
 
-  it('模式选择器覆盖核心执行模式（含 flag-off 诚实标注）', () => {
+  it('模式选择器覆盖核心执行模式，flag 标注以模式按钮 is-off 为准（当前目录全 ready）', () => {
+    // issue-14 修正：不再用整页文本查「未启用」（会误命中 ModuleHeader 状态图例的固定文案），
+    // 改为作用域断言：目录当前 agent 能力全 ready → 不存在带 is-off 的模式按钮。
     const wrapper = mount(AgentLabView, { props: { moduleId: 'agent' }, ...mountOpts })
     expect(modeByLabel(wrapper, '同步 ReAct')).toBeTruthy()
     expect(modeByLabel(wrapper, 'DAG')).toBeTruthy()
     expect(modeByLabel(wrapper, '反思流式')).toBeTruthy()
     expect(modeByLabel(wrapper, '数据分析')).toBeTruthy()
-    // flag-off 业务流程模式诚实标注「未启用」
-    expect(wrapper.text()).toContain('未启用')
+    expect(wrapper.find('.ag__mode.is-off').exists()).toBe(false)
   })
 
-  it('切到 flag-off 模式（业务流程）：composer 经闸门诚实锁定并暴露 feature flag', async () => {
+  it('业务流程模式当前 ready：可选中且端点提示切到 /agent/process/run（不被闸门锁定）', async () => {
     const wrapper = mount(AgentLabView, { props: { moduleId: 'agent' }, ...mountOpts })
     const process = modeByLabel(wrapper, '业务流程')
     expect(process).toBeTruthy()
+    expect(process!.classes()).not.toContain('is-off')
     await process!.trigger('click')
-    expect(wrapper.text()).toContain('app.agent.workflow.enabled')
+    expect(process!.classes()).toContain('active')
+    expect(wrapper.get('.ag__endpoint').text()).toContain('/agent/process/run')
   })
 
   it('更多能力网格深链任务管理能力', () => {

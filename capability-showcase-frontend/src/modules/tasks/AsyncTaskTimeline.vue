@@ -161,7 +161,7 @@ function isTerminal(status: string): boolean {
 
         <p v-if="t.error" class="tl__error">{{ t.error }}</p>
         <p v-if="t.events.length" class="tl__events">
-          {{ t.events.length }} 事件 · 最近：{{ t.events[t.events.length - 1].event }}
+          {{ t.events.length }} 事件 · 最近：{{ t.events[t.events.length - 1].event }}<template v-if="t.dropped"> · 已丢弃 {{ t.dropped }}</template>
         </p>
         </li>
       </ul>

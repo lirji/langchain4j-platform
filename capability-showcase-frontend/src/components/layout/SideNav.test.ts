@@ -129,37 +129,40 @@ describe('SideNav · 分组折叠持久化', () => {
   })
 })
 
-describe('SideNav · 模块行 = 展开/收起开关（不跳转）', () => {
+describe('SideNav · 模块行 = 双动作（展开/收起 + 跳转模块工作台）', () => {
+  // 现行设计（NavModuleRow.onModuleClick）：点模块行既 toggle 能力列表，又 router.push(/m/:id)
+  // 跳到模块工作台落地页。本组测试曾断言早期「只展开不跳转」行为，已按现行设计更新。
   function ragRow(wrapper: ReturnType<typeof mount>) {
     return wrapper.findAll('.mod').find((li) => li.text().includes('知识库'))!
   }
   const ragCapTitle = () => loadCatalog().modules.find((m) => m.id === 'rag')!.capabilities[0].title
 
-  it('点击模块行即展开能力，且不跳转（总览仍高亮、无模块 current）', async () => {
+  it('点击模块行：展开能力并跳转 /m/:id（模块 current，总览退出高亮，不双亮）', async () => {
     const wrapper = await mountNav('/')
     expect(wrapper.text()).not.toContain(ragCapTitle())
     await ragRow(wrapper).find('.mod__link').trigger('click')
     await flushPromises()
     // 展开
     expect(wrapper.text()).toContain(ragCapTitle())
-    // 未跳转：路由未变 → 总览仍高亮、无模块 current
-    expect(wrapper.find('.nav__overview.active').exists()).toBe(true)
-    expect(wrapper.find('.mod--current').exists()).toBe(false)
+    // 已跳转到模块工作台：该模块 current、总览不再高亮（唯一主 active 原则）
+    expect(ragRow(wrapper).classes()).toContain('mod--current')
+    expect(wrapper.find('.nav__overview.active').exists()).toBe(false)
   })
 
-  it('再次点击同一模块行即收起（整行 = 展开/收起来回切）', async () => {
+  it('再次点击同一模块行即收起（toggle 保留，路由停留在模块工作台）', async () => {
     const wrapper = await mountNav('/')
-    // 第一次点击：展开
+    // 第一次点击：展开 + 跳转
     await ragRow(wrapper).find('.mod__link').trigger('click')
     await flushPromises()
     expect(wrapper.text()).toContain(ragCapTitle())
-    // 第二次点击：收起
+    // 第二次点击：收起（导航为同路由 no-op）
     await ragRow(wrapper).find('.mod__link').trigger('click')
     await flushPromises()
     expect(wrapper.text()).not.toContain(ragCapTitle())
+    expect(ragRow(wrapper).classes()).toContain('mod--current')
   })
 
-  it('模块行是 button（不是链接），确保点击不导航', async () => {
+  it('模块行是 button（跳转经 router.push，无裸 href 供中键/新标签绕过）', async () => {
     const wrapper = await mountNav('/')
     const link = ragRow(wrapper).find('.mod__link')
     expect(link.element.tagName).toBe('BUTTON')
