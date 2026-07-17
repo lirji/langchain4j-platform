@@ -240,7 +240,10 @@ JSON 示例：
 
 ### GET `/rag/documents`
 
-- 用途：列出当前租户文档。响应 `DocumentInfo[]`。
+- 用途：列出当前租户文档（`visibility=public|shared` 列共享库）。
+- 无分页参数：响应 `DocumentInfo[]`（完整数组，向后兼容）。
+- 带 `page`（1-based）时：响应分页信封 `PagedDocuments`（`{ items, page, size, total, totalPages }`）。`size` 缺省 `10`、上限 `100`；越界页码自动 clamp。分页在租户隔离 + 文档级授权过滤之后进行，`total` 即调用方可见文档总数。列表按 `uploadedAt` 降序、`docId` 升序稳定排序。
+- 示例：`curl -s 'http://localhost:8080/rag/documents?page=1&size=10' -H "X-Api-Key: <key>"`；共享库分页 `?visibility=public&page=1&size=10`。
 - 经网关：是。默认开启。
 
 ### GET `/rag/documents/{docId}`
