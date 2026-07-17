@@ -8,6 +8,9 @@ import { loadCatalog } from '../../test/fixtures'
 import CapabilityCard from '../../components/capability/CapabilityCard.vue'
 import CapabilityRunner from '../../components/capability/CapabilityRunner.vue'
 import AgentLabView from './AgentLabView.vue'
+import SseConsole from '../../components/capability/SseConsole.vue'
+import SseStageConsole from '../../components/capability/SseStageConsole.vue'
+import SseEventTimeline from '../../components/capability/SseEventTimeline.vue'
 
 const RouterLink = { name: 'RouterLink', props: ['to'], template: '<a><slot /></a>' }
 const mountOpts = { global: { stubs: { RouterLink } } }
@@ -83,5 +86,23 @@ describe('AgentLabView', () => {
       ...mountOpts,
     })
     expect(wrapper.text()).toContain('能力不存在')
+  })
+
+  it('反思流式（含 answer+critique）挂 SseStageConsole，而非拼接视图或通用时间线', async () => {
+    const wrapper = mount(AgentLabView, { props: { moduleId: 'agent' }, ...mountOpts })
+    await modeByLabel(wrapper, '反思流式')!.trigger('click')
+    expect(wrapper.findComponent(SseStageConsole).exists()).toBe(true)
+    expect(wrapper.findComponent(SseConsole).exists()).toBe(false)
+    expect(wrapper.findComponent(SseEventTimeline).exists()).toBe(false)
+  })
+
+  it('任务状态流（agent.tasks.stream，命名事件流）深链挂通用 SseEventTimeline，不卡拼接视图', () => {
+    const wrapper = mount(AgentLabView, {
+      props: { moduleId: 'agent', capId: 'agent.tasks.stream' },
+      ...mountOpts,
+    })
+    expect(wrapper.findComponent(SseEventTimeline).exists()).toBe(true)
+    expect(wrapper.findComponent(SseConsole).exists()).toBe(false)
+    expect(wrapper.findComponent(SseStageConsole).exists()).toBe(false)
   })
 })

@@ -50,6 +50,13 @@ export interface ParamSpec {
   group?: string
 }
 
+/** 一条命名示例预设：{@link body} 为请求体 JSON 字符串（形状同 {@link Capability.example}）。 */
+export interface CapabilityExample {
+  label: string
+  body: string
+  description?: string
+}
+
 export interface Capability {
   id: string
   module: string
@@ -61,6 +68,8 @@ export interface Capability {
   responseKind?: ResponseKind
   params: ParamSpec[]
   example?: string
+  /** 多示例预设：有则运行器渲染成一排一键载入的 chip；单 example 仍走 example 字段。 */
+  examples?: CapabilityExample[]
   requiredScopes: string[]
   featureFlag?: string
   featureFlagDefault?: boolean

@@ -23,6 +23,8 @@ import CapabilityCard from '../../components/capability/CapabilityCard.vue'
 import ResponseViewer from '../../components/capability/ResponseViewer.vue'
 import JsonView from '../../components/capability/JsonView.vue'
 import SseConsole from '../../components/capability/SseConsole.vue'
+import SseStageConsole from '../../components/capability/SseStageConsole.vue'
+import SseEventTimeline from '../../components/capability/SseEventTimeline.vue'
 import CopyButton from '../../components/common/CopyButton.vue'
 import EmptyState from '../../components/common/EmptyState.vue'
 import ModuleHeader from '../../components/layout/ModuleHeader.vue'
@@ -354,10 +356,28 @@ const moreCaps = computed<Capability[]>(() =>
       <section class="ag__result" aria-label="执行结果">
         <h2 class="ag__result-h">结果</h2>
         <div class="ag__result-body">
-          <!-- 流式（reflexive.stream） -->
+          <!-- 流式三态：token 流→拼接视图；反思→轮次视图；其它命名事件流（任务状态流）→通用事件时间线。均不卡「等待首个 token」 -->
           <SseConsole
-            v-if="run.isSse.value"
+            v-if="run.isSse.value && run.streamShape.value === 'token'"
             :tokens="run.sse.tokens"
+            :events="run.sse.events"
+            :status="run.sse.status"
+            :note="run.sse.note"
+            :error="run.errorMessage.value"
+            :elapsed-ms="run.elapsedMs.value"
+            :trace-id="run.traceId.value"
+          />
+          <SseStageConsole
+            v-else-if="run.isSse.value && run.isReflexion.value"
+            :events="run.sse.events"
+            :status="run.sse.status"
+            :note="run.sse.note"
+            :error="run.errorMessage.value"
+            :elapsed-ms="run.elapsedMs.value"
+            :trace-id="run.traceId.value"
+          />
+          <SseEventTimeline
+            v-else-if="run.isSse.value"
             :events="run.sse.events"
             :status="run.sse.status"
             :note="run.sse.note"
