@@ -27,7 +27,7 @@ cd "$(dirname "$0")"   # 切到 deploy/
 
 FRONTEND_DIR="../capability-showcase-frontend"
 
-# ── 端口：与 start-local.sh 一致的本机重映射（避开 apollo 占用的 8080/8090/3306）──
+# ── 端口：与 start-local.sh 一致的本机重映射（避开 apollo 占用的 8080/8090 与 13306=apollo-db）──
 export EDGE_HOST_PORT="${EDGE_HOST_PORT:-18080}"
 export VISION_HOST_PORT="${VISION_HOST_PORT:-18090}"
 export MYSQL_HOST_PORT="${MYSQL_HOST_PORT:-13307}"
@@ -76,7 +76,11 @@ cat <<EOF
   启动前端 dev（vite, 热更新）
   • 前端            http://localhost:5173
   • 后端网关        http://localhost:${EDGE_HOST_PORT}   (vite 已代理 /chat、/auth 等到此)
-  • 登录            前端登录页  alice / ${AUTH_DEMO_PASSWORD:-demo12345}（或顶栏填 API Key dev-key-acme）
+  • 登录(默认)      Casdoor OIDC（edge 默认 ONLY 模式，authz-casdoor :8000 须在跑；
+                    未跑先: docker start authz-postgres && sleep 5 && docker start authz-spicedb authz-casdoor）
+  • 登录(dual 时)   alice / ${AUTH_DEMO_PASSWORD:-demo12345} 或顶栏 API Key dev-key-acme
+                    （需 EDGE_CASDOOR_MODE=dual ./start-dev.sh 重起后端才可用）
+  • LiteLLM 记账    http://localhost:4000/ui · Jaeger http://localhost:16686
   • 停止            Ctrl-C 停前端；后端 docker 仍在跑（停后端: docker compose stop）
 ════════════════════════════════════════════════════════════
 EOF

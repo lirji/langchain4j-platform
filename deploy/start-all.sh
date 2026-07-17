@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 #
 # 一键【全 docker】起前后端：所有后端服务 + 基础设施 + 能力展示前端(nginx) 全部容器化。
+# ★ 整栈重建首选本脚本 —— 不要手动 docker compose up --build（2026-07-17 实测教训：
+#   手动跑漏传 SHOWCASE_EDGE_BASE_URL，前端烘焙默认 :8080（被 apollo 占）→ 流式/直调全部
+#   "无法连接到服务"；本脚本把烘焙参数和端口重映射一并补齐）。
 #
 # 为什么要这个脚本：
 #   docker-compose.yml 里已含前端容器 capability-showcase-frontend(nginx, :8093)，
-#   直接 docker compose up 就能一条命令起前后端；但默认端口(8080/8090/3306)会与本机 apollo 冲突，
+#   直接 docker compose up 就能一条命令起前后端；但默认端口(8080/8090，13306=apollo-db)会与本机
+#   apollo 冲突（Docker Desktop 重启后 apollo 系 restart-policy 容器会自动复活抢端口），
 #   且前端构建期需把网关地址(SHOWCASE_EDGE_BASE_URL)烘焙进去。本脚本把这些变量补齐后一键拉起。
 #
 # 与 start-dev.sh 的区别：
@@ -45,7 +49,14 @@ for arg in "$@"; do
   esac
 done
 
-# ── LLM key 检查（litellm 的 chat-default 走 DeepSeek）──
+# ── LLM key 检查（litellm 的 chat-default 走 DeepSeek）。env 缺失时先尝试从既有 litellm 容器提取。──
+if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
+  DEEPSEEK_API_KEY="$(docker inspect langchain4j-platform-litellm-1 \
+    --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null \
+    | grep '^DEEPSEEK_API_KEY=' | cut -d= -f2- || true)"
+  export DEEPSEEK_API_KEY
+  [ -n "$DEEPSEEK_API_KEY" ] && echo "ℹ  DEEPSEEK_API_KEY 已从既有 litellm 容器提取（长度 ${#DEEPSEEK_API_KEY}）"
+fi
 if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
   echo "⚠  DEEPSEEK_API_KEY 未设置：litellm→DeepSeek 会失败，对话/流式不可用。"
   echo "   先  export DEEPSEEK_API_KEY=sk-...  再跑；或改 litellm/config.yaml 指向本机 ollama。"
@@ -93,17 +104,31 @@ else
   echo "（未装 curl，跳过健康探测）"
 fi
 
+# ── Casdoor ONLY 模式检测（edge 默认 EDGE_CASDOOR_MODE=only：必须 Casdoor OIDC 登录，
+#    前端 VITE_AUTH_MODE 默认 oidc 与之配套；依赖 auth-platform 栈的 authz-casdoor 在跑）──
+CASDOOR_HINT=""
+if [ "${EDGE_CASDOOR_MODE:-only}" = "only" ]; then
+  if ! docker ps --format '{{.Names}}' | grep -q '^authz-casdoor$'; then
+    CASDOOR_HINT="⚠ edge 为 Casdoor ONLY 模式但 authz-casdoor 未运行 → 登录/业务请求将 401。
+    先起 auth-platform 栈: docker start authz-postgres && sleep 5 && docker start authz-spicedb authz-casdoor
+    或临时退回双模: EDGE_CASDOOR_MODE=dual ./start-all.sh --no-build --recreate"
+  fi
+fi
+
 # ── 访问信息 ──
 cat <<EOF
 
 ════════════════════════════════════════════════════════════
   前后端就绪（全 docker）
-  • 前端(nginx)    http://localhost:8093
+  • 前端(nginx)    http://localhost:8093   （改过 SHOWCASE_* 烘焙参数后记得浏览器硬刷新）
   • 后端网关       http://localhost:${EDGE_HOST_PORT}
-  • API Key        dev-key-acme   (全权限)   /   dev-key-globex (仅 chat)
-  • 登录账号       alice / ${AUTH_DEMO_PASSWORD:-demo12345}   (租户 acme，全 scope)
-                   bob   / ${AUTH_DEMO_PASSWORD:-demo12345}   (租户 globex，仅 chat)
+  • 鉴权(默认)     前端 Casdoor OIDC 登录（edge 默认 ONLY 模式，Casdoor :8000 须在跑）
+                   ${CASDOOR_HINT:-✓ authz-casdoor 在运行}
+  • 旧凭证(dual)   EDGE_CASDOOR_MODE=dual 时: API Key dev-key-acme / dev-key-globex，
+                   或 alice·bob / ${AUTH_DEMO_PASSWORD:-demo12345} 自建登录
+  • LiteLLM 记账   http://localhost:4000/ui  (spend/模型/token/费用；admin / litellm-ui-dev)
+  • 链路追踪       Jaeger http://localhost:16686
   • 查看日志       docker compose logs -f edge-gateway capability-showcase-frontend
-  • 停止全部       docker compose down     (加 -v 连数据卷一起删)
+  • 停止全部       docker compose down     (⚠ 别加 -v：会删 mysql/qdrant/redis/es/litellm-pg 全部数据卷)
 ════════════════════════════════════════════════════════════
 EOF
