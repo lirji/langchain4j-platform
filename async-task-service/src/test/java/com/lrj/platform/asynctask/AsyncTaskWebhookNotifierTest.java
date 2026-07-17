@@ -25,6 +25,11 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+/**
+ * AsyncTaskWebhookNotifierTest：用 {@link MockRestServiceServer} 验证 {@link AsyncTaskWebhookNotifier} 的终态
+ * webhook 直投——携带正确的 X-Async-Task-* / X-Tenant-Id 头与任务 JSON、失败按 maxAttempts 重试直至成功、
+ * 对非终态或非法 URL（如 file://）不投递也不记审计。
+ */
 class AsyncTaskWebhookNotifierTest {
 
     @Test

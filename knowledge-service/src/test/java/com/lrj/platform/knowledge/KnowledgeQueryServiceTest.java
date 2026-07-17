@@ -26,6 +26,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
+/**
+ * KnowledgeQueryServiceTest：验证 {@link KnowledgeQueryService} 的检索行为——查询的租户隔离与 category 过滤、
+ * 空查询拒绝、向量高阈值下的关键词/混合命中与可配置关键词权重打分，以及开启 GraphRAG 时融合图检索命中。
+ */
 class KnowledgeQueryServiceTest {
 
     private final EmbeddingStore<TextSegment> store = new InMemoryEmbeddingStore<>();

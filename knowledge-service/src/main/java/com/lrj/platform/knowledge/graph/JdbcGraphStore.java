@@ -19,6 +19,12 @@ import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
 
+/**
+ * {@link GraphStore} 的 JDBC 实现（{@code app.rag.graph.store=jdbc} 时启用）：三元组持久化到
+ * {@code RAG_GRAPH_TRIPLE} 表，建表/建索引 DDL 以 {@code CREATE TABLE IF NOT EXISTS} 字面量内联在
+ * {@link #init()} 中（无迁移工具）。以 SHA-256 派生 GRAPH_ID 做幂等 upsert，{@link #neighbors} 在库上按
+ * 归一化实体 key 逐跳查询做 BFS 邻域遍历，均按 tenantId（及可选 category）隔离。
+ */
 public class JdbcGraphStore implements GraphStore {
 
     private final JdbcTemplate jdbc;

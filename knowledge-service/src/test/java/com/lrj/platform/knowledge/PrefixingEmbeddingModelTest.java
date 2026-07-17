@@ -11,6 +11,10 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * PrefixingEmbeddingModelTest：验证 {@link PrefixingEmbeddingModel} 对委托模型加任务前缀——查询走 query 前缀、
+ * 文档走 document 前缀且不改动调用方持有的原始 segment，前缀均为空时原样透传。
+ */
 class PrefixingEmbeddingModelTest {
 
     /** 捕获委托收到的文本,便于断言前缀。 */

@@ -15,6 +15,12 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * interop-service 的 MCP 互操作入口：对外暴露 Agent Card（{@code /interop/agent-card}、
+ * {@code /interop/a2a/agent-card}）与 MCP 工具面（{@code /interop/mcp/tools}、
+ * {@code /interop/mcp/tools/{toolName}}、{@code /interop/mcp/call}）。工具目录来自
+ * {@link InteropToolRegistry}，工具调用经 {@link InteropToolDispatcher} 转发到 agent-service。
+ */
 @RestController
 public class InteropController {
 

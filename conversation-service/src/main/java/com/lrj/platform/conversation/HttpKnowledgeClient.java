@@ -11,6 +11,11 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 
+/**
+ * {@link KnowledgeClient} 的 HTTP 实现（仅 {@code app.conversation.rag.enabled=true} 时装配）：通过
+ * {@code knowledgeRestTemplate} POST 到 knowledge-service 的 {@code /rag/query} 拉取检索结果。检索失败或返回
+ * 空时降级为空 {@link KnowledgeQueryReply}，让对话在无 RAG 上下文时继续正常进行。
+ */
 @Component
 @ConditionalOnProperty(name = "app.conversation.rag.enabled", havingValue = "true")
 public class HttpKnowledgeClient implements KnowledgeClient {

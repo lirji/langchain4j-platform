@@ -9,6 +9,11 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * ElasticsearchSegmentIndexerTest：借助 {@link FakeEsGateway} 验证 {@link ElasticsearchSegmentIndexer}
+ * 将 {@code TextSegment} 映射为 ES 文档（id = tenant/doc/index）、跳过缺必填元数据的段、关闭时完全 noop、
+ * 首次写入时惰性建索引且仅一次、best-effort 吞掉 bulk 异常而 fail-fast 时重抛，以及 deleteByDoc 委派给网关。
+ */
 class ElasticsearchSegmentIndexerTest {
 
     private final FakeEsGateway gateway = new FakeEsGateway();

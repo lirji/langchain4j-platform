@@ -7,6 +7,11 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * SentenceChunkerTest：验证 {@link SentenceChunker} 的流式分句——遇结束标点且累计长度达 minChars 时切句、
+ * 过短句不单独切而继续累积、单次 feed 可切出多句、逐 token 喂入累积到结束符才切，
+ * 以及 {@code flush} 返回无结束符的残句、null/空 token 为 no-op。
+ */
 class SentenceChunkerTest {
 
     @Test

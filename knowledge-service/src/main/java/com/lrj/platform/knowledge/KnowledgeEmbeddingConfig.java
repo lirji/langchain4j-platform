@@ -38,6 +38,13 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * knowledge-service 的向量检索基础设施装配：按 {@code app.rag.vector-store.provider} 条件装配向量库
+ * （in-memory 默认 / qdrant / pgvector / milvus / chroma / doris）及各自的 {@code CollectionManager}，
+ * 按 {@code app.rag.vector-store.isolation} 装配租户路由 {@link EmbeddingStoreRouter}（collection-per-tenant
+ * 强隔离默认 / shared 单库+元数据过滤），并按 {@code app.rag.embedding.provider} 装配 {@link EmbeddingModel}
+ * （hash 默认，零外部依赖 / openai 兼容 / ollama）。内含默认的确定性 {@link HashEmbeddingModel}。
+ */
 @Configuration
 public class KnowledgeEmbeddingConfig {
 

@@ -4,6 +4,11 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * FusionStrategyTest：验证 {@link FusionStrategy} 的默认推导 {@code effectiveDefault}——仅当 ES 真正参与查询
+ * （enabled 且 query-enabled）才翻为 RRF，只写不查或 ES 关闭时保持 WEIGHTED_MAX，显式配置始终优先；
+ * 以及 {@code parse} 对别名的识别与非法值回退。
+ */
 class FusionStrategyTest {
 
     @Test

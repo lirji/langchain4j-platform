@@ -12,6 +12,11 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * AsyncTaskWebhookOutboxTest：基于内存 H2（MySQL 兼容模式）验证 {@link AsyncTaskWebhookOutbox} 的
+ * 指数退避调度与到达上限死信判定、仅清理过期的 delivered 行、claimDue 抢占并阻止重复认领、过期 claim
+ * 可被其他 worker 重认领，以及 markRetry 释放 claim 供后续到期再派发。
+ */
 class AsyncTaskWebhookOutboxTest {
 
     @Test

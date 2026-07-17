@@ -10,6 +10,10 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
+/**
+ * RetrievalEvaluatorTest：验证 {@link RetrievalEvaluator} 用桩 {@link RetrievalClient} 逐 case 检索后，
+ * 对 recall/hitRate 等指标做跨用例宏平均聚合，并覆盖空用例集返回全零摘要的场景。
+ */
 class RetrievalEvaluatorTest {
 
     @Test

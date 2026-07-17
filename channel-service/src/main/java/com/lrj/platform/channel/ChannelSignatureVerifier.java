@@ -9,6 +9,11 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 
+/**
+ * 渠道入站事件的 HMAC-SHA256 签名校验器：对 {@link ChannelInboundEvent} 的规范化串
+ * （eventId|channel|source|eventType）用 {@code app.channel.inbound-signature-secret} 计算签名并常量时间比对。
+ * 入站签名开关关闭时直接放行；同时提供 {@code sign} 便于测试/自签。由 {@link ChannelController#inbound} 调用。
+ */
 @Component
 public class ChannelSignatureVerifier {
 

@@ -15,6 +15,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+/**
+ * {@link BrowserSession} 的 Playwright（Chromium 无头）实现。每个线程通过 {@link ThreadLocal} 独立持有
+ * Playwright/Browser/Page，惰性创建、由 {@link #closeForThread()} 释放；页面渲染结果会截断可见文本
+ * （{@code MAX_TEXT_CHARS}）并汇总前若干可点击链接（{@code MAX_LINKS}）返回给 Agent。
+ * 双门控 {@code app.agent.enabled} 与 {@code app.agent.browser.enabled} 同时为 true 才装配；
+ * 首次使用需在联网环境安装 Chromium 二进制。
+ */
 @Component
 @ConditionalOnProperty(name = {"app.agent.enabled", "app.agent.browser.enabled"}, havingValue = "true")
 public class PlaywrightBrowserSession implements BrowserSession {

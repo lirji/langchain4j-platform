@@ -5,6 +5,11 @@ import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
 import dev.langchain4j.service.V;
 
+/**
+ * 声明式 LLM 评审接口：对 DAG 综合答案在正确性/完整性/清晰度三个维度打分（0.0~1.0），并给出
+ * 一句话主要改进点（{@code mainIssue}）。由 {@link AgentDagService} 在开启重规划时调用，评分结果
+ * 驱动是否触发 {@link AgentDagReplanner} 重规划。
+ */
 public interface AgentDagCritic {
 
     @SystemMessage("""

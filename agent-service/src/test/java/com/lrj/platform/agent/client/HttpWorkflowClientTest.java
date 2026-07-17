@@ -16,6 +16,10 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+/**
+ * HttpWorkflowClientTest：验证 {@link HttpWorkflowClient} 对 workflow-service 的 REST 调用——发起退款
+ * 审批、查询实例状态、列出待办任务，覆盖传输失败/未找到的 error，以及 403 翻译成中文审批权限提示。
+ */
 class HttpWorkflowClientTest {
 
     @Test

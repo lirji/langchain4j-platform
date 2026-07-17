@@ -12,6 +12,10 @@ import java.util.HexFormat;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * FeishuEventCryptoTest：验证 {@link FeishuEventCrypto} 的加解密与验签——AES/CBC/PKCS5（key=sha256(encryptKey)、
+ * IV 前置）解密可往返、签名为 hex(SHA-256(timestamp+nonce+encryptKey+body))，覆盖正确/错误/空签名与 {@code hasEncryptKey} 判定。
+ */
 class FeishuEventCryptoTest {
 
     private static final String KEY = "test-encrypt-key";

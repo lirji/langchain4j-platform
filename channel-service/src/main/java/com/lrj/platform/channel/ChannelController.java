@@ -17,6 +17,12 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * channel-service 的对外入口，暴露 {@code /channel/**} 系列接口：能力探测、出站消息投递
+ * （{@code /channel/messages}）、通用回调与 async-task / workflow 专用回调、渠道入站事件
+ * （{@code /channel/inbound}）。业务委托给 {@link ChannelCallbackService}，入站事件先经
+ * {@link ChannelSignatureVerifier} 验签，租户身份取自 {@link TenantContext}。
+ */
 @RestController
 public class ChannelController {
 

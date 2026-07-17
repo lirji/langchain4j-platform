@@ -9,6 +9,10 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
+/**
+ * JdbcGraphStoreTest：在内存 H2（MySQL 兼容模式）上验证 {@link JdbcGraphStore} 持久化三元组、
+ * 按租户与 category 遍历邻居，以及 removeBySourcePrefix 仅删除指定租户对应文档的三元组（不误删他租户）。
+ */
 class JdbcGraphStoreTest {
 
     @Test

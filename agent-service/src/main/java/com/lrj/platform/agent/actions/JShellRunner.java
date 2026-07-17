@@ -19,6 +19,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
+/**
+ * 同 JVM 的 JShell 代码执行辅助类（包级私有）。在守护线程池里逐单元 eval 传入的 Java 源码，捕获 stdout/表达式值，
+ * 施加超时（超时则尽力 {@code stop} 并标记 timedOut）与输出截断，产出 {@link CodeSandbox.Outcome}。
+ * 供 {@code JShellCodeSandbox} 使用；因隔离性弱，仅在 {@code app.agent.code-exec.sandbox=jshell} 时启用。
+ */
 final class JShellRunner {
 
     private static final ExecutorService POOL = Executors.newCachedThreadPool(r -> {

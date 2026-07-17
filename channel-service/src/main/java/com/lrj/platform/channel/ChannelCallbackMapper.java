@@ -5,6 +5,12 @@ import com.lrj.platform.protocol.channel.ChannelCallbackRequest;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * 回调载荷映射工具：把 async-task / workflow 等下游异步系统 POST 回来的裸 JSON 载荷，
+ * 归一化为 {@link ChannelCallbackRequest}。从顶层字段、嵌套 {@code result} 及请求头中
+ * 择优提取 sourceId、status、channel、target、message，并把原始载荷保留进 metadata。
+ * 供 {@link ChannelController} 的 {@code /channel/callbacks/async-task}、{@code /channel/callbacks/workflow} 使用。
+ */
 final class ChannelCallbackMapper {
 
     private ChannelCallbackMapper() {

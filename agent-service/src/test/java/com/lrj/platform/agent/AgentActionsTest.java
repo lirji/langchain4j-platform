@@ -13,6 +13,11 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * AgentActionsTest：验证 agent 动作 {@link RagSearchAction}、{@link AnalyticsSqlAction}、
+ * {@link SchemaExploreAction} 把下游客户端返回渲染成给 LLM 的观察文本，覆盖 RAG 命中带 doc 引用、
+ * SQL 行与解读、列出/描述表结构以及错误文案等场景。
+ */
 class AgentActionsTest {
 
     @Test

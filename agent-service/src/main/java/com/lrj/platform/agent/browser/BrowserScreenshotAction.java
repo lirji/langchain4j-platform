@@ -4,6 +4,11 @@ import com.lrj.platform.agent.AgentAction;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+/**
+ * Browser-use 动作 {@code browser_screenshot}：将当前页面整页截图存到文件并返回保存路径。
+ * 委托 {@link BrowserSession#screenshot()}，需先用 {@code browser_open} 打开页面。
+ * 双门控 {@code app.agent.enabled} 与 {@code app.agent.browser.enabled} 同时为 true 才装配。
+ */
 @Component
 @ConditionalOnProperty(name = {"app.agent.enabled", "app.agent.browser.enabled"}, havingValue = "true")
 public class BrowserScreenshotAction implements AgentAction {

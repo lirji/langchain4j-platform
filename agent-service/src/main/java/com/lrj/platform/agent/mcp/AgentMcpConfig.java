@@ -12,6 +12,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * agent-service 的 MCP 客户端装配：按 {@link AgentMcpProperties} 选择 stdio 或 streamable-http 传输，
+ * 构建单个 {@link McpClient} bean（关闭时调用 close），供 MCP 工具动作调用外部 MCP 服务器。
+ * 仅在 {@code app.agent.enabled} 与 {@code app.agent.mcp.enabled} 同时为 true 时生效。
+ */
 @Configuration
 @ConditionalOnProperty(name = {"app.agent.enabled", "app.agent.mcp.enabled"}, havingValue = "true")
 public class AgentMcpConfig {

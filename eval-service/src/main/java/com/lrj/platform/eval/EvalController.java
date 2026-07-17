@@ -21,6 +21,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * eval-service 的 HTTP 入口，作为外部回归测试客户端对外暴露 {@code /eval/**} 接口：
+ * {@code /eval/capabilities} 能力清单、{@code /eval/retrieval} 检索质量评测、{@code /eval/run} 与
+ * {@code /eval/suites/{name}/run} 跑用例集、{@code /eval/dual-run} oracle 与 candidate 双跑、
+ * {@code /eval/gate} CI 门禁（有回归返回 422）。实际执行委托给 {@link EvalRunner}、{@link EvalDualRunner}、
+ * {@link EvalSuiteLoader}、{@link com.lrj.platform.eval.retrieval.RetrievalEvaluator}，报告由 {@link EvalReportWriter} 落盘。
+ */
 @RestController
 public class EvalController {
 

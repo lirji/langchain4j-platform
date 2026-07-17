@@ -5,6 +5,10 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * A2aPushNotificationStoreTest：验证 {@link A2aPushNotificationStore} 的存/取/删往返、按租户隔离
+ * （同 taskId 不同租户不串号），以及对 null taskId 或 config 的忽略。
+ */
 class A2aPushNotificationStoreTest {
 
     private final A2aPushNotificationStore store = new A2aPushNotificationStore();

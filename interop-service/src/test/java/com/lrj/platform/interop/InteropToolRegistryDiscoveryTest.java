@@ -10,6 +10,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * InteropToolRegistryDiscoveryTest：验证 {@link InteropToolRegistry} 的 live 能力发现行为——
+ * 无 client 或发现抛异常/返回空时回退静态工具集，发现成功时采用 live 工具，并按 TTL 缓存与过期后重取。
+ */
 class InteropToolRegistryDiscoveryTest {
 
     private static McpToolDescriptor tool(String name) {

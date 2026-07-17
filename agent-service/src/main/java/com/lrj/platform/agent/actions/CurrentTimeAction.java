@@ -8,6 +8,10 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 
+/**
+ * {@code current_time} 动作：返回指定 IANA 时区（actionInput，留空则用系统默认时区）的当前时间。
+ * 是 {@link AgentAction} 的确定性内置实现之一，由 {@code app.agent.enabled} 门控（默认开）。
+ */
 @Component
 @ConditionalOnProperty(name = "app.agent.enabled", havingValue = "true", matchIfMissing = true)
 public class CurrentTimeAction implements AgentAction {

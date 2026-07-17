@@ -13,6 +13,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * FeishuMessageBridgeTest：验证 {@link FeishuMessageBridge} 的入站处理与意图路由——默认走对话后回复、按 messageId 去重、
+ * 空白文本 no-op、空回复跳过发送；意图路由开启时退款类关键词起 workflow 工单（等待审批回「已转人工」、自动完成回流程结论），
+ * 关闭时退款关键词仍走对话不碰 workflow，且工单启动失败时降级为普通对话不丢消息。
+ */
 class FeishuMessageBridgeTest {
 
     @AfterEach

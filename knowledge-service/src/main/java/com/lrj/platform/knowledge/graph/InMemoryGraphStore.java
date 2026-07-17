@@ -13,6 +13,10 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+/**
+ * {@link GraphStore} 的默认内存实现（零外部依赖，用于本地运行与单测）：三元组存于 {@link CopyOnWriteArrayList}
+ * 并按「租户+实体」建索引，{@link #neighbors} 以 BFS 做租户/类目内的多跳邻域遍历。删除后重建索引。
+ */
 public class InMemoryGraphStore implements GraphStore {
 
     private final List<Triple> all = new CopyOnWriteArrayList<>();

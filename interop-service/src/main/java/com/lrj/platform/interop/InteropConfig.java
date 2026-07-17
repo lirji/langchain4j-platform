@@ -16,6 +16,12 @@ import org.springframework.web.client.RestTemplate;
 import java.util.Map;
 import java.util.concurrent.Executor;
 
+/**
+ * interop-service 的装配中心：注册指向 agent-service / conversation-service 的 {@link RestTemplate}
+ * （均挂 {@link OutboundTenantForwarder} + {@link OutboundTraceForwarder} 做租户与 trace 透传）、
+ * A2A 流式/push 中继的后台执行器（{@code interopStreamExecutor}，用 TaskDecorator 把租户与 MDC 透传到工作线程），
+ * 以及 MCP 工具目录 {@link InteropToolRegistry}（可选按 {@code app.interop.discovery-enabled} 挂 live 能力发现）。
+ */
 @Configuration
 @EnableConfigurationProperties(InteropProperties.class)
 public class InteropConfig {

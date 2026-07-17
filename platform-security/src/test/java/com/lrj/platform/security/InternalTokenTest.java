@@ -9,6 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * InternalTokenTest：验证 {@link InternalToken} 的内部 JWT 签发/校验——mint 后 verify 能完整回还
+ * 租户身份与 scope，且对错误签名、已过期、null/空白令牌一律返回 null（校验失败）。
+ */
 class InternalTokenTest {
 
     private static final String SECRET = "test-secret-at-least-32-bytes-long-000";

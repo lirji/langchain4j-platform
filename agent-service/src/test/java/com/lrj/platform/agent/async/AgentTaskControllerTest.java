@@ -13,6 +13,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+/**
+ * AgentTaskControllerTest：验证 {@link AgentTaskController} 异步提交返回 202、空 goal 返回 400、
+ * 查询缺失任务返回 404，以及 SSE 订阅存在任务时返回 emitter。
+ */
 class AgentTaskControllerTest {
 
     @Test

@@ -1,5 +1,10 @@
 package com.lrj.platform.agent;
 
+/**
+ * {@link DeepAgentService} ReAct 循环的可调参数（绑定前缀 {@code app.agent}）。涵盖步数/墙钟/token 预算上限、
+ * brain 调用重试与退避、防打转的重复检测窗口（{@code maxRepeats}/{@code loopWindow}）、scratchpad 上限与 history
+ * 窗口、以及子 Agent 委派开关与最大深度（{@code allowDelegation}/{@code maxDepth}）。
+ */
 public class AgentProperties {
 
     private boolean enabled = true;

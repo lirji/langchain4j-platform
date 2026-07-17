@@ -9,6 +9,11 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * ChunkMetricsTest：验证 {@link ChunkMetrics} 向 Micrometer 注册表按 {@code strategy} 标签记录切块指标——
+ * 文档数、chunk 总数、碎块与超大块计数及尺寸分布摘要；空段时只记文档数、空白策略归为 {@code unknown}、
+ * 无碎块/超大块时对应 counter 不创建。
+ */
 class ChunkMetricsTest {
 
     private static TextSegment seg(int len) {

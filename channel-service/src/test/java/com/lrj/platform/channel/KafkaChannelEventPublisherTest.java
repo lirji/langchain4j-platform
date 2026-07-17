@@ -14,6 +14,10 @@ import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
+/**
+ * KafkaChannelEventPublisherTest：验证 {@link KafkaChannelEventPublisher} 将 {@link com.lrj.platform.protocol.channel.ChannelEvent}
+ * 序列化为 JSON（含 eventType、tenantId 字段）并以 eventId 为 key 发往配置的 topic。
+ */
 class KafkaChannelEventPublisherTest {
 
     @Test

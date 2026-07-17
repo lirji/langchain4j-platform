@@ -32,6 +32,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * {@code /async/tasks/**} 通用异步任务中心的 REST 入口：创建、按 {@link TenantContext} 租户列举/查询、
+ * 状态更新、worker 租约（lease）、取消，以及 {@code /stream} 的 SSE 流式（支持 Last-Event-ID 断点续传，
+ * 委托 {@link AsyncTaskSseService}）与死信 webhook outbox 巡检。所有操作严格按当前租户隔离；每次生命周期
+ * 变更都发布 {@link AsyncTaskEvent}（供 SSE 推送与 webhook 通知消费）并记审计。持久化委托可插拔的
+ * {@link AsyncTaskStore}（内存/JDBC）。
+ */
 @RestController
 public class AsyncTaskController {
 

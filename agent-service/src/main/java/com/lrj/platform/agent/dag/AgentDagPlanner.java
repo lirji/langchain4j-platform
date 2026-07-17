@@ -3,6 +3,10 @@ package com.lrj.platform.agent.dag;
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
 
+/**
+ * 声明式 LLM 规划接口：把用户目标拆解为 1~6 个子任务的无环 DAG（{@link AgentDagPlan}），仅在子任务
+ * 确需上游输出时才产生依赖。由 {@link AgentDagService} 的 plan-run 流程调用。
+ */
 public interface AgentDagPlanner {
 
     @SystemMessage("""

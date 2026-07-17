@@ -3,6 +3,11 @@ package com.lrj.platform.agent.dag;
 import com.lrj.platform.agent.critique.CritiqueWeights;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * DAG 编排的配置项（前缀 {@code app.agent.dag}）：任务数上限 {@code maxTasks}，以及重规划子配置
+ * {@link Replan}（开关、最大重规划次数、聚合分阈值与 {@link CritiqueWeights} 三维权重）。
+ * 由 {@link AgentDagService} 读取。
+ */
 @ConfigurationProperties(prefix = "app.agent.dag")
 public class AgentDagProperties {
 

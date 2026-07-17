@@ -4,6 +4,12 @@ import com.lrj.platform.agent.AgentAction;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+/**
+ * Browser-use 动作 {@code browser_click_xy}：按像素坐标（{@code x,y}）点击当前页面，
+ * 用于链接文本点不到的图标/canvas/无文字按钮。解析并校验坐标入参后委托
+ * {@link BrowserSession#clickAt(double, double)}。双门控 {@code app.agent.enabled}
+ * 与 {@code app.agent.browser.enabled} 同时为 true 才装配。
+ */
 @Component
 @ConditionalOnProperty(name = {"app.agent.enabled", "app.agent.browser.enabled"}, havingValue = "true")
 public class BrowserClickXyAction implements AgentAction {

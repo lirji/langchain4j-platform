@@ -4,6 +4,10 @@ import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
 import dev.langchain4j.service.V;
 
+/**
+ * 声明式 LLM 重规划接口：当上一轮综合答案被 {@link AgentDagCritic} 判为不达标时，结合原目标、旧计划、
+ * 旧答案与评分/主要问题，产出修订后的 {@link AgentDagPlan}。由 {@link AgentDagService} 在重规划循环中调用。
+ */
 public interface AgentDagReplanner {
 
     @SystemMessage("""

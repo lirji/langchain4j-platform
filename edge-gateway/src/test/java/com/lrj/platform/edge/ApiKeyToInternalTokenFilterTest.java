@@ -17,6 +17,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * ApiKeyToInternalTokenFilterTest：验证 {@link ApiKeyToInternalTokenFilter} 的入站鉴权——已被 Bearer 注入内部 JWT 时
+ * 即便无 {@code X-Api-Key} 也放行、有效 api-key 换发内部令牌并从下游请求剥除外部 api-key、缺凭证返回 401、
+ * 开放路径（如 {@code /auth/login}）直接放行。
+ */
 class ApiKeyToInternalTokenFilterTest {
 
     private final InternalSecurityProperties props = buildProps();

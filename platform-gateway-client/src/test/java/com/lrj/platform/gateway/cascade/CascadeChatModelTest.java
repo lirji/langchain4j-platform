@@ -14,6 +14,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * CascadeChatModelTest：验证 {@link CascadeChatModel} 的廉价→强模型级联升级逻辑——低置信
+ * （{@link ConfidenceGate} 判否）时升级到强模型、高置信时沿用廉价答案且不调用强模型、廉价模型直接
+ * 返回工具调用时短路交回上层工具循环（既不咨询 gate 也不升级）。
+ */
 class CascadeChatModelTest {
 
     private static final ChatRequest REQUEST = ChatRequest.builder()

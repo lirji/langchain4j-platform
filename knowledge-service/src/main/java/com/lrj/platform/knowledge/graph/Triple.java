@@ -1,5 +1,9 @@
 package com.lrj.platform.knowledge.graph;
 
+/**
+ * 已归一化、可入库的图三元组：在主语/谓语/宾语之外携带来源文档 {@code sourceId}、租户 {@code tenantId}
+ * 与可选 {@code category}（用于隔离与溯源）。构造时校验 subject/relation/object/tenantId 必填，否则抛异常。
+ */
 public record Triple(String subject,
                      String relation,
                      String object,

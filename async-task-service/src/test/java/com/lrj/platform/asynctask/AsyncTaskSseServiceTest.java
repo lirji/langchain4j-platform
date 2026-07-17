@@ -10,6 +10,10 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * AsyncTaskSseServiceTest：验证 {@link AsyncTaskSseService} 的历史重放语义——按 Last-Event-ID 只重放其后的事件、
+ * 忽略非法 lastEventId，以及有界历史窗口（保留最近 {@code HISTORY_LIMIT} 条）下的裁剪行为。
+ */
 class AsyncTaskSseServiceTest {
 
     @Test

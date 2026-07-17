@@ -19,6 +19,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Executor;
 
+/**
+ * 内存存储模式下的 webhook 通知器（{@code app.async-task.store=in-memory}）。监听 {@link AsyncTaskEvent}，
+ * 任务进入终态时向其 {@code webhookUrl} 异步 HTTP 直投（带重试/退避，经 {@code asyncTaskExecutor} 线程池），
+ * 并记审计。当 webhook {@code transport=kafka} 时让位给 Kafka 事件通道（见 {@code isKafkaTransport} 守卫）。
+ * JDBC 模式则改由 {@link AsyncTaskWebhookOutbox} + {@link AsyncTaskWebhookOutboxDispatcher} 做事务性投递。
+ */
 @Component
 @ConditionalOnProperty(name = "app.async-task.store", havingValue = "in-memory", matchIfMissing = true)
 public class AsyncTaskWebhookNotifier {

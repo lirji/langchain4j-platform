@@ -16,6 +16,12 @@ import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
 
+/**
+ * GraphRAG 装配（整体由 {@code app.rag.graph.enabled=true} 开关，默认关）：按 {@code app.rag.graph.store}
+ * 装配 {@link GraphStore}（in-memory 默认 / jdbc，jdbc 时另建 Hikari 数据源与 {@link GraphDatasourceProperties}），
+ * 并装配 {@link GraphExtractor}、{@link EntityLinker}（{@link TokenEntityLinker}）与 {@link GraphIngestor}
+ * （从 {@code app.rag.graph.*} 读取每块三元组上限、关系白名单、别名表、同步/异步开关）。
+ */
 @Configuration
 @ConditionalOnProperty(name = "app.rag.graph.enabled", havingValue = "true")
 public class GraphRagConfig {

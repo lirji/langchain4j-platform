@@ -13,6 +13,10 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * EvalReportWriterTest：验证 {@link EvalReportWriter} 在配置了报告目录时把
+ * {@link com.lrj.platform.protocol.eval.EvalRunReply} 写成含 runId 的 JSON 文件，目录为空时跳过写入。
+ */
 class EvalReportWriterTest {
 
     @TempDir

@@ -6,6 +6,10 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * EvalSuiteLoaderTest：验证 {@link EvalSuiteLoader} 能从 classpath 加载基线用例集，
+ * 并对不安全的 suite 名（如路径穿越 {@code ../secret}）抛出 IllegalArgumentException。
+ */
 class EvalSuiteLoaderTest {
 
     @Test

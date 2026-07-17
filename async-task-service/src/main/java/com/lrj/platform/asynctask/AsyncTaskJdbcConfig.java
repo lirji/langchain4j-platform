@@ -13,6 +13,11 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 import javax.sql.DataSource;
 
+/**
+ * JDBC 持久化模式（{@code app.async-task.store=jdbc}）下的装配：提供 async-task 专用的 Hikari 数据源
+ * 与事务管理器（供 {@link JdbcAsyncTaskStore} 把「终态更新 + 生命周期事件 outbox」原子提交），以及
+ * 仅当 webhook {@code transport=kafka} 时才创建的生命周期事件事务性 outbox 与 Kafka relay（A1）。
+ */
 @Configuration
 @ConditionalOnProperty(name = "app.async-task.store", havingValue = "jdbc")
 public class AsyncTaskJdbcConfig {

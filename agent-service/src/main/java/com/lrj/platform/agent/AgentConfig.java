@@ -30,6 +30,14 @@ import org.springframework.web.client.RestTemplate;
 import java.time.Duration;
 import java.util.List;
 
+/**
+ * agent-service 的核心装配。用 {@code AiServices.builder} 把各类 LLM 接口（{@link AgentBrain} ReAct 决策核心、
+ * 链式 {@code ChainLink}、投票 {@code Voter}/{@code VoteAggregator}、反思 {@code ReflexionAnswerer}、
+ * DAG {@code AgentDagPlanner}/{@code AgentDagCritic}/{@code AgentDagReplanner}、数据分析/业务流程 planner）
+ * 绑定网关 ChatModel 构建为 Bean，并组装 {@link DeepAgentService}。还提供指向 knowledge/analytics/vision/workflow
+ * 各下游服务的 {@link RestTemplate}——均装配 {@code OutboundTenantForwarder} + {@code OutboundTraceForwarder}
+ * 拦截器以跨服务传播租户与 traceId。整体由 {@code app.agent.enabled} 门控（默认开）。
+ */
 @Configuration
 @ConditionalOnProperty(name = "app.agent.enabled", havingValue = "true", matchIfMissing = true)
 public class AgentConfig {

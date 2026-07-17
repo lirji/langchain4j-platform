@@ -11,6 +11,11 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/**
+ * {@code rag_search} 动作：在企业知识库检索资料。通过 {@link KnowledgeClient} 调 knowledge-service 的 RAG，
+ * 按配置的 top-k/min-score/category 发起 {@link KnowledgeQueryRequest}，把命中片段截断后以带 {@code [doc=ID]}
+ * 标记的形式拼成观察文本，便于最终答案引用来源。是 {@link AgentAction} 可插拔实现，由 {@code app.agent.enabled} 门控（默认开）。
+ */
 @Component
 @ConditionalOnProperty(name = "app.agent.enabled", havingValue = "true", matchIfMissing = true)
 public class RagSearchAction implements AgentAction {

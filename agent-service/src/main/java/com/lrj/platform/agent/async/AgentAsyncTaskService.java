@@ -30,6 +30,12 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
+/**
+ * agent 异步任务的生命周期核心。提交任务后在 {@code agentTaskExecutor} 上异步跑（深度 Agent run 或任意
+ * {@code Supplier}/带进度的 {@code Function}），经 {@link AgentTaskStore} 落状态并发布 {@link AgentTaskEvent}/进度事件、
+ * 记 {@link AuditLogger} 审计，支持查询/列举（按租户过滤）与取消。可切换由外部 async-task-service 作为权威存储
+ * （{@code app.agent.async.external.authoritative}，含 lease 抢占执行）。由 {@code app.agent.enabled} 门控（默认开）。
+ */
 @Service
 @ConditionalOnProperty(name = "app.agent.enabled", havingValue = "true", matchIfMissing = true)
 public class AgentAsyncTaskService {

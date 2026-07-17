@@ -20,6 +20,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * StreamingConversationControllerTest：验证 {@link StreamingConversationController#chatStream} 的记忆键与 RAG 上下文
+ * 装配并启动 {@link dev.langchain4j.service.TokenStream}、per-request 类目透传，以及注入被拦截时不触达模型/检索。
+ */
 class StreamingConversationControllerTest {
 
     private static final ResolvedAssistantStyle STYLE = new ResolvedAssistantStyle("中文", "简洁", "cite", "");

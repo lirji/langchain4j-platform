@@ -1,5 +1,10 @@
 package com.lrj.platform.agent.async;
 
+/**
+ * {@link ExternalAsyncTaskClient} 的配置项：是否启用外部托管、async-task-service 基址、是否镜像
+ * webhook、中央端是否为权威投递方（authoritative）、worker 标识与租约秒数。绑定
+ * {@code app.agent.async.external.*} 前缀，决定本地与中央任务中心的职责划分。
+ */
 public class ExternalAsyncTaskProperties {
 
     private boolean enabled;

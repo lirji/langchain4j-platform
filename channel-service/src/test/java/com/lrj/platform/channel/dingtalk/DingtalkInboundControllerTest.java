@@ -15,6 +15,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+/**
+ * DingtalkInboundControllerTest：验证 {@link DingtalkInboundController} 处理钉钉入站事件——
+ * 合法签名的文本消息被解析（去空白）并交给 {@link DingtalkMessageBridge}、非法签名返回 401 且不转交、
+ * 非文本消息被忽略、以及关闭验签开关时跳过签名校验直接受理。
+ */
 class DingtalkInboundControllerTest {
 
     private static final String SECRET = "app-secret";

@@ -25,6 +25,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * AgentAsyncTaskServiceTest：验证 {@link AgentAsyncTaskService} 提交后异步跑 agent 并发布状态变迁
+ * （PENDING→RUNNING→SUCCEEDED）、租户隔离的查询、外部权威存储（{@link ExternalAsyncTaskClient}）的
+ * create/lease/update 语义与租约失败不执行，以及执行前取消保持 CANCELLED 状态。
+ */
 class AgentAsyncTaskServiceTest {
 
     @AfterEach

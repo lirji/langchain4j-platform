@@ -1,5 +1,9 @@
 package com.lrj.platform.asynctask;
 
+/**
+ * async-task JDBC 数据源配置项（前缀 {@code app.async-task.datasource}），承载 URL / 驱动 / 账号 / 连接池大小。
+ * 仅在 {@code app.async-task.store=jdbc} 时由 {@link AsyncTaskJdbcConfig} 绑定，并据此构建 Hikari 连接池。
+ */
 public class AsyncTaskDatasourceProperties {
 
     private String url = "jdbc:mysql://localhost:3306/async_task?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true";

@@ -16,6 +16,11 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * DingtalkMessageBridgeTest：验证 {@link DingtalkMessageBridge} 的知识库兜底路由——命中（分数达标）时先对话再回复、
+ * 无命中或弱命中（低于 minScore）转人工客服且不调对话、按 msgId 去重、空白文本 no-op，
+ * 以及命中但 LLM 回复为空时跳过回复调用。
+ */
 class DingtalkMessageBridgeTest {
 
     @AfterEach

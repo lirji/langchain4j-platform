@@ -22,6 +22,11 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+/**
+ * A2aServiceTest：验证 {@link A2aService} 的 A2A JSON-RPC 分派——{@code message/send} 按 skill 代理到
+ * agent-service 的同步 chat 或异步 research 任务、push 通知配置登记与 webhook 回指 interop 自身、
+ * {@code tasks/get} 与 {@code tasks/cancel} 的状态映射及错误码，以及 Agent Card 暴露。
+ */
 class A2aServiceTest {
 
     private final ObjectMapper json = new ObjectMapper();

@@ -10,6 +10,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
+/**
+ * 多 Agent DAG 编排的 HTTP 入口，暴露 {@code /agent/dag/**} 系列接口：同步执行给定任务图
+ * （{@code /run}）、由 LLM 先规划再执行（{@code /plan-run}），以及对应的异步版本
+ * （{@code /run/async}、{@code /plan-run/async}，交给 {@link AgentAsyncTaskService} 带进度回传运行）。
+ * 实际编排委托给 {@link AgentDagService}。仅在 {@code app.agent.enabled} 开启（默认开）时装配。
+ */
 @RestController
 @ConditionalOnProperty(name = "app.agent.enabled", havingValue = "true", matchIfMissing = true)
 public class AgentDagController {

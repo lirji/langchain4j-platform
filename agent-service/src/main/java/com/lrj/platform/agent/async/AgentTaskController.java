@@ -15,6 +15,12 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * agent 异步任务的 REST 入口。{@code POST /agent/run/async} 提交深度 Agent 任务（可选 webhook 回调），
+ * {@code GET /agent/tasks}、{@code GET/DELETE /agent/tasks/{id}} 列举/查询/取消，
+ * {@code GET /agent/tasks/{id}/stream} 以 SSE 订阅进度。分别委托 {@link AgentAsyncTaskService} 与
+ * {@link AgentTaskSseService}；由 {@code app.agent.enabled} 门控（默认开）。
+ */
 @RestController
 @ConditionalOnProperty(name = "app.agent.enabled", havingValue = "true", matchIfMissing = true)
 public class AgentTaskController {

@@ -11,6 +11,10 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * PromptChainServiceTest：验证 {@link PromptChainService} 顺序执行链步骤、把上一步输出喂给下一步，
+ * gate（最小长度/包含/正则匹配）不过时短路跳过剩余步骤，并在结果中携带租户 id。
+ */
 class PromptChainServiceTest {
 
     @AfterEach

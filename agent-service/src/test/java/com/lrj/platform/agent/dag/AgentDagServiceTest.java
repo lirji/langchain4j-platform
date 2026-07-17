@@ -19,6 +19,12 @@ import java.util.ArrayList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * AgentDagServiceTest：验证 {@link AgentDagService} 多 Agent DAG 编排的核心行为——
+ * 拓扑分层执行与上游结果向下游传递、终答综合、菱形依赖分层、成环与重复 taskId 的拒绝、
+ * 由规划器输出的 planAndRun、评分低于阈值时的重规划（replan），以及各阶段进度事件（dag-*）的发射。
+ * 用同步 executor 与桩 {@link DeepAgentService} 保持确定性。
+ */
 class AgentDagServiceTest {
 
     @AfterEach

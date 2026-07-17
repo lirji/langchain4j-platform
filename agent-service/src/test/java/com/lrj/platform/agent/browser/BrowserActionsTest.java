@@ -7,6 +7,11 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * BrowserActionsTest：验证浏览器 agent 动作（{@link BrowserOpenAction}、{@link BrowserClickAction}、
+ * {@link BrowserClickXyAction}、{@link BrowserTypeAction}、{@link BrowserScreenshotAction}）委托
+ * {@link BrowserSession} 的行为，覆盖坐标/选择器解析与非法输入的提示、run 结束时关闭会话。
+ */
 class BrowserActionsTest {
 
     @Test

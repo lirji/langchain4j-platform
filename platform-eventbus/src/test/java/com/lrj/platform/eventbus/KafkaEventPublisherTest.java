@@ -21,6 +21,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * KafkaEventPublisherTest：验证 {@link KafkaEventPublisher#publish} 将事件序列化为 JSON、以 tenantId 为 key
+ * 发到约定主题，并同步等待 broker ack（{@code send().get()}）；broker 失败时向上抛异常，以便中继层重试。
+ */
 class KafkaEventPublisherTest {
 
     private final ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());

@@ -4,6 +4,10 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * InMemorySemanticCacheStoreTest：验证 {@link InMemorySemanticCacheStore} 的租户分桶隔离、按余弦取最近命中、
+ * 同问覆盖、超容量淘汰最旧，以及按租户/按问题失效。
+ */
 class InMemorySemanticCacheStoreTest {
 
     @Test

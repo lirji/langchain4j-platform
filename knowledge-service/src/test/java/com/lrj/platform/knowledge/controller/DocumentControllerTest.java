@@ -23,6 +23,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * DocumentControllerTest：验证 {@code DocumentController} 的上传接口——缺 ingest scope 时 403、具备 scope 时委托
+ * {@link DocumentService}，以及图片上传在多模态关闭时返回 400、开启时经 {@link MultimodalRetrievalService} 入库为图片向量。
+ */
 class DocumentControllerTest {
 
     @AfterEach

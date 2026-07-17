@@ -17,6 +17,11 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+/**
+ * EvalRunnerTest：借助 {@link org.springframework.test.web.client.MockRestServiceServer} 验证
+ * {@link EvalRunner} 的各类断言路径——expectedContains、oracleContains、JSON 路径、语义相似度（含 CJK 分词）、
+ * 可选 LLM 判官与 embedding 相似度阈值、HTTP 错误捕获与用例前置校验。
+ */
 class EvalRunnerTest {
 
     @Test

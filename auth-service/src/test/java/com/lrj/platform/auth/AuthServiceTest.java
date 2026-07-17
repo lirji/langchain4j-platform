@@ -10,6 +10,11 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * AuthServiceTest：验证 {@link AuthService} 的账号密码登录与会话生命周期。覆盖种子账号登录、用户名大小写不敏感、
+ * 角色 scope 展开进有效 scopes、错误密码/未知用户 401、禁用账号 403、失败节流 429，以及刷新令牌轮转
+ * （旧令牌作废、新令牌可用）、未知/过期会话 401 与登出撤销。
+ */
 class AuthServiceTest {
 
     private PasswordHasher hasher;

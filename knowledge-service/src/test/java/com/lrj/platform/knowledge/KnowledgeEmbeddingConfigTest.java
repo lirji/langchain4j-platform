@@ -18,6 +18,11 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * KnowledgeEmbeddingConfigTest：用 {@link ApplicationContextRunner} 验证 {@link KnowledgeEmbeddingConfig} 的条件装配——
+ * 默认 hash embedding + 内存 collection-per-tenant 路由、openai/ollama embedding 及 qdrant/pgvector/milvus/chroma/doris
+ * 各 provider 的向量库与路由选型，以及开启多模态时文本/图片双 router 共存且 @Primary 解析到文本 router。
+ */
 class KnowledgeEmbeddingConfigTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()

@@ -15,6 +15,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.UnaryOperator;
 
+/**
+ * Agent 异步任务的内存存储（基于 {@link ConcurrentHashMap}）。提供按 {@code taskId} 的存取/原子更新
+ * 与按租户列表查询（按创建时间倒序），并通过 {@link Scheduled} 定时清理超过 {@code app.agent.async.task-ttl}
+ * 的已完成任务。属默认的进程内实现，本地运行与单测无需外部依赖。
+ */
 @Component
 public class AgentTaskStore {
 

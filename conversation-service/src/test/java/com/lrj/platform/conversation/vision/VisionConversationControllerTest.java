@@ -15,6 +15,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+/**
+ * VisionConversationControllerTest：验证 {@link VisionConversationController#chatVision} 在开启时转发图片与问题给
+ * {@link VisionClient}、关闭时返回未启用错误，以及空图片返回校验错误。
+ */
 class VisionConversationControllerTest {
 
     @AfterEach

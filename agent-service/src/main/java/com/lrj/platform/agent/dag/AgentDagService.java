@@ -34,6 +34,13 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
 
+/**
+ * 多 Agent DAG 编排核心：把子任务按依赖做拓扑分层，同层用 {@code agentTaskExecutor} 并行跑
+ * {@link DeepAgentService}，逐层把上游结果喂给下游，最后综合成最终答案。可选「评审-重规划」闭环——
+ * 由 {@link AgentDagCritic} 打分、低于阈值时经 {@link AgentDagReplanner} 修订计划重跑
+ * （受 {@link AgentDagProperties} 控制）。被 {@link AgentDagController} 调用，支持
+ * {@link AgentTaskProgressSink} 进度回传。仅在 {@code app.agent.enabled} 开启时装配。
+ */
 @Service
 @ConditionalOnProperty(name = "app.agent.enabled", havingValue = "true", matchIfMissing = true)
 public class AgentDagService {

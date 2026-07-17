@@ -8,6 +8,11 @@ import java.net.ServerSocket;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * TcpHealthProbeTest：验证 {@link TcpHealthProbe#probeTcp} 的 TCP 连通性探测——端口在监听时返回 UP
+ * 并带 host/port/tcpConnectMs 明细，无监听或 URL 无法解析时返回 DOWN，且能在缺省端口的 https URL 上
+ * 推断 443 端口。
+ */
 class TcpHealthProbeTest {
 
     @Test

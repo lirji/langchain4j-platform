@@ -12,6 +12,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * BrowserSeeActionTest：验证 {@link BrowserSeeAction} 把当前页截图字节与裁剪后的指令送往
+ * {@link VisionClient} 做视觉理解，覆盖空指令走默认描述、无截图时的提示、视觉调用异常与空结果的兜底。
+ */
 class BrowserSeeActionTest {
 
     private final BrowserSession session = mock(BrowserSession.class);

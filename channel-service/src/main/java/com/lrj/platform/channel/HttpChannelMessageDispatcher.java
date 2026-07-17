@@ -16,6 +16,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
 import java.util.Map;
 
+/**
+ * 基于 HTTP 的默认出站投递实现：按渠道分发——webhook（POST，可选 HMAC 出站签名）、
+ * 飞书（群自定义机器人 webhook，或经 {@link com.lrj.platform.channel.feishu.HttpFeishuReplyClient}
+ * 走应用 API 直发 open_id，用于工作流终态回推原发起人）、语音（POST 至 provider URL）。
+ * 出站总开关 {@code app.channel.outbound-enabled} 关闭时消息保持 {@code ACCEPTED} 挂起不真正外发。
+ */
 @Component
 public class HttpChannelMessageDispatcher implements ChannelMessageDispatcher {
 

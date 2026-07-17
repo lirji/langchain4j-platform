@@ -19,6 +19,12 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * AuthControllerTest：验证 {@link AuthController} 的登录/刷新/登出/me/publicConfig 端点。重点覆盖
+ * 登录签发访问令牌并写入 HttpOnly 刷新 cookie（原始刷新令牌不进响应体）、刷新时从 cookie 读取并轮转、
+ * 登出清 cookie 并作废令牌、{@code me} 从 {@link com.lrj.platform.security.TenantContext} 回显身份（未鉴权 401），
+ * 以及注册开关仅在 rbac 与 registration 同开时才暴露。
+ */
 class AuthControllerTest {
 
     private AuthService service;

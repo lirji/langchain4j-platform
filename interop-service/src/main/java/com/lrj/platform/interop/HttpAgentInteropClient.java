@@ -8,6 +8,11 @@ import org.springframework.web.client.RestTemplate;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * {@link AgentInteropClient} 的 HTTP 实现：用装了租户/trace 转发器的 {@code interopAgentRestTemplate}
+ * （见 {@link InteropConfig}）把请求 POST 到 agent-service 的 {@code /agent/run}、{@code /agent/run/async}、
+ * {@code /agent/dag/plan-run} 与 {@code /agent/dag/plan-run/async}。
+ */
 @Component
 public class HttpAgentInteropClient implements AgentInteropClient {
 

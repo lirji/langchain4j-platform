@@ -17,6 +17,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
+/**
+ * AnalyticsControllerTest：验证 {@link AnalyticsController} 把问题委托给 {@link NlToSqlService}——
+ * 透传 {@link AnalyticsSqlReply}、缺失/空请求时兜底为空串，并保留 {@code /chat/sql}（兼容路由）与
+ * {@code /analytics/sql}（服务原生路由）两个端点。
+ */
 class AnalyticsControllerTest {
 
     @Test

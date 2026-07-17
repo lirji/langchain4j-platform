@@ -11,6 +11,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.regex.Pattern;
 
+/**
+ * 评测用例集（baseline suite）加载器。按名字先从外部基线目录
+ * （{@link EvalProperties#getBaselineDirectory()}）读取 {@code <name>.json}，找不到再回退到 classpath
+ * 下的 {@code eval/baselines/}，解析为 {@link com.lrj.platform.protocol.eval.EvalSuiteDefinition}。
+ * suite 名做白名单校验并对目录做路径穿越防护；缺失时抛 {@link SuiteNotFoundException}。
+ */
 @Service
 public class EvalSuiteLoader {
 

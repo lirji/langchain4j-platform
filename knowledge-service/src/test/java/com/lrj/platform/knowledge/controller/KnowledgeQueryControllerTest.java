@@ -12,6 +12,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * KnowledgeQueryControllerTest：验证 {@link KnowledgeQueryController} 的接口行为——{@code /rag/query} 委托
+ * {@link KnowledgeQueryService}、按 shared 标志映射 visibility(tenant/public)、空查询转 400，以及 {@code /rag/config}
+ * 反映运行时共享库状态与 RAG 运行时视图（{@link RagRuntimeInfo}）。
+ */
 class KnowledgeQueryControllerTest {
 
     /** 查询相关用例不关心运行时视图，用零依赖基线（hash + in-memory）即可。 */

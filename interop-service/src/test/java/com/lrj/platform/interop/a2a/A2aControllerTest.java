@@ -12,6 +12,11 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * A2aControllerTest：验证 {@link A2aController} 的 A2A JSON-RPC 入口——well-known Agent Card、
+ * {@code message/send} 路由到 gateway、{@code message/stream} 返回 {@link SseEmitter}，
+ * 以及空文本与缺 method 时的错误码。
+ */
 class A2aControllerTest {
 
     private final ObjectMapper json = new ObjectMapper();

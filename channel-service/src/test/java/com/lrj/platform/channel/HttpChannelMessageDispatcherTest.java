@@ -15,6 +15,11 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+/**
+ * HttpChannelMessageDispatcherTest：验证 {@link HttpChannelMessageDispatcher} 各渠道投递行为——
+ * 出站关闭时保持 ACCEPTED、webhook/语音/飞书正确 POST 载荷、语音 provider 缺失或元数据覆盖、
+ * 飞书群 webhook 与经应用 API 直发 open_id（工作流终态回推）两条路径、以及出站 HMAC 签名与密钥缺失的失败分支。
+ */
 class HttpChannelMessageDispatcherTest {
 
     @Test

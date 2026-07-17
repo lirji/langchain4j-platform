@@ -20,6 +20,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * ConversationControllerTest：验证 {@link ConversationController#chat} 的租户元数据回填、RAG 上下文注入与
+ * per-request 类目透传、语义缓存命中短路 RAG/LLM、缓存失效（按租户/按问题），以及注入拦截与 PII 脱敏场景。
+ */
 class ConversationControllerTest {
 
     private static final ResolvedAssistantStyle STYLE = new ResolvedAssistantStyle("中文", "简洁", "cite", "");

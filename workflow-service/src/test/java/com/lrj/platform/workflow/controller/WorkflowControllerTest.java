@@ -20,6 +20,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
+/**
+ * WorkflowControllerTest：验证 {@code WorkflowController} 的退款审批端点。覆盖 {@code /workflow/tasks} 的
+ * approve scope 鉴权门（缺权 403、有权委托 {@link WorkflowService#listTasks()}），以及
+ * {@code /workflow/refund/start} 接收边缘侧启动请求并回显实例/任务/优先级等字段（含 MockMvc standalone 验证）。
+ */
 class WorkflowControllerTest {
 
     @AfterEach

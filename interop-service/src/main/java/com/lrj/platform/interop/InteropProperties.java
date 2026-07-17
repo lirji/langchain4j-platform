@@ -5,6 +5,11 @@ import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
 import java.time.Duration;
 
+/**
+ * {@code app.interop.*} 配置绑定：agent-service / conversation-service 基址与连接/读超时、
+ * live 能力发现开关（{@link #discoveryEnabled}）与缓存 TTL，以及内嵌的 A2A Agent Card 元数据与
+ * push 回调中继参数（{@link A2a}）。由 {@link InteropConfig} 消费。
+ */
 @ConfigurationProperties(prefix = "app.interop")
 public class InteropProperties {
 

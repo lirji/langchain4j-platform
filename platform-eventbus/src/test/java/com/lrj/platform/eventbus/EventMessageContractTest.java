@@ -12,6 +12,12 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * EventMessageContractTest：验证 {@code platform-protocol} 事件契约 record 的不可变性与默认值——
+ * {@link com.lrj.platform.protocol.event.AuditEventMessage} 对 fields 做防御性拷贝并返回只读视图（null → 空 map），
+ * {@link com.lrj.platform.protocol.event.UsageEventMessage} 的 occurredAt 为 null 时补默认时间，
+ * 以及 {@link com.lrj.platform.protocol.event.EventTopics} 死信主题遵循 {@code .DLT} 后缀约定。
+ */
 class EventMessageContractTest {
 
     @Test

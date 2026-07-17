@@ -9,6 +9,10 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * RagPromptAugmenterTest：验证 {@link RagPromptAugmenter} 关闭时原样返回、开启时前置 {@code [Knowledge sources]}
+ * 来源块并透传检索参数，以及 per-request 类目覆盖 / 空白回退配置默认类目。
+ */
 class RagPromptAugmenterTest {
 
     @Test

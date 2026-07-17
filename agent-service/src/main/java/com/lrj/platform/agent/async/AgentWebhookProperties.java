@@ -2,6 +2,10 @@ package com.lrj.platform.agent.async;
 
 import java.time.Duration;
 
+/**
+ * {@link AgentTaskWebhookNotifier} 的配置项：是否启用、最大重试次数、重试退避间隔，
+ * 以及回调 HTTP 客户端的连接/读取超时。绑定 {@code app.agent.webhook.*} 前缀。
+ */
 public class AgentWebhookProperties {
 
     private boolean enabled = true;

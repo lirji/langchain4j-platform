@@ -10,6 +10,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+/**
+ * platform-metering 计量子系统的自动装配：按 {@code app.token-budget.store} 选择 {@link TokenBudgetTracker}
+ * 实现（默认 {@link RedisTokenBudgetTracker} 跨 pod 共享预算，{@code in-memory} 回退单 JVM），并挂载
+ * 按租户扣减 token 预算的 {@link TokenBudgetChatModelListener}（{@link ChatModelListener} SPI）与查询用的
+ * {@link TokenBudgetEndpoint}。
+ */
 @Configuration
 @EnableConfigurationProperties(TokenBudgetProperties.class)
 public class PlatformMeteringAutoConfiguration {

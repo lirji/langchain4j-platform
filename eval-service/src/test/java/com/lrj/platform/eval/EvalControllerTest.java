@@ -18,6 +18,11 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * EvalControllerTest：验证 {@link EvalController} 的接口契约——capabilities 暴露 oracle 断言清单、
+ * {@code /eval/run} 与命名 suite 的 202 受理与空用例 400、以及门禁语义（candidate 匹配 oracle 返回 200、
+ * 回归返回 422 且带 regressions、dualRun 恒 200、缺 suiteName 返回 400），用桩 runner/suiteLoader 隔离外部依赖。
+ */
 class EvalControllerTest {
 
     @Test

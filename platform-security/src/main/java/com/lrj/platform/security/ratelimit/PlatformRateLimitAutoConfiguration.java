@@ -7,6 +7,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+/**
+ * platform-security 限流子系统的自动装配：按 {@code app.rate-limit.store} 选择 {@link RateLimiterRegistry}
+ * 实现——默认 {@link RedisRateLimiterRegistry}（跨重启/多 pod 共享计数），设为 {@code in-memory} 时回退
+ * 单 JVM 的 {@link InMemoryRateLimiterRegistry}。
+ */
 @Configuration
 @EnableConfigurationProperties(RateLimitProperties.class)
 public class PlatformRateLimitAutoConfiguration {

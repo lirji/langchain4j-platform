@@ -6,6 +6,10 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * AssistantStylePropertiesTest：验证 {@link AssistantStyleProperties#resolve} 的默认取值、按模型覆盖的字段级合并、
+ * 不匹配模型时忽略覆盖，以及 null 字段回退默认 / 空串清空的语义。
+ */
 class AssistantStylePropertiesTest {
 
     private static AssistantStyleProperties base() {

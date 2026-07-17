@@ -6,6 +6,10 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * InMemoryUserProfileStoreTest：验证 {@link InMemoryUserProfileStore} 的按租户+用户分桶增删列、子串包含与去标点/大小写
+ * 归一化去重、超容量淘汰最旧、清空计数，以及忽略空白文本。
+ */
 class InMemoryUserProfileStoreTest {
 
     private static MemoryItem item(String text) {

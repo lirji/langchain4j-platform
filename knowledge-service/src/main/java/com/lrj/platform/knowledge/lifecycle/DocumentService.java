@@ -48,6 +48,13 @@ import java.util.stream.Collectors;
 
 import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metadataKey;
 
+/**
+ * 知识文档全生命周期服务：负责上传（切分 {@link DocumentSplitterFactory} → 可选 Contextual 增强 → 嵌入
+ * {@link EmbeddingModel} → 写向量库 {@link EmbeddingStoreRouter}、词法镜像 {@link DocumentMirror}、可选 ES 索引与
+ * GraphRAG {@link GraphIngestor}）、列举、读取与删除，并维护 {@code DocumentRegistry} 元数据、审计与语义缓存失效。
+ * 所有操作按 {@link TenantContext} 租户隔离，{@code shared=true} 时落公共/共享库保留分区（{@link PublicKb#TENANT_ID}）；
+ * 文档级授权经可插拔 {@link KnowledgeAuthz}（{@code app.rag.authz.mode}，默认 Noop 恒放行）。
+ */
 @Service
 public class DocumentService {
 

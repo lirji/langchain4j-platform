@@ -10,6 +10,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * SemanticCacheTest：验证 {@link SemanticCache#getOrCompute} 的命中短路 supplier、未命中回填、相似度阈值命中/未命中、
+ * 租户隔离、关闭时旁路不落缓存，以及按租户/按问题失效。
+ */
 class SemanticCacheTest {
 
     @AfterEach

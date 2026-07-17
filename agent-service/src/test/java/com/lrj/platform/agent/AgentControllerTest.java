@@ -10,6 +10,10 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * AgentControllerTest：验证 {@link AgentController} 把 {@link DeepAgentService} 的运行结果映射为
+ * 带租户 id 的协议回复，并对空 goal 返回 400。
+ */
 class AgentControllerTest {
 
     @AfterEach

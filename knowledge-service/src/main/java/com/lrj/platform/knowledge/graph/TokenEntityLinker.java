@@ -5,6 +5,10 @@ import com.lrj.platform.knowledge.hybrid.KeywordTokenizer;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
+/**
+ * {@link EntityLinker} 的默认实现：从 {@link GraphStore} 取出租户/类目下的实体，凡查询串包含实体表面词
+ * （子串命中），或经 {@link KeywordTokenizer} 分词后实体 token 全部落在查询 token 内的，即作为种子实体返回。
+ */
 public class TokenEntityLinker implements EntityLinker {
 
     private final GraphStore graphStore;

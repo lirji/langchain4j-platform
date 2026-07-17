@@ -15,6 +15,11 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 
+/**
+ * {@link AnalyticsClient} 的 HTTP 实现，经 {@code analyticsRestTemplate}（透传租户与 traceId）
+ * 调用 analytics-service 的 {@code /analytics/sql} 与 {@code /analytics/schema/**}。RestClient 异常被
+ * 捕获并降级为带 error 的结果对象，不向调用方抛出。默认装配（{@code matchIfMissing=true}）。
+ */
 @Component
 @ConditionalOnProperty(name = {"app.agent.enabled", "app.agent.analytics.enabled"}, havingValue = "true", matchIfMissing = true)
 public class HttpAnalyticsClient implements AnalyticsClient {

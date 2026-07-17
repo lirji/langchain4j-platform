@@ -2,6 +2,11 @@ package com.lrj.platform.eval;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * eval-service 的配置属性（前缀 {@code app.eval}）。承载被测目标默认地址与鉴权头、响应片段截断长度、
+ * 基线/报告/快照目录、LLM 判官与 embedding 的最小通过分，以及双跑门禁的容差参数
+ * （passRate/averageScore 容差、最小 agreement、重复跑次数）。
+ */
 @ConfigurationProperties(prefix = "app.eval")
 public class EvalProperties {
 

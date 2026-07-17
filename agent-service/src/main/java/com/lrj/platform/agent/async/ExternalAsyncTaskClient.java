@@ -23,6 +23,12 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * 将 Agent 异步任务镜像/托管到中央 async-task-service（:8086）的 REST 客户端。封装对
+ * {@code /async/tasks/**} 的创建、查询、列表、状态更新、租约续期与取消调用，在本地任务存储与
+ * 平台统一任务中心之间同步；请求经 {@code asyncTaskRestTemplate} 透传租户与 traceId。
+ * 仅当 {@code app.agent.async.external.enabled=true} 时装配，配置见 {@link ExternalAsyncTaskProperties}。
+ */
 @Component
 @ConditionalOnProperty(name = "app.agent.async.external.enabled", havingValue = "true")
 public class ExternalAsyncTaskClient {

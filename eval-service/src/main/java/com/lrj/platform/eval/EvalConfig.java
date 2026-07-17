@@ -16,6 +16,12 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
 
+/**
+ * eval-service 的 Spring 装配。提供评测用的 {@link org.springframework.web.client.RestTemplate}，
+ * 并按 {@code app.eval.judge.enabled} / {@code app.eval.embedding.enabled} 条件装配 {@link EvalJudge}
+ * 与 {@link EvalEmbeddingComparator}：默认注入禁用实现，开启后分别走 platform-gateway-client 的确定性
+ * {@code ChatModel}（LLM 判官）和网关 OpenAI 兼容 embedding（向量相似度）。
+ */
 @Configuration
 @EnableConfigurationProperties(EvalProperties.class)
 public class EvalConfig {

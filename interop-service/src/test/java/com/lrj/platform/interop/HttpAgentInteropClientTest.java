@@ -12,6 +12,10 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+/**
+ * HttpAgentInteropClientTest：用 {@link MockRestServiceServer} 验证 {@link HttpAgentInteropClient}
+ * 对 agent-service 各端点（run、run/async、dag/plan-run[/async]）的请求路径与请求体是否正确。
+ */
 class HttpAgentInteropClientTest {
 
     @Test

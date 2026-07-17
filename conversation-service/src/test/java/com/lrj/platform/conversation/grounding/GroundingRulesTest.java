@@ -8,6 +8,10 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * GroundingRulesTest：验证 {@link GroundingRules} 的来源 id 生成、捏造引用检测（去重保序）、诚实拒答识别、
+ * 支撑度打分解析、来源渲染与可信度警告后缀拼接。
+ */
 class GroundingRulesTest {
 
     private static KnowledgeHit hit(String displayName, String index, String text) {

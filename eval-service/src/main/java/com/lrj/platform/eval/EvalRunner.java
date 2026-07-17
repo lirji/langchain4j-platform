@@ -23,6 +23,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+/**
+ * 单个评测用例的执行核心：按 {@link com.lrj.platform.protocol.eval.EvalCase} 向被测目标发一次 HTTP 请求，
+ * 再依次施加各类断言——{@code expectedContains} 文本包含、{@code expectedJsonPaths} JSON 路径、
+ * {@code semanticExpected} 词袋余弦相似度（内置、支持 CJK 分词）、可选 {@link EvalJudge} LLM 判官、
+ * 可选 {@link EvalEmbeddingComparator} 向量相似度，以及 {@code oracleContains} 单体行为基准比对，
+ * 产出 {@link com.lrj.platform.protocol.eval.EvalCaseResult}。
+ */
 @Service
 public class EvalRunner {
 

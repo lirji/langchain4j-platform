@@ -16,6 +16,11 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+/**
+ * ChannelControllerTest：验证 {@link ChannelController} 出站受理返回 202 并发布 channel.message.accepted 事件、
+ * 非法消息/缺字段回调返回 400、入站事件验签失败返回 401、合法入站事件发布 message.created 事件，
+ * 以及 async-task 回调经 {@link ChannelCallbackMapper} 正确映射为渠道消息（含 callbackSource/SourceId/Status 元数据）。
+ */
 class ChannelControllerTest {
 
     @Test

@@ -1,5 +1,9 @@
 package com.lrj.platform.knowledge.graph;
 
+/**
+ * JDBC 图存储的数据源配置属性（前缀 {@code app.rag.graph.datasource}）：URL、账号、驱动、连接池大小，
+ * 由 {@link GraphRagConfig} 绑定后用于构建 {@link JdbcGraphStore} 的 Hikari 数据源。
+ */
 public class GraphDatasourceProperties {
 
     private String url = "jdbc:mysql://localhost:3306/knowledge_graph?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true";

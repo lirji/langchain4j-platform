@@ -28,6 +28,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
 
+/**
+ * {@link AsyncTaskStore} 的 JDBC 持久化实现（{@code app.async-task.store=jdbc}），用裸 {@link JdbcTemplate}
+ * 直连 MySQL 管理 {@code ASYNC_TASK} 表（表结构以 {@code CREATE TABLE IF NOT EXISTS}/{@code ALTER TABLE} 字面量
+ * 在 {@code init()} 内演进）。覆写增改查、租约与清理，其中「非终态→终态」的状态提交在同一事务内原子写入一条
+ * 生命周期事件 outbox（A1，仅 webhook transport=kafka 时注入 {@link AsyncTaskLifecycleOutbox}），供
+ * {@code AsyncTaskLifecycleRelay} relay 到 Kafka。
+ */
 @Component
 @ConditionalOnProperty(name = "app.async-task.store", havingValue = "jdbc")
 public class JdbcAsyncTaskStore extends AsyncTaskStore {

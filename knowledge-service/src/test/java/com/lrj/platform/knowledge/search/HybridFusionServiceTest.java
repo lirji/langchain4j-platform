@@ -7,6 +7,11 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * HybridFusionServiceTest：验证 {@link HybridFusionService} 的多路结果融合。WEIGHTED_MAX 分支将向量/关键词/ES
+ * 命中同一 chunk 合并为 hybrid 并取最高分、同源保留更高分、graph 结果独立成条；RRF 分支按倒数名次排序、
+ * 同源重复 chunk 只计一次最佳名次、多源命中标记为 hybrid；两分支均保留公共库 shared 可见性并在冲突时 fail-safe 取 tenant。
+ */
 class HybridFusionServiceTest {
 
     private final HybridFusionService fusion = new HybridFusionService();

@@ -10,6 +10,10 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * InteropControllerTest：验证 {@link InteropController} 的 Agent Card 暴露、MCP 工具列表与单个描述符查询，
+ * 以及工具调用（ping、agent.run 代理、缺 goal 返回 400、未知工具返回 404）的状态码与结果。
+ */
 class InteropControllerTest {
 
     @Test

@@ -18,6 +18,11 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+/**
+ * WorkflowAsyncTaskNotifierTest：借助 {@link org.springframework.test.web.client.MockRestServiceServer}
+ * 验证 {@link WorkflowAsyncTaskNotifier#publishTerminal} 先 POST 创建异步任务、再 PATCH 置为 SUCCEEDED 的两步回推，
+ * 以及创建返回 409 冲突时仍能幂等地完成既有任务。
+ */
 class WorkflowAsyncTaskNotifierTest {
 
     @Test

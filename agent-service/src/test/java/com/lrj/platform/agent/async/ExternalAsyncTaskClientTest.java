@@ -18,6 +18,11 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+/**
+ * ExternalAsyncTaskClientTest：验证 {@link ExternalAsyncTaskClient} 对接中心任务服务
+ * （async-task-service）的 REST 契约——创建任务（默认不透传 webhook）、镜像终态状态更新、租约、
+ * 可选委派 webhook、读取并映射回 agent 任务形状，以及列表与取消。
+ */
 class ExternalAsyncTaskClientTest {
 
     @Test

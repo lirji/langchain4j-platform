@@ -19,6 +19,11 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+/**
+ * HttpA2aAgentGatewayTest：验证 {@link HttpA2aAgentGateway} 把 chat / submitTask / getTask / cancelTask
+ * 代理到 agent-service（{@code /agent/run}、{@code /agent/run/async}、{@code /agent/tasks/**}），
+ * 并覆盖 404 时返回空/false 的处理。
+ */
 class HttpA2aAgentGatewayTest {
 
     private RestTemplate restTemplate() {

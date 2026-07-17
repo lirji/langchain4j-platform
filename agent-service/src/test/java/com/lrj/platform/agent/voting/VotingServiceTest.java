@@ -11,6 +11,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * VotingServiceTest：验证 {@link VotingService} 多投票者集成的两种策略——
+ * majority 多数表决（归一化后同派统计、达到 minAgreement 才置信、保序取胜出派原文）、
+ * synthesis 聚合综合（agreement 为 NaN 且恒置信），以及按 n 精确 fan-out 投票者调用次数。
+ */
 class VotingServiceTest {
 
     @AfterEach

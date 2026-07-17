@@ -11,6 +11,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * RAG 检索查询入口：暴露 {@code POST /rag/query}（别名 {@code /knowledge/query}）委托 {@link KnowledgeQueryService}
+ * 做租户隔离的混合检索并映射为 {@link KnowledgeQueryReply}，以及 {@code GET /rag/config} 返回
+ * {@link KnowledgeRuntimeView} 供前端做能力协商（共享库是否开启、RAG 运行时视图，来自 {@link RagRuntimeInfo}）。
+ */
 @RestController
 public class KnowledgeQueryController {
 

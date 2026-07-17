@@ -12,6 +12,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+/**
+ * FeishuInboundControllerTest：验证 {@link FeishuInboundController} 处理飞书入站回调——
+ * url_verification 校验 token 通过后回显 challenge、token 不符返回 401、
+ * im.message.receive_v1 文本消息被解析（messageId/openId/chatId/text）并交给 {@link FeishuMessageBridge}、非文本消息被忽略。
+ */
 class FeishuInboundControllerTest {
 
     private final ObjectMapper json = new ObjectMapper();

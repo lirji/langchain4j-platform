@@ -8,6 +8,12 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/**
+ * RAG 提示增强器：调用 {@link KnowledgeClient} 检索知识库命中，拼成 {@code [Knowledge sources]} 上下文块注入
+ * 系统提示（受 {@code app.conversation.rag.*} 的开关、top-k、min-score、类目与最大上下文字符数控制，并支持
+ * per-request 类目覆盖）。未开启 / 无命中 / 空问题时返回空上下文，使对话退化为无 RAG；同时带回真正进入上下文块的
+ * 结构化命中 {@link RagContext} 供 grounding 事后核对。
+ */
 @Component
 public class RagPromptAugmenter {
 

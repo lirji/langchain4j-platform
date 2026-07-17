@@ -16,6 +16,11 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+/**
+ * HttpAgentCapabilityClientTest：用 {@link MockRestServiceServer} 验证
+ * {@link HttpAgentCapabilityClient} 从 agent-service {@code /agent/capabilities} 拉取并映射为
+ * {@link McpToolDescriptor} 列表。
+ */
 class HttpAgentCapabilityClientTest {
 
     @Test

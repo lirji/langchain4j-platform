@@ -18,6 +18,10 @@ import static org.springframework.http.MediaType.APPLICATION_JSON;
 
 import org.springframework.http.HttpStatus;
 
+/**
+ * HttpAnalyticsClientTest：验证 {@link HttpAnalyticsClient} 对 analytics-service 的 REST 调用——
+ * NL2SQL 请求/响应的类型化收发、guardBlocked 透传、传输失败降级为 error，以及列表/描述表结构接口。
+ */
 class HttpAnalyticsClientTest {
 
     @Test

@@ -11,6 +11,12 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
 
+/**
+ * 对话服务访问 knowledge-service 的 RAG 客户端配置：仅当 {@code app.conversation.rag.enabled=true} 时激活，
+ * 构建指向知识库（默认 {@code :8084}）的 {@code knowledgeRestTemplate}，并装上 {@link OutboundTenantForwarder} +
+ * {@link OutboundTraceForwarder} 拦截器以跨服务透传租户身份与 traceId，同时按配置设置连接/读取超时。
+ * 供 {@link HttpKnowledgeClient} 注入使用。
+ */
 @Configuration
 @ConditionalOnProperty(name = "app.conversation.rag.enabled", havingValue = "true")
 public class ConversationRagConfig {

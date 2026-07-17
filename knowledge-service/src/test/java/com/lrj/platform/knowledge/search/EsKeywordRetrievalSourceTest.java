@@ -9,6 +9,11 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * EsKeywordRetrievalSourceTest：借助 {@link FakeEsGateway} 验证 {@link EsKeywordRetrievalSource}
+ * 的启用判定（须 enabled 且 query-enabled）、BM25 归一化与 mergeKey/id 对齐、ES 权重放大、关归一化时保留原始分、
+ * 网关异常时降级为空结果，以及把租户与 category 下推给网关。
+ */
 class EsKeywordRetrievalSourceTest {
 
     private final FakeEsGateway gateway = new FakeEsGateway();

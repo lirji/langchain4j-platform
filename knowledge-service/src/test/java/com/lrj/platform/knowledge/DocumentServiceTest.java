@@ -21,6 +21,10 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+/**
+ * DocumentServiceTest：验证 {@link DocumentService} 的文档生命周期——上传/列举/读取/删除的租户隔离、同名重传
+ * 版本递增覆盖、多模态原始字节大小、开启 GraphRAG 时三元组随上传/删除同步，以及语义缓存失效器的调用与容错。
+ */
 class DocumentServiceTest {
 
     private final DocumentMirror mirror = new DocumentMirror();

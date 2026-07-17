@@ -12,6 +12,11 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * KeywordSearchServiceTest：验证 {@link KeywordSearchService} 基于 {@link DocumentMirror} 的关键词检索
+ * 按租户与 category 隔离结果，并验证 {@link SimpleKeywordTokenizer} 对中文按二元组（bigram）切词。
+ * 依赖 {@link TenantContext}，用例后在 {@code @AfterEach} 清理。
+ */
 class KeywordSearchServiceTest {
 
     private final DocumentMirror mirror = new DocumentMirror();

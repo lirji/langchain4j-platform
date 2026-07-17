@@ -4,6 +4,10 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * ConfidenceGateTest：验证 {@link ConfidenceGate#isConfident} 的启发式置信判定——干净的长答案判为
+ * 置信，答案过短、含不确定标记（中/英文）或为 null 时判为不置信（需升级）。
+ */
 class ConfidenceGateTest {
 
     @Test

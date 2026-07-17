@@ -26,6 +26,12 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * AdminControllerTest：验证 {@link AdminController} 的 RBAC 管理端点。覆盖 role-admin scope 与
+ * admin-writes 开关的鉴权门（403/503）、用户/角色/租户基础角色/用户组的 CRUD 与成员管理、
+ * 未知角色与保留租户的校验（400）、被引用资源删除冲突（409），以及基于 If-Match 版本号的乐观锁语义
+ * （匹配前进、陈旧 412、缺失 428、非法 400）和继承层有效权限归因。
+ */
 class AdminControllerTest {
 
     private final PasswordHasher hasher = new PasswordHasher();

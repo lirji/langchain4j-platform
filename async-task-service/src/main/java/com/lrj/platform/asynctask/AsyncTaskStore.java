@@ -19,6 +19,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.UnaryOperator;
 
+/**
+ * 异步任务存储的默认内存实现（{@code app.async-task.store=in-memory}，缺省即启用），基于
+ * {@link ConcurrentHashMap}。提供增改查、按租户列举、worker 租约（lease）抢占与到期回收，以及按 TTL
+ * 定时清理终态任务。JDBC 变体 {@link JdbcAsyncTaskStore} 继承本类并覆写各方法；租约/状态迁移的纯函数工具
+ * （{@link #withStatus}、{@link #withLease}）由两种实现共享。
+ */
 @Component
 @ConditionalOnProperty(name = "app.async-task.store", havingValue = "in-memory", matchIfMissing = true)
 public class AsyncTaskStore {

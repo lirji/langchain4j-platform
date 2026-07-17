@@ -17,6 +17,11 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * SessionBearerAuthFilterTest：验证 {@link SessionBearerAuthFilter} 用会话密钥签发的前端会话 JWT
+ * 换发内部 JWT 的行为——合法 Bearer 换发内部令牌并剥离 {@code Authorization}、身份一致；非法 Bearer
+ * 原样透传交给 api-key filter；无 Authorization 及开放登录路径直接放行不换发。
+ */
 class SessionBearerAuthFilterTest {
 
     private final InternalSecurityProperties props = new InternalSecurityProperties();

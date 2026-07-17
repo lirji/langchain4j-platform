@@ -21,6 +21,11 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * A2aPushForwarderTest：验证 {@link A2aPushForwarder} 的任务终态 push 中继——HMAC 签名的确定性、
+ * 未登记 push 的任务被忽略、投递 A2A Task 信封（含 {@code X-A2A-Notification-Token} 与 HMAC 签名头）
+ * 后从 store 清理且不泄漏 {@link TenantContext}。
+ */
 class A2aPushForwarderTest {
 
     private final ObjectMapper json = new ObjectMapper();

@@ -14,6 +14,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * ReflexionServiceTest：验证 {@link ReflexionService} 反思式自改进的收敛逻辑——
+ * 首答即达阈值时提前停止（不调用 improve）、恒不达阈时最多迭代 maxAttempts 次、
+ * improve 提示中携带评分与主要问题、以及各阶段进度事件（attempt-start/answer/critique/done）的发射。
+ */
 class ReflexionServiceTest {
 
     @AfterEach

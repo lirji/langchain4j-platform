@@ -2,6 +2,11 @@ package com.lrj.platform.protocol.eval;
 
 import java.util.Map;
 
+/**
+ * 回归评测中的单条用例契约：定义待打的 {@code endpoint}/{@code method}/{@code body}，以及多档校验方式——
+ * 子串包含 ({@code expectedContains}/{@code oracleContains})、JSON path 断言、语义/判官/嵌入相似度
+ * 期望值与各自的最小分阈值。eval-service 据此逐条执行并判定通过。
+ */
 public record EvalCase(String id,
                        String endpoint,
                        String method,

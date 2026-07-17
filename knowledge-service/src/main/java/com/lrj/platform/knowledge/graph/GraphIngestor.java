@@ -12,6 +12,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executor;
 
+/**
+ * GraphRAG 入库器：对文档切分后的 {@link TextSegment} 逐段调 {@link GraphExtractor} 抽取三元组，
+ * 按关系白名单与每块上限过滤、按别名表归一化实体，附上 tenantId/category/sourceId 后写入 {@link GraphStore}；
+ * 支持同步或经 {@link Executor} 异步入库。文档删除时按 sourceId 前缀清理对应三元组。
+ */
 public class GraphIngestor {
 
     private static final Logger log = LoggerFactory.getLogger(GraphIngestor.class);

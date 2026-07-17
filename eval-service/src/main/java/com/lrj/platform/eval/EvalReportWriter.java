@@ -9,6 +9,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
+/**
+ * 评测报告落盘器。当 {@link EvalProperties#getReportDirectory()} 配置了目录时，把一次运行的
+ * {@link com.lrj.platform.protocol.eval.EvalRunReply} 以 runId 命名写成 JSON 文件（含路径穿越校验）；
+ * 未配置目录则跳过并返回空。
+ */
 @Service
 public class EvalReportWriter {
 

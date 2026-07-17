@@ -13,6 +13,13 @@ import java.util.Map;
 import java.util.function.LongSupplier;
 import java.util.function.ToIntFunction;
 
+/**
+ * ReAct 自主 Agent 的核心执行引擎。反复调用 {@link AgentBrain} 决策下一步，按 {@link AgentDecision#action()}
+ * 分派到注册的 {@link AgentAction}（或 {@code finish} 收尾、{@code delegate} 递归派子 Agent），把观察写回
+ * scratchpad/history 直至完成。内建多重停止条件（{@code MAX_STEPS}/{@code TIMEOUT}/{@code BUDGET}/{@code LOOP}
+ * 打转检测/{@code CANCELLED}/{@code ERROR}），并在超出 {@code maxScratchpadChars} 时经 {@link ScratchpadSummarizer}
+ * 压缩早期笔记。所有阈值来自 {@link AgentProperties}；产出内部 {@link Run}/{@link Step} 记录供 {@link AgentRunMapper} 转 DTO。
+ */
 public class DeepAgentService {
 
     private static final Logger log = LoggerFactory.getLogger(DeepAgentService.class);

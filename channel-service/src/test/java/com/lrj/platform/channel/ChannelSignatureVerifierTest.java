@@ -8,6 +8,10 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * ChannelSignatureVerifierTest：验证 {@link ChannelSignatureVerifier} 在入站签名关闭时全部放行、
+ * 开启后自签能通过校验、以及伪造签名被拒。
+ */
 class ChannelSignatureVerifierTest {
 
     @Test

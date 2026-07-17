@@ -2,6 +2,11 @@ package com.lrj.platform.agent.mcp;
 
 import java.util.List;
 
+/**
+ * agent-service MCP 客户端的配置项（前缀 {@code app.agent.mcp}）：开关、传输类型
+ * （{@code stdio}/{@code http}）、日志开关，以及 {@link Stdio} 命令行与 {@link Http} 端点地址。
+ * 由 {@link AgentMcpConfig} 绑定并据此构建 MCP 传输。
+ */
 public class AgentMcpProperties {
 
     private boolean enabled = false;

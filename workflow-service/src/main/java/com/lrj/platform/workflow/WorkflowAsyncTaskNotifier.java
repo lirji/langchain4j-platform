@@ -19,6 +19,13 @@ import org.springframework.web.client.RestTemplate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * 工作流终态回推到 async-task-service 的通知器：审批流程走到 COMPLETED 时，先以 {@code workflow-<instanceId>}
+ * 为幂等键创建异步任务（已存在的 409 视为幂等成功），再将其状态置为 SUCCEEDED 并携带 reply/webhookUrl，
+ * 由 async-task-service 负责最终 webhook 投递。仅在 {@code app.workflow.enabled=true} 时装配，
+ * 通过 {@code workflowAsyncTaskRestTemplate} 调用；任何 {@link org.springframework.web.client.RestClientException}
+ * 都被吞掉并返回 false，不阻断主流程。
+ */
 @Component
 @ConditionalOnProperty(name = "app.workflow.enabled", havingValue = "true")
 public class WorkflowAsyncTaskNotifier {

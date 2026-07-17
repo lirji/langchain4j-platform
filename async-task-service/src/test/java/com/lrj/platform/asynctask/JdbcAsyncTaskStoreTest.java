@@ -16,6 +16,11 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * JdbcAsyncTaskStoreTest：基于内存 H2（MySQL 兼容模式）验证 {@link JdbcAsyncTaskStore} 的关键语义——
+ * 「非终态→终态」转变时在同一事务内原子写一条生命周期 outbox 行（非终态更新与已终态 no-op 均不入队，
+ * EVENT_ID 幂等），以及 SQL 层租约的抢占（活跃租约阻断他人）、过期重认领与终态任务不可被租约修改。
+ */
 class JdbcAsyncTaskStoreTest {
 
     @Test

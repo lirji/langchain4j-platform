@@ -4,6 +4,10 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * CodeExecActionTest：验证 {@link CodeExecAction} 的代码执行动作——正常算术求值、输出截断、超时、
+ * 编译错误、不安全 API 拦截、源码过长/为空以及未启用时的提示文案。
+ */
 class CodeExecActionTest {
 
     @Test

@@ -14,6 +14,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+/**
+ * Agent 异步任务的服务端推送（SSE）中心。按 {@code taskId} 维护 {@link SseEmitter} 订阅表，
+ * {@link #subscribe(String)} 订阅时先补发当前任务快照、任务已终态则立即关闭连接；同时监听
+ * {@link AgentTaskEvent}（状态变更）与 {@link AgentTaskProgressEvent}（中间进度）并转发给对应订阅方。
+ * 默认随 {@code app.agent.enabled} 装配。
+ */
 @Service
 @ConditionalOnProperty(name = "app.agent.enabled", havingValue = "true", matchIfMissing = true)
 public class AgentTaskSseService {

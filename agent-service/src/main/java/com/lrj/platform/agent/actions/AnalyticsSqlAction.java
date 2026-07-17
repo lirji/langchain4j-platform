@@ -8,6 +8,11 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * {@code analytics_sql} 动作：把自然语言业务统计问题委托给 analytics-service 的 NL2SQL（只读、带安全护栏），
+ * 通过 {@link AnalyticsClient} 调用并把生成的 SQL、行数、前若干行数据与解读拼成观察文本返回给 ReAct 循环。
+ * 是 {@link AgentAction} 的可插拔实现之一，由 {@code app.agent.enabled} 门控（默认开）。
+ */
 @Component
 @ConditionalOnProperty(name = "app.agent.enabled", havingValue = "true", matchIfMissing = true)
 public class AnalyticsSqlAction implements AgentAction {

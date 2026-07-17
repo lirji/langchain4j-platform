@@ -9,6 +9,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * VoiceConversationServiceTest：验证 {@link VoiceConversationService#chat} 的语音闭环——正常轮次先 ASR 转写、
+ * 再经 {@link ConversationClient} 对话、TTS 合成时剥除引用标记（文本侧保留），route=CHAT；空白转写直接回退提示
+ * 且不调用对话（不烧 token），route=NONE；并覆盖 {@code stripCitations} 去除 {@code [doc=...]} 标记。
+ */
 class VoiceConversationServiceTest {
 
     private static SpeechService.Speech tts(String tag) {

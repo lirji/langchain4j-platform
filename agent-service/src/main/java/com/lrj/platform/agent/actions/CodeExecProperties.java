@@ -1,5 +1,10 @@
 package com.lrj.platform.agent.actions;
 
+/**
+ * {@code code_exec} 动作与沙箱的可调参数（绑定前缀 {@code app.agent.code-exec}）。含总开关、执行超时、源码/输出
+ * 长度上限、是否启用受限 API denylist（{@code blockUnsafeApis}），以及子进程沙箱专属的堆上限 {@code maxHeapMb}
+ * 与 {@code javaExecutable}、沙箱实现选择 {@code sandbox}。由 {@link CodeExecConfig} 装配，供 {@link CodeExecAction} 使用。
+ */
 public class CodeExecProperties {
 
     private boolean enabled = false;

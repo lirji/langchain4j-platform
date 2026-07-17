@@ -9,6 +9,11 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * SessionTokenIssuerTest：验证 {@link SessionTokenIssuer} 签发的会话访问令牌可被 edge-gateway 用同一会话密钥验签
+ * （还原租户/用户/scopes），且内部令牌密钥无法验签会话令牌——会话与内部令牌的爆炸半径相互隔离；
+ * 另验证刷新令牌哈希的确定性与不可逆（同串同哈希、不同串不同哈希、哈希 != 原串）。
+ */
 class SessionTokenIssuerTest {
 
     private final InternalSecurityProperties sec = new InternalSecurityProperties();

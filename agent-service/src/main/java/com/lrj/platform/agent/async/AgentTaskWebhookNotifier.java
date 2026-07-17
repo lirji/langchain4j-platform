@@ -18,6 +18,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Executor;
 
+/**
+ * 监听 {@link AgentTaskEvent}，在任务到达终态时向调用方在任务 {@code input.webhookUrl} 指定的地址
+ * 异步回调 {@link AgentTaskWebhookPayload}。带最大重试次数与退避（见 {@link AgentWebhookProperties}），
+ * 成功/失败均经 {@link AuditLogger} 记录审计事件。当中央 async-task-service 已接管 webhook 投递
+ * （{@link ExternalAsyncTaskProperties} 的 authoritative + mirrorWebhook）时本地不再重复发送。
+ */
 @Component
 public class AgentTaskWebhookNotifier {
 

@@ -8,6 +8,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+/**
+ * UserProfileServiceTest：验证 {@link UserProfileService} 的画像回忆（渲染要点、按 recall 限额取最近）与
+ * observe 抽取入库（空事实不写、抽取异常被吞不外抛）。
+ */
 class UserProfileServiceTest {
 
     /** 同步执行器，便于确定性断言 observe 结果。 */

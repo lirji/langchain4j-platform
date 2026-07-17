@@ -12,6 +12,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+/**
+ * ChatMcpControllerTest：验证 {@link ChatMcpController#chatMcp} 在 {@link McpAssistant} 可用时分派并回填租户，
+ * 不可用时返回 "MCP not enabled" 错误。
+ */
 class ChatMcpControllerTest {
 
     @AfterEach

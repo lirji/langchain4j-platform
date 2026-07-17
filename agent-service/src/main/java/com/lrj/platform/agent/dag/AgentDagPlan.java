@@ -4,6 +4,11 @@ import dev.langchain4j.model.output.structured.Description;
 
 import java.util.List;
 
+/**
+ * DAG 规划的结构化输出契约：由 {@link AgentDagPlanner}/{@link AgentDagReplanner} 生成，承载 1~6 个
+ * 子任务（{@link Task}，各含 id、指令描述与上游依赖 {@code dependsOn}）。{@link AgentDagService}
+ * 据此拆分并按依赖分层并行执行。
+ */
 public record AgentDagPlan(
         @Description("""
                 1 to 6 sub-tasks that together answer the user's goal.

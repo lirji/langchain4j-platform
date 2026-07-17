@@ -23,6 +23,11 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * AsyncTaskControllerTest：验证 {@link AsyncTaskController} 的核心行为——创建返回 202 且按租户绑定、
+ * 支持调用方自带 taskId、拒绝空 kind、状态迁移到终态、worker 租约抢占与到期重认领、活跃租约阻断他人
+ * 更新、终态任务不重复发终态事件、跨租户不可见（404），以及死信 webhook outbox 的租户隔离与上限约束。
+ */
 class AsyncTaskControllerTest {
 
     @AfterEach

@@ -21,6 +21,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * JDBC 模式下的 webhook outbox 派发器（{@code app.async-task.store=jdbc}）。定时（{@code @Scheduled}）从
+ * {@link AsyncTaskWebhookOutbox} 抢占到期行并 HTTP 投递：成功标记 delivered，4xx 视为客户端错误直接死信，
+ * 5xx/网络错误按指数退避重试至上限后死信，同时清理过期的 delivered 行。每个实例用唯一 ownerId 认领，
+ * 支持多实例并发派发。投递结果记审计（WEBHOOK_DELIVERED / WEBHOOK_FAILED）。
+ */
 @Component
 @ConditionalOnProperty(name = "app.async-task.store", havingValue = "jdbc")
 public class AsyncTaskWebhookOutboxDispatcher {

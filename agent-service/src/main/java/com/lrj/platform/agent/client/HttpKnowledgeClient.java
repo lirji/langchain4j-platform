@@ -12,6 +12,11 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 
+/**
+ * {@link KnowledgeClient} 的 HTTP 实现，经 {@code knowledgeRestTemplate}（透传租户与 traceId）
+ * 调用 knowledge-service 的 {@code /rag/query} 做检索。RestClient 异常被捕获并降级为空
+ * {@link KnowledgeQueryReply}，不向调用方抛出。默认装配（{@code matchIfMissing=true}）。
+ */
 @Component
 @ConditionalOnProperty(name = "app.agent.enabled", havingValue = "true", matchIfMissing = true)
 public class HttpKnowledgeClient implements KnowledgeClient {

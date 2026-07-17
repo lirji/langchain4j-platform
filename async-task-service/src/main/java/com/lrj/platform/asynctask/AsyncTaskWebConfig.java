@@ -13,6 +13,12 @@ import org.springframework.web.client.RestTemplate;
 import java.util.Map;
 import java.util.concurrent.Executor;
 
+/**
+ * async-task-service 的 Web/调度装配：绑定 webhook 配置（{@link AsyncTaskWebhookProperties}）、构建带超时的
+ * webhook {@link RestTemplate}，并提供 {@code asyncTaskExecutor} 线程池——其 TaskDecorator 会跨线程传播
+ * {@link TenantContext} 与 MDC，保证异步 webhook 投递仍带正确的租户与 traceId 上下文。{@code @EnableScheduling}
+ * 打开各 {@code @Scheduled} 清理/派发任务。
+ */
 @Configuration
 @EnableScheduling
 public class AsyncTaskWebConfig {

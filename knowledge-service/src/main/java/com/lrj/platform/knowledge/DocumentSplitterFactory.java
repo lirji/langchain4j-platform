@@ -10,6 +10,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+/**
+ * 入库切分器工厂：按 {@code app.rag.chunking.*} 配置构建 langchain4j 的 {@link DocumentSplitter}。
+ * 支持 recursive / markdown-header / parent-child / semantic 四种策略，字符或 token 计量（token 模式用
+ * {@link OpenAiTokenCountEstimator}），语义切分复用注入的 {@link EmbeddingModel}。由 {@code DocumentService}
+ * 在文档入库时调用 {@link #create()} 取得切分器。
+ */
 @Component
 public class DocumentSplitterFactory {
 

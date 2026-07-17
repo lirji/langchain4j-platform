@@ -13,6 +13,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * QueryRouterServiceTest：验证 {@link QueryRouterService#route} 按 {@link RouteKind} 分档——RAG 档检索并注入上下文、
+ * CHAT/TOOL 档不检索，以及分类器异常时回退 RAG。
+ */
 class QueryRouterServiceTest {
 
     private static final ResolvedAssistantStyle STYLE = new ResolvedAssistantStyle("中文", "简洁", "cite", "");

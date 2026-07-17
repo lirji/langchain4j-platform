@@ -9,6 +9,11 @@ import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * DingtalkEventCryptoTest：验证 {@link DingtalkEventCrypto} 的回调签名校验——签名为
+ * Base64(HmacSHA256(appSecret, timestamp + "\n" + appSecret))，覆盖正确签名通过、错误/空签名与错误时间戳被拒、
+ * 以及 {@code hasSecret} 对配置的反映。
+ */
 class DingtalkEventCryptoTest {
 
     private static final String SECRET = "test-app-secret";

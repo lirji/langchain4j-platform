@@ -4,6 +4,12 @@ import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
 import dev.langchain4j.service.V;
 
+/**
+ * ReAct 决策核心的 LangChain4j AiService 接口。按系统/用户提示每次只决定下一步，
+ * 结构化返回一个 {@link AgentDecision}（thought / action / actionInput / note / finalAnswer）。
+ * 由 {@code AgentConfig} 用 {@code AiServices.builder} 绑定网关 ChatModel 构建，被 {@link DeepAgentService}
+ * 在其推理循环里反复调用。
+ */
 public interface AgentBrain {
 
     @SystemMessage("""

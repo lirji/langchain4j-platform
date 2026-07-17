@@ -11,6 +11,11 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * McpToolActionTest：验证 {@link McpToolAction} 把 LLM 给的 JSON 解析为 MCP 工具调用并分发到
+ * {@link McpClient}，覆盖工具列表描述、缺 args 默认空对象、缺 tool 字段/非法 JSON 的可纠正提示，
+ * 以及工具返回错误或执行抛异常的处理。
+ */
 class McpToolActionTest {
 
     @Test

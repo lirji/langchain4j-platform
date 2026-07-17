@@ -18,6 +18,13 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * JDBC 模式（{@code app.async-task.store=jdbc}）下的 webhook 事务性 outbox，直连裸 {@link JdbcTemplate} 管理
+ * {@code ASYNC_TASK_WEBHOOK_OUTBOX} 表（表结构以 {@code CREATE TABLE IF NOT EXISTS}/{@code ALTER TABLE} 字面量在
+ * {@code init()} 内演进）。提供入队、基于 claim TTL 的抢占式派发（{@link #claimDue}，支持过期重认领）、
+ * 投递成功/重试/死信标记、指数退避调度（{@link #schedule}）与死信巡检。由 {@link AsyncTaskWebhookOutboxEnqueuer}
+ * 入队、{@link AsyncTaskWebhookOutboxDispatcher} 轮询派发。
+ */
 @Component
 @ConditionalOnProperty(name = "app.async-task.store", havingValue = "jdbc")
 public class AsyncTaskWebhookOutbox {

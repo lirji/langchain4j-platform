@@ -2,6 +2,11 @@ package com.lrj.platform.asynctask;
 
 import java.time.Duration;
 
+/**
+ * 异步任务 webhook 投递配置项（前缀 {@code app.async-task.webhook}）：开关、终态投递传输方式（http/kafka）、
+ * 重试次数/退避、连接与读超时、outbox 轮询间隔/批量、已投递记录保留时长与 claim 租约 TTL。由
+ * {@link AsyncTaskWebConfig} 绑定，被 webhook notifier / outbox / dispatcher 共同读取。
+ */
 public class AsyncTaskWebhookProperties {
 
     private boolean enabled = true;

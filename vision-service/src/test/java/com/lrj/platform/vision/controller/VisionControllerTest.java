@@ -17,6 +17,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 
+/**
+ * VisionControllerTest：验证 {@code VisionController#caption} 先经 {@link VisionContentGuard} 校验/归一化 MIME、
+ * 再将解码后的图片字节委托给 {@link VisionModel} 并把结果包装为 {@code VisionCaptionReply}（含 model/chars）；
+ * 覆盖空 base64、null 请求、超尺寸与非法 MIME 在调用模型前即被拒绝。
+ */
 class VisionControllerTest {
 
     private final VisionModel visionModel = mock(VisionModel.class);

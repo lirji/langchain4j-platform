@@ -11,6 +11,10 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
+/**
+ * GraphIngestorTest：验证 {@link GraphIngestor} 从文本段抽取管道式三元组并写入 {@link InMemoryGraphStore}——
+ * 应用实体别名映射与关系白名单过滤，并保证 removeBySourcePrefix 能按来源前缀清除某文档的全部三元组。
+ */
 class GraphIngestorTest {
 
     private final InMemoryGraphStore store = new InMemoryGraphStore();

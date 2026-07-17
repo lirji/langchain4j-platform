@@ -9,6 +9,12 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/**
+ * {@code code_exec} 动作：执行一段 Java 源码做精确计算/数据转换。先按 {@link CodeExecProperties} 做长度限制与
+ * denylist（{@code UNSAFE_TOKENS} 拦截网络/文件/进程/反射等受限 API），再交给注入的 {@link CodeSandbox} 实现
+ * （默认独立子进程 {@code SubprocessCodeSandbox}，可选同 JVM 的 {@code JShellCodeSandbox}）执行并处理超时/截断/出错。
+ * 是 {@link AgentAction} 的可插拔实现，双门控 {@code app.agent.enabled} + {@code app.agent.code-exec.enabled}（默认关）。
+ */
 @Component
 @ConditionalOnProperty(name = {"app.agent.enabled", "app.agent.code-exec.enabled"}, havingValue = "true")
 public class CodeExecAction implements AgentAction {

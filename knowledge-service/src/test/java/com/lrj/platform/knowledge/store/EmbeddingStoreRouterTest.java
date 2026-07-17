@@ -14,6 +14,11 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * EmbeddingStoreRouterTest：验证三种向量库路由实现。{@link InMemoryEmbeddingStoreRouter} 为每租户物理隔离独立
+ * store、同租户复用同一 store、维度切换时 fail-fast；{@link SingleEmbeddingStoreRouter} 忽略租户共享单一 store 但仍校验维度；
+ * {@link ManagedEmbeddingStoreRouter} 按租户命名并清洗 collection 名、惰性建集合后复用、既有集合维度不符时 fail-fast。
+ */
 class EmbeddingStoreRouterTest {
 
     private final EmbeddingModel model = new KnowledgeEmbeddingConfig.HashEmbeddingModel();

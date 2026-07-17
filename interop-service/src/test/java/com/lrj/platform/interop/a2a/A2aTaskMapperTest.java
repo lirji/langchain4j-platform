@@ -7,6 +7,10 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * A2aTaskMapperTest：验证 {@link A2aTaskMapper} 把 agent 任务状态串映射为 A2A {@link TaskState}，
+ * 并按状态构造成功任务的文本 artifact、失败任务的错误 status message、运行中任务无 artifact/无消息。
+ */
 class A2aTaskMapperTest {
 
     private final A2aTaskMapper mapper = new A2aTaskMapper();

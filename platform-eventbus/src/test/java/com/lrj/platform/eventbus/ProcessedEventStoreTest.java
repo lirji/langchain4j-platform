@@ -5,6 +5,11 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * ProcessedEventStoreTest：验证 {@link ProcessedEventStore} 的幂等去重语义——{@link InMemoryProcessedEventStore}
+ * 与 {@link JdbcProcessedEventStore}（H2 MySQL 模式）首次 markProcessed 返回 true、重复返回 false，
+ * 且 JDBC 实现跨 store 实例（模拟重启连同一库）仍能识别已处理事件。
+ */
 class ProcessedEventStoreTest {
 
     @Test

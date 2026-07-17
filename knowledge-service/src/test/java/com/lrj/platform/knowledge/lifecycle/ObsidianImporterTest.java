@@ -27,6 +27,12 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * ObsidianImporterTest：验证 {@link ObsidianImporter} 导入 Obsidian vault 压缩包——将笔记经
+ * {@code DocumentService} 上传（跳过 {@code .obsidian} 配置、frontmatter category 优先、否则用请求默认值）、
+ * 把双链 [[...]] 映射为图三元组写入 {@link GraphStore}（去别名/去 self），图未启用时仍导入笔记但不产生三元组，
+ * 以及 frontmatter 解析与 linkTarget 别名/小节剥离等静态辅助方法。
+ */
 class ObsidianImporterTest {
 
     @AfterEach

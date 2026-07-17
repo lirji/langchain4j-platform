@@ -7,6 +7,12 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 
+/**
+ * JDBC 模式下将终态任务写入 webhook outbox 的入队器（{@code app.async-task.store=jdbc}）。监听
+ * {@link AsyncTaskEvent}，当任务进入终态且配置了合法 webhook URL 时，向 {@link AsyncTaskWebhookOutbox}
+ * 入队一条待投递记录，交由 {@link AsyncTaskWebhookOutboxDispatcher} 异步派发。当 webhook
+ * {@code transport=kafka} 时让位给 Kafka 事件通道。
+ */
 @Component
 @ConditionalOnProperty(name = "app.async-task.store", havingValue = "jdbc")
 public class AsyncTaskWebhookOutboxEnqueuer {

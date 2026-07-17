@@ -16,6 +16,12 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * 异步任务的 SSE 流式推送服务。监听 {@link AsyncTaskEvent}，把每次任务状态变更广播给该任务的所有
+ * {@link SseEmitter} 订阅者，并维护一段有界历史（{@code HISTORY_LIMIT}）以支持按 Last-Event-ID
+ * 断点续传（{@link #eventsAfter}）；任务进入终态时自动 complete 并清理订阅。由 {@link AsyncTaskController}
+ * 的 {@code /async/tasks/{id}/stream} 调用。
+ */
 @Service
 public class AsyncTaskSseService {
 

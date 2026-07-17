@@ -7,6 +7,10 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
+/**
+ * RetrievalMetricsTest：验证 {@link RetrievalMetrics} 的 IR 指标计算——recall/precision/MRR/hit、
+ * 文件级匹配对 chunk 漂移鲁棒而精确级需完全命中、相关标注去重、以及无检索时全零。
+ */
 class RetrievalMetricsTest {
 
     @Test

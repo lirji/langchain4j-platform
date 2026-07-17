@@ -5,6 +5,11 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * VisionContentGuardTest：验证 {@link VisionContentGuard#validate} 的入图校验与 MIME 归一化——拒绝空图、
+ * 超尺寸图、白名单外的 MIME（均抛 IllegalArgumentException），缺失/非图片 MIME 归一化为 {@code image/png}，
+ * 白名单匹配大小写不敏感。
+ */
 class VisionContentGuardTest {
 
     @Test

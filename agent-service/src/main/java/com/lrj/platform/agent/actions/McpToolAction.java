@@ -12,6 +12,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+/**
+ * {@code mcp_call} 动作：调用 MCP server 暴露的外部工具。构造时经 {@link McpClient#listTools()} 拉取工具清单
+ * 拼进动作描述，运行时把 actionInput 的 JSON（{@code {"tool":...,"args":{...}}}）解析成 {@code ToolExecutionRequest}
+ * 交给 MCP 执行并回填结果文本。是 {@link AgentAction} 可插拔实现，双门控 {@code app.agent.enabled} + {@code app.agent.mcp.enabled}（默认关）。
+ */
 @Component
 @ConditionalOnProperty(name = {"app.agent.enabled", "app.agent.mcp.enabled"}, havingValue = "true")
 public class McpToolAction implements AgentAction {

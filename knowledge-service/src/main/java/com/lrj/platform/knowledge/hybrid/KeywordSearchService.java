@@ -11,6 +11,11 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * 混合检索中的关键词（词法）检索分支：在 {@link DocumentMirror} 的当前租户分区内，用 {@link KeywordTokenizer}
+ * 分词后按查询/片段 token 重叠比例打分排序，返回 {@link KeywordHit}。严格租户隔离（仅读当前租户分区），
+ * 可选并入公共/共享库分区；支持按 category 过滤。
+ */
 @Service
 public class KeywordSearchService {
 

@@ -17,6 +17,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * DefaultVisionModelTest：借助捕获式假 {@link dev.langchain4j.model.chat.ChatModel} 验证
+ * {@link DefaultVisionModel#caption} 将图片与指令组装为含单个 {@code ImageContent}（base64 == 入参）+
+ * 单个 {@code TextContent}（指令）的多模态 UserMessage，空白指令回退默认 caption 提示，
+ * 且默认指令路径按图片 SHA 缓存（重复命中不再调模型）、带具体问题的路径不缓存。
+ */
 class DefaultVisionModelTest {
 
     /** 捕获最近一次请求的假 ChatModel，回固定文本。 */

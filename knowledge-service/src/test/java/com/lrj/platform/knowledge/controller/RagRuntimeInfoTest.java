@@ -5,6 +5,12 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * RagRuntimeInfoTest：验证 {@link RagRuntimeInfo} 及其 {@code view()} 到
+ * {@link com.lrj.platform.protocol.knowledge.KnowledgeRuntimeView.RagRuntime} 协议视图的映射。
+ * 覆盖 embedding provider 的语义/降级判定（ollama、openai 为语义，hash 为降级占位）、模型名选取，
+ * 以及融合策略随 ES 开关的默认值（开→rrf、关→weighted_max）与显式配置优先。
+ */
 class RagRuntimeInfoTest {
 
     @Test

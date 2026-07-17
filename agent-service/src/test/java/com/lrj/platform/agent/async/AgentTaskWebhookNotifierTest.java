@@ -23,6 +23,10 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+/**
+ * AgentTaskWebhookNotifierTest：验证 {@link AgentTaskWebhookNotifier} 仅对终态任务向合法 webhook
+ * 回调（带任务/租户请求头），失败按配置重试，非终态或非法 URL 不投递。
+ */
 class AgentTaskWebhookNotifierTest {
 
     @Test

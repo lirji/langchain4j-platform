@@ -8,6 +8,10 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * DeepAgentServiceTest：验证 {@link DeepAgentService} 的 ReAct 循环——直接 finish、执行动作并把观察
+ * 喂回轨迹、重复动作触发 LOOP 停止，以及 delegate 子 Agent 的深度上限。
+ */
 class DeepAgentServiceTest {
 
     @Test

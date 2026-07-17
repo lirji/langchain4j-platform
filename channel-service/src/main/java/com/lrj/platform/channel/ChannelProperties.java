@@ -4,6 +4,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
 
+/**
+ * channel-service 的配置绑定（前缀 {@code app.channel}）：出站总开关与出站签名密钥、入站签名开关与密钥、
+ * 语音 provider 地址、渠道事件发布开关与 topic，以及出站 RestTemplate 的连接/读取超时。
+ * 默认全部保守关闭，由 {@link HttpChannelMessageDispatcher}、{@link ChannelSignatureVerifier}、
+ * {@link KafkaChannelEventPublisher} 等消费。
+ */
 @ConfigurationProperties(prefix = "app.channel")
 public class ChannelProperties {
 

@@ -10,6 +10,11 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * GraphSearchServiceTest：验证 {@link GraphSearchService} 从查询文本链接种子实体、按租户与 category
+ * 在 {@link InMemoryGraphStore} 上做邻居遍历并生成命中路径文本，确保跨租户与跨 category 的隔离。
+ * 依赖 {@link TenantContext}，每个用例后在 {@code @AfterEach} 清理。
+ */
 class GraphSearchServiceTest {
 
     private final InMemoryGraphStore store = new InMemoryGraphStore();

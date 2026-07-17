@@ -8,6 +8,11 @@ import org.springframework.web.client.RestClientException;
 
 import java.util.Map;
 
+/**
+ * MCP 工具调用调度器：按 {@link McpToolCallRequest#tool()} 将请求分派到本地 {@code platform.ping}
+ * 或经 {@link AgentInteropClient} 代理到 agent-service（run / run_async / dag.plan_run[_async]），
+ * 并把下游 HTTP/网络异常规约为带错误信息的 {@link McpToolCallReply}。供 {@link InteropController} 使用。
+ */
 @Component
 public class InteropToolDispatcher {
 

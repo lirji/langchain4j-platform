@@ -11,6 +11,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+/**
+ * ExtractControllerTest：验证 {@link ExtractController#extract} 按 type 分派到 {@link Extractor}、默认走 ticket、
+ * 未知类型抛 400，以及缺失 text 时传空串。
+ */
 class ExtractControllerTest {
 
     @Test

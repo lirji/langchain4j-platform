@@ -15,6 +15,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+/**
+ * AgentDagControllerTest：验证 {@link AgentDagController} 的入参校验与状态码——空 goal 返回 400、
+ * 非法 DAG（成环）返回 400 并回带错误信息，以及异步接口返回 202 与被接受的任务。
+ */
 class AgentDagControllerTest {
 
     @Test
