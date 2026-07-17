@@ -75,6 +75,11 @@ app:
       enabled: ${AGENT_WORKFLOW_ENABLED:false}
       base-url: ${WORKFLOW_BASE_URL:http://localhost:8082}
       read-timeout: ${AGENT_WORKFLOW_READ_TIMEOUT:60s}
+    # 订单查询（order-service）。默认关：不配则 order_query 走 NoopOrderClient（返回 disabled），
+    # orderRestTemplate 也不装配。开启后 order_query 经内部 JWT 直连 order-service 按订单号只读查、按租户隔离。
+    order:
+      enabled: ${AGENT_ORDER_ENABLED:false}
+      base-url: ${ORDER_BASE_URL:http://localhost:8093}
     http:
       connect-timeout: ${AGENT_HTTP_CONNECT_TIMEOUT:1s}
       read-timeout: ${AGENT_HTTP_READ_TIMEOUT:5s}

@@ -185,6 +185,21 @@ public class AgentConfig {
         return serviceRestTemplate(builder, tenantForwarder, traceForwarder, baseUrl, connectTimeout, readTimeout);
     }
 
+    /**
+     * order-service 客户端（order_query 动作按订单号只读查订单）。默认关（order.enabled）；
+     * 类级已门控 agent.enabled。透传租户 → order-service 按租户隔离。
+     */
+    @Bean
+    @ConditionalOnProperty(name = "app.agent.order.enabled", havingValue = "true")
+    RestTemplate orderRestTemplate(RestTemplateBuilder builder,
+                                   OutboundTenantForwarder tenantForwarder,
+                                   OutboundTraceForwarder traceForwarder,
+                                   @Value("${app.agent.order.base-url:http://localhost:8093}") String baseUrl,
+                                   @Value("${app.agent.http.connect-timeout:1s}") Duration connectTimeout,
+                                   @Value("${app.agent.http.read-timeout:5s}") Duration readTimeout) {
+        return serviceRestTemplate(builder, tenantForwarder, traceForwarder, baseUrl, connectTimeout, readTimeout);
+    }
+
     private static RestTemplate serviceRestTemplate(RestTemplateBuilder builder,
                                                     OutboundTenantForwarder tenantForwarder,
                                                     OutboundTraceForwarder traceForwarder,
