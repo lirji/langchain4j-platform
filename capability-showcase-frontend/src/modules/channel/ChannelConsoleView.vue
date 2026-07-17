@@ -11,7 +11,7 @@
  *
  * 深链（capId 存在）沿用通用 CapabilityRunner。执行统一经 executionGate + runCapability（不手写路径/不绕闸门）。
  */
-import { computed, ref } from 'vue'
+import { computed, onScopeDispose, ref, watch } from 'vue'
 import { useCatalogStore } from '../../stores/catalog'
 import { useSessionStore } from '../../stores/session'
 import { runCapability } from '../../api/client'
@@ -77,25 +77,46 @@ const discovered = ref(false)
 function parseChannels(data: unknown): ChannelInfo[] | null {
   const arr = firstArray(data, ['channels', 'capabilities', 'configured', 'data', 'items', 'results'])
   if (!arr) return null
-  return arr.map((item): ChannelInfo => {
-    if (item && typeof item === 'object') {
+  // 过滤 null/无标识项，不产生伪渠道条目。
+  const out: ChannelInfo[] = []
+  for (const item of arr) {
+    if (item == null) continue
+    if (typeof item === 'object') {
       const o = item as Record<string, unknown>
       const label =
-        asStr(o.channel) ?? asStr(o.name) ?? asStr(o.id) ?? asStr(o.type) ?? asStr(o.provider) ?? '(渠道)'
+        asStr(o.channel) ?? asStr(o.name) ?? asStr(o.id) ?? asStr(o.type) ?? asStr(o.provider)
+      if (!label) continue
       const bits: string[] = []
       for (const k of ['type', 'provider', 'enabled', 'target', 'description']) {
         const v = asStr(o[k])
         if (v && v !== label) bits.push(`${k}: ${v}`)
       }
-      return { label, detail: bits.length ? bits.join(' · ') : undefined }
+      out.push({ label, detail: bits.length ? bits.join(' · ') : undefined })
+    } else {
+      const label = asStr(item)
+      if (label) out.push({ label })
     }
-    return { label: String(item) }
-  })
+  }
+  return out
 }
 // 兜底：无法解析为渠道列表时展示原始响应。
 const discoveryFallback = computed(() => discoveryRaw.value != null && channels.value === null)
+// 成功但空响应体：独立终态，不与「尚未发现」混用。
+const discoveryEmptyBody = computed(
+  () => discovered.value && !discoveryBusy.value && !discoveryError.value && discoveryRaw.value == null,
+)
+
+// ── 请求生命周期治理：AbortController 池 + 代号（卸载 / 凭证切换时使 pending 失效）──
+const activeControllers = new Set<AbortController>()
+let discoverGeneration = 0
+function abortAll(): void {
+  for (const c of activeControllers) c.abort()
+  activeControllers.clear()
+}
+onScopeDispose(abortAll)
 
 async function discover(): Promise<void> {
+  if (discoveryBusy.value) return
   const cap = discoveryCap.value
   if (!cap) return
   const gate = executionGate(cap, { ...session.permissionContext(), confirmed: false })
@@ -103,21 +124,43 @@ async function discover(): Promise<void> {
     discoveryError.value = gate.reason ?? '当前不可执行。'
     return
   }
+  const gen = ++discoverGeneration
+  const controller = new AbortController()
+  activeControllers.add(controller)
   discoveryBusy.value = true
   discoveryError.value = null
   discoveryRaw.value = null
   channels.value = null
   try {
-    const res = await runCapability(cap, {} as FormValues, session.runContext())
+    const res = await runCapability(cap, {} as FormValues, session.runContext(controller.signal))
+    if (gen !== discoverGeneration) return // 旧代号：已被新一轮 / 凭证切换失效
     discoveryRaw.value = res.data ?? null
     channels.value = parseChannels(res.data)
   } catch (e) {
+    if (gen !== discoverGeneration) return
     discoveryError.value = humanizeError(e, cap)
   } finally {
-    discoveryBusy.value = false
-    discovered.value = true
+    activeControllers.delete(controller)
+    if (gen === discoverGeneration) {
+      discoveryBusy.value = false
+      discovered.value = true
+    }
   }
 }
+
+// ── 凭证切换：清空已展示的渠道数据并使 pending 请求失效（租户不串味）──
+watch(
+  () => [session.apiKey, session.credentialMode] as const,
+  () => {
+    discoverGeneration += 1
+    abortAll()
+    channels.value = null
+    discoveryRaw.value = null
+    discoveryError.value = null
+    discovered.value = false
+    discoveryBusy.value = false
+  },
+)
 </script>
 
 <template>
@@ -192,6 +235,13 @@ async function discover(): Promise<void> {
       <div v-else-if="discoveryFallback" class="ch__fallback">
         <ResponseViewer phase="success" :data="discoveryRaw" />
       </div>
+      <EmptyState
+        v-else-if="discoveryEmptyBody"
+        variant="empty"
+        icon="∅"
+        title="成功，但响应体为空"
+        description="发现请求成功，但服务未返回任何数据。"
+      />
       <EmptyState
         v-else-if="!discovered"
         variant="empty"

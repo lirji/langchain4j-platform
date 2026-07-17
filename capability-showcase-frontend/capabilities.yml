@@ -1317,9 +1317,10 @@ modules:
           - { name: audio, in: form-data, type: file, required: true, label: 音频文件, accept: "audio/*" }
         requiredScopes: []
         featureFlag: app.voice.enabled
-        featureFlagDefault: true
+        # 后端 voice-service 为 VOICE_ENABLED:false 默认关（2026-07 增强默认全开时有意留关）——目录 fail-closed。
+        featureFlagDefault: false
         riskLevel: safe
-        state: ready
+        state: flag-off
         executableByDefault: true
       - id: voice.chat
         module: multimodal
@@ -1334,9 +1335,9 @@ modules:
           - { name: chatId, in: query, type: string, required: false, label: 会话ID, defaultValue: "default" }
         requiredScopes: []
         featureFlag: app.voice.enabled
-        featureFlagDefault: true
+        featureFlagDefault: false
         riskLevel: safe
-        state: ready
+        state: flag-off
         executableByDefault: true
       - id: voice.chat.stream
         module: multimodal
@@ -1351,9 +1352,9 @@ modules:
           - { name: chatId, in: query, type: string, required: false, label: 会话ID, defaultValue: "default" }
         requiredScopes: []
         featureFlag: app.voice.enabled
-        featureFlagDefault: true
+        featureFlagDefault: false
         riskLevel: safe
-        state: ready
+        state: flag-off
         executableByDefault: true
         sseEvents: [message, done, error]
         tags: [sse]
@@ -1371,7 +1372,8 @@ modules:
         featureFlag: app.rag.multimodal-embedding.enabled
         featureFlagDefault: true
         riskLevel: caution
-        state: ready
+        # 带 requiredScopes 的能力须标 scope-required：gate 才会做 Bearer scope 预判 / api-key hint。
+        state: scope-required
         executableByDefault: true
       - id: rag.image.search
         module: multimodal
@@ -1534,17 +1536,18 @@ modules:
         requestKind: json
         responseKind: json
         params:
-          - { name: cases, in: body, type: json, required: true, label: "用例(JSON 数组)", placeholder: '[{"query":"退款","expectedDocIds":["d1"]}]' }
+          # 字段以 protocol RetrievalCase(id, question, relevantDocIds) 为准，勿用 query/expectedDocIds。
+          - { name: cases, in: body, type: json, required: true, label: "用例(JSON 数组)", placeholder: '[{"id":"c1","question":"退款","relevantDocIds":["d1"]}]', example: '[{"id":"c1","question":"退款政策","relevantDocIds":[]}]' }
           - { name: topK, in: body, type: integer, required: false, label: TopK, defaultValue: 5 }
           - { name: category, in: body, type: string, required: false, label: 类目(可选) }
-        example: '{"cases":[{"query":"退款政策","expectedDocIds":[]}],"topK":5}'
+        example: '{"cases":[{"id":"c1","question":"退款政策","relevantDocIds":[]}],"topK":5}'
         examples:
           - label: "单用例"
-            body: '{"cases":[{"query":"退款政策","expectedDocIds":[]}],"topK":5}'
+            body: '{"cases":[{"id":"c1","question":"退款政策","relevantDocIds":[]}],"topK":5}'
           - label: "多用例"
-            body: '{"cases":[{"query":"退款政策","expectedDocIds":[]},{"query":"审批流程","expectedDocIds":[]}],"topK":5}'
+            body: '{"cases":[{"id":"c1","question":"退款政策","relevantDocIds":[]},{"id":"c2","question":"审批流程","relevantDocIds":[]}],"topK":5}'
           - label: "带期望命中"
-            body: '{"cases":[{"query":"退款政策","expectedDocIds":["doc-1"]}],"topK":10}'
+            body: '{"cases":[{"id":"c1","question":"退款政策","relevantDocIds":["doc-1"]}],"topK":10}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
@@ -1678,12 +1681,13 @@ modules:
       - id: channel.callbacks.async-task
         module: channel
         title: 异步任务回调
-        description: "POST /channel/callbacks/async-task，经 header 传任务状态（演示 header 注入）。body 为任意 payload。"
+        description: "POST /channel/callbacks/async-task，经 header 传任务状态（演示 header 注入）。后端 @RequestBody 必填：body 为任意 payload JSON 对象（留空发 {}）。"
         method: POST
         path: /channel/callbacks/async-task
         requestKind: json
         responseKind: json
         params:
+          - { name: payload, in: body, type: json, required: false, label: "载荷(JSON)", placeholder: "{}" }
           - { name: X-Async-Task-Id, in: header, type: string, required: false, label: 任务ID(header) }
           - { name: X-Async-Task-Status, in: header, type: string, required: false, label: 任务状态(header), placeholder: "SUCCEEDED" }
         example: '{}'
@@ -1695,12 +1699,13 @@ modules:
       - id: channel.callbacks.workflow
         module: channel
         title: 工作流回调
-        description: "POST /channel/callbacks/workflow，经 header 传实例状态。body 为任意 payload。"
+        description: "POST /channel/callbacks/workflow，经 header 传实例状态。后端 @RequestBody 必填：body 为任意 payload JSON 对象（留空发 {}）。"
         method: POST
         path: /channel/callbacks/workflow
         requestKind: json
         responseKind: json
         params:
+          - { name: payload, in: body, type: json, required: false, label: "载荷(JSON)", placeholder: "{}" }
           - { name: X-Workflow-Instance-Id, in: header, type: string, required: false, label: 实例ID(header) }
           - { name: X-Workflow-Status, in: header, type: string, required: false, label: 实例状态(header) }
         example: '{}'
@@ -1712,13 +1717,17 @@ modules:
       - id: channel.inbound
         module: channel
         title: 入站事件
-        description: "POST /channel/inbound，ChannelInboundEvent（字段以后端为准）+ 可选 X-Channel-Signature header（仅 inboundSignatureEnabled=true 时校验）。"
+        description: "POST /channel/inbound，ChannelInboundEvent(eventId, channel, source, eventType, payload) + 可选 X-Channel-Signature header（仅 inboundSignatureEnabled=true 时校验）。"
         method: POST
         path: /channel/inbound
         requestKind: json
         responseKind: json
         params:
+          - { name: channel, in: body, type: string, required: true, label: 渠道, placeholder: "dingtalk" }
+          - { name: eventType, in: body, type: string, required: true, label: 事件类型, placeholder: "message" }
+          - { name: payload, in: body, type: json, required: false, label: "载荷(JSON)", placeholder: "{}" }
           - { name: X-Channel-Signature, in: header, type: string, required: false, label: 签名(可选 header) }
+        example: '{"channel":"dingtalk","eventType":"message","payload":{"text":"你好"}}'
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: caution
