@@ -79,6 +79,10 @@ spring:
           uri: ${VOICE_URI:http://localhost:8091}
           predicates:
             - Path=/voice,/voice/**
+        - id: order
+          uri: ${ORDER_URI:http://localhost:8093}
+          predicates:
+            - Path=/orders,/orders/**
 
 # 边缘持有 api-key → 租户映射；换发内部 JWT 后下游只认 JWT。
 platform:

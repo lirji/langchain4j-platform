@@ -92,6 +92,10 @@ config:
   VOICE_URI: "http://voice-service:8091"
   # 登录/RBAC 服务（edge-gateway 路由 /auth/** 到此）。
   AUTH_URI: "http://auth-service:8092"
+  # 订单查询服务（edge-gateway 路由 /orders/** 到此；agent order_query 直连）。
+  ORDER_URI: "http://order-service:8093"
+  ORDER_DB_URL: "jdbc:mysql://mysql:3306/order_service?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true"
+  ORDER_DB_USER: "root"
 
   # --- eval 客户端目标（打自己的边缘网关） ---
   EVAL_TARGET_BASE_URL: "http://edge-gateway:8080"
@@ -234,6 +238,7 @@ secrets:
     NL2SQL_DB_ADMIN_PASSWORD: "change-me"
     ASYNC_TASK_DB_PASSWORD: "change-me"
     RAG_GRAPH_DB_PASSWORD: "change-me"
+    ORDER_DB_PASSWORD: "change-me"
     # auth-service 账号库口令（AUTH_STORE=jdbc 时）。
     AUTH_DB_PASSWORD: "change-me"
     # workflow outbox HMAC 签名密钥。
@@ -444,6 +449,11 @@ services:
 
   voice-service:
     port: 8091
+    replicaCount: 1
+
+  # -------- 订单查询（agent order_query 下游） --------
+  order-service:
+    port: 8093
     replicaCount: 1
 
   # -------- 登录 / RBAC --------

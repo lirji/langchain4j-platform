@@ -46,6 +46,7 @@ client ──X-Api-Key/Bearer──▶ edge-gateway (Spring Cloud Gateway)
 | `eval-service` | 服务 | `/eval/**` 外部回归测试客户端，可执行 HTTP target case、加载 baseline suite、做响应/oracle 断言并输出 JSON report |
 | `vision-service` | 服务 | `/vision/caption`·`/vision/describe` 图像描述（多模态，JSON 或 multipart 上传）；默认关（`VISION_ENABLED=false`） |
 | `voice-service` | 服务 | `/voice/transcribe` 转写 + `/voice/chat`(+`/stream`) 语音闭环 ASR(whisper)→`/chat`→TTS；默认关（`VOICE_ENABLED=false`） |
+| `order-service` | 服务 | `/orders/{orderNo}` 按订单号只读查订单（状态/金额/客户/下单日期）；裸 JdbcTemplate + 持久化 MySQL（独立库 `order_service`）、按 `tenant_id` 隔离；供深度 Agent 的 `order_query` 动作调用（:8093，宿主机映射 8094——8093 被展示前端占用） |
 | `edge-gateway` | 服务 | 边缘 API 网关：入站凭证 → 换发内部 JWT（`X-Internal-Token`）转发下游。三个签发 filter：`CasdoorTokenExchangeFilter`(Casdoor Bearer, -120，默认关) / `SessionBearerAuthFilter`(会话 Bearer, -110) / `ApiKeyToInternalTokenFilter`(X-Api-Key, -100)。Casdoor 灰度 `EDGE_CASDOOR_MODE`=DUAL(默认，Casdoor 或回退老路)/ONLY(仅 Casdoor)；多租户登录方案 C（Casdoor Shared Application + 选 org，前端按 org 用 `<base>-org-<tenant>` 客户端，edge 校验 `<base>-org-*` aud 家族 + owner 绑定）。限流 + CORS 白名单 |
 
 > 后续继续加固 `channel`/`interop`/`eval` 的真实适配逻辑，并继续加固 `knowledge`/`async-task` 的持久化和跨服务协议。

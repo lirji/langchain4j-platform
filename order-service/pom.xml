@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://www.maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.lrj.platform</groupId>
+        <artifactId>langchain4j-platform</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>order-service</artifactId>
+    <name>order-service</name>
+    <description>Order bounded context: read-only, tenant-scoped order lookup over persistent MySQL (no LLM).</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <!-- root 的 dependencyManagement 未管理 mysql-connector-j，须显式版本（对齐 async-task/analytics） -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <version>8.4.0</version>
+        </dependency>
+        <!-- 必需：入站内部 JWT 校验 + TenantContext 还原（AutoConfiguration.imports 自注册 InternalTokenAuthFilter） -->
+        <dependency>
+            <groupId>com.lrj.platform</groupId>
+            <artifactId>platform-security</artifactId>
+        </dependency>
+        <!-- 约定：跨服务 traceId 透传 -->
+        <dependency>
+            <groupId>com.lrj.platform</groupId>
+            <artifactId>platform-observability</artifactId>
+        </dependency>
+        <!-- 共享 DTO：OrderView 契约（与 agent-service 的 OrderClient 共用） -->
+        <dependency>
+            <groupId>com.lrj.platform</groupId>
+            <artifactId>platform-protocol</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

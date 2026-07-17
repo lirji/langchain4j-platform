@@ -45,6 +45,7 @@
         <module>eval-service</module>
         <module>vision-service</module>
         <module>voice-service</module>
+        <module>order-service</module>
         <module>edge-gateway</module>
     </modules>
 

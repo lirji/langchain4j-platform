@@ -1,0 +1,41 @@
+server:
+  port: 8093
+
+spring:
+  application:
+    name: order-service
+  # 集中配置（可选）：Config Server 不可达时不阻断启动，各 ${ENV:default} 兜底继续生效。
+  config:
+    import: "optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}"
+  # 持久化 MySQL（单库，Boot 自动装配 JdbcTemplate）。createDatabaseIfNotExist=true：库不存在自动建。
+  datasource:
+    url: ${ORDER_DB_URL:jdbc:mysql://localhost:3306/order_service?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}
+    username: ${ORDER_DB_USER:root}
+    password: ${ORDER_DB_PASSWORD:root}
+
+platform:
+  # 入站内部 JWT 校验 + TenantContext 还原（jwt-secret 必须与 edge 一致）。
+  # allow-api-key-fallback：本地直连调试用 X-Api-Key；生产置 false，只信 edge 签发的内部 JWT。
+  security:
+    jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
+    allow-api-key-fallback: true
+    api-keys:
+      dev-key-tenantA-admin:
+        tenant: tenantA
+        user: analyst-a
+        scopes: [analytics]
+
+app:
+  order:
+    # 首次启动且表为空时插演示订单（tenantA 101-109 / tenantB 2001-2002）。生产接真库置 false。
+    seed-demo: ${ORDER_SEED_DEMO:true}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
