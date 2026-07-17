@@ -10,7 +10,7 @@
  *
  * 深链沿用通用 CapabilityRunner。执行统一经 executionGate + runCapability（不手写路径 / 不绕闸门 / 不臆造字段）。
  */
-import { computed, ref } from 'vue'
+import { computed, onScopeDispose, ref, watch } from 'vue'
 import { useCatalogStore } from '../../stores/catalog'
 import { useSessionStore } from '../../stores/session'
 import { runCapability } from '../../api/client'
@@ -67,25 +67,47 @@ function numOf(v: unknown): number | undefined {
   if (typeof v === 'string' && v.trim() && Number.isFinite(Number(v))) return Number(v)
   return undefined
 }
+/** 多键 envelope 探测：取首个**非空**数组（空数组不得遮蔽后置有效数组）；全空则回落首个空数组。 */
 function firstArray(data: unknown, keys: string[]): unknown[] | null {
   if (Array.isArray(data)) return data
   if (data && typeof data === 'object') {
     const o = data as Record<string, unknown>
-    for (const k of keys) if (Array.isArray(o[k])) return o[k] as unknown[]
+    let firstEmpty: unknown[] | null = null
+    for (const k of keys) {
+      const v = o[k]
+      if (Array.isArray(v)) {
+        if (v.length) return v
+        if (!firstEmpty) firstEmpty = v
+      }
+    }
+    return firstEmpty
   }
   return null
 }
+
+// ── 请求生命周期治理：AbortController 池 + 代号 ──
+// 代号（generation）由「新一轮动作 / 凭证切换」递增；旧一轮的异步完成回调凭代号失效，不回写状态。
+// 卸载或凭证切换时 abort 所有 pending 请求。
+const activeControllers = new Set<AbortController>()
+let mcpGeneration = 0
+let retrievalGeneration = 0
+function abortAll(): void {
+  for (const c of activeControllers) c.abort()
+  activeControllers.clear()
+}
+onScopeDispose(abortAll)
 
 /** 复用 executionGate + runCapability 驱动一次一次性调用。 */
 async function callCap(
   cap: Capability | undefined,
   values: FormValues,
+  signal?: AbortSignal,
 ): Promise<{ data?: unknown; error?: string }> {
   if (!cap) return { error: '能力不在目录中。' }
   const gate = executionGate(cap, { ...session.permissionContext(), confirmed: false })
   if (!gate.allowed) return { error: gate.reason ?? '当前不可执行。' }
   try {
-    const res = await runCapability(cap, values, session.runContext())
+    const res = await runCapability(cap, values, session.runContext(signal))
     return { data: res.data }
   } catch (e) {
     return { error: humanizeError(e, cap) }
@@ -117,25 +139,58 @@ const called = ref(false)
 function parseTools(data: unknown): ToolItem[] | null {
   const arr = firstArray(data, ['tools', 'items', 'data', 'results'])
   if (!arr) return null
-  return arr.map((item): ToolItem => {
-    if (item && typeof item === 'object') {
+  // 过滤 null/无标识项（不产生可点击的伪工具），重名去重保首个。
+  const out: ToolItem[] = []
+  const seen = new Set<string>()
+  for (const item of arr) {
+    if (item == null) continue
+    let name: string | undefined
+    let description: string | undefined
+    if (typeof item === 'object') {
       const o = item as Record<string, unknown>
-      return {
-        name: asStr(o.name) ?? asStr(o.tool) ?? asStr(o.id) ?? '(工具)',
-        description: asStr(o.description) ?? asStr(o.summary) ?? asStr(o.title),
-      }
+      name = asStr(o.name) ?? asStr(o.tool) ?? asStr(o.id)
+      description = asStr(o.description) ?? asStr(o.summary) ?? asStr(o.title)
+    } else {
+      name = asStr(item)
     }
-    return { name: String(item) }
-  })
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+    out.push({ name, description })
+  }
+  return out
 }
 const toolsFallback = computed(() => toolsRaw.value != null && tools.value === null)
+// 成功但空响应体：独立终态，不与「尚未请求」混用。
+const toolsEmptyBody = computed(
+  () => toolsLoaded.value && !toolsBusy.value && !toolsError.value && toolsRaw.value == null,
+)
+
+/** 重置 MCP 选中/详情/调用派生状态（重新列出、凭证切换时调用）。 */
+function resetMcpSelection(): void {
+  selectedTool.value = null
+  detailData.value = null
+  detailError.value = null
+  detailBusy.value = false
+  callError.value = null
+  callResult.value = null
+  called.value = false
+  callBusy.value = false
+}
 
 async function loadTools(): Promise<void> {
+  if (toolsBusy.value) return
+  const gen = ++mcpGeneration
+  const controller = new AbortController()
+  activeControllers.add(controller)
   toolsBusy.value = true
   toolsError.value = null
   toolsRaw.value = null
   tools.value = null
-  const { data, error } = await callCap(toolsCap.value, {})
+  // 重新列出即重置旧选中/详情/调用状态（旧工具可能已不存在）。
+  resetMcpSelection()
+  const { data, error } = await callCap(toolsCap.value, {}, controller.signal)
+  activeControllers.delete(controller)
+  if (gen !== mcpGeneration) return // 旧代号：已被新一轮 / 凭证切换失效
   toolsBusy.value = false
   toolsLoaded.value = true
   if (error) {
@@ -147,12 +202,22 @@ async function loadTools(): Promise<void> {
 }
 
 async function selectTool(name: string): Promise<void> {
+  // 新选择使旧详情与旧调用一并失效（详情/调用共用代号，防乱序覆盖与结果错挂）。
+  const gen = ++mcpGeneration
   selectedTool.value = name
   detailData.value = null
   detailError.value = null
+  callError.value = null
+  callResult.value = null
+  called.value = false
+  callBusy.value = false
   // 选中即把工具名带入调用表单（三步串联）。
   detailBusy.value = true
-  const { data, error } = await callCap(toolDetailCap.value, { toolName: name })
+  const controller = new AbortController()
+  activeControllers.add(controller)
+  const { data, error } = await callCap(toolDetailCap.value, { toolName: name }, controller.signal)
+  activeControllers.delete(controller)
+  if (gen !== mcpGeneration) return
   detailBusy.value = false
   if (error) {
     detailError.value = error
@@ -162,19 +227,35 @@ async function selectTool(name: string): Promise<void> {
 }
 
 async function callTool(): Promise<void> {
+  if (callBusy.value) return
   const tool = selectedTool.value
   if (!tool) return
   const argsStr = callArgs.value.trim() || '{}'
+  let parsedArgs: unknown
   try {
-    JSON.parse(argsStr)
+    parsedArgs = JSON.parse(argsStr)
   } catch {
     callError.value = 'arguments 不是合法 JSON。'
     return
   }
+  // 后端 McpToolCallRequest.arguments 是 Map：数组/标量在前端即阻断。
+  if (!parsedArgs || typeof parsedArgs !== 'object' || Array.isArray(parsedArgs)) {
+    callError.value = 'arguments 必须是 JSON 对象。'
+    return
+  }
+  const gen = mcpGeneration // 快照代号：期间切换工具/重列则丢弃本次结果，不错挂到新工具名下
   callBusy.value = true
   callError.value = null
   callResult.value = null
-  const { data, error } = await callCap(callCapability.value, { tool, arguments: argsStr })
+  const controller = new AbortController()
+  activeControllers.add(controller)
+  const { data, error } = await callCap(
+    callCapability.value,
+    { tool, arguments: argsStr },
+    controller.signal,
+  )
+  activeControllers.delete(controller)
+  if (gen !== mcpGeneration) return
   callBusy.value = false
   called.value = true
   if (error) {
@@ -214,10 +295,12 @@ function extractMetrics(data: unknown): Metric[] | null {
   const seen = new Set<string>()
   for (const obj of scopes) {
     for (const [key, val] of Object.entries(obj)) {
-      if (!METRIC_RE.test(key) || seen.has(key)) continue
+      // 去重按规范化（小写）key：`Recall` 与嵌套 `recall` 语义相同，只保留先出现的一个。
+      const norm = key.toLowerCase()
+      if (!METRIC_RE.test(key) || seen.has(norm)) continue
       const n = numOf(val)
       if (n === undefined) continue
-      seen.add(key)
+      seen.add(norm)
       out.push({ label: key, value: fmtMetric(n), tone: metricTone(key) })
     }
   }
@@ -256,22 +339,54 @@ const retrievalGate = computed(() =>
     : { allowed: false, reason: '未找到检索评测能力。' },
 )
 
+/** 本地校验失败：给出错误并清掉上一轮结果，避免旧指标被误读为本轮结果。 */
+function retrievalReject(message: string): void {
+  retrievalError.value = message
+  retrievalRaw.value = null
+}
+
 async function runRetrieval(): Promise<void> {
+  if (retrievalBusy.value) return
   if (!retrievalCap.value) return
-  const casesStr = retrievalCases.value.trim()
+  const casesStr = retrievalCases.value.trim() || '[]'
+  let parsedCases: unknown
   try {
-    JSON.parse(casesStr || '[]')
+    parsedCases = JSON.parse(casesStr)
   } catch {
-    retrievalError.value = 'cases 不是合法 JSON 数组。'
+    retrievalReject('cases 不是合法 JSON 数组。')
     return
   }
+  // 结构校验（不止语法）：必须是非空数组，且每个元素为用例对象（字段以后端 RetrievalCase 为准）。
+  if (
+    !Array.isArray(parsedCases) ||
+    parsedCases.length === 0 ||
+    parsedCases.some((c) => !c || typeof c !== 'object' || Array.isArray(c))
+  ) {
+    retrievalReject('cases 必须是非空 JSON 数组，且每个元素为用例对象。')
+    return
+  }
+  // topK：清空视为省略；非空必须是 1..50 的整数（HTML min/max 不拦程序性提交；.number 解析失败可能给字符串）。
+  const rawTopK: unknown = retrievalTopK.value
+  const hasTopK = rawTopK !== null && rawTopK !== undefined && rawTopK !== ''
+  if (
+    hasTopK &&
+    (typeof rawTopK !== 'number' || !Number.isInteger(rawTopK) || rawTopK < 1 || rawTopK > 50)
+  ) {
+    retrievalReject('TopK 必须是 1..50 的整数。')
+    return
+  }
+  const gen = ++retrievalGeneration
   retrievalBusy.value = true
   retrievalError.value = null
   retrievalRaw.value = null
-  const values: FormValues = { cases: casesStr || '[]' }
-  if (retrievalTopK.value != null) values.topK = retrievalTopK.value
+  const values: FormValues = { cases: casesStr }
+  if (hasTopK) values.topK = rawTopK as number
   if (retrievalCategory.value.trim()) values.category = retrievalCategory.value.trim()
-  const { data, error } = await callCap(retrievalCap.value, values)
+  const controller = new AbortController()
+  activeControllers.add(controller)
+  const { data, error } = await callCap(retrievalCap.value, values, controller.signal)
+  activeControllers.delete(controller)
+  if (gen !== retrievalGeneration) return
   retrievalBusy.value = false
   retrievalRan.value = true
   if (error) {
@@ -280,6 +395,26 @@ async function runRetrieval(): Promise<void> {
   }
   retrievalRaw.value = data ?? null
 }
+
+// ── 凭证切换：清空两个分区的页面数据并使 pending 请求失效（租户不串味）──
+watch(
+  () => [session.apiKey, session.credentialMode] as const,
+  () => {
+    mcpGeneration += 1
+    retrievalGeneration += 1
+    abortAll()
+    tools.value = null
+    toolsRaw.value = null
+    toolsError.value = null
+    toolsLoaded.value = false
+    toolsBusy.value = false
+    resetMcpSelection()
+    retrievalRaw.value = null
+    retrievalError.value = null
+    retrievalRan.value = false
+    retrievalBusy.value = false
+  },
+)
 </script>
 
 <template>
@@ -362,6 +497,13 @@ async function runRetrieval(): Promise<void> {
           <div v-else-if="toolsFallback" class="ie__fallback">
             <ResponseViewer phase="success" :data="toolsRaw" />
           </div>
+          <EmptyState
+            v-else-if="toolsEmptyBody"
+            variant="empty"
+            icon="∅"
+            title="成功，但响应体为空"
+            description="请求成功，但服务未返回任何数据。"
+          />
           <EmptyState
             v-else-if="!toolsLoaded"
             variant="empty"
@@ -465,7 +607,7 @@ async function runRetrieval(): Promise<void> {
               v-model="retrievalCases"
               class="form-control ie__args"
               rows="3"
-              placeholder='[{"query":"退款","expectedDocIds":["d1"]}]'
+              placeholder='[{"id":"c1","question":"退款","relevantDocIds":["d1"]}]'
               aria-label="检索评测用例 JSON"
             />
           </label>
@@ -515,6 +657,13 @@ async function runRetrieval(): Promise<void> {
         <div v-else-if="retrievalFallback" class="ie__fallback">
           <ResponseViewer phase="success" :data="retrievalRaw" />
         </div>
+        <EmptyState
+          v-else-if="retrievalRan && !retrievalBusy && !retrievalError && retrievalRaw == null"
+          variant="empty"
+          icon="∅"
+          title="成功，但响应体为空"
+          description="评测请求成功，但服务未返回任何数据。"
+        />
         <EmptyState
           v-else-if="!retrievalRan && !retrievalMetrics"
           variant="empty"

@@ -52,18 +52,27 @@ const selectedImageCap = computed(
 const selectedVoiceCap = computed(
   () => voiceCaps.value.find((c) => c.id === selectedVoiceId.value) ?? voiceCaps.value[0],
 )
-// 目录就绪后把选中初始化到首个可用能力。
+// 目录就绪后把选中初始化到首个可用能力；目录变化时若当前选中已不存在则规范化到首项，
+// 避免 stale id 在旧能力重现时无用户操作地夺回选择。
 watch(
   imageCaps,
   (caps) => {
-    if (!selectedImageId.value && caps.length) selectedImageId.value = caps[0].id
+    if (!caps.length) {
+      selectedImageId.value = ''
+      return
+    }
+    if (!caps.some((c) => c.id === selectedImageId.value)) selectedImageId.value = caps[0].id
   },
   { immediate: true },
 )
 watch(
   voiceCaps,
   (caps) => {
-    if (!selectedVoiceId.value && caps.length) selectedVoiceId.value = caps[0].id
+    if (!caps.length) {
+      selectedVoiceId.value = ''
+      return
+    }
+    if (!caps.some((c) => c.id === selectedVoiceId.value)) selectedVoiceId.value = caps[0].id
   },
   { immediate: true },
 )
@@ -104,9 +113,10 @@ const focusedIsStream = computed(
     <ModuleHeader :module-id="moduleId" />
 
     <InfoNote tone="warning" class="mm__banner">
-      多数能力默认未注册：需开启对应开关（<code>app.vision.enabled</code>、<code>app.voice.enabled</code>、
-      <code>app.conversation.vision.enabled</code>、<code>app.rag.multimodal-embedding.enabled</code>）后端才会挂载。
-      未启用时可预览请求 / 复制 curl，但不可执行（运行器会标注具体 flag）。首期仅支持文件上传，暂不做浏览器录音采集。
+      语音能力默认未注册：需开启 <code>app.voice.enabled</code> 后端才会挂载。图像侧
+      （<code>app.vision.enabled</code>、<code>app.conversation.vision.enabled</code>、
+      <code>app.rag.multimodal-embedding.enabled</code>）默认已开启，但需相应模型后端（VISION_MODEL / CLIP）就绪。
+      未启用能力可预览请求 / 复制 curl，但不可执行（运行器会标注具体 flag）。首期仅支持文件上传，暂不做浏览器录音采集。
     </InfoNote>
 
     <WorkbenchSection
