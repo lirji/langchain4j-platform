@@ -55,8 +55,10 @@ public class AgentConfig {
     }
 
     @Bean
-    AgentBrain agentBrain(ChatModel chatModel) {
-        return AiServices.builder(AgentBrain.class).chatModel(chatModel).build();
+    AgentBrain agentBrain(GatewayChatModelFactory chatModelFactory) {
+        // ReAct 每步都要解析出 AgentDecision，用 json_object 变体从模型侧保证合法 JSON
+        // （thought 里的裸英文引号曾打断 Jackson 解析致 stopReason=ERROR）；不注册为第二个 ChatModel Bean。
+        return AiServices.builder(AgentBrain.class).chatModel(chatModelFactory.buildJsonMode()).build();
     }
 
     @Bean
