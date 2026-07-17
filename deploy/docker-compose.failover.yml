@@ -1,5 +1,7 @@
-# TEST-ONLY compose：网关故障转移冒烟专用（deploy/smoke-failover.sh 使用）。
-# 两个 mock OpenAI 上游 + 一个 LiteLLM（挂 config.failover.yaml）。不进默认栈、不进默认 CI。
+# TEST-ONLY compose：LiteLLM 网关能力冒烟专用（deploy/smoke-failover.sh 使用）。
+# 两个 mock OpenAI 上游 + LiteLLM（挂 config.failover.yaml）+ test-only Postgres/Redis/Jaeger，
+# 覆盖：failover、spend 记账/virtual key/预算硬拒绝（PG）、响应缓存（Redis）、OTel span（Jaeger）。
+# 不进默认栈、不进默认 CI；无命名卷 —— down -v 即全清，绝不触碰主栈数据。
 name: llm-failover-smoke
 
 services:
@@ -19,13 +21,52 @@ services:
       - ./litellm/mock_upstream.py:/app/mock_upstream.py:ro
     command: ["python", "/app/mock_upstream.py"]
 
+  # test-only PG：spend/virtual key 状态。匿名卷、不映射宿主端口。
+  smoke-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: litellm
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: smoke-pg-pw
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+  # test-only Redis：响应缓存。
+  smoke-redis:
+    image: redis:7-alpine
+
+  # test-only Jaeger：断言 LiteLLM OTel span 真实到达 collector。
+  # UI/API 映射 16690（主栈 jaeger 用 16686，避免同机冲突）；OTLP 4318 仅栈内访问。
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    ports:
+      - "16690:16686"
+
   litellm:
-    image: ghcr.io/berriai/litellm:main-stable
+    # 与主栈同一固定 tag —— 冒烟即验证生产将用的镜像版本
+    image: ghcr.io/berriai/litellm:${LITELLM_IMAGE_TAG:-v1.74.3-stable}
     depends_on:
-      - mock-a
-      - mock-b
+      mock-a:
+        condition: service_started
+      mock-b:
+        condition: service_started
+      smoke-postgres:
+        condition: service_healthy
+      smoke-redis:
+        condition: service_started
+      jaeger:
+        condition: service_started
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-smoke-master}
+      DATABASE_URL: postgresql://litellm:smoke-pg-pw@smoke-postgres:5432/litellm
+      REDIS_HOST: smoke-redis
+      REDIS_PORT: "6379"
+      OTEL_EXPORTER: otlp_http
+      OTEL_ENDPOINT: http://jaeger:4318/v1/traces   # otlp_http 必须带 /v1/traces，缺路径会 404
+      OTEL_SERVICE_NAME: litellm-proxy
     volumes:
       - ./litellm/config.failover.yaml:/app/config.yaml:ro
     command: ["--config", "/app/config.yaml", "--port", "4000"]

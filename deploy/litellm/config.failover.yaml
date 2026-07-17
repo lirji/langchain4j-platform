@@ -1,20 +1,31 @@
-# TEST-ONLY LiteLLM 配置 —— 仅供 deploy/smoke-failover.sh 的网关故障转移冒烟使用。
+# TEST-ONLY LiteLLM 配置 —— 仅供 deploy/smoke-failover.sh 的网关能力冒烟使用。
 # 不用于生产（生产用 deploy/litellm/config.yaml）。不进默认 CI。
 #
 # 双上游 + fallbacks：逻辑模型 chat-default 主打 mock-a；主上游失败时 LiteLLM 在网关边界
 # 按 fallbacks 回退到 chat-default-fallback（mock-b）。smoke 脚本会干掉 mock-a 后断言仍返回 200
 # 且内容切换到 mock-b —— 全部在 LiteLLM 边界完成，应用/Java 侧零改动、零 mock。
+#
+# 另配 test-only 单价（mock usage=1+1 token → 每次调用 $0.02）：让 virtual key 的
+# max_budget 硬拒绝在冒烟里确定性可触发；生产单价由真实 provider 价目决定，与此无关。
 model_list:
   - model_name: chat-default
     litellm_params:
       model: openai/mock-a
       api_base: http://mock-a:8080/v1
       api_key: sk-mock
+      input_cost_per_token: 0.01
+      output_cost_per_token: 0.01
   - model_name: chat-default-fallback
     litellm_params:
       model: openai/mock-b
       api_base: http://mock-b:8080/v1
       api_key: sk-mock
+      input_cost_per_token: 0.01
+      output_cost_per_token: 0.01
+
+router_settings:
+  # 与主配置同构（冒烟能起来即真机验证了该键在固定镜像上合法）
+  cooldown_time: 30
 
 litellm_settings:
   # 主上游不可用时快速失败并回退（演示跨上游 failover 的验证点）
@@ -22,6 +33,16 @@ litellm_settings:
   request_timeout: 15
   fallbacks:
     - chat-default: ["chat-default-fallback"]
+  # 响应缓存（test-only Redis）：与主配置同构，TTL 短
+  cache: true
+  cache_params:
+    type: redis
+    ttl: 120
+    namespace: "litellm.smoke.cache"
+  # OTel span → test-only Jaeger（endpoint 由容器 OTEL_* 环境变量提供）
+  callbacks: ["otel"]
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
+  # 缩短 spend 批量落库间隔（默认 10s）→ 预算硬拒绝断言无需长等待。test-only。
+  proxy_batch_write_at: 1
