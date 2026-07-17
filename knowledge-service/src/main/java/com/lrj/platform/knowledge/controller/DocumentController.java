@@ -3,6 +3,7 @@ package com.lrj.platform.knowledge.controller;
 import com.lrj.platform.knowledge.lifecycle.DocumentInfo;
 import com.lrj.platform.knowledge.lifecycle.DocumentService;
 import com.lrj.platform.knowledge.lifecycle.DocumentTextExtractor;
+import com.lrj.platform.knowledge.lifecycle.PagedDocuments;
 import com.lrj.platform.knowledge.lifecycle.MultimodalIngestionText;
 import com.lrj.platform.knowledge.multimodal.MultimodalRetrievalService;
 import com.lrj.platform.security.TenantContext;
@@ -115,13 +116,26 @@ public class DocumentController {
     }
 
     /**
-     * 列文档元数据。{@code visibility=public|shared} 列共享库保留分区（普通登录用户即可读，无需特殊 scope）；
-     * 缺省 {@code tenant} 列当前租户（向后兼容）。响应里 {@link DocumentInfo#tenantId()} 为 {@code __public__}
-     * 即共享文档，前端据此映射 visibility。
+     * 列文档元数据（<strong>完整数组</strong>，无分页参数时）。{@code visibility=public|shared} 列共享库保留分区
+     * （普通登录用户即可读，无需特殊 scope）；缺省 {@code tenant} 列当前租户（向后兼容）。响应里
+     * {@link DocumentInfo#tenantId()} 为 {@code __public__} 即共享文档，前端据此映射 visibility。
      */
     @GetMapping
     public List<DocumentInfo> list(@RequestParam(required = false) String visibility) {
         return documents.list(isPublic(visibility));
+    }
+
+    /**
+     * 分页列文档元数据（带 {@code page} 参数时命中此重载，返回 {@link PagedDocuments} 信封）。
+     * 租户库 / 共享库同一入口，仅 {@code visibility} 区分。分页在租户隔离 + 文档级授权过滤之后进行，
+     * {@code total} 即调用方可见文档总数。{@code page} 1-based；{@code size} 缺省 {@code 10}、上限 {@code 100}
+     * （越界由 service clamp）。不带 {@code page} 的旧调用仍走上面的完整数组入口（向后兼容）。
+     */
+    @GetMapping(params = "page")
+    public PagedDocuments listPaged(@RequestParam(required = false) String visibility,
+                                    @RequestParam(defaultValue = "1") int page,
+                                    @RequestParam(required = false) Integer size) {
+        return documents.listPaged(isPublic(visibility), page, size == null ? 0 : size);
     }
 
     @GetMapping("/{docId}")

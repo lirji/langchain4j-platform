@@ -10,7 +10,7 @@ vi.mock('./authorizedFetch', () => ({
   },
 }))
 
-import { listDocuments, deleteDocument, fetchRagConfig } from './knowledge'
+import { listDocuments, listDocumentsPaged, deleteDocument, fetchRagConfig } from './knowledge'
 
 function res(status: number, body: unknown): Response {
   return {
@@ -52,6 +52,23 @@ describe('api/knowledge —— 双模凭证 + visibility', () => {
     calls.length = 0
     await listDocuments('tenant', bearerCtx())
     expect(calls[0].url).not.toContain('visibility')
+  })
+
+  it('listDocumentsPaged tenant 带 page/size，不带 visibility', async () => {
+    nextResponse = () => res(200, { items: [], page: 1, size: 10, total: 0, totalPages: 1 })
+    const paged = await listDocumentsPaged('tenant', 2, 10, bearerCtx())
+    expect(calls[0].url).toContain('page=2')
+    expect(calls[0].url).toContain('size=10')
+    expect(calls[0].url).not.toContain('visibility')
+    expect(paged.totalPages).toBe(1)
+  })
+
+  it('listDocumentsPaged public 带 visibility=public + page/size', async () => {
+    nextResponse = () => res(200, { items: [], page: 1, size: 20, total: 0, totalPages: 1 })
+    await listDocumentsPaged('public', 1, 20, bearerCtx())
+    expect(calls[0].url).toContain('visibility=public')
+    expect(calls[0].url).toContain('page=1')
+    expect(calls[0].url).toContain('size=20')
   })
 
   it('deleteDocument public 走 DELETE + visibility', async () => {

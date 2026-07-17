@@ -18,6 +18,9 @@ platform:
   gateway:
     base-url: ${GATEWAY_BASE_URL:http://localhost:4000/v1}
     api-key: ${GATEWAY_API_KEY:sk-litellm-master}
+    # knowledge 只用确定性同步模型（RAG 增强），无流式需求 —— 关掉自动装配的 streamingChatModel 省一个 Bean。
+    streaming:
+      enabled: ${GATEWAY_STREAMING_ENABLED:false}
   security:
     jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
     allow-api-key-fallback: true
@@ -44,9 +47,9 @@ app:
       strict-tenant-only: ${RAG_AUTHZ_STRICT_TENANT_ONLY:false}
     # 公共/共享知识库：一个所有租户可读的保留分区（tenantId=__public__）。开启后查询在隔离查
     # 各自租户的基础上并入公共分区命中；写公共库需 public-ingest scope（见 DocumentController）。
-    # 默认关闭 —— 关闭时行为与引入该特性前完全一致（向后兼容）。
+    # 默认开启 —— 让共享知识库视图常态可用；如需回滚到向后兼容的关闭态，设 RAG_PUBLIC_ENABLED=false。
     public:
-      enabled: ${RAG_PUBLIC_ENABLED:false}
+      enabled: ${RAG_PUBLIC_ENABLED:true}
       tenant-id: ${RAG_PUBLIC_TENANT_ID:__public__}
     vector-store:
       # provider: in-memory | qdrant（默认）| pgvector | milvus | chroma | doris
@@ -114,14 +117,14 @@ app:
     # 文档 upload/delete 成功后，尽力而为地失效 conversation 侧 L1 语义缓存（做到「更新即新鲜」）。
     # 默认关闭：关闭时用 Noop 实现，对 ingest 零影响。开启需 conversation 已开语义缓存才有意义。
     cache-invalidation:
-      enabled: ${RAG_CACHE_INVALIDATION_ENABLED:false}
+      enabled: ${RAG_CACHE_INVALIDATION_ENABLED:true}
       conversation-base-url: ${RAG_CACHE_INVALIDATION_CONVERSATION_URL:http://conversation-service:8081}
       connect-timeout: ${RAG_CACHE_INVALIDATION_CONNECT_TIMEOUT:1s}
       read-timeout: ${RAG_CACHE_INVALIDATION_READ_TIMEOUT:2s}
     # 原生图片多模态 embedding（CLIP / jina-clip）：图片直接向量化 + text→image 检索。
     # 默认关闭（零依赖）；开启后 /rag/documents 传图片与 /rag/image 走此路径，图片向量存独立 image collection。
     multimodal-embedding:
-      enabled: ${RAG_MULTIMODAL_ENABLED:false}
+      enabled: ${RAG_MULTIMODAL_ENABLED:true}
       base-url: ${RAG_MULTIMODAL_BASE_URL:http://localhost:8000/v1}
       api-key: ${RAG_MULTIMODAL_API_KEY:}
       model-name: ${RAG_MULTIMODAL_MODEL:jinaai/jina-clip-v2}
@@ -169,7 +172,7 @@ app:
       socket-timeout-ms: ${RAG_ES_SOCKET_TIMEOUT_MS:5000}
     # 重排序：默认关。开启后按 type 二选一（llm=复用共享 temp=0 ChatModel 打分；jina=Jina reranker 云 API）
     rerank:
-      enabled: ${RAG_RERANK_ENABLED:false}
+      enabled: ${RAG_RERANK_ENABLED:true}
       type: ${RAG_RERANK_TYPE:llm}                # llm | jina
       candidate-multiplier: ${RAG_RERANK_CANDIDATE_MULTIPLIER:3}
       # 相关性阈值(0..1)：rerank 打分低于此值的候选在截断到 topK 前丢弃 —— 让 topK 成为"上限"而非"必凑满"。
@@ -180,20 +183,21 @@ app:
         model-name: ${RAG_RERANK_JINA_MODEL:jina-reranker-v2-base-multilingual}
     # 查询扩展：默认关。开启后用共享 temp=0 ChatModel 把 1 query 扩成 N 变体多路召回
     query-expansion:
-      enabled: ${RAG_QUERY_EXPANSION_ENABLED:false}
+      enabled: ${RAG_QUERY_EXPANSION_ENABLED:true}
       max-variants: ${RAG_QUERY_EXPANSION_MAX_VARIANTS:4}
     # Contextual Retrieval：默认关。开启后入库时逐 chunk 加文档级上下文前缀再嵌入（每 chunk 一次 LLM 调用）
     contextual:
-      enabled: ${RAG_CONTEXTUAL_ENABLED:false}
+      enabled: ${RAG_CONTEXTUAL_ENABLED:true}
       max-doc-chars: ${RAG_CONTEXTUAL_MAX_DOC_CHARS:8000}
     # 切分质量打点（F5.3，Micrometer，常开）：入库时记录 chunk 尺寸分布 + 碎块/超大块比例（按 strategy tag）。
     metrics:
       tiny-chars: ${RAG_METRICS_TINY_CHARS:50}
       oversize-chars: ${RAG_METRICS_OVERSIZE_CHARS:2000}
-    # 可选 RAG LLM 增强（rerank=llm / query-expansion / contextual / grounding）共用的网关模型，默认复用 platform.gateway.*
+    # 可选 RAG LLM 增强（rerank=llm / query-expansion / contextual / grounding）共用的网关模型。
+    # 经 GatewayChatModelFactory 收口：base-url/api-key/timeout 一律走 platform.gateway.*，
+    # 审计/按租户 token 预算/成本/LiteLLM 侧租户归因统一生效。仅保留 model-name 覆盖，
+    # 允许增强用比主对话更廉价的模型（RAG_LLM_MODEL），未设时复用 platform.gateway.model-name。
     llm:
-      base-url: ${RAG_LLM_BASE_URL:${platform.gateway.base-url:http://localhost:4000/v1}}
-      api-key: ${RAG_LLM_API_KEY:${platform.gateway.api-key:sk-litellm-master}}
       model-name: ${RAG_LLM_MODEL:${platform.gateway.model-name:chat-default}}
     graph:
       enabled: ${RAG_GRAPH_ENABLED:true}

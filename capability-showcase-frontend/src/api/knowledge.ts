@@ -6,7 +6,7 @@
  * （docVisibility 仅作兜底/校验）；query 命中用服务端 KnowledgeHit.visibility。删共享需 public-ingest（后端 403 兜底）。
  */
 import type { RunContext } from '../types/api'
-import type { DocumentInfo, KnowledgeRuntimeView, Visibility } from '../types/knowledge'
+import type { DocumentInfo, KnowledgeRuntimeView, PagedDocuments, Visibility } from '../types/knowledge'
 import { API_KEY_HEADER, AUTH_HEADER } from './client'
 import { authorizedFetch } from './authorizedFetch'
 import { ApiError } from './errors'
@@ -37,11 +37,30 @@ function visQuery(visibility: Visibility): string {
   return visibility === 'public' ? '?visibility=public' : ''
 }
 
+/** 分页 query：public 带 visibility，始终带 page/size（后端据 page 命中分页信封重载）。 */
+function pagedQuery(visibility: Visibility, page: number, size: number): string {
+  const p = new URLSearchParams()
+  if (visibility === 'public') p.set('visibility', 'public')
+  p.set('page', String(page))
+  p.set('size', String(size))
+  return `?${p.toString()}`
+}
+
 export const fetchRagConfig = (ctx: RunContext): Promise<KnowledgeRuntimeView> =>
   edgeJson<KnowledgeRuntimeView>('/rag/config', ctx)
 
+/** 列文档（完整数组，无分页）——保留给不需要分页的调用方 / 向后兼容。 */
 export const listDocuments = (visibility: Visibility, ctx: RunContext): Promise<DocumentInfo[]> =>
   edgeJson<DocumentInfo[]>(`/rag/documents${visQuery(visibility)}`, ctx)
+
+/** 分页列文档：返回 `PagedDocuments` 信封（items + 页码 + 总数）。租户库 / 共享库同一入口，仅 visibility 区分。 */
+export const listDocumentsPaged = (
+  visibility: Visibility,
+  page: number,
+  size: number,
+  ctx: RunContext,
+): Promise<PagedDocuments> =>
+  edgeJson<PagedDocuments>(`/rag/documents${pagedQuery(visibility, page, size)}`, ctx)
 
 export const getDocument = (docId: string, visibility: Visibility, ctx: RunContext): Promise<DocumentInfo> =>
   edgeJson<DocumentInfo>(`/rag/documents/${encodeURIComponent(docId)}${visQuery(visibility)}`, ctx)

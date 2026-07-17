@@ -3,6 +3,7 @@ package com.lrj.platform.knowledge.controller;
 import com.lrj.platform.knowledge.lifecycle.DocumentInfo;
 import com.lrj.platform.knowledge.lifecycle.DocumentService;
 import com.lrj.platform.knowledge.lifecycle.DocumentTextExtractor;
+import com.lrj.platform.knowledge.lifecycle.PagedDocuments;
 import com.lrj.platform.knowledge.multimodal.MultimodalRetrievalService;
 import com.lrj.platform.security.TenantContext;
 import org.junit.jupiter.api.AfterEach;
@@ -93,6 +94,33 @@ class DocumentControllerPublicTest {
 
         controller.list(null);
         verify(service).list(false);
+    }
+
+    @Test
+    void listPaged_delegatesWithVisibilityAndPaging() {
+        DocumentService service = mock(DocumentService.class);
+        DocumentInfo info = new DocumentInfo("d1", "acme", "a.md", "text/plain",
+                5, 1, 1, Instant.now(), "manual");
+        PagedDocuments page = new PagedDocuments(List.of(info), 2, 10, 25, 3);
+        when(service.listPaged(false, 2, 10)).thenReturn(page);
+        DocumentController controller = new DocumentController(
+                service, mock(DocumentTextExtractor.class), noMultimodal());
+
+        assertThat(controller.listPaged(null, 2, 10)).isSameAs(page);
+        verify(service).listPaged(false, 2, 10);
+    }
+
+    @Test
+    void listPaged_public_readsSharedPartition_sizeDefaultsWhenNull() {
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
+        DocumentService service = mock(DocumentService.class);
+        PagedDocuments page = new PagedDocuments(List.of(), 1, 10, 0, 1);
+        when(service.listPaged(true, 1, 0)).thenReturn(page); // size=null → 0（service 内部再取默认）
+        DocumentController controller = new DocumentController(
+                service, mock(DocumentTextExtractor.class), noMultimodal());
+
+        assertThat(controller.listPaged("public", 1, null)).isSameAs(page);
+        verify(service).listPaged(true, 1, 0);
     }
 
     @Test

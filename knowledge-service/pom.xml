@@ -93,6 +93,10 @@
 
         <dependency>
             <groupId>com.lrj.platform</groupId>
+            <artifactId>platform-gateway-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.lrj.platform</groupId>
             <artifactId>platform-security</artifactId>
         </dependency>
         <dependency>
@@ -106,6 +110,10 @@
         <dependency>
             <groupId>com.lrj.platform</groupId>
             <artifactId>platform-audit</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.lrj.platform</groupId>
+            <artifactId>platform-metering</artifactId>
         </dependency>
 
         <!-- 统一权限平台接入 SDK (grpc-free: 仅 protocol + spring-web/jackson, 不引 authzed grpc) -->

@@ -20,6 +20,18 @@ export interface DocumentInfo {
 }
 
 /**
+ * 后端 `PagedDocuments` 信封（`GET /rag/documents?page=&size=`）。分页发生在租户隔离 + 文档级授权过滤之后，
+ * 故 `total` 是"当前调用方可见"的总条数。`page` 1-based，服务端已 clamp 到 `[1, totalPages]`；`totalPages` 至少 1。
+ */
+export interface PagedDocuments {
+  items: DocumentInfo[]
+  page: number
+  size: number
+  total: number
+  totalPages: number
+}
+
+/**
  * RAG 运行时后端形态（`KnowledgeRuntimeView.rag`，合同 v2 起返回）。
  * 供检索台如实展示"当前实际用哪种 embedding / 向量库 / 有没有开混排"，取代写死的"默认 HashEmbedding"提示。
  */
