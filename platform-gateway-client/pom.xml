@@ -25,6 +25,18 @@
         </dependency>
 
         <!--
+          租户归因（LiteLLM 记账）：optional —— 只为编译 TenantContextIdentityAutoConfiguration 的
+          TenantContext 适配。绝不能传递给下游：eval-service 只依赖本模块、无鉴权，若 security 传递
+          进去会自动注册 InternalTokenAuthFilter + Redis 限流 bean（明显回归）。security 缺失时该
+          配置类经 @ConditionalOnClass 整体跳过，归因退化 anonymous（启动告警）。
+        -->
+        <dependency>
+            <groupId>com.lrj.platform</groupId>
+            <artifactId>platform-security</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!--
           分布式追踪桥（#1 OTel）：一处依赖惠及全部 6 个 gateway-client 消费服务（agent/analytics/
           conversation/eval/vision/workflow）；edge-gateway/config-server 不依赖本模块故不受影响。
           OTLP 默认 okhttp sender（HTTP/protobuf），不引 grpc —— 与固定的 grpc-bom:1.59.1 无冲突。

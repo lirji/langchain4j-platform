@@ -1,5 +1,6 @@
 package com.lrj.platform.gateway;
 
+import com.lrj.platform.gateway.tenant.TenantAttributionMode;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
@@ -29,6 +30,14 @@ public class GatewayClientProperties {
     private boolean logRequests = false;
     private boolean logResponses = false;
 
+    /**
+     * 租户归因三档开关：{@code none}（默认，与接入前逐字一致）/ {@code user}（请求体 user=tenantId，
+     * LiteLLM 按 end-user 记账）/ {@code virtual-key}（另加 per-tenant key，LiteLLM 预算/限流硬保底）。
+     * 非法值绑定失败 → 启动失败。virtual key 本身<strong>不在</strong>本 bean 承载（避免
+     * configprops 暴露），见 {@code EnvironmentTenantVirtualKeyResolver}。
+     */
+    private TenantAttributionMode tenantAttribution = TenantAttributionMode.NONE;
+
     public String getBaseUrl() { return baseUrl; }
     public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
     public String getApiKey() { return apiKey; }
@@ -45,4 +54,6 @@ public class GatewayClientProperties {
     public void setLogRequests(boolean logRequests) { this.logRequests = logRequests; }
     public boolean isLogResponses() { return logResponses; }
     public void setLogResponses(boolean logResponses) { this.logResponses = logResponses; }
+    public TenantAttributionMode getTenantAttribution() { return tenantAttribution; }
+    public void setTenantAttribution(TenantAttributionMode tenantAttribution) { this.tenantAttribution = tenantAttribution; }
 }
