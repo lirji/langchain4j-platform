@@ -297,6 +297,7 @@ async function demoLogin(u: string): Promise<void> {
   position: relative;
   flex: 1;
   min-height: 100vh;
+  min-height: 100dvh; /* 移动浏览器地址栏收放不跳动 */
   width: 100%;
   overflow-y: auto;
   display: flex;
@@ -598,14 +599,20 @@ async function demoLogin(u: string): Promise<void> {
 .lp-reg-link:hover { text-decoration: underline; }
 .lp-foot { font-size: 12px; color: rgba(30, 50, 90, 0.5); }
 
-/* 窄屏：收起品牌区，表单卡片自带紧凑品牌头 */
-@media (max-width: 860px) {
+/* 窄屏：收起品牌区，表单卡片自带紧凑品牌头（canonical 1023，与主控制台抽屉断点对齐） */
+@media (max-width: 1023px) {
   .lp-brand { display: none; }
   .lp-card { max-width: 440px; }
   .lp-compact-head { display: block; }
 }
-@media (max-width: 480px) {
+@media (max-width: 640px) {
   .lp-form { padding: 30px 22px 26px; }
+  /* 演示账号描述改可换行，避免窄屏截断 */
+  .lp-demo-desc { white-space: normal; }
+}
+/* 触屏 16px 防 iOS 聚焦缩放 */
+@media (pointer: coarse) {
+  .lp-input { font-size: 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

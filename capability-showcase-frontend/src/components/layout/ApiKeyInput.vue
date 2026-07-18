@@ -96,6 +96,17 @@ function clearKey(): void {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
 }
+/* 手机档：放宽输入框可用宽度；触屏 16px 防 iOS 聚焦缩放 */
+@media (max-width: 640px) {
+  .apikey__input {
+    max-width: 60vw;
+  }
+}
+@media (pointer: coarse) {
+  .apikey__input {
+    font-size: 16px;
+  }
+}
 .apikey__chip {
   display: inline-flex;
   align-items: center;

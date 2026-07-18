@@ -98,8 +98,8 @@ a.crumbs__item:hover {
   flex-shrink: 0;
 }
 
-/* md 及以下：仅保留末级 */
-@media (max-width: 767px) {
+/* 平板及以下（canonical 1023，与抽屉断点对齐）：仅保留末级 */
+@media (max-width: 1023px) {
   .crumbs__li:not([data-last='true']) {
     display: none;
   }

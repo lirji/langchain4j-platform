@@ -243,4 +243,17 @@ async function doLogout(): Promise<void> {
 .authctl__warn-clear:hover {
   background: var(--danger-soft);
 }
+
+/* 手机档：身份 chip 收敛（藏租户段，用户名+凭证徽章保留，租户仍在 title）；
+   浮层（高级面板/覆盖警告条）宽度钳到视口内 */
+@media (max-width: 640px) {
+  .authctl__tenant,
+  .authctl__sep {
+    display: none;
+  }
+  .authctl__panel,
+  .authctl__warn {
+    max-width: calc(100vw - 2 * var(--page-px));
+  }
+}
 </style>

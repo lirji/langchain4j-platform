@@ -309,7 +309,8 @@ const navToggleLabel = computed(() => (navExpanded.value ? '收起导航菜单' 
   top: calc(100% + 6px);
   right: 0;
   z-index: var(--z-popover);
-  min-width: 200px;
+  /* min() 保留下限语义（桌面不变），窄屏钳到视口内 */
+  min-width: min(200px, calc(100vw - 2 * var(--page-px)));
   padding: var(--space-1);
   background: var(--surface);
   border: 1px solid var(--border-strong);

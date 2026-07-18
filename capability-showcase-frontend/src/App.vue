@@ -244,6 +244,10 @@ onMounted(() => {
 }
 
 @media (max-width: 1023px) {
+  /* iOS Safari 对 fixed 背景支持差且伤滚动性能，移动端降为默认 */
+  .app-shell {
+    background-attachment: scroll;
+  }
   .app-nav {
     position: fixed;
     top: var(--header-h);
@@ -253,6 +257,8 @@ onMounted(() => {
     transform: translateX(-100%);
     transition: transform var(--dur) var(--ease);
     box-shadow: var(--shadow-lg);
+    /* 底部 home 条安全区，防抽屉页脚被遮 */
+    padding-bottom: var(--safe-bottom);
   }
   .app-nav--open {
     transform: translateX(0);

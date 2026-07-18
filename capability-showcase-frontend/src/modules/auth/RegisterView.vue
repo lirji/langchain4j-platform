@@ -204,6 +204,7 @@ async function submit(): Promise<void> {
   position: relative;
   flex: 1;
   min-height: 100vh;
+  min-height: 100dvh; /* 移动浏览器地址栏收放不跳动 */
   width: 100%;
   overflow-y: auto;
   display: flex;
@@ -440,13 +441,18 @@ async function submit(): Promise<void> {
 .lp-back-link:hover { text-decoration: underline; }
 .lp-foot { font-size: 12px; color: rgba(30, 50, 90, 0.5); }
 
-@media (max-width: 860px) {
+/* canonical 1023，与主控制台抽屉断点对齐 */
+@media (max-width: 1023px) {
   .lp-brand { display: none; }
   .lp-card { max-width: 440px; }
   .lp-compact-head { display: block; }
 }
-@media (max-width: 480px) {
+@media (max-width: 640px) {
   .lp-form { padding: 30px 22px 26px; }
+}
+/* 触屏 16px 防 iOS 聚焦缩放 */
+@media (pointer: coarse) {
+  .lp-input { font-size: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .lp-blob, .lp-card, .lp-spin { animation: none !important; }
