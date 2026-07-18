@@ -605,6 +605,12 @@ async function runSql(): Promise<void> {
   overflow: auto;
   max-height: 360px;
 }
+/* 手机档：JSON 面板矮一档，少占竖向空间 */
+@media (max-width: 640px) {
+  .al__json {
+    max-height: 280px;
+  }
+}
 .al__fallback {
   min-height: 200px;
   border: 1px solid var(--code-border);

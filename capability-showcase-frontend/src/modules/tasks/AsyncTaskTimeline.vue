@@ -292,6 +292,12 @@ function isTerminal(status: string): boolean {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 手机档：任务 id 截断宽随视口收窄（行本身可换行，见 .tl__row flex-wrap） */
+@media (max-width: 640px) {
+  .tl__id {
+    max-width: 60vw;
+  }
+}
 .tl__kind {
   font-size: var(--fs-xs);
   color: var(--primary);

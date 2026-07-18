@@ -112,10 +112,18 @@ const showParams = ref(false)
 
 const transcriptEl = ref<HTMLElement | null>(null)
 
-function scrollToBottom(): void {
+/** 自动滚动守卫：用户上滑离底超过此阈值即暂停跟随（防流式/软键盘弹出时强拽回底部）。 */
+const AUTO_SCROLL_SLACK = 80
+function isNearBottom(el: HTMLElement): boolean {
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= AUTO_SCROLL_SLACK
+}
+function scrollToBottom(force = false): void {
+  // 判定须在 nextTick 前取当前滚动位（新内容渲染后 scrollHeight 已变大、判定必假）
+  const el = transcriptEl.value
+  if (el && !force && !isNearBottom(el)) return
   void nextTick(() => {
-    const el = transcriptEl.value
-    if (el) el.scrollTop = el.scrollHeight
+    const target = transcriptEl.value
+    if (target) target.scrollTop = target.scrollHeight
   })
 }
 function patch(id: number, fn: (m: ChatMsg) => void): void {
@@ -219,7 +227,8 @@ function startAssistant(cap: Capability, values: FormValues): void {
     src: { ...values },
   })
   activeAsstId.value = asstId
-  scrollToBottom()
+  // 用户刚发送：无条件滚到底（不受上滑守卫影响）
+  scrollToBottom(true)
 }
 
 const canSend = computed(
@@ -879,6 +888,12 @@ onUnmounted(() => run.abort())
 .msg:focus-within .msg__actions {
   opacity: 1;
 }
+/* 触屏无 hover：复制/重新生成常显，否则手机上不可达 */
+@media (hover: none) {
+  .msg__actions {
+    opacity: 1;
+  }
+}
 .msg__act {
   padding: 2px 8px;
   font-size: var(--fs-xs);
@@ -947,13 +962,13 @@ onUnmounted(() => run.abort())
   overflow: auto;
 }
 
-/* Composer：sticky 底部玻璃（大面，允许 blur） */
+/* Composer：sticky 底部玻璃（大面，允许 blur）；底衬 home 条安全区 */
 .chat__composer {
   position: sticky;
   bottom: 0;
   flex-shrink: 0;
   margin-top: var(--space-2);
-  padding: var(--space-3) var(--space-4) var(--space-4);
+  padding: var(--space-3) var(--space-4) calc(var(--space-4) + var(--safe-bottom));
   border: 1px solid var(--glass-border);
   border-bottom: none;
   border-top-left-radius: var(--radius-lg);
@@ -1017,6 +1032,39 @@ onUnmounted(() => run.abort())
   font-size: var(--fs-xs);
   color: var(--text-subtle);
   font-family: var(--font-mono);
+}
+
+/* 手机档：模式 chips 单行横滚、气泡放宽、参数输入弹性化 */
+@media (max-width: 640px) {
+  .chat__rail {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+  .chat__mode {
+    flex-shrink: 0;
+  }
+  .msg {
+    max-width: 92%;
+  }
+  .chat__param-input {
+    width: auto;
+    flex: 1 1 120px;
+  }
+  .chat__params label {
+    flex: 1 1 auto;
+  }
+}
+/* 触屏：消息操作按钮触控目标抬升；参数输入 16px 防 iOS 聚焦缩放 */
+@media (pointer: coarse) {
+  .msg__act {
+    min-height: 32px;
+    padding: 4px 10px;
+  }
+  .chat__param-input {
+    font-size: 16px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

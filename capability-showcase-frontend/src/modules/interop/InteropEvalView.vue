@@ -856,6 +856,12 @@ watch(
   gap: var(--space-3);
   max-width: 360px;
 }
+/* 手机档：双列塌单列 */
+@media (max-width: 640px) {
+  .ie__ret-params {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .ie__ret-actions {
   display: flex;
   gap: var(--space-2);

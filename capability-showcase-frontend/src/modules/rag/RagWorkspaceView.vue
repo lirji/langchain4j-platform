@@ -873,6 +873,7 @@ const ingestScopeHint = computed(() => {
   justify-content: center;
   gap: var(--space-3);
   margin-top: var(--space-3);
+  flex-wrap: wrap;
 }
 .rag__pager-info {
   font-size: var(--fs-xs);
@@ -929,6 +930,15 @@ const ingestScopeHint = computed(() => {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
+}
+/* 手机档：文档行允许操作按钮换行到下一行，避免标题被挤没 */
+@media (max-width: 640px) {
+  .rag__doc {
+    flex-wrap: wrap;
+  }
+  .rag__doc-main {
+    flex: 1 1 100%;
+  }
 }
 .rag__doc-main {
   min-width: 0;
@@ -1024,6 +1034,12 @@ const ingestScopeHint = computed(() => {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-3);
+}
+/* 手机档：TopK/最低分/类目三列塌单列，避免挤成三窄条 */
+@media (max-width: 640px) {
+  .rag__params {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .rag__search-actions {
   display: flex;

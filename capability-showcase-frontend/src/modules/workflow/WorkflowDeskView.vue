@@ -583,6 +583,12 @@ const approveScopeHint = computed(() => {
   flex: 1;
   min-width: 160px;
 }
+/* 手机档：放开定宽下限 */
+@media (max-width: 640px) {
+  .wf__comment {
+    min-width: 0;
+  }
+}
 .wf__btn {
   padding: 6px 12px;
 }

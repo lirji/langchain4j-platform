@@ -649,6 +649,12 @@ const moreCaps = computed<Capability[]>(() =>
   flex: 1;
   min-width: 220px;
 }
+/* 手机档：放开定宽下限，防撑破换行 */
+@media (max-width: 640px) {
+  .ag__adv-field--wide {
+    min-width: 0;
+  }
+}
 .ag__tasks {
   font-family: var(--font-mono);
   font-size: var(--fs-xs);

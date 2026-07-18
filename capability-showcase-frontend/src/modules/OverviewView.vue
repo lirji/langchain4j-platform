@@ -249,6 +249,11 @@ const coreCaps = computed(() =>
   color: var(--primary-fg);
   transform: translateY(-1px);
 }
+/* 触屏无 hover：按压给即时反馈 */
+.ov__quick-link:active {
+  background: var(--primary);
+  color: var(--primary-fg);
+}
 
 /* ── 统计卡行 ── */
 .ov__stats {
