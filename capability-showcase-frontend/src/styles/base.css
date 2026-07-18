@@ -323,5 +323,28 @@ textarea.form-control {
   :root {
     --page-px: var(--space-4);
     --page-py: var(--space-5);
+    /* 手机档版式收窄：hero 字阶、卡墙最小列宽（320px 视口内容区约 288px，300 必横向溢出）、节间距 */
+    --fs-display: var(--fs-2xl);
+    --card-min: 260px;
+    --section-gap: var(--space-6);
+  }
+}
+
+/* ── 移动端适配 · 触控能力查询（与宽度断点正交；鼠标桌面零影响）──
+   分组选择器同时压制默认与 compact 密度：:root[data-density='compact'] 特异性 (0,2,0)
+   高于 :root，纯声明顺序赢不了；JS 未就绪首帧无 data-density 属性时由 :root 一侧兜底。 */
+@media (pointer: coarse) {
+  :root,
+  :root[data-density='compact'] {
+    --control-h: 44px;
+    --control-h-sm: 38px;
+    /* 玻璃模糊降档，降低移动 GPU 负担（与 reduced-motion 同值） */
+    --glass-blur: 6px;
+    --glass-blur-strong: 8px;
+  }
+  /* iOS Safari 对 <16px 输入聚焦会自动放大页面——触屏环境输入统一 16px 防缩放 */
+  .form-control,
+  .form-control--mono {
+    font-size: 16px;
   }
 }
