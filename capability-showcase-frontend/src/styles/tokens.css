@@ -4,6 +4,13 @@
  * @media (prefers-color-scheme) 仅作 JS 未就绪前的首屏兜底。
  */
 
+/*
+ * ── 断点约定（canonical；TS 单一真源见 src/composables/useBreakpoint.ts 的 BREAKPOINTS）──
+ * 桌面: (min-width: 1024px)；平板及以下（抽屉导航）: (max-width: 1023px)；手机精修: (max-width: 640px)。
+ * CSS 的 @media 无法引用变量，改断点须同步改 BREAKPOINTS 与全部 @media 字面值（review 时 grep 校验）。
+ * 触控/防 iOS 聚焦缩放用能力查询 (pointer: coarse) / (hover: none)，不新增宽度断点。
+ */
+
 :root {
   /* 间距 / 圆角 / 阴影 / 字号（主题无关） */
   --space-1: 4px;
@@ -291,6 +298,9 @@
   /* 能力/模块卡片网格的统一最小列宽（auto-fill 的 minmax 基准），收敛各模块卡片宽度。 */
   --card-min: 300px;
   --section-gap: var(--space-7);
+  /* 安全区（刘海屏/底部 home 条）：依赖 index.html viewport-fit=cover；不支持 env() 的环境回退 0 */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 
   /* z 梯度：统一叠放次序（header < scrim < drawer < popover < cmdk < toast < skip） */
   --z-header: 20;
