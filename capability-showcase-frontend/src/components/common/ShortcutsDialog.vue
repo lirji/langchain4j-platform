@@ -69,7 +69,13 @@ useFocusTrap({
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 15vh var(--space-4) var(--space-4);
+  /* dvh 防移动地址栏跳动；手机档顶距收窄 */
+  padding: 10dvh var(--space-4) var(--space-4);
+}
+@media (max-width: 640px) {
+  .sc {
+    padding-top: var(--space-4);
+  }
 }
 .sc__scrim {
   position: absolute;

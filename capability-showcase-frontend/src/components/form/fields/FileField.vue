@@ -84,7 +84,9 @@ function clear(): void {
         <span class="dropzone__meta">{{ formatBytes((model as File).size) }}</span>
       </template>
       <template v-else>
-        <span class="dropzone__hint">点击或拖拽文件到此处上传</span>
+        <!-- 触屏无拖拽：按 hover 能力切换提示文案（CSS 控制显隐） -->
+        <span class="dropzone__hint dropzone__hint--pointer">点击或拖拽文件到此处上传</span>
+        <span class="dropzone__hint dropzone__hint--touch">点击选择文件上传</span>
         <span v-if="accept" class="dropzone__meta">接受：{{ accept }}</span>
       </template>
     </div>
@@ -151,6 +153,24 @@ function clear(): void {
   background: transparent;
   border: none;
   text-decoration: underline;
+}
+.dropzone__hint--touch {
+  display: none;
+}
+@media (hover: none) {
+  .dropzone__hint--pointer {
+    display: none;
+  }
+  .dropzone__hint--touch {
+    display: inline;
+  }
+}
+/* 触屏：移除按钮触控目标抬升 */
+@media (pointer: coarse) {
+  .dropzone__clear {
+    min-height: 32px;
+    padding: 4px 8px;
+  }
 }
 .filepreview {
   margin-top: var(--space-2);

@@ -174,6 +174,7 @@ useFocusTrap({
   bottom: 0;
   width: 360px;
   max-width: 92vw;
+  padding-bottom: var(--safe-bottom);
   display: flex;
   flex-direction: column;
   background: var(--glass-bg-strong);
@@ -344,6 +345,26 @@ useFocusTrap({
 .entry:hover .entry__actions,
 .entry:focus-within .entry__actions {
   opacity: 1;
+}
+/* 触屏无 hover：条目操作（重跑/删除）常显；触控目标抬升 */
+@media (hover: none) {
+  .entry__actions {
+    opacity: 1;
+  }
+}
+@media (pointer: coarse) {
+  .entry__btn {
+    min-height: 32px;
+    padding: 4px 10px;
+  }
+}
+/* 手机档：抽屉全宽 */
+@media (max-width: 640px) {
+  .drawer__panel {
+    width: 100vw;
+    max-width: 100vw;
+    border-left: none;
+  }
 }
 .entry__btn {
   padding: 2px 8px;

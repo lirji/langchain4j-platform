@@ -33,4 +33,14 @@ const model = defineModel<unknown>()
   font-size: var(--fs-sm);
   color: var(--text-muted);
 }
+/* 触屏：不走 .form-control 的勾选目标单独抬升 */
+@media (pointer: coarse) {
+  .bool {
+    min-height: 32px;
+  }
+  .bool__input {
+    width: 22px;
+    height: 22px;
+  }
+}
 </style>

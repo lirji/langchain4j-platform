@@ -4,6 +4,7 @@ import type { Capability, ParamSpec } from '../../types/catalog'
 import type { FormValues } from '../../utils/validation'
 import { useSessionStore } from '../../stores/session'
 import { useHistoryStore } from '../../stores/history'
+import { useBreakpoint } from '../../composables/useBreakpoint'
 import { useCapabilityRun } from '../../composables/useCapabilityRun'
 import { executionGate } from '../../utils/gate'
 import { toCurl } from '../../utils/curl'
@@ -28,6 +29,8 @@ const values = ref<FormValues>({})
 const formRef = ref<InstanceType<typeof DynamicForm> | null>(null)
 const confirmed = ref(false)
 const showCurl = ref(false)
+const { isPhone } = useBreakpoint()
+const resEl = ref<HTMLElement | null>(null)
 
 const isDanger = computed(() => !props.cap.executableByDefault)
 const gate = computed(() => {
@@ -147,6 +150,9 @@ async function execute(): Promise<void> {
   recordSnapshot = { ...values.value }
   pendingRecord = true
   await run.run(values.value, { confirmed: confirmed.value })
+  // 手机档单列堆叠：响应区在表单下方屏外，执行返回（SSE 为流开始）后自动滚过去。
+  // 可选调用防御 jsdom 无 scrollIntoView。
+  if (isPhone.value) resEl.value?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
   if (run.phase.value === 'success' && run.result.value) {
     emit('result', {
       cap: props.cap,
@@ -262,7 +268,7 @@ function onKeydown(e: KeyboardEvent): void {
       </section>
 
       <!-- 响应区 -->
-      <section class="runner__pane runner__res" aria-label="响应">
+      <section ref="resEl" class="runner__pane runner__res" aria-label="响应">
         <h2 class="runner__h">响应</h2>
         <div class="runner__res-body">
           <SseConsole
@@ -441,6 +447,17 @@ function onKeydown(e: KeyboardEvent): void {
 @media (max-width: 1023px) {
   .runner__grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* 手机档：执行主按钮独占一行易点，响应区最小高度收窄少占首屏 */
+@media (max-width: 640px) {
+  .runner__actions .btn--primary,
+  .runner__actions .btn--stream,
+  .runner__actions .btn--danger {
+    flex: 1 1 100%;
+  }
+  .runner__res-body {
+    min-height: 200px;
   }
 }
 </style>

@@ -47,6 +47,12 @@ const IN_LABEL: Record<ParamIn, string> = {
   gap: 8px;
   margin-bottom: 6px;
 }
+/* 手机档：label 与参数位置徽章允许换行，避免长参数名挤压 */
+@media (max-width: 640px) {
+  .field__label {
+    flex-wrap: wrap;
+  }
+}
 .field__name {
   font-size: var(--fs-sm);
   font-weight: 600;

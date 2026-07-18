@@ -528,6 +528,12 @@ function eventTone(name: string): string {
   font-weight: 700;
   color: var(--text-muted);
 }
+/* 手机档：事件名列宽收窄，给数据列留空间 */
+@media (max-width: 640px) {
+  .stage__event-name {
+    min-width: 80px;
+  }
+}
 .stage__event-name[data-tone='ok'] {
   color: var(--success);
 }

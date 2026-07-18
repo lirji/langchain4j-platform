@@ -328,7 +328,13 @@ useFocusTrap({
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 15vh var(--space-4) var(--space-4);
+  /* dvh 防移动地址栏跳动；手机档顶距收窄给软键盘留空间 */
+  padding: 10dvh var(--space-4) var(--space-4);
+}
+@media (max-width: 640px) {
+  .cmdk {
+    padding-top: var(--space-4);
+  }
 }
 .cmdk__scrim {
   position: absolute;
@@ -339,7 +345,7 @@ useFocusTrap({
   position: relative;
   width: 100%;
   max-width: 640px;
-  max-height: 70vh;
+  max-height: 70dvh;
   display: flex;
   flex-direction: column;
   background: var(--glass-bg-strong);

@@ -59,6 +59,9 @@ function fmt(v: unknown): string {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
+  /* 横滚可见性提示：右缘渐隐示意还有内容（纯视觉，不改交互） */
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), rgba(0, 0, 0, 0.35));
+  mask-image: linear-gradient(to right, #000 calc(100% - 20px), rgba(0, 0, 0, 0.35));
 }
 .rt:focus-visible {
   outline: none;
@@ -103,5 +106,11 @@ function fmt(v: unknown): string {
 }
 .rt__tr:last-child .rt__td {
   border-bottom: none;
+}
+/* 手机档：单元格截断收紧，减少横滚距离 */
+@media (max-width: 640px) {
+  .rt__td {
+    max-width: 24ch;
+  }
 }
 </style>

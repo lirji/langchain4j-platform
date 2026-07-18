@@ -84,6 +84,12 @@ defineProps<{ cap: Capability; moduleId: string }>()
 .card__fav.is-fav {
   opacity: 1;
 }
+/* 触屏无 hover：星标常显，否则未收藏能力在手机上无法收藏 */
+@media (hover: none) {
+  .card__fav {
+    opacity: 1;
+  }
+}
 .card__top {
   display: flex;
   align-items: center;
