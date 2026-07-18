@@ -29,7 +29,7 @@ platform:
 
 app:
   vision:
-    # 总开关。默认关 → VisionModel / VisionController 全不装配，零依赖、零网络。
+    # 总开关。默认开（须配 VISION_MODEL，否则启动 fail-fast）；置 false → VisionModel / VisionController 全不装配，零依赖、零网络。
     enabled: ${VISION_ENABLED:true}
     # 视觉逻辑模型名（对应 LiteLLM model_list 里的多模态模型，如 gpt-4o-mini / qwen2.5-vl）。
     # 开启（enabled=true）但此项留空 → 启动 fail-fast 明确报错，绝不静默降级。

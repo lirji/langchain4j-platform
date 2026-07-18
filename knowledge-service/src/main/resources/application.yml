@@ -115,14 +115,14 @@ app:
     registry:
       store: ${RAG_REGISTRY_STORE:redis}
     # 文档 upload/delete 成功后，尽力而为地失效 conversation 侧 L1 语义缓存（做到「更新即新鲜」）。
-    # 默认关闭：关闭时用 Noop 实现，对 ingest 零影响。开启需 conversation 已开语义缓存才有意义。
+    # 默认开；置 false 时用 Noop 实现、对 ingest 零影响。需 conversation 已开语义缓存才有意义。
     cache-invalidation:
       enabled: ${RAG_CACHE_INVALIDATION_ENABLED:true}
       conversation-base-url: ${RAG_CACHE_INVALIDATION_CONVERSATION_URL:http://conversation-service:8081}
       connect-timeout: ${RAG_CACHE_INVALIDATION_CONNECT_TIMEOUT:1s}
       read-timeout: ${RAG_CACHE_INVALIDATION_READ_TIMEOUT:2s}
     # 原生图片多模态 embedding（CLIP / jina-clip）：图片直接向量化 + text→image 检索。
-    # 默认关闭（零依赖）；开启后 /rag/documents 传图片与 /rag/image 走此路径，图片向量存独立 image collection。
+    # 默认开（需可达的多模态 embedding 后端 base-url）；/rag/documents 传图片与 /rag/image 走此路径，图片向量存独立 image collection；置 false 关闭。
     multimodal-embedding:
       enabled: ${RAG_MULTIMODAL_ENABLED:true}
       base-url: ${RAG_MULTIMODAL_BASE_URL:http://localhost:8000/v1}
@@ -170,7 +170,7 @@ app:
       fail-fast: ${RAG_ES_FAIL_FAST:false}   # 写失败：false=best-effort(默认) / true=让上传失败
       connect-timeout-ms: ${RAG_ES_CONNECT_TIMEOUT_MS:2000}
       socket-timeout-ms: ${RAG_ES_SOCKET_TIMEOUT_MS:5000}
-    # 重排序：默认关。开启后按 type 二选一（llm=复用共享 temp=0 ChatModel 打分；jina=Jina reranker 云 API）
+    # 重排序：默认开。按 type 二选一（llm=复用共享 temp=0 ChatModel 打分；jina=Jina reranker 云 API）；置 false 关闭
     rerank:
       enabled: ${RAG_RERANK_ENABLED:true}
       type: ${RAG_RERANK_TYPE:llm}                # llm | jina
@@ -181,11 +181,11 @@ app:
       jina:
         api-key: ${JINA_API_KEY:}
         model-name: ${RAG_RERANK_JINA_MODEL:jina-reranker-v2-base-multilingual}
-    # 查询扩展：默认关。开启后用共享 temp=0 ChatModel 把 1 query 扩成 N 变体多路召回
+    # 查询扩展：默认开。用共享 temp=0 ChatModel 把 1 query 扩成 N 变体多路召回；置 false 关闭
     query-expansion:
       enabled: ${RAG_QUERY_EXPANSION_ENABLED:true}
       max-variants: ${RAG_QUERY_EXPANSION_MAX_VARIANTS:4}
-    # Contextual Retrieval：默认关。开启后入库时逐 chunk 加文档级上下文前缀再嵌入（每 chunk 一次 LLM 调用）
+    # Contextual Retrieval：默认开。入库时逐 chunk 加文档级上下文前缀再嵌入（每 chunk 一次 LLM 调用）；置 false 关闭
     contextual:
       enabled: ${RAG_CONTEXTUAL_ENABLED:true}
       max-doc-chars: ${RAG_CONTEXTUAL_MAX_DOC_CHARS:8000}

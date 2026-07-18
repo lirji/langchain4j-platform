@@ -112,7 +112,7 @@ platform:
         user: alice
         scopes: [chat, ingest]
 
-# ③ Casdoor SSO 身份切换（默认关；灰度期开）。开启后 edge 验 Casdoor access token → 换发内部 JWT，
+# ③ Casdoor SSO 身份切换（默认开、mode=only 严格；dual 为灰度回滚）。edge 验 Casdoor access token → 换发内部 JWT，
 # 验不过透传给 legacy(session/api-key) filter。scope 由 Casdoor 展开进 token，edge 只透传 + 固定 allowlist
 # （与角色数量无关）。tenantId←owner、userId←sub。
 edge:

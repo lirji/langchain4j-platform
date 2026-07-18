@@ -56,7 +56,7 @@ app:
     browser:
       enabled: ${AGENT_BROWSER_ENABLED:false}
     # 视觉后端（独立 vision-service）。browser_see 动作双门控在 browser.enabled + vision.enabled 同时 true。
-    # 默认关：不配则 browser_see 不出现在工具清单，视觉 RestTemplate/客户端也不装配。
+    # vision 默认开（视觉 RestTemplate/客户端装配）；browser_see 仍需 browser.enabled=true（默认关）才出现在工具清单。
     vision:
       enabled: ${AGENT_VISION_ENABLED:true}
       base-url: ${VISION_BASE_URL:http://localhost:8090}
@@ -69,14 +69,14 @@ app:
     analytics:
       base-url: ${ANALYTICS_BASE_URL:http://localhost:8083}
       enabled: ${AGENT_ANALYTICS_ENABLED:true}
-    # 业务流程智能体（workflow-service）。默认关：不配则 refund_start/workflow_status/workflow_tasks 动作、
+    # 业务流程智能体（workflow-service）。默认开（有副作用·人在环，需 workflow-service 可达）；置 false 则 refund_start/workflow_status/workflow_tasks 动作、
     # /agent/process 端点、workflow RestTemplate/客户端都不装配。read-timeout 放宽——refund/start 同步跑两次 LLM。
     workflow:
       enabled: ${AGENT_WORKFLOW_ENABLED:true}
       base-url: ${WORKFLOW_BASE_URL:http://localhost:8082}
       read-timeout: ${AGENT_WORKFLOW_READ_TIMEOUT:60s}
-    # 订单查询（order-service）。默认关：不配则 order_query 走 NoopOrderClient（返回 disabled），
-    # orderRestTemplate 也不装配。开启后 order_query 经内部 JWT 直连 order-service 按订单号只读查、按租户隔离。
+    # 订单查询（order-service）。默认开：order_query 经内部 JWT 直连 order-service 按订单号只读查、按租户隔离；
+    # 置 false 则 order_query 走 NoopOrderClient（返回 disabled）、orderRestTemplate 不装配。
     order:
       enabled: ${AGENT_ORDER_ENABLED:true}
       base-url: ${ORDER_BASE_URL:http://localhost:8093}

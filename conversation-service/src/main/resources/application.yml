@@ -64,7 +64,7 @@ app:
       read-timeout: ${CONVERSATION_RAG_READ_TIMEOUT:3s}
     # History-aware 检索（对齐单体 CompressingQueryTransformer）：用会话记忆历史把带指代的追问
     # （「它跟 X 啥区别」）压缩为自包含检索 query 再检索；只影响送知识库的 query，用户消息原样进记忆。
-    # 默认关（开启后每轮 /chat 多一次 LLM 压缩调用）。
+    # 默认开（每轮 /chat 多一次 LLM 压缩调用；置 false 关闭）。
     history-aware:
       enabled: ${CONVERSATION_HISTORY_AWARE_ENABLED:true}
       max-history-messages: ${CONVERSATION_HISTORY_AWARE_MAX_HISTORY_MESSAGES:10}
@@ -78,7 +78,7 @@ app:
       token-model: ${CONVERSATION_MEMORY_TOKEN_MODEL:gpt-4o-mini}  # tokens 档 tokenizer 依据
       redis-ttl: ${CONVERSATION_MEMORY_REDIS_TTL:P7D}        # redis 档会话 TTL（ISO-8601，如 P7D / PT12H）
       # 长期记忆/用户画像（对齐单体 memory/profile）：跨会话抽取用户持久事实，对话前作为 context 新鲜注入。
-      # 端点 /chat/memory、GET/DELETE /memory/profile。默认关（开启后每轮多一次 temp=0 抽取）。
+      # 端点 /chat/memory、GET/DELETE /memory/profile。默认开（每轮多一次 temp=0 抽取；置 false 关闭）。
       profile:
         enabled: ${CONVERSATION_MEMORY_PROFILE_ENABLED:true}
         store: ${CONVERSATION_MEMORY_PROFILE_STORE:in-memory}  # in-memory（redis 变体待补）
@@ -87,12 +87,12 @@ app:
         async: ${CONVERSATION_MEMORY_PROFILE_ASYNC:true}
     # Grounding 事后校验（对齐单体 ai/grounding，warn 模式）：答案 vs RAG 来源核对，
     # Layer0 伪造引用（[doc=ID] 不在来源）+ Layer1 faithfulness 打分 < 阈值 → 在答案末尾追加可信度提示后缀
-    # （不改写、不拒答）。开启后每轮 RAG 回答多一次 temp=0 判官调用，故默认关。
+    # （不改写、不拒答）。每轮 RAG 回答多一次 temp=0 判官调用；默认开（置 false 关闭）。
     grounding:
       enabled: ${CONVERSATION_GROUNDING_ENABLED:true}
       threshold: ${CONVERSATION_GROUNDING_THRESHOLD:0.7}
     # LLM-as-Router（对齐单体 ai/routing）：分类 query（RAG/TOOL/CHAT）后分派——RAG 走检索、TOOL/CHAT 裸答。
-    # 端点 POST /chat/auto。开启后每轮多一次 temp=0 分类调用，故默认关。
+    # 端点 POST /chat/auto。每轮多一次 temp=0 分类调用；默认开（置 false 关闭）。
     router:
       enabled: ${CONVERSATION_ROUTER_ENABLED:true}
     # MCP 驱动对话（对齐单体 ai/mcp）：工具全部来自 MCP server。端点 POST /chat/mcp。默认关。
@@ -104,20 +104,20 @@ app:
         command: ${CONVERSATION_MCP_STDIO_COMMAND:}    # 逗号分隔的进程命令，如 "npx,-y,@modelcontextprotocol/server-everything"
       http:
         url: ${CONVERSATION_MCP_HTTP_URL:http://localhost:3001/mcp}
-    # 视觉对话（对齐单体 ai/vision）：/chat/vision 把图片+问题委托给 vision-service（视觉能力已在那边）。默认关。
+    # 视觉对话（对齐单体 ai/vision）：/chat/vision 把图片+问题委托给 vision-service（视觉能力已在那边）。默认开（置 false 关闭）。
     vision:
       enabled: ${CONVERSATION_VISION_ENABLED:true}
       vision-base-url: ${CONVERSATION_VISION_BASE_URL:http://localhost:8090}
       connect-timeout: ${CONVERSATION_VISION_CONNECT_TIMEOUT:1s}
       read-timeout: ${CONVERSATION_VISION_READ_TIMEOUT:60s}
-    # 对话护栏（移植单体 PromptInjection/PII）。默认全关、零回归；生产建议开启（安全合规）。
+    # 对话护栏（移植单体 PromptInjection/PII）。默认全开（安全合规）；置 false 可关、退回零回归。
     guardrail:
       injection:
         enabled: ${CONVERSATION_GUARDRAIL_INJECTION_ENABLED:true}
         mode: ${CONVERSATION_GUARDRAIL_INJECTION_MODE:block}   # block(拒答) | sanitize(剥离控制token) | audit(仅记日志放行)
       pii:
         enabled: ${CONVERSATION_GUARDRAIL_PII_ENABLED:true}    # 输出里的 email/手机号/身份证就地脱敏
-    # L1 语义缓存（应用侧 / 问题级 / 租户桶 / pre-RAG）。默认关闭，对现有 /chat 行为零影响。
+    # L1 语义缓存（应用侧 / 问题级 / 租户桶 / pre-RAG）。默认开；置 false 关闭时对现有 /chat 行为零影响。
     semantic-cache:
       enabled: ${CONVERSATION_SEMANTIC_CACHE_ENABLED:true}
       threshold: ${CONVERSATION_SEMANTIC_CACHE_THRESHOLD:0.95}
@@ -128,7 +128,7 @@ app:
         model-name: ${CONVERSATION_SEMANTIC_CACHE_EMBEDDING_MODEL:embedding-default}
       redis:
         ttl: ${CONVERSATION_SEMANTIC_CACHE_REDIS_TTL:0s}
-  # Model Cascade（便宜模型先答 → 低置信才升级强模型）。默认关闭，对现有 /chat 行为零影响。
+  # Model Cascade（便宜模型先答 → 低置信才升级强模型）。默认开；置 false 关闭时对现有 /chat 行为零影响。
   # cheap-model / strong-model 为 LiteLLM model_list 里的逻辑模型名；留空退化为网关默认模型。
   chat:
     cascade:

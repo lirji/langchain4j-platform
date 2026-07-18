@@ -16,7 +16,7 @@ app:
     read-timeout: ${INTEROP_READ_TIMEOUT:30s}
     # A2A message/stream 代理 conversation /chat/stream 的读超时；须 > 流式 emitter 超时(130s 内)。
     stream-read-timeout: ${INTEROP_STREAM_READ_TIMEOUT:120s}
-    # live capability discovery：默认关（静态 registry，零下游依赖）。开启后懒加载 + TTL 拉取，
+    # live capability discovery：默认开（懒加载 + TTL 从下游拉取）。置 false 退回静态 registry（零下游依赖），
     # 下游不可达确定性回退静态默认。
     discovery-enabled: ${INTEROP_DISCOVERY_ENABLED:true}
     capability-ttl: ${INTEROP_CAPABILITY_TTL:60s}
