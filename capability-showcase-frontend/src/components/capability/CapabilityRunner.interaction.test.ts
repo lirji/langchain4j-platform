@@ -6,6 +6,7 @@ import { useCatalogStore } from '../../stores/catalog'
 import { useHistoryStore } from '../../stores/history'
 import CapabilityRunner from './CapabilityRunner.vue'
 import { cleanup, jsonResponse, setupCatalog, sseResponse } from '../../test/interactionHarness'
+import { stubMatchMedia, type ViewportStub } from '../../test/viewport'
 
 /**
  * 57 项能力的传输合同测试：合同表独立硬编码（不从生产 assembleRequest 自证），
@@ -245,6 +246,52 @@ describe('CapabilityRunner 57 项合同', () => {
     wrapper.findComponent(DynamicFormStub).vm.$emit('update:modelValue', { message: 'EDITED-AFTER' })
     await flushPromises()
     expect(useHistoryStore().entries[0].params).toMatchObject({ message: 'message-value' })
+    wrapper.unmount()
+  })
+})
+
+describe('CapabilityRunner · 手机档执行后自动滚到响应区', () => {
+  let viewport: ViewportStub | null = null
+  const hadScrollIntoView = 'scrollIntoView' in Element.prototype
+
+  beforeEach(() => setupCatalog())
+  afterEach(() => {
+    viewport?.restore()
+    viewport = null
+    // jsdom 原生无 scrollIntoView，测试注入后清理，避免污染其它用例
+    if (!hadScrollIntoView) delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+    cleanup()
+  })
+
+  async function runOnce() {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ ok: true })))
+    const wrapper = mount(CapabilityRunner, {
+      props: { cap: useCatalogStore().capabilityById('chat.sync')! },
+      global: { stubs: { DynamicForm: DynamicFormStub } },
+    })
+    await flushPromises()
+    await executeButton(wrapper).trigger('click')
+    await flushPromises()
+    return wrapper
+  }
+
+  it('phone 视口：执行返回后对响应区调用 scrollIntoView', async () => {
+    viewport = stubMatchMedia({ desktop: false, phone: true })
+    const scrollSpy = vi.fn()
+    ;(Element.prototype as { scrollIntoView?: unknown }).scrollIntoView = scrollSpy
+    const wrapper = await runOnce()
+    expect(scrollSpy).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('桌面视口（双栏并排）：不触发 scrollIntoView', async () => {
+    viewport = stubMatchMedia({ desktop: true, phone: false })
+    const scrollSpy = vi.fn()
+    ;(Element.prototype as { scrollIntoView?: unknown }).scrollIntoView = scrollSpy
+    const wrapper = await runOnce()
+    expect(scrollSpy).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 })

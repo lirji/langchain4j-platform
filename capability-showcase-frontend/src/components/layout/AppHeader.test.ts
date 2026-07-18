@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory, type Router } from 'vue-router'
 import { useUiStore } from '../../stores/ui'
+import { stubMatchMedia, type ViewportStub } from '../../test/viewport'
 import AppHeader from './AppHeader.vue'
 
 const stub = { template: '<div />' }
@@ -54,5 +55,31 @@ describe('AppHeader · 菜单按钮（桌面折叠开关）', () => {
     const wrapper = await mountHeader()
     const btn = wrapper.find('.header__menu')
     expect(btn.exists()).toBe(true)
+  })
+})
+
+describe('AppHeader · 菜单按钮（移动抽屉分流）', () => {
+  let viewport: ViewportStub | null = null
+
+  afterEach(() => {
+    viewport?.restore()
+    viewport = null
+  })
+
+  it('移动视口点击 ☰ 切换 sidebarOpen（不动 navCollapsed）', async () => {
+    viewport = stubMatchMedia({ desktop: false, phone: true })
+    const ui = useUiStore()
+    const wrapper = await mountHeader()
+    const btn = wrapper.find('.header__menu')
+
+    expect(ui.sidebarOpen).toBe(false)
+    await btn.trigger('click')
+    expect(ui.sidebarOpen).toBe(true)
+    expect(ui.navCollapsed).toBe(false)
+    expect(btn.attributes('aria-expanded')).toBe('true')
+
+    await btn.trigger('click')
+    expect(ui.sidebarOpen).toBe(false)
+    expect(btn.attributes('aria-expanded')).toBe('false')
   })
 })

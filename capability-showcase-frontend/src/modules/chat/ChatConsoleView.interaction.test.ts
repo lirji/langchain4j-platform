@@ -118,6 +118,38 @@ describe('ChatConsoleView interaction', () => {
     wrapper.unmount()
   })
 
+  it('流式自动滚动守卫：上滑离底暂停跟随，回底部附近自动恢复', async () => {
+    const encoder = new TextEncoder()
+    let controller!: ReadableStreamDefaultController<Uint8Array>
+    const body = new ReadableStream<Uint8Array>({
+      start(c) {
+        controller = c
+        c.enqueue(encoder.encode('data: first\n\n'))
+      },
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body, { status: 200 })))
+    const wrapper = mount(ChatConsoleView, { props: { moduleId: 'chat' } })
+    await wrapper.get('.chat__textarea').setValue('x')
+    await buttonByText(wrapper, '发送').trigger('click')
+    await settle()
+
+    // jsdom 无排版：手工注入滚动几何。离底 1000-100-400=500 > 80 → 视为用户上滑中。
+    const el = wrapper.get('.chat__transcript').element as HTMLElement
+    Object.defineProperty(el, 'scrollHeight', { value: 1000, configurable: true })
+    Object.defineProperty(el, 'clientHeight', { value: 400, configurable: true })
+    Object.defineProperty(el, 'scrollTop', { value: 100, writable: true, configurable: true })
+
+    controller.enqueue(encoder.encode('data: more\n\n'))
+    await settle()
+    expect(el.scrollTop).toBe(100) // 上滑中：新 token 不得拽回底部
+
+    el.scrollTop = 950 // 回到底部附近（离底 -350 ≤ 80）
+    controller.enqueue(encoder.encode('data: tail\n\nevent: done\ndata: {}\n\n'))
+    await settle()
+    expect(el.scrollTop).toBe(1000) // 恢复跟随：滚到 scrollHeight
+    wrapper.unmount()
+  })
+
   it('auto/cascade/memory 模式只发送各自目录声明的参数', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ reply: 'ok' }))
     vi.stubGlobal('fetch', fetchMock)
