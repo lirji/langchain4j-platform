@@ -62,16 +62,20 @@ useFocusTrap({
 
 useGlobalShortcuts()
 
+const shellEl = ref<HTMLElement | null>(null)
+
 /**
- * iOS Safari 软键盘视口校正：壳层自身不滚动（app-shell overflow:hidden），但 iOS 弹键盘时
- * 会真实滚动 window 以露出输入框，键盘收起后 scrollY 偶发滞留 >0 —— 顶栏（含 ☰）被顶出
- * 屏幕上沿，表现为"菜单按钮消失、刷新才恢复"。键盘收起（可视高≈布局高）且有残留时归零。
+ * iOS Safari 视口校正：壳层（app-shell，overflow:hidden）设计上不滚动，但 iOS 弹键盘
+ * “滚动露出输入框”会连 overflow:hidden 的祖先一起滚，键盘收起后偶发不归零——
+ * 顶栏（含 ☰）被顶出屏幕上沿，表现为"菜单栏消失、刷新才恢复"。
+ * 键盘收起（可视高≈布局视口高；不用 innerHeight——iOS 上它随键盘变）且有残留时全部归零。
  */
 function restoreViewportAfterKeyboard(): void {
   const vv = window.visualViewport
-  if (!vv) return
-  if (vv.height >= window.innerHeight - 80 && (window.scrollY > 0 || vv.offsetTop > 0)) {
-    window.scrollTo(0, 0)
+  if (vv && vv.height < document.documentElement.clientHeight - 80) return // 键盘仍展开，放行
+  if (window.scrollY > 0) window.scrollTo(0, 0)
+  for (const el of [document.documentElement, document.body, shellEl.value]) {
+    if (el && el.scrollTop > 0) el.scrollTop = 0
   }
 }
 
@@ -80,14 +84,17 @@ onMounted(() => {
   ui.applyDensity()
   void catalog.load()
   window.visualViewport?.addEventListener('resize', restoreViewportAfterKeyboard)
+  // 壳层被滚动本身就是异常信号（键盘收起时）：即时纠偏，兜住 resize 之后才发生的滞留
+  shellEl.value?.addEventListener('scroll', restoreViewportAfterKeyboard)
 })
 onUnmounted(() => {
   window.visualViewport?.removeEventListener('resize', restoreViewportAfterKeyboard)
+  shellEl.value?.removeEventListener('scroll', restoreViewportAfterKeyboard)
 })
 </script>
 
 <template>
-  <div class="app-shell">
+  <div ref="shellEl" class="app-shell">
     <!-- 公开页（登录）：全屏，无壳层 -->
     <RouterView v-if="isAuthRoute" />
 

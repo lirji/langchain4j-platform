@@ -23,6 +23,14 @@
 
 截图: 本目录 `01-login.png` ~ `05-runner.png`（05 为 async.list 运行器执行后）。
 
+## 勘误（0718 第二轮，真机反馈驱动）
+
+首轮 A3 断言 `top<200` **放走了一只真 bug**：实测 top=0 意味着 scrollIntoView 把 56px 顶栏
+连同 overflow:hidden 的 app-shell 一起滚出了屏外（真机表现：执行出结果后菜单栏消失、刷新才恢复）。
+修复为只滚最近滚动容器（.app-main），A3 断言升级为「top<200 **且 ☰ 顶部可见、壳层 scrollTop=0**」；
+复跑 15/15 通过（top=64, mainScrollTop=436, shellScrollTop=0）。同轮补齐 4 个 <16px 输入框的
+coarse 16px（导航搜索框为主触发点），修复 iOS 输入聚焦缩放残留导致的抽屉错位。
+
 ## 过程发现（非缺陷）
 
 1. `chat.sync` 深链渲染聊天台而非通用运行器（会话能力设计如此），运行器用例改用 `/m/tasks/async.list`。

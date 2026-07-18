@@ -144,6 +144,34 @@ watch(
   },
 )
 
+/** 向上找最近的真正滚动容器（overflow-y auto/scroll）。 */
+function nearestScroller(node: HTMLElement | null): HTMLElement | null {
+  for (let el = node?.parentElement ?? null; el; el = el.parentElement) {
+    const oy = getComputedStyle(el).overflowY
+    if (oy === 'auto' || oy === 'scroll') return el
+  }
+  return null
+}
+
+/**
+ * 手机档执行后把响应区滚入视口。**不能用 scrollIntoView(block:'start')**：
+ * 它会连 overflow:hidden 的 app-shell 一起滚，把顶栏(☰)顶出屏外且无法自行恢复
+ * （真机 bug：结果出来后菜单栏消失、刷新才回来）。只滚最近的滚动容器（.app-main）。
+ */
+function scrollResponseIntoView(): void {
+  const el = resEl.value
+  if (!el) return
+  const scroller = nearestScroller(el)
+  if (!scroller) {
+    // 兜底（jsdom 无布局时走此路径，测试据此断言）
+    el.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    return
+  }
+  const top =
+    el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 8
+  scroller.scrollTo({ top, behavior: 'smooth' })
+}
+
 async function execute(): Promise<void> {
   const errs = formRef.value?.validate() ?? {}
   if (Object.keys(errs).length > 0) return
@@ -151,8 +179,7 @@ async function execute(): Promise<void> {
   pendingRecord = true
   await run.run(values.value, { confirmed: confirmed.value })
   // 手机档单列堆叠：响应区在表单下方屏外，执行返回（SSE 为流开始）后自动滚过去。
-  // 可选调用防御 jsdom 无 scrollIntoView。
-  if (isPhone.value) resEl.value?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+  if (isPhone.value) scrollResponseIntoView()
   if (run.phase.value === 'success' && run.result.value) {
     emit('result', {
       cap: props.cap,
