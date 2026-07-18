@@ -10,7 +10,7 @@
 - **服务直连端口**（本地调试/服务间调用）：conversation `:8081`、workflow `:8082`、analytics `:8083`、knowledge `:8084`、agent `:8085`、async-task `:8086`、channel `:8087`、interop `:8088`、eval `:8089`、vision `:8090`、voice `:8091`、**auth `:8092`（登录 + RBAC）**、order `:8093`（按订单号只读查订单，agent order_query 下游；compose 宿主机映射 8094）。
 - **前端与检索基础设施**：能力展示前端 `capability-showcase-frontend`（:8093，Vue3 静态 SPA / nginx，前后端分离，浏览器跨域直调网关）；RAG 检索基础设施 Elasticsearch（:9200，BM25 全文混排）+ Kibana（:5601，查询 UI）+ Qdrant（:6333/:6334，向量库）。
 - **不经 edge-gateway 暴露**：`config-server`（:8888，集中配置基础设施，仅服务内部经 `spring.config.import` 拉取）。
-- **默认开关基线**：两套「默认」需分清——**application.yml 裸跑默认**（多为内存/确定性/关闭，单测零外部依赖）与 **docker-compose demo 默认**（为一键体验把 RAG 持久化/ES/登录 RBAC 等打开）。下文标注以 application.yml 默认为准，并在有差异处注明 compose 覆盖。
+- **默认开关基线**：两套「默认」需分清——**application.yml 裸跑默认**（2026-07 起大多数**行为增强**已默认打开：RAG 增强、多轮记忆/长期画像、注入/PII 护栏、语义缓存、模型级联、意图路由、看图对话、RAG rerank/查询扩展/上下文增强/GraphRAG/ES 全文/公共库/多模态、DAG 重规划、agent 动作 vision/analytics/workflow/order、interop discovery、eval judge/embedding、vision 等；仅 MCP、code-exec、浏览器、语音、渠道入站桥/事件、RAG enforce 授权、自助注册、成本归因等仍默认关；同时 embedding 仍用确定性 `hash`、部分存储用内存，保单测零外部依赖）与 **docker-compose demo 默认**（再叠加真实基础设施：qdrant/redis/jdbc/ES + nomic embedding + hanlp 分词 + 登录 RBAC）。下文标注以 application.yml 默认为准，并在有差异处注明 compose 覆盖。
 
 ## 核心能力矩阵
 
@@ -23,22 +23,22 @@
 | LLM 网关 | 所有模型调用统一走 OpenAI 兼容端点，provider 路由/failover 在 LiteLLM | `platform-gateway-client` + LiteLLM | 常开 |
 | 集中配置 | Spring Cloud Config Server，native（默认）/git 后端，`optional:` 接入不阻断启动 | `config-server`（:8888） | native 后端默认可用；git 需 `SPRING_PROFILES_ACTIVE=git` |
 | 事件总线 | EventPublisher SPI，Noop 默认 / Kafka 变体，幂等生产 + 消费去重（effective exactly-once） | `platform-eventbus` | `platform.eventbus.enabled=false`（默认 Noop） |
-| 对话 | `/chat` 入口，可选 RAG 上下文增强 | `/chat`（conversation :8081） | RAG 增强 `CONVERSATION_RAG_ENABLED=false` |
-| 语义缓存 L1 | 问题级 / 租户桶 / pre-RAG 语义缓存，命中即短路 RAG+LLM；含失效端点 | `/chat` 旁路、`DELETE /chat/cache` | `CONVERSATION_SEMANTIC_CACHE_ENABLED=false` |
-| 模型级联 | 便宜模型先答、低置信才升级强模型 | `/chat/cascade`（conversation） | `CHAT_CASCADE_ENABLED=false` |
-| 意图路由 | LLM-as-Router 自动分类问题再分派应答 | `/chat/auto`（conversation） | `CONVERSATION_ROUTER_ENABLED=false` |
-| 视觉对话 | 看图对话，图片+问题委托 vision-service | `/chat/vision`（conversation multipart） | `CONVERSATION_VISION_ENABLED=false` |
+| 对话 | `/chat` 入口，默认带 RAG 上下文增强 | `/chat`（conversation :8081） | RAG 增强 `CONVERSATION_RAG_ENABLED=true`（默认开） |
+| 语义缓存 L1 | 问题级 / 租户桶 / pre-RAG 语义缓存，命中即短路 RAG+LLM；含失效端点 | `/chat` 旁路、`DELETE /chat/cache` | `CONVERSATION_SEMANTIC_CACHE_ENABLED=true`（默认开） |
+| 模型级联 | 便宜模型先答、低置信才升级强模型 | `/chat/cascade`（conversation） | `CHAT_CASCADE_ENABLED=true`（默认开） |
+| 意图路由 | LLM-as-Router 自动分类问题再分派应答 | `/chat/auto`（conversation） | `CONVERSATION_ROUTER_ENABLED=true`（默认开） |
+| 视觉对话 | 看图对话，图片+问题委托 vision-service | `/chat/vision`（conversation multipart） | `CONVERSATION_VISION_ENABLED=true`（默认开） |
 | MCP 对话 | 工具来自外部 MCP server 的对话 | `/chat/mcp`（conversation） | `CONVERSATION_MCP_ENABLED=false` |
 | 结构化抽取 | 自由文本 → 结构化 POJO（工单等） | `/extract?type=`（conversation） | 端点常开（抽取器注册表） |
 | 多轮记忆 | 按会话隔离的滑窗记忆（messages/tokens/summary），内存或 Redis | `/chat`、`/chat/stream` 记忆键 | `CONVERSATION_MEMORY_STORE=in-memory`（常开，内存滑窗） |
-| 长期画像 | 跨会话用户画像抽取/召回、合规查看与删除 | `/chat/memory`、`GET/DELETE /memory/profile` | `CONVERSATION_MEMORY_PROFILE_ENABLED=false` |
-| 安全护栏 | 提示注入前置拦截、PII 输出脱敏，流式/非流式一致 | `/chat` 前后置 | 注入 `CONVERSATION_GUARDRAIL_INJECTION_ENABLED=false`、PII `CONVERSATION_GUARDRAIL_PII_ENABLED=false` |
+| 长期画像 | 跨会话用户画像抽取/召回、合规查看与删除 | `/chat/memory`、`GET/DELETE /memory/profile` | `CONVERSATION_MEMORY_PROFILE_ENABLED=true`（默认开） |
+| 安全护栏 | 提示注入前置拦截、PII 输出脱敏，流式/非流式一致 | `/chat` 前后置 | 注入 `CONVERSATION_GUARDRAIL_INJECTION_ENABLED=true`（默认开，block）、PII `CONVERSATION_GUARDRAIL_PII_ENABLED=true`（默认开） |
 | 知识库 RAG | 文档上传、Tika 抽取、分块、四路混排检索（向量 + 内存关键词 + ES BM25 + 图谱）、可配置排序权重 | `/rag/documents/**`、`/rag/query`（knowledge :8084） | 上传/查询常开；hybrid `RAG_HYBRID_ENABLED=true` |
 | ES 全文混排 | Elasticsearch 真 BM25 全文分支并入混合检索，多源 **RRF 融合**（免疫量纲差），smartcn 中文分析器 | `/rag/query` 召回、索引 `knowledge_segments_text` | `RAG_ES_ENABLED=true`（默认开）；`RAG_FUSION_STRATEGY` 空 → ES 开启时有效默认 `rrf` |
-| 公共/共享知识库 | 查询在隔离查各自租户基础上并入 `__public__` 公共分区；写共享库需 `public-ingest` scope | `/rag/documents?visibility=public`、`/rag/query`、`/rag/config` | `RAG_PUBLIC_ENABLED=false`（默认关） |
-| 检索重排 | 召回放大后二次打分重排（LLM-as-judge 或 Jina reranker） | `/rag/query` 后置 | `RAG_RERANK_ENABLED=false` |
-| 查询扩展 | 用 LLM 生成 query 变体扩大召回 | `/rag/query` 前置 | `RAG_QUERY_EXPANSION_ENABLED=false` |
-| 上下文增强 | 入库时逐 chunk 加文档级上下文前缀再嵌入（Contextual Retrieval） | `/rag/documents` ingest 期 | `RAG_CONTEXTUAL_ENABLED=false` |
+| 公共/共享知识库 | 查询在隔离查各自租户基础上并入 `__public__` 公共分区；写共享库需 `public-ingest` scope | `/rag/documents?visibility=public`、`/rag/query`、`/rag/config` | `RAG_PUBLIC_ENABLED=true`（默认开） |
+| 检索重排 | 召回放大后二次打分重排（LLM-as-judge 或 Jina reranker） | `/rag/query` 后置 | `RAG_RERANK_ENABLED=true`（默认开，llm 档；jina 需 key） |
+| 查询扩展 | 用 LLM 生成 query 变体扩大召回 | `/rag/query` 前置 | `RAG_QUERY_EXPANSION_ENABLED=true`（默认开） |
+| 上下文增强 | 入库时逐 chunk 加文档级上下文前缀再嵌入（Contextual Retrieval） | `/rag/documents` ingest 期 | `RAG_CONTEXTUAL_ENABLED=true`（默认开） |
 | 中文分词 | keyword hybrid 支持 HanLP 中文分词（默认 simple 零依赖） | `/rag/query` keyword 路 | `RAG_HYBRID_TOKENIZER=simple`（默认）/`hanlp` |
 | Obsidian 导入 | 把 zip 打包的 Obsidian vault 批量导入 RAG（`[[双链]]`→GraphRAG 三元组） | `POST /rag/obsidian/import`（multipart） | 端点常开 |
 | 多租户隔离 | collection-per-tenant 强隔离（每租户独立 collection/namespace） | knowledge 向量库 | `RAG_VECTOR_STORE_ISOLATION=collection-per-tenant`（默认） |
@@ -49,21 +49,21 @@
 | NL2SQL / ChatBI | 自然语言转 SQL、只读查询保护 | `/chat/sql`、`/analytics/sql`（analytics :8083） | 常开 |
 | 工作流审批 | Flowable 退款审批流、人工审批、超时、终态通知 | `/workflow/**`（workflow :8082） | 常开；终态通知模式可切 async-task |
 | 深度 Agent（ReAct） | 单次/异步 ReAct loop，rag/sql/time/delegate 等动作 | `/agent/run`、`/agent/run/async`（agent :8085） | `AGENT_ENABLED=true` |
-| DAG 多 Agent | 显式 DAG / 自动规划 DAG / 异步，拓扑分层并行，可选 critique+replan | `/agent/dag/run[/async]`、`/agent/dag/plan-run[/async]` | 常开；replan `AGENT_DAG_REPLAN_ENABLED=false` |
+| DAG 多 Agent | 显式 DAG / 自动规划 DAG / 异步，拓扑分层并行，可选 critique+replan | `/agent/dag/run[/async]`、`/agent/dag/plan-run[/async]` | 常开；replan `AGENT_DAG_REPLAN_ENABLED=true`（默认开） |
 | 链式 Agent | 顺序步骤 + 步间确定性 gate + 不过即短路 | `/agent/chain` | 端点常开；`steps` 默认空需先配置 |
 | 投票 Agent | 同题并行 N 次，majority 或 synthesis 取共识 | `/agent/vote` | 端点常开（N=3，majority） |
 | 反思 Agent | 单答案 answer→critique→improve 自省环，加权聚合达阈值即停 | `/agent/reflexive[/stream]` | 端点常开 |
-| Agent 工具 | 可选受限代码执行、MCP client、无头浏览器动作、视觉看图 | agent 动作注册表 | 全部默认关闭 |
+| Agent 工具 | 可选受限代码执行、MCP client、无头浏览器动作、视觉看图 | agent 动作注册表 | 代码执行 / MCP / 浏览器动作默认关闭；视觉后端默认开 |
 | 异步任务中心 | 通用任务状态、租户隔离、取消、SSE 断点续订、worker lease、webhook outbox | `/async/tasks/**`、`/async/webhook-outbox/dead`（async-task :8086） | 常开；JDBC 存储 `ASYNC_TASK_STORE=in-memory`（默认） |
 | 渠道接入 | 渠道能力、webhook/飞书/钉钉/voice 出站、飞书&钉钉入站事件桥（→ /chat → 回复）、callback、HMAC 签名、可选 Kafka event | `/channel/**`（channel :8087） | 出站/签名/事件桥/Kafka 全默认关 |
-| 互操作（A2A/MCP） | 真 A2A JSON-RPC task 协议、agent-card、MCP tool surface、可选 live discovery | `/interop/**`、`/interop/a2a`、`/.well-known/agent-card.json`（interop :8088） | 常开；live discovery `INTEROP_DISCOVERY_ENABLED=false` |
-| 回归评测 | HTTP case/suite 执行、双跑门禁、contains/JSON-path/semantic/oracle 断言 | `/eval/**`（eval :8089） | 常开；judge/embedding 比较默认关 |
-| 多模态视觉 | 图片 caption/描述（多模态 ChatModel 经 LiteLLM），供 knowledge/agent 复用 | `/vision/caption`、`/vision/describe`（vision :8090） | `VISION_ENABLED=false`（默认整服务不装配） |
+| 互操作（A2A/MCP） | 真 A2A JSON-RPC task 协议、agent-card、MCP tool surface、可选 live discovery | `/interop/**`、`/interop/a2a`、`/.well-known/agent-card.json`（interop :8088） | 常开；live discovery `INTEROP_DISCOVERY_ENABLED=true`（默认开） |
+| 回归评测 | HTTP case/suite 执行、检索质量评测、双跑门禁、contains/JSON-path/semantic/oracle 断言 | `/eval/**`（eval :8089） | 常开；judge/embedding 比较默认开 |
+| 多模态视觉 | 图片 caption/描述（多模态 ChatModel 经 LiteLLM），供 knowledge/agent 复用 | `/vision/caption`、`/vision/describe`（vision :8090） | `VISION_ENABLED=true`（默认开；须配 `VISION_MODEL` 否则 fail-fast） |
 | 语音闭环 | 音频 → ASR(whisper) → `/chat` → TTS，支持整轮 / SSE 半流式 / 纯转写 | `/voice/chat`、`/voice/chat/stream`、`/voice/transcribe`（voice :8091） | `VOICE_ENABLED=false`（默认整服务不装配） |
-| 订单查询（工具调用示例） | 按订单号确定性只读查订单（状态/金额/客户/日期），持久化 MySQL、参数化按租户隔离；供深度 Agent 的 `order_query` 动作在对话里自主调用 | `/orders/{orderNo}`（order :8093）；agent 侧 `order_query` 动作 | order-service 常开；agent 侧 `AGENT_ORDER_ENABLED=false`（默认走 Noop 降级） |
+| 订单查询（工具调用示例） | 按订单号确定性只读查订单（状态/金额/客户/日期），持久化 MySQL、参数化按租户隔离；供深度 Agent 的 `order_query` 动作在对话里自主调用 | `/orders/{orderNo}`（order :8093）；agent 侧 `order_query` 动作 | order-service 常开；agent 侧 `AGENT_ORDER_ENABLED=true`（默认开） |
 | 审计与计量 | 审计日志、LLM audit listener、token budget、cost attribution | `platform-audit`、`platform-metering` | audit/budget 常开、cost 默认关 |
 | 可观测性 | trace id 生成与跨服务透传 | `platform-observability` | 常开 |
-| 能力展示前端 | 前后端分离的独立静态 SPA（Vue3/nginx），凭证感知导航、direct mode 跨域直调、能力五态诚实呈现、RBAC 控制台 + RAG 租户/共享双视图 | `capability-showcase-frontend`（:8093） | 独立部署；RBAC 控制台/共享库 UI 以 `VITE_*` kill switch 收口 |
+| 能力展示前端 | 前后端分离的独立静态 SPA（Vue3/nginx），凭证感知导航、direct mode 跨域直调、能力五态诚实呈现、RAG 租户/共享双视图、移动端/响应式适配 | `capability-showcase-frontend`（:8093） | 独立部署；**前端 RBAC 管理控制台已移除**（身份/授权外置 Casdoor + auth-platform），后端 `/auth/admin/**` API 仍在 |
 
 ## 技术栈总览（技术清单）
 
@@ -208,36 +208,36 @@
 
 `conversation-service`：
 
-- **`POST /chat`**：默认直接调用 LLM。开启 `CONVERSATION_RAG_ENABLED=true` 后先调 `knowledge-service` 的 `/rag/query`，把检索结果注入 prompt 再交给 LLM（`CONVERSATION_RAG_TOP_K`、`CONVERSATION_RAG_CATEGORY`、`CONVERSATION_RAG_MIN_SCORE` 等可调）。
-- **L1 语义缓存**（默认关，`CONVERSATION_SEMANTIC_CACHE_ENABLED=true` 开启）：应用侧、问题级、按租户分桶、在 RAG 之前。命中即短路 RAG+LLM 直接返回。相似度阈值 `CONVERSATION_SEMANTIC_CACHE_THRESHOLD`（默认 0.95），embedding provider `hash`（默认）/`openai`，store `in-memory`（默认）/`redis`（TTL `CONVERSATION_SEMANTIC_CACHE_REDIS_TTL`，默认 0=不过期）。
+- **`POST /chat`**：默认即先调 `knowledge-service` 的 `/rag/query` 做 RAG 上下文增强（`CONVERSATION_RAG_ENABLED=true` 默认开），把检索结果注入 prompt 再交给 LLM（`CONVERSATION_RAG_TOP_K`、`CONVERSATION_RAG_CATEGORY`、`CONVERSATION_RAG_MIN_SCORE` 等可调）；置 `false` 退回纯 LLM 直答。
+- **L1 语义缓存**（默认开，`CONVERSATION_SEMANTIC_CACHE_ENABLED`，置 `false` 关闭）：应用侧、问题级、按租户分桶、在 RAG 之前。命中即短路 RAG+LLM 直接返回。相似度阈值 `CONVERSATION_SEMANTIC_CACHE_THRESHOLD`（默认 0.95），embedding provider `hash`（默认）/`openai`，store `in-memory`（默认）/`redis`（TTL `CONVERSATION_SEMANTIC_CACHE_REDIS_TTL`，默认 0=不过期）。
 - **`DELETE /chat/cache`** 语义缓存失效：清当前租户的缓存桶（带 `question` 参数则定向失效某问题）。租户取自内部 JWT，只能清自己的桶；语义缓存关闭时 no-op。知识库更新后调它可避免 `/chat` 返回缓存旧答案（也可由 knowledge-service 自动触发，见 §2）。
-- **`POST /chat/cascade`** 模型级联（默认关，`CHAT_CASCADE_ENABLED=true` 开启，端点仅在开启时装配）：便宜模型先答，低置信才升级强模型。`CHAT_CASCADE_CHEAP_MODEL` / `CHAT_CASCADE_STRONG_MODEL` 为 LiteLLM 里的逻辑模型名（留空退化为网关默认模型），置信门 `CHAT_CASCADE_CONFIDENCE_THRESHOLD`（默认 0.6），可选 `CHAT_CASCADE_SELF_RATING`。返回体含 `served=cheap|strong`。cascade 变体 ChatModel 由 `platform-gateway-client` 产出。
+- **`POST /chat/cascade`** 模型级联（默认开，`CHAT_CASCADE_ENABLED`，端点仅在开启时装配，置 `false` 关闭）：便宜模型先答，低置信才升级强模型。`CHAT_CASCADE_CHEAP_MODEL` / `CHAT_CASCADE_STRONG_MODEL` 为 LiteLLM 里的逻辑模型名（留空退化为网关默认模型），置信门 `CHAT_CASCADE_CONFIDENCE_THRESHOLD`（默认 0.6），可选 `CHAT_CASCADE_SELF_RATING`。返回体含 `served=cheap|strong`。cascade 变体 ChatModel 由 `platform-gateway-client` 产出。
 - **`POST /conversation/workflow/reply`**、**`POST /conversation/workflow/ticket`**：给 workflow-service 用的回复生成 + 结构化工单抽取端点，让 workflow 经 HTTP 调用而不直连本地 ChatModel。
-- **`POST /chat/auto`** 意图路由（默认关，`CONVERSATION_ROUTER_ENABLED=true` 开启）：LLM-as-Router 用 temp=0 判官模型先给问题分类，再分派到对应应答路径；返回体含 `route`（路由类型）、`reason`、`classifyMs`/`answerMs`。记忆键（`<tenantId>::<chatId>`）与 `/chat` 一致，与普通对话共享多轮记忆。未启用时返回明确禁用提示。
-- **`POST /chat/vision`** 看图对话（multipart，默认关，`CONVERSATION_VISION_ENABLED=true` 开启）：图片 base64 后连同 `message`（作为 vision 指令）转发给 vision-service（`CONVERSATION_VISION_BASE_URL`，默认 `http://localhost:8090`），返回 `reply`/`model`/`chars`。未启用或缺图返回明确提示。
+- **`POST /chat/auto`** 意图路由（默认开，`CONVERSATION_ROUTER_ENABLED`）：LLM-as-Router 用 temp=0 判官模型先给问题分类，再分派到对应应答路径；返回体含 `route`（路由类型）、`reason`、`classifyMs`/`answerMs`。记忆键（`<tenantId>::<chatId>`）与 `/chat` 一致，与普通对话共享多轮记忆。未启用时返回明确禁用提示。
+- **`POST /chat/vision`** 看图对话（multipart，默认开，`CONVERSATION_VISION_ENABLED`）：图片 base64 后连同 `message`（作为 vision 指令）转发给 vision-service（`CONVERSATION_VISION_BASE_URL`，默认 `http://localhost:8090`），返回 `reply`/`model`/`chars`。未启用或缺图返回明确提示。
 - **`POST /chat/mcp`** MCP 工具对话（默认关，`CONVERSATION_MCP_ENABLED=true` 开启）：工具来自外部 MCP server（`CONVERSATION_MCP_TRANSPORT=stdio`（默认）|`http`），由 `McpAssistant` 挂载工具后应答。未启用时返回禁用提示。
 - **`POST /extract?type=ticket`** 结构化抽取（端点常开）：自由文本 → 结构化 POJO（langchain4j structured output），用抽取器注册表按 `type` 分派，未知类型返回 400。新增目标类型只需注册一个 `type → 抽取函数`。
 - **多轮记忆**（默认内存滑窗，常开）：`Assistant.chat(@MemoryId ...)` 按会话隔离记忆。`CONVERSATION_MEMORY_STORE=in-memory`（默认）|`redis`（`CONVERSATION_MEMORY_REDIS_TTL`，默认 `P7D`）；滑窗 `CONVERSATION_MEMORY_WINDOW_MODE=messages`（默认，`_MAX_MESSAGES=20`）|`tokens`（`_MAX_TOKENS=2000`，tokenizer 依据 `_TOKEN_MODEL=gpt-4o-mini`）|`summary`（旧消息用 LLM 压缩成中文摘要）。默认零外部依赖。
-- **长期用户画像**（默认关，`CONVERSATION_MEMORY_PROFILE_ENABLED=true` 开启）：跨会话抽取并召回用户画像事实。`POST /chat/memory` 带画像对话、`GET /memory/profile` 查看、`DELETE /memory/profile` 合规清空。租户+用户取自内部 JWT，天然只操作自己的画像。`_STORE=in-memory`（默认，redis 变体待补）、`_MAX_ITEMS=50`、`_RECALL_LIMIT=12`、`_ASYNC=true`（异步抽取不阻塞应答）。未启用时端点返回禁用提示。
-- **安全护栏**（提示注入 + PII，均默认关）：controller 层前置扫描输入、后置脱敏输出，纯确定性逻辑、流式/非流式一致，不依赖 langchain4j guardrail SPI。注入护栏 `CONVERSATION_GUARDRAIL_INJECTION_ENABLED=true` + `CONVERSATION_GUARDRAIL_INJECTION_MODE=block`（命中即拒答，默认）|`sanitize`（剥离控制 token 后继续）|`audit`（仅记日志放行）；PII 护栏 `CONVERSATION_GUARDRAIL_PII_ENABLED=true` 对输出里的 email/手机号/身份证就地脱敏。生产建议开启，因平台约定默认关需显式打开。
+- **长期用户画像**（默认开，`CONVERSATION_MEMORY_PROFILE_ENABLED`）：跨会话抽取并召回用户画像事实。`POST /chat/memory` 带画像对话、`GET /memory/profile` 查看、`DELETE /memory/profile` 合规清空。租户+用户取自内部 JWT，天然只操作自己的画像。`_STORE=in-memory`（默认，redis 变体待补）、`_MAX_ITEMS=50`、`_RECALL_LIMIT=12`、`_ASYNC=true`（异步抽取不阻塞应答）。未启用时端点返回禁用提示。
+- **安全护栏**（提示注入 + PII，均默认开）：controller 层前置扫描输入、后置脱敏输出，纯确定性逻辑、流式/非流式一致，不依赖 langchain4j guardrail SPI。注入护栏 `CONVERSATION_GUARDRAIL_INJECTION_ENABLED` + `CONVERSATION_GUARDRAIL_INJECTION_MODE=block`（命中即拒答，默认）|`sanitize`（剥离控制 token 后继续）|`audit`（仅记日志放行）；PII 护栏 `CONVERSATION_GUARDRAIL_PII_ENABLED` 对输出里的 email/手机号/身份证就地脱敏。两者默认开；如需放行可显式置 `false`。
 
 ### 2. 知识库、RAG 与 GraphRAG
 
 `knowledge-service`（`/rag/**`）：
 
 - **文档 ingestion**：`POST /rag/documents`（JSON 文本或 multipart 文件）、`GET /rag/documents`、`GET /rag/documents/{docId}`、`DELETE /rag/documents/{docId}`。Apache Tika 抽取 PDF/Office/HTML/纯文本；支持 Markdown header、parent-child、semantic 等分块。
-- **图片多模态 embedding（CLIP）**（默认关，`RAG_MULTIMODAL_ENABLED=true`）：图片走原生 CLIP / jina-clip 多模态 embedding，向量存入独立 image collection（`knowledge_images_<tenant>`，与文本集合隔离）。`POST /rag/image`（multipart `image`）入库、`POST /rag/image-search`（文本 query 跨模态检索图片）；通用 `POST /rag/documents` 传 `image/*` 或 `imageBase64` 也走多模态。默认关闭时上传图片返回 400。⚠️ 旧的「图 → 文字（caption/OCR）」路径（`RAG_IMAGE_TEXT_*`）已移除，不再接受 `caption`/`ocrText`。
+- **图片多模态 embedding（CLIP）**（默认开，`RAG_MULTIMODAL_ENABLED`；需可达的 CLIP/jina 多模态 embedding 端点，缺后端调用期报错）：图片走原生 CLIP / jina-clip 多模态 embedding，向量存入独立 image collection（`knowledge_images_<tenant>`，与文本集合隔离）。`POST /rag/image`（multipart `image`）入库、`POST /rag/image-search`（文本 query 跨模态检索图片）；通用 `POST /rag/documents` 传 `image/*` 或 `imageBase64` 也走多模态。关闭（`RAG_MULTIMODAL_ENABLED=false`）时上传图片返回 400。⚠️ 旧的「图 → 文字（caption/OCR）」路径（`RAG_IMAGE_TEXT_*`）已移除，不再接受 `caption`/`ocrText`。
 - **检索（四路混排 + RRF）**：`POST /rag/query`（别名 `/knowledge/query`）并行召回四路——vector（向量）、keyword（内存 BM25 近似）、es（Elasticsearch 真 BM25 全文，`RAG_ES_ENABLED=true` 默认开）、graph（可选）——交 `HybridFusionService` 融合。融合策略 `RAG_FUSION_STRATEGY`：留空时 ES 参与查询则**有效默认 `rrf`**（`1/(k+rank)`，`RAG_FUSION_RRF_K=60`，免疫 BM25/余弦量纲差），否则 `weighted_max`（权重 `RAG_RANKING_VECTOR_WEIGHT`/`_KEYWORD_WEIGHT`/`_ES_WEIGHT`/`_GRAPH_WEIGHT`）。命中多源标 `source=hybrid`。keyword hybrid 默认开（`RAG_HYBRID_ENABLED=true`）。
 - **ES 全文索引**：ingest 时 `SegmentIndexer` 把同批明文分块同步 upsert 进 `knowledge_segments_text`（`RAG_ES_INDEX_NAME`）；字段 `tenantId/docId/category/...` 为 keyword 精确过滤、`text` 用 smartcn 中文分析器全文（`RAG_ES_ANALYZER=smartcn`，不可用 standard）。ES 写失败默认 best-effort（`RAG_ES_FAIL_FAST=false`），查询失败降级返回空、由内存关键词源兜底。开启 ES 后需重灌历史文档以填充索引（`seed-kb.sh`）。
-- **公共/共享知识库**（默认关，`RAG_PUBLIC_ENABLED=true` 开启）：保留租户分区 `__public__`；开启后各租户查询在隔离查自己分区基础上并入公共分区（向量/keyword/ES 三路并，graph 本期不并），命中标 `visibility=public`。写共享库 `POST /rag/documents`（`visibility=public|shared`）需 `public-ingest` scope（否则 403），列/查共享库普通登录用户即可；运行时 `GET /rag/config` 回显 `publicKbEnabled` 供前端决定是否展示共享库视图。
+- **公共/共享知识库**（默认开，`RAG_PUBLIC_ENABLED`）：保留租户分区 `__public__`；各租户查询在隔离查自己分区基础上并入公共分区（向量/keyword/ES 三路并，graph 本期不并），命中标 `visibility=public`。写共享库 `POST /rag/documents`（`visibility=public|shared`）需 `public-ingest` scope（否则 403），列/查共享库普通登录用户即可；运行时 `GET /rag/config` 回显 `publicKbEnabled` 供前端决定是否展示共享库视图。
 - **多租户强隔离**：`RAG_VECTOR_STORE_ISOLATION=collection-per-tenant`（默认）—— 每租户独立 collection/namespace，EmbeddingStore/Model 按租户路由；可退回 `shared`（单 store + metadata filter）。
 - **向量存储**：`RAG_VECTOR_STORE_PROVIDER=qdrant`（yml/compose 默认，`QDRANT_HOST`/`QDRANT_PORT`）| `in-memory`（零依赖回退）| `pgvector`（`RAG_PGVECTOR_*`，含 `SEARCH_MODE=HYBRID` 向量+PG 全文 RRF）| `milvus`（`RAG_MILVUS_*`）| `chroma`（`RAG_CHROMA_*`）| `doris`（自研 JDBC + HNSW ANN，`RAG_DORIS_*`）。collection/表基名统一由 `RAG_VECTOR_STORE_BASE_COLLECTION`（默认 `knowledge_segments`）决定。
 - **Embedding provider**：`RAG_EMBEDDING_PROVIDER=hash`（默认，确定性本地）| `openai`（走 LiteLLM/OpenAI 兼容）| `ollama`（`RAG_EMBEDDING_OLLAMA_BASE_URL`、`RAG_EMBEDDING_OLLAMA_MODEL`，默认 `nomic-embed-text`）。含维度守卫、超时/重试参数。
-- **GraphRAG**（默认关，`RAG_GRAPH_ENABLED=true`）：`POST /rag/graph/query`（实体邻居查询）、`GET /rag/graph/entities`。确定性三元组抽取，受控格式 `subject|relation|object`（换行或分号分隔）；`RAG_GRAPH_INCLUDE_IN_QUERY` 决定是否融合进 `/rag/query`；关系白名单 `RAG_GRAPH_RELATION_WHITELIST`、别名 `RAG_GRAPH_ALIASES`、最大跳数 `RAG_GRAPH_MAX_HOPS`。图谱存储 `RAG_GRAPH_STORE=in-memory`（默认）| `jdbc`（MySQL）。
-- **语义缓存失效联动**（默认关，`RAG_CACHE_INVALIDATION_ENABLED=true`）：文档 `upload`/`delete` 成功后，尽力而为地调 conversation 的 `DELETE /chat/cache` 失效同租户语义缓存（松耦合、带内部 JWT 传播租户、失败只记日志不阻断 ingest），配合 §1 的失效端点实现「文档更新 → 缓存即新鲜」。默认 Noop 实现，零影响。
-- **检索重排（rerank）**（默认关，`RAG_RERANK_ENABLED=true`）：先按 `RAG_RERANK_CANDIDATE_MULTIPLIER`（默认 3）放大召回，再二次打分重排。`RAG_RERANK_TYPE=llm`（默认，复用共享 temp=0 ChatModel 让 LLM 打 0..1 相关性分，零外部依赖）|`jina`（Jina reranker 云 API，`RAG_RERANK_JINA_MODEL`，默认 `jina-reranker-v2-base-multilingual` + `JINA_API_KEY`）。默认 Noop 不重排。
-- **查询扩展（query-expansion）**（默认关，`RAG_QUERY_EXPANSION_ENABLED=true`）：用共享 temp=0 ChatModel 为原 query 生成同义/多角度变体扩大召回，`RAG_QUERY_EXPANSION_MAX_VARIANTS`（默认 4，含原 query）。默认 Noop 不扩展。
-- **上下文增强（Contextual Retrieval）**（默认关，`RAG_CONTEXTUAL_ENABLED=true`）：入库时逐 chunk 用共享 temp=0 ChatModel 生成「该片段在全文中的位置与主题」一句上下文前缀再嵌入，提升脱离全文后的可检索性；`RAG_CONTEXTUAL_MAX_DOC_CHARS`（默认 8000）限制喂给生成器的文档截断。每 chunk 一次 LLM 调用，仅 ingest 期发生。默认 Noop 不增强。
+- **GraphRAG**（默认开，`RAG_GRAPH_ENABLED`）：`POST /rag/graph/query`（实体邻居查询）、`GET /rag/graph/entities`。确定性三元组抽取，受控格式 `subject|relation|object`（换行或分号分隔）；`RAG_GRAPH_INCLUDE_IN_QUERY` 决定是否融合进 `/rag/query`；关系白名单 `RAG_GRAPH_RELATION_WHITELIST`、别名 `RAG_GRAPH_ALIASES`、最大跳数 `RAG_GRAPH_MAX_HOPS`。图谱存储 `RAG_GRAPH_STORE=in-memory`（默认）| `jdbc`（MySQL）。
+- **语义缓存失效联动**（默认开，`RAG_CACHE_INVALIDATION_ENABLED`）：文档 `upload`/`delete` 成功后，尽力而为地调 conversation 的 `DELETE /chat/cache` 失效同租户语义缓存（松耦合、带内部 JWT 传播租户、失败只记日志不阻断 ingest），配合 §1 的失效端点实现「文档更新 → 缓存即新鲜」。关闭时为 Noop 实现，零影响。
+- **检索重排（rerank）**（默认开，`RAG_RERANK_ENABLED`）：先按 `RAG_RERANK_CANDIDATE_MULTIPLIER`（默认 3）放大召回，再二次打分重排。`RAG_RERANK_TYPE=llm`（默认，复用共享 temp=0 ChatModel 让 LLM 打 0..1 相关性分，零外部依赖）|`jina`（Jina reranker 云 API，`RAG_RERANK_JINA_MODEL`，默认 `jina-reranker-v2-base-multilingual` + `JINA_API_KEY`）。关闭时为 Noop 不重排。
+- **查询扩展（query-expansion）**（默认开，`RAG_QUERY_EXPANSION_ENABLED`）：用共享 temp=0 ChatModel 为原 query 生成同义/多角度变体扩大召回，`RAG_QUERY_EXPANSION_MAX_VARIANTS`（默认 4，含原 query）。关闭时为 Noop 不扩展。
+- **上下文增强（Contextual Retrieval）**（默认开，`RAG_CONTEXTUAL_ENABLED`）：入库时逐 chunk 用共享 temp=0 ChatModel 生成「该片段在全文中的位置与主题」一句上下文前缀再嵌入，提升脱离全文后的可检索性；`RAG_CONTEXTUAL_MAX_DOC_CHARS`（默认 8000）限制喂给生成器的文档截断。每 chunk 一次 LLM 调用，仅 ingest 期发生。关闭时为 Noop 不增强。
 - **中文分词（HanLP）**：keyword hybrid 检索的分词器 `RAG_HYBRID_TOKENIZER=simple`（默认，零依赖）|`hanlp`（HanLP 中文分词，切词更准，随 knowledge 依赖引入，需 HanLP 词典）。
 - **Obsidian vault 导入**：`POST /rag/obsidian/import`（multipart `file`=vault zip，可选 `category`）把一个 zip 打包的 Obsidian 库批量导入 RAG —— 每篇 `.md` 笔记成为一个文档、`[[双链]]` 成为 GraphRAG 三元组；缺文件返回 400。端点常开，需带具备 ingest 权限的 api-key。
 
@@ -302,7 +302,7 @@
 
 - **A2A JSON-RPC**：`POST /interop/a2a` 单端点，真 task 协议，方法 `message/send`、`message/stream`（真 SSE：chat 代理 conversation `/chat/stream` token 流、research 代理 agent 任务流）、`tasks/get`、`tasks/cancel`、`tasks/pushNotificationConfig/set|get`；push 通知按 A2A Task 信封回推客户端（interop 侧中继，HMAC + `X-A2A-Notification-Token`）。`GET /.well-known/agent-card.json` A2A 生态 agent-card（edge-gateway 白名单放行）。
 - **agent-card / MCP surface**：`GET /interop/agent-card`、`GET /interop/a2a/agent-card`、`GET /interop/mcp/tools`、`GET /interop/mcp/tools/{toolName}`、`POST /interop/mcp/call`。
-- **live discovery**（默认关，`INTEROP_DISCOVERY_ENABLED=true`）：agent-card skills / MCP tools 从向下游动态发现（懒加载 + TTL `INTEROP_CAPABILITY_TTL`），下游不可达确定性回退静态默认。
+- **live discovery**（默认开，`INTEROP_DISCOVERY_ENABLED`）：agent-card skills / MCP tools 从向下游动态发现（懒加载 + TTL `INTEROP_CAPABILITY_TTL`），下游不可达确定性回退静态默认。
 
 ### 9. 回归评测
 
@@ -311,11 +311,11 @@
 - `GET /eval/capabilities`、`POST /eval/run`（单 case/内联 suite）、`POST /eval/suites/{suiteName}/run`（baseline suite）。
 - **双跑门禁**：`POST /eval/dual-run`（同一 suite 分别打 oracle 冻结单体与 candidate 网关）、`POST /eval/gate`（纯函数 Gate，回归返回 HTTP 422 供 CI fail）。
 - 断言：HTTP status、response contains、oracle contains、JSON path 等值（如 `$.answer`、`$.items[0].name`）、轻量 semantic-tolerance（`semanticExpected` + `semanticMinScore`），输出 JSON report。
-- 可选比较模式：LLM-judge（`EVAL_JUDGE_ENABLED=false`）、embedding 相似度（`EVAL_EMBEDDING_ENABLED=false`），默认均关。
+- 可选比较模式：LLM-judge（`EVAL_JUDGE_ENABLED=true`）、embedding 相似度（`EVAL_EMBEDDING_ENABLED=true`），默认均开。
 
 ### 10. 多模态视觉
 
-`vision-service`（:8090，`/vision/**`）独立多模态服务，**默认整服务不装配**（`VISION_ENABLED=false`；开启但 `VISION_MODEL` 留空则启动 fail-fast）：
+`vision-service`（:8090，`/vision/**`）独立多模态服务，**默认开启但须配模型**（`VISION_ENABLED=true`；`VISION_MODEL` 留空则启动 fail-fast，须配一个 LiteLLM `model_list` 里的多模态模型逻辑名，compose 默认 `vision-default`→本机 Ollama qwen2.5vl）：
 
 - `POST /vision/caption`（别名 `/vision/describe`）：JSON（`imageBase64`）或 multipart 图片，返回 caption/描述。多模态 ChatModel 与文本共用同一 LiteLLM base-url，仅逻辑模型名不同（`VISION_MODEL`，如 gpt-4o-mini / qwen2.5-vl）。
 - 图片字节上限 `VISION_MAX_IMAGE_BYTES`（默认 10MB）、允许 MIME `VISION_ALLOWED_MIME`、caption 结果按内容 SHA-256 缓存（`VISION_CAPTION_CACHE_SIZE`）。vision token 计入 metering。
@@ -347,4 +347,4 @@
 - A2A `message/stream` 已是真 SSE（chat 代理 conversation token 流、research 代理 agent 任务流）；push 通知按 A2A Task 信封由 interop 中继回推（默认经 agent webhook 触发，零外部依赖；push 配置存储默认内存、多副本需换 Redis/JDBC）。
 - 契约测试当前覆盖 knowledge/agent 两个 P0 provider（analytics/async-task 待补），网关 failover 为独立 smoke 脚本、不进默认 CI。
 - `code_exec` 子进程沙箱是中等隔离，非强隔离容器；生产对不可信输入应进一步收紧。
-- RS256、Config Server git 后端、vision 模型、voice ASR/TTS（需真实 OpenAI 兼容语音端点）、RAG rerank(jina)/查询扩展/上下文增强、HanLP 分词、Kafka EOS 等生产能力默认关闭或需填真实外部配置。
+- RS256、Config Server git 后端、vision 模型（`VISION_MODEL` 需配）、voice ASR/TTS（需真实 OpenAI 兼容语音端点）、RAG rerank 的 jina 云 reranker、HanLP 分词、Kafka EOS、agent code-exec/browser/MCP 等生产能力默认关闭或需填真实外部配置。

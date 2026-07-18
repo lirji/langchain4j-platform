@@ -4,7 +4,7 @@
 **RAG + LLM 之前**。用向量相似度把「意思等价但字面不同」的重复提问归并，命中即返回历史答案、
 **0 LLM token**，直接砍掉重复问答的检索与生成成本。
 
-**默认关闭**（`CONVERSATION_SEMANTIC_CACHE_ENABLED=false`）；关闭时 `/chat` 行为与无缓存完全一致，零回归。
+**默认开启**（`CONVERSATION_SEMANTIC_CACHE_ENABLED=true`）；置 `false` 关闭时 `/chat` 行为与无缓存完全一致，零回归。
 所有 curl 走边缘网关 `http://localhost:8080` + `X-Api-Key`；`conversation-service` 自身 `:8081` 仅供直连调试。
 
 代码：`conversation-service` 的 `com.lrj.platform.conversation.cache.*`（`SemanticCache` 编排器 +
@@ -72,7 +72,7 @@ tenantId 直接进 key，天然隔离。租户身份由内部 JWT 还原进 `Ten
 > 内存实现的 `@ConditionalOnProperty(havingValue="in-memory", matchIfMissing=true)` 只是「属性完全缺省」时的兜底，
 > 而 yml 已把属性解析成 `redis`，所以**装配出来的是 Redis 实现**。
 >
-> **启动不需要 Redis**：store bean 构造期只打日志、不建连接。缓存默认关闭时 `getOrCompute` 全程短路，
+> **启动不需要 Redis**：store bean 构造期只打日志、不建连接。缓存关闭时（`CONVERSATION_SEMANTIC_CACHE_ENABLED=false`）`getOrCompute` 全程短路，
 > 永不触达 store —— 因此即便 `store=redis`，**关着缓存也无需 Redis 在线**。
 > 但**一旦开启缓存且用默认 `redis`，就需要一个可达的 Redis**（第一次 miss 的回填会连 Redis）。
 > 单机 / 没有 Redis 时把 `CONVERSATION_SEMANTIC_CACHE_STORE=in-memory` 即可。
@@ -117,7 +117,7 @@ tenantId 直接进 key，天然隔离。租户身份由内部 JWT 还原进 `Ten
 app:
   conversation:
     semantic-cache:
-      enabled: false            # 总开关，默认关
+      enabled: true             # 总开关，默认开
       threshold: 0.95           # 余弦命中阈值 [-1,1]，越高越保守（越不易误命中）
       max-entries-per-tenant: 1000   # 每租户桶上限（仅 in-memory 生效），超出丢最旧
       store: redis              # redis（默认）| in-memory
@@ -130,7 +130,7 @@ app:
 
 | 环境变量 | 默认 | 说明 |
 | --- | --- | --- |
-| `CONVERSATION_SEMANTIC_CACHE_ENABLED` | `false` | 总开关。关闭时缓存链全程短路，`/chat` 行为与历史完全一致 |
+| `CONVERSATION_SEMANTIC_CACHE_ENABLED` | `true` | 总开关（默认开）。置 `false` 时缓存链全程短路，`/chat` 行为与历史完全一致 |
 | `CONVERSATION_SEMANTIC_CACHE_THRESHOLD` | `0.95` | 余弦命中阈值。语义缓存最怕「意思其实不同却误命中返回错答案」，故默认偏保守，宁可 miss |
 | `CONVERSATION_SEMANTIC_CACHE_MAX_ENTRIES` | `1000` | 每租户桶条数上限（**仅 in-memory 生效**），超出丢最旧插入的一条 |
 | `CONVERSATION_SEMANTIC_CACHE_STORE` | `redis` | `redis`（默认，多副本共享 / 重启不丢，开启需 Redis 在线）\| `in-memory`（进程内，单机 / dev） |
@@ -182,15 +182,15 @@ curl -s -X DELETE 'http://localhost:8080/chat/cache?question=怎么申请退款'
 
 缓存关闭时该端点为 no-op（`cleared:0` / `removed:false`）。
 
-**知识库变更自动联动（松耦合，默认关）**
+**知识库变更自动联动（松耦合，默认开）**
 
 knowledge-service 在文档 upload / delete 成功后，可**尽力而为地**回调 conversation 的 `DELETE /chat/cache`
-失效当前租户缓存，做到「知识库更新即答案新鲜」。默认关闭（用 Noop 实现，对 ingest 零影响）；开启需
+失效当前租户缓存，做到「知识库更新即答案新鲜」。默认开启；置 `RAG_CACHE_INVALIDATION_ENABLED=false` 则用 Noop 实现、对 ingest 零影响。要真正生效需
 knowledge 与 conversation 都已就绪且 conversation 已开缓存才有意义。相关开关在 knowledge-service：
 
 | 环境变量 | 默认 | 说明 |
 | --- | --- | --- |
-| `RAG_CACHE_INVALIDATION_ENABLED` | `false` | 开启后 upload/delete 成功即回调 conversation 失效当前租户语义缓存 |
+| `RAG_CACHE_INVALIDATION_ENABLED` | `true` | 开启后 upload/delete 成功即回调 conversation 失效当前租户语义缓存 |
 | `RAG_CACHE_INVALIDATION_CONVERSATION_URL` | `http://conversation-service:8081` | conversation 服务地址（服务间直连，best-effort，失败仅告警不阻断 ingest） |
 
 详见 [`rag-guide.md`](rag-guide.md)（§9 L1 语义缓存 / 文档生命周期）。
@@ -220,14 +220,14 @@ knowledge 与 conversation 都已就绪且 conversation 已开缓存才有意义
 
 | 环境变量 | 默认 | 作用域 |
 | --- | --- | --- |
-| `CONVERSATION_SEMANTIC_CACHE_ENABLED` | `false` | 总开关（conversation `/chat`） |
+| `CONVERSATION_SEMANTIC_CACHE_ENABLED` | `true` | 总开关（conversation `/chat`） |
 | `CONVERSATION_SEMANTIC_CACHE_THRESHOLD` | `0.95` | 余弦命中阈值 |
 | `CONVERSATION_SEMANTIC_CACHE_MAX_ENTRIES` | `1000` | 每租户桶上限（仅 in-memory） |
 | `CONVERSATION_SEMANTIC_CACHE_STORE` | `redis` | 存储后端：`redis` / `in-memory` |
 | `CONVERSATION_SEMANTIC_CACHE_EMBEDDING_PROVIDER` | `hash` | 向量化：`hash` / `openai` |
 | `CONVERSATION_SEMANTIC_CACHE_EMBEDDING_MODEL` | `embedding-default` | `openai` 档逻辑模型名 |
 | `CONVERSATION_SEMANTIC_CACHE_REDIS_TTL` | `0s` | 整桶 TTL（仅 redis）；`0s`=不过期 |
-| `RAG_CACHE_INVALIDATION_ENABLED`（knowledge） | `false` | 文档变更后自动失效 conversation 缓存 |
+| `RAG_CACHE_INVALIDATION_ENABLED`（knowledge） | `true` | 文档变更后自动失效 conversation 缓存 |
 | `RAG_CACHE_INVALIDATION_CONVERSATION_URL`（knowledge） | `http://conversation-service:8081` | 联动目标地址 |
 
 相关文档：[`rag-guide.md`](rag-guide.md)（RAG 增强 + 语义缓存联动）、[`operations.md`](../参考/operations.md)（运行配置）、

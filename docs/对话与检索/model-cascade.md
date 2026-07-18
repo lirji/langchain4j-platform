@@ -1,8 +1,8 @@
 # Model Cascade / 成本路由指南
 
-> 新项目里这是 **conversation-service**（`:8081`）的 `POST /chat/cascade` 端点，默认**关闭**（`CHAT_CASCADE_ENABLED=false`）。开启后，同一个问题先用**便宜模型**作答，只有当答案被判「低置信」时才升级到**强模型**重答，从而在不牺牲难题质量的前提下压低整体 token 成本。
+> 新项目里这是 **conversation-service**（`:8081`）的 `POST /chat/cascade` 端点，默认**开启**（`CHAT_CASCADE_ENABLED=true`）。同一个问题先用**便宜模型**作答，只有当答案被判「低置信」时才升级到**强模型**重答，从而在不牺牲难题质量的前提下压低整体 token 成本。
 
-代码归属：级联的构造能力在 `platform-gateway-client`（`com.lrj.platform.gateway.cascade.*`），端点/绑定/指标接线在 `conversation-service`（`com.lrj.platform.conversation.cascade.*`）。开关默认关时整套 `CascadeConfig` 不装配、对现有 `/chat` 零开销。
+代码归属：级联的构造能力在 `platform-gateway-client`（`com.lrj.platform.gateway.cascade.*`），端点/绑定/指标接线在 `conversation-service`（`com.lrj.platform.conversation.cascade.*`）。置 `CHAT_CASCADE_ENABLED=false` 时整套 `CascadeConfig` 不装配、对现有 `/chat` 零开销。
 
 ---
 
@@ -24,7 +24,7 @@
 
 | 方法 | 路径 | 载体服务 | 默认状态 |
 |---|---|---|---|
-| POST | `/chat/cascade` | conversation :8081 | 默认关（`CHAT_CASCADE_ENABLED=false`） |
+| POST | `/chat/cascade` | conversation :8081 | 默认开（`CHAT_CASCADE_ENABLED=true`） |
 
 走 `/chat` 同一套鉴权链：经边缘网关 `:8080` 校验 `X-Api-Key`（需 `chat` scope）→ 签发内部 JWT → 多租户 `TenantContext` → 限流 + 每租户日 token 配额。底层 cheap/strong 两个模型都挂了全部 `ChatModelListener`，**token 照常计入审计、成本与当前租户配额，级联不绕过配额**。
 
@@ -181,7 +181,7 @@ curl -s -X POST http://localhost:8080/chat/cascade \
 
 | 环境变量 | 默认 | 作用 |
 |---|---|---|
-| `CHAT_CASCADE_ENABLED` | `false` | 总开关。关闭时 `CascadeConfig` / `ConfidenceGate` / `CascadeService` / 端点全不装配，零开销 |
+| `CHAT_CASCADE_ENABLED` | `true` | 总开关（默认开）。置 `false` 时 `CascadeConfig` / `ConfidenceGate` / `CascadeService` / 端点全不装配，零开销 |
 | `CHAT_CASCADE_CHEAP_MODEL` | 空 | 便宜模型的 **LiteLLM 逻辑模型名**。留空 → 回退网关默认 `chat-default` |
 | `CHAT_CASCADE_STRONG_MODEL` | 空 | 强模型的 LiteLLM 逻辑模型名。留空 → 回退 `chat-default`（此时便宜=强，仅演示不省钱） |
 | `CHAT_CASCADE_CONFIDENCE_THRESHOLD` | `0.6` | 自评置信阈值，**仅 `self-rating=true` 时生效**；自评分 `<` 此值 → 升级 |

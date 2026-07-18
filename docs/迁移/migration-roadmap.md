@@ -1,5 +1,9 @@
 # 迁移路线图
 
+> ⚠️ **历史存档（2026-07-18）**：迁移主体已完成，本路线图**仅作历史记录**保留——下文「当前状态 / 服务迁移顺序」里标为「进行中 / 暂缓」的条目（`knowledge-service` RAG、`async-task-service`、`agent-service` 多 Agent、`interop-service` A2A/MCP、`browser_see`、workflow 终态异步化 等）**均已落地**；且本路线图**未覆盖**后续新增的 `auth-service` 登录 + 继承式 RBAC、Casdoor SSO、SpiceDB 文档级 ReBAC、`order-service`、`voice-service`、能力展示前端 + 移动端适配、LiteLLM spend 记账/failover、增强开关默认全开 等方案变更。
+>
+> **当前真实状态以这些为准**：[变更记录](../变更记录.md)（近期方案级变更汇总）、[业务场景总览](../scenarios.md)、[能力文档](../参考/capabilities.md)；迁移收尾细节见 [迁移收尾方案与排期](migration-remaining-plan.md) 与 [对话/RAG 基础层迁移收尾](migration-gap-closure-plan.md)（20 项全部完成）。
+
 本项目是对原单体项目的微服务化重写：
 
 `/Users/liruijun/personal/LLM/LangChain4j_project`

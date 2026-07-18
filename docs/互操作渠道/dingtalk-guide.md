@@ -65,7 +65,7 @@ curl -s -X POST 'http://localhost:8080/rag/documents' \
 
 | 环境变量 | 建议值 | 说明 |
 |---|---|---|
-| `CONVERSATION_RAG_ENABLED` | `true` | 打开 `/chat` 的 RAG 增强（默认 `false`，关闭时等价裸 LLM） |
+| `CONVERSATION_RAG_ENABLED` | `true` | 打开 `/chat` 的 RAG 增强（默认 `true`，置 `false` 时等价裸 LLM） |
 | `KNOWLEDGE_BASE_URL` | `http://knowledge-service:8084` | 知识库地址 |
 | `CONVERSATION_RAG_TOP_K` | `5` | 召回条数 |
 | `CONVERSATION_RAG_MIN_SCORE` | `0.5`（示例） | 相关性下限，过滤弱相关 |

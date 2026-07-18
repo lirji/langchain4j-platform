@@ -5,7 +5,7 @@
 1. **平台 agent 作为 MCP client** —— `agent-service` 在 ReAct 循环里通过 `mcp_call` 动作调用外部 MCP server 暴露的工具。
 2. **平台经 interop 暴露 MCP-style tool surface** —— `interop-service` 用 tools/list、tool schema、call 三个 HTTP 端点，把平台内部能力包装成 MCP 风格工具，供外部编排器调用。
 
-两个方向相互独立，可只开其一。所有 MCP 相关能力**默认关闭 / 静态**，不配置外部 server 时对现有行为零影响。
+两个方向相互独立，可只开其一。**方向 ① agent 作 MCP client 默认关闭**（`AGENT_MCP_ENABLED=false`，不配置外部 server 时对现有行为零影响）；**方向 ② interop 的 MCP surface 恒在**，工具目录默认经 live discovery（`INTEROP_DISCOVERY_ENABLED=true`）从 agent-service 动态发现、下游不可达即确定性回退静态。
 
 > 端点访问约定：业务端点建议走 `edge-gateway`（`http://localhost:8080`，带 `X-Api-Key`，网关内部换发内部 JWT）。服务直连端口仅用于本地调试：`agent-service` :8085、`interop-service` :8088。
 
@@ -119,7 +119,7 @@ curl -s -X POST 'http://localhost:8080/agent/run' \
 | `platform.agent.dag.plan_run` | 自动规划并执行 DAG | `goal` |
 | `platform.agent.dag.plan_run_async` | 异步规划并执行 DAG | `goal`（可选 `webhookUrl`） |
 
-`platform.ping` 是 interop 本地内建工具（恒在）；四个 `platform.agent.*` 工具默认取**静态目录**。若开启 live capability discovery（`INTEROP_DISCOVERY_ENABLED=true`，默认 false），interop 会懒加载 + 按 TTL（`INTEROP_CAPABILITY_TTL`，默认 60s）从 agent-service 拉取能力；下游不可达时确定性回退到上面的静态默认，永不因下游故障抛错或阻塞。
+`platform.ping` 是 interop 本地内建工具（恒在）；四个 `platform.agent.*` 工具经 live capability discovery（`INTEROP_DISCOVERY_ENABLED`，**默认 true**）懒加载 + 按 TTL（`INTEROP_CAPABILITY_TTL`，默认 60s）从 agent-service 拉取能力；下游不可达时确定性回退到上面的静态默认，永不因下游故障抛错或阻塞。置 `INTEROP_DISCOVERY_ENABLED=false` 则纯取静态目录。
 
 ```bash
 curl -s 'http://localhost:8080/interop/mcp/tools' \
@@ -241,7 +241,7 @@ interop 侧配置前缀 `app.interop`（`InteropProperties`）：
 | `app.interop.agent-base-url` | `AGENT_BASE_URL` | `http://localhost:8085` | 代理目标 agent-service 基址 |
 | `app.interop.connect-timeout` | `INTEROP_CONNECT_TIMEOUT` | `1s` | 出站连接超时 |
 | `app.interop.read-timeout` | `INTEROP_READ_TIMEOUT` | `30s` | 出站读取超时 |
-| `app.interop.discovery-enabled` | `INTEROP_DISCOVERY_ENABLED` | `false` | live capability discovery 开关 |
+| `app.interop.discovery-enabled` | `INTEROP_DISCOVERY_ENABLED` | `true` | live capability discovery 开关 |
 | `app.interop.capability-ttl` | `INTEROP_CAPABILITY_TTL` | `60s` | discovery 缓存 TTL |
 
 ---
@@ -249,4 +249,4 @@ interop 侧配置前缀 `app.interop`（`InteropProperties`）：
 ## 小结
 
 - **方向一（agent 作 MCP client）**：`AGENT_MCP_ENABLED=true` + 选 `AGENT_MCP_TRANSPORT`（http/stdio），agent 大脑通过 `mcp_call` 自主调用外部 MCP server；默认关闭。
-- **方向二（interop 暴露 MCP surface）**：无需开关即可用 `/interop/mcp/tools`、`/interop/mcp/tools/{name}`、`/interop/mcp/call`，内建 `platform.ping` + 四个 `platform.agent.*` 工具；工具目录默认静态，`INTEROP_DISCOVERY_ENABLED=true` 后从 agent-service 动态发现并可回退。
+- **方向二（interop 暴露 MCP surface）**：无需开关即可用 `/interop/mcp/tools`、`/interop/mcp/tools/{name}`、`/interop/mcp/call`，内建 `platform.ping` + 四个 `platform.agent.*` 工具；工具目录默认经 `INTEROP_DISCOVERY_ENABLED=true` 从 agent-service 动态发现并可回退静态（置 `false` 则纯静态）。

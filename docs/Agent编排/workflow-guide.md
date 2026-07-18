@@ -4,8 +4,8 @@
 
 | 你想找的 "workflow" | 是什么 | 载体服务 | 端点前缀 | 默认状态 |
 |---|---|---|---|---|
-| **业务流程引擎**（本文 A 部分） | Flowable BPMN 引擎：退款审批这类"挂起等人工、跨天、可持久化"的长流程 | `workflow-service`（:8082） | `/workflow/**` | **默认关**（`WORKFLOW_ENABLED=false`） |
-| **LLM 编排模式**（本文 B 部分） | Anthropic《Building Effective Agents》的 5 种 workflow 模式 + agent：prompt chaining / routing / parallelization / orchestrator-workers / evaluator-optimizer | `agent-service`（:8085）+ `conversation-service`（:8081） | `/agent/**`、`/chat/auto` | 编排端点多为常开；路由默认关 |
+| **业务流程引擎**（本文 A 部分） | Flowable BPMN 引擎：退款审批这类"挂起等人工、跨天、可持久化"的长流程 | `workflow-service`（:8082） | `/workflow/**` | **默认开**（`WORKFLOW_ENABLED=true`，需可达 MySQL） |
+| **LLM 编排模式**（本文 B 部分） | Anthropic《Building Effective Agents》的 5 种 workflow 模式 + agent：prompt chaining / routing / parallelization / orchestrator-workers / evaluator-optimizer | `agent-service`（:8085）+ `conversation-service`（:8081） | `/agent/**`、`/chat/auto` | 编排端点多为常开；路由默认开 |
 
 这两个 "workflow" **没有代码关系**：A 是「业务流程赛道」的词（人工审批、状态机、DB 持久化），B 是「LLM 编排赛道」的词（用预定义代码路径编排多次模型调用）。唯一的交汇点在 C 部分——**渠道意图路由**：飞书入站消息命中"退款/投诉"时分流到 A 的退款工作流，其余走 B/对话。
 
@@ -20,7 +20,7 @@
 
 # A. 业务流程引擎（Flowable / 退款审批）
 
-**一句话定位**：`workflow-service`（:8082）用 Flowable 7.1.0 BPMN 引擎跑退款审批长流程，整套由 `WORKFLOW_ENABLED=true` 开关（默认关，关时零开销、不装配任何 Bean）；端点 `/workflow/**`，需一个可达的 MySQL（首次自动建 `flowable` 库 + ~25 张 `ACT_*` 表）。
+**一句话定位**：`workflow-service`（:8082）用 Flowable 7.1.0 BPMN 引擎跑退款审批长流程，整套由 `WORKFLOW_ENABLED` 开关（默认开，需可达 MySQL；置 `false` 则零开销、不装配任何 Bean）；端点 `/workflow/**`，首次自动建 `flowable` 库 + ~25 张 `ACT_*` 表。
 
 ## A.1 为什么是 Flowable，而不是扩现有 async 状态机
 
@@ -206,7 +206,7 @@ WORKFLOW_ENABLED=true WORKFLOW_DB_PASSWORD=root \
 
 | 属性 / 环境变量 | 默认 | 含义 |
 |---|---|---|
-| `app.workflow.enabled` / `WORKFLOW_ENABLED` | `false` | 总开关，关时整套 Bean 不装配 |
+| `app.workflow.enabled` / `WORKFLOW_ENABLED` | `true` | 总开关（需可达 MySQL），置 `false` 时整套 Bean 不装配 |
 | `app.workflow.datasource.url` / `WORKFLOW_DB_URL` | `jdbc:mysql://localhost:3306/flowable?...` | Flowable 引擎数据源（独立 Hikari 池） |
 | `app.workflow.datasource.username` / `WORKFLOW_DB_USER` | `root` | 数据源用户 |
 | `app.workflow.datasource.password` / `WORKFLOW_DB_PASSWORD` | `root`(yml)/空(默认) | 数据源密码 |
@@ -237,10 +237,10 @@ WORKFLOW_ENABLED=true WORKFLOW_DB_PASSWORD=root \
 | Anthropic 模式 | 一句话 | 新端点（经 :8080） | 载体 | 开关（新） | 单体旧端点 |
 |---|---|---|---|---|---|
 | **Prompt Chaining** | 固定顺序链，步间插确定性 gate | `POST /agent/chain` | agent | `app.agent.chaining.steps`（无独立 enable，空则 400） | `/chat/chain` |
-| **Routing** | 分类 → 分派到专门链路 | `POST /chat/auto` | conversation | `CONVERSATION_ROUTER_ENABLED`（默认 false） | `/chat/auto` |
+| **Routing** | 分类 → 分派到专门链路 | `POST /chat/auto` | conversation | `CONVERSATION_ROUTER_ENABLED`（默认 true） | `/chat/auto` |
 | **Parallelization · Sectioning** | 拆**不同**独立子任务并行 | `POST /agent/dag/run`、`/agent/dag/plan-run` | agent | 常开（`AGENT_DAG_MAX_TASKS`=6） | `/chat/multi-agent` |
 | **Parallelization · Voting** | **同一**任务并行多跑取共识 | `POST /agent/vote` | agent | 常开（`AGENT_VOTING_*`） | `/chat/vote` |
-| **Orchestrator-Workers** | 中枢动态拆任务 → worker → 综合 | `POST /agent/dag/plan-run`（+ replan 闭环） | agent | 常开；replan `AGENT_DAG_REPLAN_ENABLED`（默认 false） | `/chat/multi-agent` |
+| **Orchestrator-Workers** | 中枢动态拆任务 → worker → 综合 | `POST /agent/dag/plan-run`（+ replan 闭环） | agent | 常开；replan `AGENT_DAG_REPLAN_ENABLED`（默认 true） | `/chat/multi-agent` |
 | **Evaluator-Optimizer** | 生成 → 评估 → 反馈循环 | `POST /agent/reflexive`（+ `/stream`） | agent | 常开（`AGENT_REFLEXION_*`） | `/chat/reflexive` |
 | *(Agent，非 workflow)* | LLM 自己决定下一步 | `POST /agent/run` | agent | 常开（`AGENT_ENABLED`=true） | `/agent/run` |
 
@@ -276,7 +276,7 @@ curl -X POST http://localhost:8080/agent/chain \
 
 ## B.2 Routing —— `POST /chat/auto`
 
-LLM-as-Router：`QueryClassifier`（temp=0 判官模型，分类需确定性）把问题分到 `RAG` / `TOOL` / `CHAT` 三条链路。默认关（`CONVERSATION_ROUTER_ENABLED=false`）；未启用时端点返回明确禁用提示。记忆键与 `/chat` 一致（`<tenantId>::<chatId>`），与普通对话共享多轮记忆。
+LLM-as-Router：`QueryClassifier`（temp=0 判官模型，分类需确定性）把问题分到 `RAG` / `TOOL` / `CHAT` 三条链路。默认开（`CONVERSATION_ROUTER_ENABLED=true`）；置 `false` 关闭时端点返回明确禁用提示。记忆键与 `/chat` 一致（`<tenantId>::<chatId>`），与普通对话共享多轮记忆。
 
 ```bash
 # 启用：CONVERSATION_ROUTER_ENABLED=true 起 conversation-service
@@ -330,7 +330,7 @@ curl -X POST http://localhost:8080/agent/vote \
 
 ## B.5 Orchestrator-Workers —— `POST /agent/dag/plan-run`（+ replan）
 
-Orchestrator-Workers 是 Sectioning 的动态版：中枢（Planner）动态拆任务派给 worker，再综合。落在同一个 DAG 服务，额外带 **replan 闭环**——综合结果经 `AgentDagCritic` 三维加权评分，低于 `AGENT_DAG_REPLAN_THRESHOLD`（默 0.75）则重规划（最多 `AGENT_DAG_REPLAN_MAX_REPLANS` 次）。replan 默认关（`AGENT_DAG_REPLAN_ENABLED=false`）；开启后响应的 `attempts[]` 记录各轮评分、`acceptedByThreshold` 标是否达阈收敛。
+Orchestrator-Workers 是 Sectioning 的动态版：中枢（Planner）动态拆任务派给 worker，再综合。落在同一个 DAG 服务，额外带 **replan 闭环**——综合结果经 `AgentDagCritic` 三维加权评分，低于 `AGENT_DAG_REPLAN_THRESHOLD`（默 0.75）则重规划（最多 `AGENT_DAG_REPLAN_MAX_REPLANS` 次）。replan 默认开（`AGENT_DAG_REPLAN_ENABLED=true`）；响应的 `attempts[]` 记录各轮评分、`acceptedByThreshold` 标是否达阈收敛（置 `false` 则跳过重规划）。
 
 ## B.6 Evaluator-Optimizer（Reflexion）—— `POST /agent/reflexive` / `/agent/reflexive/stream`
 
@@ -358,9 +358,9 @@ curl -N -X POST http://localhost:8080/agent/reflexive/stream \
 | 模式 | 环境变量 / 属性 | 默认 | 端点 |
 |---|---|---|---|
 | Prompt Chaining | `app.agent.chaining.steps`（yml，无 enable，空则 400） | 空 | `/agent/chain` |
-| Routing | `CONVERSATION_ROUTER_ENABLED` | `false` | `/chat/auto` |
+| Routing | `CONVERSATION_ROUTER_ENABLED` | `true` | `/chat/auto` |
 | DAG (Sectioning) | `AGENT_DAG_MAX_TASKS` | `6` | `/agent/dag/run`、`/agent/dag/plan-run`(+`/async`) |
-| Orchestrator replan | `AGENT_DAG_REPLAN_ENABLED` | `false` | `/agent/dag/plan-run` |
+| Orchestrator replan | `AGENT_DAG_REPLAN_ENABLED` | `true` | `/agent/dag/plan-run` |
 | — replan 阈值 | `AGENT_DAG_REPLAN_THRESHOLD` / `_MAX_REPLANS` | `0.75` / `1` | — |
 | Voting | `AGENT_VOTING_N` / `AGENT_VOTING_STRATEGY` / `AGENT_VOTING_MIN_AGREEMENT` | `3` / `majority` / `0.5` | `/agent/vote` |
 | Reflexion | `AGENT_REFLEXION_THRESHOLD` / `_MAX_ATTEMPTS` | `0.75` / `2` | `/agent/reflexive`(+`/stream`) |
@@ -400,7 +400,7 @@ curl -N -X POST http://localhost:8080/agent/reflexive/stream \
 
 | 环境变量 | 默认 | 作用 |
 |---|---|---|
-| `WORKFLOW_ENABLED` | `false` | 总开关 |
+| `WORKFLOW_ENABLED` | `true` | 总开关（需可达 MySQL） |
 | `WORKFLOW_DB_URL` / `WORKFLOW_DB_USER` / `WORKFLOW_DB_PASSWORD` | localhost:3306/flowable / root / root | Flowable 引擎数据源 |
 | `WORKFLOW_AI_CLIENT_MODE` | `http` | ServiceTask AI 来源：`http`/`local` |
 | `CONVERSATION_BASE_URL` | `http://localhost:8081` | http 模式下 conversation 基址 |
@@ -416,9 +416,9 @@ curl -N -X POST http://localhost:8080/agent/reflexive/stream \
 |---|---|---|
 | `AGENT_ENABLED` | `true` | 编排端点总开关 |
 | `app.agent.chaining.steps`（yml） | 空 | Prompt Chaining 链步骤（空则 `/agent/chain` 返回 400） |
-| `CONVERSATION_ROUTER_ENABLED` | `false` | Routing `/chat/auto` |
+| `CONVERSATION_ROUTER_ENABLED` | `true` | Routing `/chat/auto` |
 | `AGENT_DAG_MAX_TASKS` | `6` | DAG 最大任务数 |
-| `AGENT_DAG_REPLAN_ENABLED` / `_THRESHOLD` / `_MAX_REPLANS` | `false` / `0.75` / `1` | Orchestrator replan 闭环 |
+| `AGENT_DAG_REPLAN_ENABLED` / `_THRESHOLD` / `_MAX_REPLANS` | `true` / `0.75` / `1` | Orchestrator replan 闭环 |
 | `AGENT_VOTING_N` / `_STRATEGY` / `_MIN_AGREEMENT` | `3` / `majority` / `0.5` | Voting |
 | `AGENT_REFLEXION_THRESHOLD` / `_MAX_ATTEMPTS` | `0.75` / `2` | Reflexion |
 | `AGENT_REFLEXION_WEIGHT_{CORRECTNESS,COMPLETENESS,CLARITY}` | `0.4/0.4/0.2` | Reflexion 三维权重 |

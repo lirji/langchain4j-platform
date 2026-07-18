@@ -4,6 +4,8 @@
 原单体**冻结为参考实现 / 行为基准**，逻辑逐步移植过来。设计与阶段见
 `~/.claude/plans/ai-sprightly-feigenbaum.md`。
 
+> **最新变更**（2026-07）：Casdoor SSO 整栈默认开且 `only` 严格模式、继承式 RBAC、ES 全文混排 + RRF、order-service、前端移动端/响应式适配、LiteLLM spend 记账/failover、各服务增强开关默认全开。逐项见 [docs/变更记录](docs/变更记录.md)。
+
 ## 目标拓扑
 
 ```
@@ -21,7 +23,7 @@ client ──X-Api-Key/Bearer──▶ edge-gateway (Spring Cloud Gateway)
 ```
 
 - **两层网关分工**：`edge-gateway` 管业务 API 路由/鉴权；`LiteLLM` 管 LLM provider 路由/failover。
-- **三种对外凭据**：`X-Api-Key`、登录会话 `Authorization: Bearer`（`auth-service` 签发）、或 **Casdoor SSO Bearer**（`edge.casdoor.enabled` 默认关，JWKS 验签，支持多租户登录）；边缘统一换发内部 JWT，下游只认 JWT（`platform-security`），对凭据来源无感知。
+- **三种对外凭据**：`X-Api-Key`、登录会话 `Authorization: Bearer`（`auth-service` 签发）、或 **Casdoor SSO Bearer**（`edge.casdoor.enabled` **默认开**、`mode=only` 严格，JWKS 验签，支持多租户登录）；边缘统一换发内部 JWT，下游只认 JWT（`platform-security`），对凭据来源无感知。
 
 ## 模块
 
@@ -44,10 +46,10 @@ client ──X-Api-Key/Bearer──▶ edge-gateway (Spring Cloud Gateway)
 | `channel-service` | 服务 | `/channel/**` 渠道 ACL：webhook/Feishu/voice 出站、async-task/workflow callback、出入站签名校验；`/channel/dingtalk/events`·`/channel/feishu/events` 入站客服桥；可选 Kafka event |
 | `interop-service` | 服务 | `/interop/**` A2A（`message/send`、`message/stream` 真 SSE、push 通知中继 `/interop/a2a/push-callback`、`/.well-known/agent-card.json`）、MCP tool surface，并可代理 agent run/async/DAG 能力 |
 | `eval-service` | 服务 | `/eval/**` 外部回归测试客户端，可执行 HTTP target case、加载 baseline suite、做响应/oracle 断言并输出 JSON report |
-| `vision-service` | 服务 | `/vision/caption`·`/vision/describe` 图像描述（多模态，JSON 或 multipart 上传）；默认关（`VISION_ENABLED=false`） |
+| `vision-service` | 服务 | `/vision/caption`·`/vision/describe` 图像描述（多模态，JSON 或 multipart 上传）；默认开（`VISION_ENABLED=true`） |
 | `voice-service` | 服务 | `/voice/transcribe` 转写 + `/voice/chat`(+`/stream`) 语音闭环 ASR(whisper)→`/chat`→TTS；默认关（`VOICE_ENABLED=false`） |
 | `order-service` | 服务 | `/orders/{orderNo}` 按订单号只读查订单（状态/金额/客户/下单日期）；裸 JdbcTemplate + 持久化 MySQL（独立库 `order_service`）、按 `tenant_id` 隔离；供深度 Agent 的 `order_query` 动作调用（:8093，宿主机映射 8094——8093 被展示前端占用） |
-| `edge-gateway` | 服务 | 边缘 API 网关：入站凭证 → 换发内部 JWT（`X-Internal-Token`）转发下游。三个签发 filter：`CasdoorTokenExchangeFilter`(Casdoor Bearer, -120，默认关) / `SessionBearerAuthFilter`(会话 Bearer, -110) / `ApiKeyToInternalTokenFilter`(X-Api-Key, -100)。Casdoor 灰度 `EDGE_CASDOOR_MODE`=DUAL(默认，Casdoor 或回退老路)/ONLY(仅 Casdoor)；多租户登录方案 C（Casdoor Shared Application + 选 org，前端按 org 用 `<base>-org-<tenant>` 客户端，edge 校验 `<base>-org-*` aud 家族 + owner 绑定）。限流 + CORS 白名单 |
+| `edge-gateway` | 服务 | 边缘 API 网关：入站凭证 → 换发内部 JWT（`X-Internal-Token`）转发下游。三个签发 filter：`CasdoorTokenExchangeFilter`(Casdoor Bearer, -120，**默认开**) / `SessionBearerAuthFilter`(会话 Bearer, -110) / `ApiKeyToInternalTokenFilter`(X-Api-Key, -100)。Casdoor `EDGE_CASDOOR_MODE`=ONLY(**默认**，仅 Casdoor，非 open-path 无有效 token→401)/DUAL(灰度回滚窗口，验不过透传老路)；多租户登录方案 C（Casdoor Shared Application + 选 org，前端按 org 用 `<base>-org-<tenant>` 客户端，edge 校验 `<base>-org-*` aud 家族 + owner 绑定）。限流 + CORS 白名单 |
 
 > 后续继续加固 `channel`/`interop`/`eval` 的真实适配逻辑，并继续加固 `knowledge`/`async-task` 的持久化和跨服务协议。
 
@@ -133,7 +135,7 @@ curl -s -X POST 'http://localhost:8080/rag/obsidian/import' \
   -F 'file=@./my-vault.zip' -F 'category=notes'
 ```
 
-图片走原生 CLIP 多模态 embedding：向量存入独立的 image collection（`knowledge_images_<tenant>`，与文本集合隔离），文本 query 可跨模态检索图片。默认关闭（`RAG_MULTIMODAL_ENABLED=false`），关闭时上传图片返回 400。
+图片走原生 CLIP 多模态 embedding：向量存入独立的 image collection（`knowledge_images_<tenant>`，与文本集合隔离），文本 query 可跨模态检索图片。**默认开**（`RAG_MULTIMODAL_ENABLED=true`，需可达的多模态 embedding 后端 `RAG_MULTIMODAL_BASE_URL`——缺后端时图片入库/检索会报错）；置 `false` 时上传图片返回 400。
 
 > ⚠️ **破坏性变更**：旧的「图 → 文字（caption/OCR）」路径已移除，上传图片不再接受 `caption`/`ocrText` 字段，`RAG_IMAGE_TEXT_*` / `ImageTextProvider` 全部删除。
 
@@ -182,7 +184,7 @@ RAG_REGISTRY_STORE=redis
 bash deploy/smoke-qdrant-rag.sh
 ```
 
-需要启用第一阶段 GraphRAG（确定性抽取）时，可设置：
+GraphRAG（确定性三元组抽取）**默认已开**（`RAG_GRAPH_ENABLED=true`）。如需自定义抽取行为，可设置：
 
 ```bash
 RAG_GRAPH_ENABLED=true
@@ -191,7 +193,7 @@ RAG_GRAPH_RELATION_WHITELIST=隶属于,使用
 RAG_GRAPH_ALIASES=张三经理=张三
 ```
 
-默认图谱存储是内存；需要持久化到 MySQL 时设置：
+图谱存储**默认 `jdbc`（持久化到 MySQL）**；连接可自定义（改回内存用 `RAG_GRAPH_STORE=in-memory`）：
 
 ```bash
 RAG_GRAPH_STORE=jdbc
@@ -433,11 +435,11 @@ curl -s 'http://localhost:8080/analytics/schema/tables/orders' -H 'X-Api-Key: de
 
 精确的跨行计算（占比 / 环比等）建议再开 `AGENT_CODE_EXEC_ENABLED=true`，否则计算子任务会退化为模型推理估算。
 
-### 业务流程智能体 —— `/agent/process/run`（默认关，人在环）
+### 业务流程智能体 —— `/agent/process/run`（人在环，默认开）
 
 业务流程智能体同样建在 DAG 编排上：专用 Planner 把「帮我发起退款并跟进」这类诉求拆成「发起 → 查状态 → 如实汇报」子任务，worker 调用 `refund_start`（发起退款审批流）、`workflow_status`（查实例）、`workflow_tasks`（列待办，需审批权限）动作驱动 workflow-service。**人在环治理**：智能体只发起 / 查询 / 汇报，高风险（`WAITING_APPROVAL`）会如实告知「需人工审批、尚未批准」；**不提供自动审批**——approve/reject 仍由具备 `approve` scope 的人走 `POST /workflow/tasks/{id}/complete`。智能体只在流程外编排，不进 Flowable 同步 ServiceTask。
 
-有副作用，默认关，需 workflow-service 与 agent 侧开关同时打开：
+有副作用、人在环审批；默认已开（`AGENT_WORKFLOW_ENABLED=true` + workflow-service 侧 `WORKFLOW_ENABLED=true`），需 workflow-service 可达：
 
 ```bash
 # workflow-service：WORKFLOW_ENABLED=true（其 assess/resolve 环节还会调 conversation-service）

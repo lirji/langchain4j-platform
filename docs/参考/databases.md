@@ -19,6 +19,8 @@
 | 测试库 | H2 | 内嵌 | 无 | 无 | 依赖 DB 的单测（内存，无 Testcontainers） |
 
 > Kafka 严格说不是数据库，是跨服务事件总线；一并列出便于对齐端口与凭据。
+>
+> ℹ️ **外部 IAM 存储不在本 compose 内**：身份侧 **Casdoor（:8000）** 与授权侧 **auth-platform-server（:8200，SpiceDB ReBAC）** 都是本仓库外的独立平台（各自的库自管，如 Casdoor 表在 authz-postgres）。仅在 edge Casdoor 启用 / `RAG_AUTHZ_MODE != disabled` 时才被依赖，详见 §七#6。可观测侧 LiteLLM（:4000）、Jaeger（:16686）亦非数据存储，见[运行与配置手册](operations.md)。
 
 ## 一、MySQL 8.4（关系型，:3306）
 
@@ -29,7 +31,7 @@ Docker 单实例 `mysql:8.4`，`MYSQL_ROOT_PASSWORD=root`、初始库 `platform`
 | workflow-service | `flowable` | root | root | 恒开 | Flowable BPMN 退款审批引擎表 + outbox |
 | analytics-service | `nl2sql_demo` | root（admin） | root | `NL2SQL_ENABLED=true` | NL2SQL 演示库（建表/写入） |
 | analytics-service | `nl2sql_demo` | `nl2sql_ro`（只读） | `nl2sql_ro` | 同上 | NL2SQL 只读执行连接（六层 SQL 护栏之一） |
-| knowledge-service | `knowledge_graph` | root | Docker `root` / 本地默认**空** | `RAG_GRAPH_STORE=jdbc`（compose 默认 jdbc） | GraphRAG 图谱存储 |
+| knowledge-service | `knowledge_graph` | root | Docker `root` / 本地默认**空** | `RAG_GRAPH_STORE=jdbc`（yml/compose 默认 jdbc） | GraphRAG 图谱存储 |
 | async-task-service | `async_task` | root | Docker `root` / 本地默认**空** | `ASYNC_TASK_STORE=jdbc`（compose 默认 jdbc） | 通用异步任务中心 |
 | auth-service | `auth` | root | root | `AUTH_STORE=jdbc`（compose 默认 jdbc） | 登录账号 / 角色 / role-scope / 刷新会话（`USERS`/`USER_ROLE`/`ROLES`/`ROLE_SCOPE`/`AUTH_SESSION`，仅存刷新令牌哈希） |
 | order-service | `order_service` | root | root | 恒开（服务本身即 DB 支撑） | 订单只读查询（`orders`/`customers`，`CREATE TABLE IF NOT EXISTS` + 首启种子，按 `tenant_id` 隔离）；`ORDER_SEED_DEMO=false` 关演示种子 |
@@ -119,7 +121,7 @@ mvn -pl knowledge-service spring-boot:run
 | 1 | **向量库** | 每个 chunk 的 embedding + 正文，`collection-per-tenant` 隔离 | **Qdrant**（第三节） | `RAG_VECTOR_STORE_PROVIDER=qdrant` | `storeRouter.forTenant(...).addAll(embeddings, segments)` |
 | 2 | 明文镜像（**进程内内存，非外部库**） | 明文分块，供内存 keyword 检索兜底 | `DocumentMirror`（`ConcurrentHashMap`） | 恒开，不可关 | `documentMirror.add(segments)` |
 | 3 | **Elasticsearch** | 同一批 chunk 的 BM25 全文倒排，索引 `knowledge_segments_text`，smartcn 中文分析 | **ES :9200**（第四节） | `RAG_ES_ENABLED=true`（默认开）；关时为 `NoopSegmentIndexer` 零副作用 | `segmentIndexer.index(segments)` |
-| 4 | **图谱库** | GraphRAG 抽出的实体/关系三元组 | **MySQL** 库 `knowledge_graph`（第一节） | `RAG_GRAPH_ENABLED=true` + `RAG_GRAPH_STORE=jdbc`（compose 默认）；关时 `graphIngestor==null` 跳过 | `graphIngestor.ingest(segments)` |
+| 4 | **图谱库** | GraphRAG 抽出的实体/关系三元组 | **MySQL** 库 `knowledge_graph`（第一节） | `RAG_GRAPH_ENABLED=true` + `RAG_GRAPH_STORE=jdbc`（yml/compose 默认）；关时 `graphIngestor==null` 跳过 | `graphIngestor.ingest(segments)` |
 | 5 | **文档登记 registry** | 文档级元数据/版本目录（`list`/`get`/覆盖判定） | **Redis** key `rag:docs:<tenant>`（第二节） | `RAG_REGISTRY_STORE=redis`（默认）；可退 `in-memory` | `registry.put(info)` |
 | 6 | **SpiceDB（授权关系，外部 `auth-platform`）** | 不是内容，是「谁能看」——文档 `owner` + `home_dept`（上传人部门）关系元组 | 外部 `auth-platform-server` :8200 → SpiceDB | 仅 `app.rag.authz.mode=shadow`/`enforce`；且仅**新建**文档写（同名覆盖保留原 owner，不夺权）。默认 `disabled` 不写 | `knowledgeAuthz.onDocumentCreated(...)` |
 

@@ -5,7 +5,7 @@
 - **多轮记忆（会话内 / short-term）**：按 `chatId` 保留最近若干轮，换个会话就忘、跨会话不共享。
   **默认开启**、内存滑窗，零外部依赖；`redis` 档多副本共享 + 重启不丢。
 - **长期用户画像（跨会话 / long-term）**：记住"关于这个**用户**、值得**跨会话**长期保留"的事实——
-  偏好、稳定属性、反复诉求。下次该用户任意新会话进来被召回注入。**默认关闭**（mem0 式语义长期记忆）。
+  偏好、稳定属性、反复诉求。下次该用户任意新会话进来被召回注入。**默认开启**（mem0 式语义长期记忆）。
 
 两者都遵循平台一贯的「接口 + `@ConditionalOnProperty` 多实现，默认内存/确定性」写法，本地运行和单测无需任何外部基础设施。
 
@@ -22,13 +22,13 @@
 
 长期画像补的是**另一条轴**：记住"关于这个**用户**、值得**跨会话**长期保留"的事实。
 
-| | 多轮记忆（默认开） | 长期画像（默认关） |
+| | 多轮记忆（默认开） | 长期画像（默认开） |
 | --- | --- | --- |
 | 键 | `<tenantId>::<chatId>`（一次会话） | `(tenant, user)`（跨该用户所有会话） |
 | 内容 | 最近 N 轮原始消息（或摘要） | 抽炼后的 durable 用户事实 |
 | 生命周期 | 会话结束 / 滑出即忘 | 长期保留（带容量上限淘汰） |
 | 注入 | 由 `@AiService` 自动进 prompt 历史 | chat 前召回、每轮新鲜拼进系统提示 `context` |
-| 开关 | `CONVERSATION_MEMORY_*`（默认 in-memory + messages 档） | `CONVERSATION_MEMORY_PROFILE_*`（默认关） |
+| 开关 | `CONVERSATION_MEMORY_*`（默认 in-memory + messages 档） | `CONVERSATION_MEMORY_PROFILE_*`（默认开，`in-memory` 档） |
 | 端点 | 内嵌在 `/chat`、`/chat/memory` 等所有走记忆的对话端点 | `/chat/memory`、`GET/DELETE /memory/profile` |
 
 > `/chat/memory` 端点**同时用到两条轴**：它用同一个 `<tenantId>::<chatId>` 键拿到多轮窗口记忆，
@@ -110,7 +110,7 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=s2' \
 ## 3. 长期用户画像（跨会话记忆）
 
 > 新项目里这是 `conversation-service` 的 `memory/profile/` 包，端点 `/chat/memory`、`GET/DELETE /memory/profile`，
-> **默认关**（`CONVERSATION_MEMORY_PROFILE_ENABLED=false`）→ 对话链零变化。开启后每轮多一次 temp=0 抽取调用。
+> **默认开**（`CONVERSATION_MEMORY_PROFILE_ENABLED=true`）：每轮多一次 temp=0 抽取调用；置 `false` 则关闭、对话链零变化。
 
 ### 3.1 做什么
 
@@ -147,7 +147,7 @@ app:
   conversation:
     memory:
       profile:
-        enabled: false        # 默认关 → 对话链零变化
+        enabled: true         # 默认开；置 false 则关闭、对话链零变化
         store: in-memory      # in-memory（默认，重启即丢）；redis 变体接口已留、待补
         max-items: 50         # 每用户记忆上限，超出淘汰最旧
         recall-limit: 12      # chat 前注入召回最近多少条
@@ -206,7 +206,7 @@ curl -s -X DELETE 'http://localhost:8080/memory/profile' -H 'X-Api-Key: dev-key-
 
 **决策**（这些是老单体文档沉淀下来的设计洞察，迁移时原样保留）：
 
-- **独立端点 `/chat/memory` 而非改主 `/chat`**：跟 `/chat/auto`、`/chat/sql` 一样，新能力走新端点 + 默认关，主链零回归。生产要全局开就把召回注入折进 `/chat`（按信号）。
+- **独立端点 `/chat/memory` 而非改主 `/chat`**：跟 `/chat/auto`、`/chat/sql` 一样，新能力走新端点，主链零回归（画像召回只在 `/chat/memory`，不折进主 `/chat`）。生产要全局开就把召回注入折进 `/chat`（按信号）。
 - **异步观察**：抽取是额外一次 LLM 调用，投后台不拖慢响应（与 `summary` 档异步压缩同理）。
 - **注入走系统提示 `context` 而非落历史**：每轮新鲜注入、对 guardrail/RAG 透明；观察用**原始**消息（不含注入前缀），让抽取看到干净输入、也避免前缀在多轮记忆里累积。
 - **抽取走 temp=0 判官模型**：画像应稳定，不该同段对话每次抽出不同事实。
@@ -223,7 +223,7 @@ curl -s -X DELETE 'http://localhost:8080/memory/profile' -H 'X-Api-Key: dev-key-
 | --- | --- |
 | embedding 语义检索 / 消歧 | v1 用 lexical 去重 + 全量召回（`recall-limit` 截断）够用；大画像库再上向量 |
 | 记忆 update/forget（mem0 的改写/遗忘） | v1 只 add + 去重 + 容量淘汰；带冲突消解的 update 是后续 |
-| 自动注入主 `/chat` | 默认关 + 独立端点更安全；按信号折入 |
+| 自动注入主 `/chat` | 独立端点更安全（主 `/chat` 不自动召回画像）；按信号折入 |
 | 长期画像 Redis 持久化实现 | 接口已留（`UserProfileStore`），按信号补（可参考多轮记忆的 `RedisChatMemoryStore`） |
 
 ---
@@ -245,7 +245,7 @@ curl -s -X DELETE 'http://localhost:8080/memory/profile' -H 'X-Api-Key: dev-key-
 
 | 环境变量 | 默认 | 说明 |
 | --- | --- | --- |
-| `CONVERSATION_MEMORY_PROFILE_ENABLED` | `false` | 总开关；关时 `/chat/memory`、`/memory/profile` 返回禁用提示 |
+| `CONVERSATION_MEMORY_PROFILE_ENABLED` | `true` | 总开关；置 `false` 时 `/chat/memory`、`/memory/profile` 返回禁用提示 |
 | `CONVERSATION_MEMORY_PROFILE_STORE` | `in-memory` | 目前仅内存实现（redis 变体待补） |
 | `CONVERSATION_MEMORY_PROFILE_MAX_ITEMS` | `50` | 每用户记忆上限，超出淘汰最旧 |
 | `CONVERSATION_MEMORY_PROFILE_RECALL_LIMIT` | `12` | chat 前召回注入最近多少条 |

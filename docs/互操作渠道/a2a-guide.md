@@ -402,8 +402,8 @@ live discovery 影响的是 **MCP 工具目录**（`/interop/mcp/tools`、平台
 
 机制（`InteropToolRegistry` + `AgentCapabilityClient`）：
 
-- 默认**关闭**（`app.interop.discovery-enabled=false`）：走静态回退工具集 `STATIC_AGENT_TOOLS`，零下游依赖，dev/test 行为不变。
-- 开启后：懒加载 + TTL 缓存，从 `agent-service GET /agent/capabilities` 拉取当前能力（返回 `List<McpToolDescriptor>`）；下游不可达 / 返回空时**确定性回退**到 last-known-good 或静态默认，永不因下游故障抛错或阻塞。
+- 默认**开启**（`app.interop.discovery-enabled=true`）：懒加载 + TTL 缓存，从 `agent-service GET /agent/capabilities` 拉取当前能力（返回 `List<McpToolDescriptor>`）；下游不可达 / 返回空时**确定性回退**到 last-known-good 或静态默认，永不因下游故障抛错或阻塞。
+- 置 `false` 关闭：走静态回退工具集 `STATIC_AGENT_TOOLS`，零下游依赖，dev/test 行为不变。
 
 内建工具 `platform.ping` 恒在；agent 工具（静态默认）：`platform.agent.run`、`platform.agent.run_async`、`platform.agent.dag.plan_run`、`platform.agent.dag.plan_run_async`。
 
@@ -411,7 +411,7 @@ live discovery 影响的是 **MCP 工具目录**（`/interop/mcp/tools`、平台
 
 | 属性 | 环境变量 | 默认值 | 说明 |
 |---|---|---|---|
-| `app.interop.discovery-enabled` | `INTEROP_DISCOVERY_ENABLED` | `false` | live discovery 总开关（**默认关**） |
+| `app.interop.discovery-enabled` | `INTEROP_DISCOVERY_ENABLED` | `true` | live discovery 总开关（**默认开**） |
 | `app.interop.capability-ttl` | `INTEROP_CAPABILITY_TTL` | `60s` | discovery 缓存 TTL，过期触发懒刷新 |
 | `app.interop.agent-base-url` | `AGENT_BASE_URL` | `http://localhost:8085` | 代理到的 agent-service 基址 |
 | `app.interop.conversation-base-url` | `CONVERSATION_BASE_URL` | `http://localhost:8081` | `message/stream`（chat）代理的 conversation 基址 |
@@ -472,7 +472,7 @@ live discovery 影响的是 **MCP 工具目录**（`/interop/mcp/tools`、平台
 | `INTEROP_A2A_AGENT_DESCRIPTION` | agent-card `description` | 见默认 |
 | `INTEROP_A2A_BASE_URL` | agent-card `url` 前缀（对外可达的 A2A 端点基址） | `http://localhost:8080` |
 | `INTEROP_A2A_VERSION` | agent-card `version` | `0.1.0` |
-| `INTEROP_DISCOVERY_ENABLED` | live capability discovery（从 agent-service 动态拉能力） | `false` |
+| `INTEROP_DISCOVERY_ENABLED` | live capability discovery（从 agent-service 动态拉能力） | `true` |
 | `AGENT_BASE_URL` | interop→agent 内网地址 | `http://localhost:8085` |
 
 鉴权：`/.well-known/agent-card.json` **免鉴权对外**（A2A 发现惯例，已在 edge-gateway 白名单）；`/interop/a2a` JSON-RPC 端点**需 `X-Api-Key`**（agent-card 的 `securitySchemes.apiKey` 已声明）。对外发布时，为外部调用方分配专用 api-key→租户 映射即可按租户隔离。

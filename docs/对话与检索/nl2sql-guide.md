@@ -2,7 +2,7 @@
 
 本指南面向要把「自然语言问数据」接进平台的开发者。对应服务是 **`analytics-service`**（`:8083`），
 端点 `POST /chat/sql`（别名 `POST /analytics/sql`），经边缘网关 `http://localhost:8080` 暴露。
-**整套能力默认关闭**（`NL2SQL_ENABLED=false`）——关时 `analytics-service` 照常启动，只是不注册
+**整套能力默认开启**（`NL2SQL_ENABLED=true`）——置 `NL2SQL_ENABLED=false` 关闭时 `analytics-service` 照常启动，只是不注册
 NL2SQL 相关 bean 与端点（访问 `/chat/sql` 返回 404）。
 
 把「自然语言 → SQL → 执行 → 自然语言解读」做成一条**受控**链路，是平台两条主线的直接延展：
@@ -360,7 +360,7 @@ demo 种子只为本地跑通；接真实库时：
 
 | 环境变量 | 默认 | 说明 |
 | --- | --- | --- |
-| `NL2SQL_ENABLED` | `false`（compose 里设 `true`） | NL2SQL 总开关；关时端点/bean 不注册 |
+| `NL2SQL_ENABLED` | `true` | NL2SQL 总开关；关时端点/bean 不注册 |
 | `NL2SQL_DB_URL` | `jdbc:mysql://localhost:3306/nl2sql_demo?createDatabaseIfNotExist=true&...` | admin 数据源（建库/种子/内省 schema） |
 | `NL2SQL_DB_READONLY_URL` | 同库但不带 `createDatabaseIfNotExist` | 只读执行数据源；留空则与 admin 共用 |
 | `NL2SQL_DB_ADMIN_USER` / `NL2SQL_DB_ADMIN_PASSWORD` | `root` / `root` | admin 账号 |

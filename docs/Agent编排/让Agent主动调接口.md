@@ -70,7 +70,7 @@ public interface OrderClient {
 }
 ```
 
-HTTP 实现（`HttpOrderClient.java`），经**带租户/trace 透传的 RestTemplate** 调下游；**默认关**（`app.agent.order.enabled`），关时由 `NoopOrderClient` 兜底：
+HTTP 实现（`HttpOrderClient.java`），经**带租户/trace 透传的 RestTemplate** 调下游；由 `app.agent.order.enabled` 门控（**本仓库默认开**；置 `false` 则由 `NoopOrderClient` 兜底）：
 
 ```java
 @Component
@@ -179,7 +179,7 @@ RestTemplate orderRestTemplate(RestTemplateBuilder builder,
 app:
   agent:
     order:
-      enabled: ${AGENT_ORDER_ENABLED:false}     # 默认关：不开则走 NoopOrderClient
+      enabled: ${AGENT_ORDER_ENABLED:true}      # 默认开；置 false 则走 NoopOrderClient
       base-url: ${ORDER_BASE_URL:http://localhost:8093}
 ```
 
@@ -204,7 +204,7 @@ app:
 
 1. **`description()` 决定成败**——它是模型唯一能看到的「工具说明书」。写清楚三件事：**干什么**、**`actionInput` 填什么格式**、**什么时候别用它**（引导模型在多个工具间正确分流，如「统计类用 analytics_sql」）。这比调 prompt 更有效。
 
-2. **按风险选门控**。只读、无副作用的查询（如 `order_query`）：动作用 `matchIfMissing = true` 默认挂载，用一个 feature flag（`app.agent.order.enabled`，默认关）+ Http/Noop 互补控制「真调还是降级」，避免去调可能不存在的下游。**有副作用的**（发起退款）：学 `RefundStartAction` 用双门控 `@ConditionalOnProperty(name = {"app.agent.enabled", "app.agent.workflow.enabled"}, havingValue = "true")` 默认关，防误触发。**不可逆高风险操作（审批、支付、删除）根本不给动作**——`workflow` 就故意不提供 `workflow_complete` 审批动作，留给人在流程外做。
+2. **按风险选门控**。只读、无副作用的查询（如 `order_query`）：动作用 `matchIfMissing = true` 默认挂载，用一个 feature flag（`app.agent.order.enabled`，本仓库默认开、可置 `false` 降级）+ Http/Noop 互补控制「真调还是降级」，避免去调可能不存在的下游。**有副作用的**（发起退款）：学 `RefundStartAction` 用双门控 `@ConditionalOnProperty(name = {"app.agent.enabled", "app.agent.workflow.enabled"}, havingValue = "true")`（本仓库亦默认开、生产可关），防误触发。**不可逆高风险操作（审批、支付、删除）根本不给动作**——`workflow` 就故意不提供 `workflow_complete` 审批动作，留给人在流程外做。
 
 3. **租户隔离自动带,别手写**。agent-service 的 RestTemplate 都挂了 `OutboundTenantForwarder` + `OutboundTraceForwarder`（`AgentConfig.serviceRestTemplate()`）：当前线程 `TenantContext` 里的租户身份会被铸成内部 JWT 自动透传到 order-service，traceId 也一路带下去。你的 client 直接用这个 RestTemplate 即可,**不用碰鉴权头**。下游 order-service 只要依赖 `platform-security` 就自动还原租户。
 

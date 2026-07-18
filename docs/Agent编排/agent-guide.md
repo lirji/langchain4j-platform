@@ -5,7 +5,7 @@
 > 阅读约定：
 > - **经网关**：`http://localhost:8080` + `X-Api-Key`（网关校验 key → 签发内部 JWT → 路由到下游）。`/agent`、`/agent/**` 路由到 agent-service；`/chat`、`/chat/**` 路由到 conversation-service。调用 Agent 需 api-key 绑定 `agent` scope（cascade 走 `/chat` 需 `chat` scope）。
 > - **直连**：`http://localhost:8085`（agent）、`http://localhost:8081`（conversation），仅本地调试/服务间调用。
-> - **默认开关**：大多数能力默认关闭或需先配置。下文每项标注默认状态与开启用的环境变量。核心编排（ReAct / DAG / reflexion / voting / chaining）在 `AGENT_ENABLED=true`（默认 true）时端点即挂载。
+> - **默认开关**：编排端点与多数增强/动作能力默认已开，仅高风险动作（`code_exec` / `mcp_call` / `browser_*`）与需外部配置的能力默认关闭。下文每项标注默认状态与开启用的环境变量。核心编排（ReAct / DAG / reflexion / voting / chaining）在 `AGENT_ENABLED=true`（默认 true）时端点即挂载。
 
 ---
 
@@ -14,16 +14,16 @@
 | 模式 / 能力 | 端点 | 载体服务 | 默认状态 |
 |---|---|---|---|
 | 深度 Agent（ReAct） | `POST /agent/run`、`/agent/run/async` + `/agent/tasks/**` | agent :8085 | 常开（`AGENT_ENABLED=true`） |
-| DAG 多 Agent | `POST /agent/dag/run`、`/agent/dag/plan-run`（各带 `/async`） | agent :8085 | 常开；replan 默认关 |
+| DAG 多 Agent | `POST /agent/dag/run`、`/agent/dag/plan-run`（各带 `/async`） | agent :8085 | 常开；replan 默认开 |
 | 数据分析智能体（DAG 特化） | `POST /agent/analyst/run`（+`/async`） | agent :8085 | 常开；需 analytics `NL2SQL_ENABLED=true` 才能真取数 |
-| 业务流程智能体（DAG 特化，人在环） | `POST /agent/process/run`（+`/async`） | agent :8085 | **默认关**（`AGENT_WORKFLOW_ENABLED=true`），需 workflow `WORKFLOW_ENABLED=true` |
+| 业务流程智能体（DAG 特化，人在环） | `POST /agent/process/run`（+`/async`） | agent :8085 | **默认开**（`AGENT_WORKFLOW_ENABLED=true`），需 workflow `WORKFLOW_ENABLED=true`（亦默认开） |
 | Reflexion 自省 | `POST /agent/reflexive`、`/agent/reflexive/stream` | agent :8085 | 常开 |
 | Voting 投票共识 | `POST /agent/vote` | agent :8085 | 常开（n=3，majority） |
 | Prompt Chaining | `POST /agent/chain` | agent :8085 | 端点常开，但 `steps` 默认空需先配置 |
-| Model Cascade | `POST /chat/cascade` | conversation :8081 | 默认关（`CHAT_CASCADE_ENABLED=false`） |
+| Model Cascade | `POST /chat/cascade` | conversation :8081 | 默认开（`CHAT_CASCADE_ENABLED=true`） |
 | 异步任务 + SSE | `/agent/run/async`、`/agent/dag/**/async`、`/agent/tasks/{id}/stream` | agent :8085 | 常开 |
 | 动作 rag_search / analytics_sql / schema_explore / current_time | ReAct 内部工具 | agent :8085 | 常开 |
-| 动作 refund_start / workflow_status / workflow_tasks | ReAct 内部工具 | agent :8085 | 默认关（`AGENT_WORKFLOW_ENABLED=false`） |
+| 动作 refund_start / workflow_status / workflow_tasks | ReAct 内部工具 | agent :8085 | 默认开（`AGENT_WORKFLOW_ENABLED=true`，有副作用，双门控） |
 | 动作 code_exec | ReAct 内部工具 | agent :8085 | 默认关（`AGENT_CODE_EXEC_ENABLED=false`） |
 | 动作 mcp_call | ReAct 内部工具 | agent :8085 | 默认关（`AGENT_MCP_ENABLED=false`） |
 | 动作 browser_open/click/click_xy/type/screenshot | ReAct 内部工具 | agent :8085 | 默认关（`AGENT_BROWSER_ENABLED=false`） |
@@ -62,8 +62,8 @@
 - `rag_search`：调 knowledge-service 检索知识库，返回带 `[doc=ID]` 的片段（常开）。
 - `analytics_sql`：调 analytics-service 做 NL2SQL 只读查询，返回 SQL + 行数 + 数据 + 解读（常开）。
 - `current_time`：查当前时间，`actionInput` 填 IANA 时区（常开）。
-- `order_query`：按订单号查订单（状态/金额/客户/日期），调独立 order-service（默认关，见 [§7.10](#710-order_query--按订单号查订单默认关)）。
-- `code_exec` / `mcp_call` / `browser_*` / `browser_see`：见 [§7 动作与开关](#7-动作与开关default-多为关)。
+- `order_query`：按订单号查订单（状态/金额/客户/日期），调独立 order-service（默认开，见 [§7.10](#710-order_query--按订单号查订单默认开)）。
+- `code_exec` / `mcp_call` / `browser_*` / `browser_see`：见 [§7 动作与开关](#7-动作与开关高风险动作默认关)。
 - `delegate`：把独立子目标派给子 Agent（受 `allow-delegation` + `max-depth` 约束）。
 
 ### 关键调优开关（`app.agent.*`，均可用环境变量覆盖）
@@ -120,14 +120,14 @@ curl -N 'http://localhost:8080/agent/tasks/{taskId}/stream' -H 'X-Api-Key: dev-k
 
 响应 `AgentDagRunReply`：`goal` / `levels[][]`（拓扑分层的任务 id）/ `taskResults[]` / `tenantId` / `attempts[]`（每轮执行 + `critique` + 聚合分）/ `acceptedByThreshold`。
 
-### Critic / Replan 质量闭环（默认关）
+### Critic / Replan 质量闭环（默认开）
 
-开启后每轮 synthesis 由 `AgentDagCritic` 评分（correctness / completeness / clarity 三维加权聚合），低于阈值则 `AgentDagReplanner` 修订 DAG 再跑一轮，直到过阈值或达重规划上限。`acceptedByThreshold=false` 表示用尽重规划仍未过阈值。
+每轮 synthesis 由 `AgentDagCritic` 评分（correctness / completeness / clarity 三维加权聚合），低于阈值则 `AgentDagReplanner` 修订 DAG 再跑一轮，直到过阈值或达重规划上限。`acceptedByThreshold=false` 表示用尽重规划仍未过阈值。
 
 | 属性（`app.agent.dag.*`） | 环境变量 | 默认 |
 |---|---|---|
 | `max-tasks` | `AGENT_DAG_MAX_TASKS` | `6` |
-| `replan.enabled` | `AGENT_DAG_REPLAN_ENABLED` | `false` |
+| `replan.enabled` | `AGENT_DAG_REPLAN_ENABLED` | `true` |
 | `replan.threshold` | `AGENT_DAG_REPLAN_THRESHOLD` | `0.75` |
 | `replan.max-replans` | `AGENT_DAG_REPLAN_MAX_REPLANS` | `1` |
 | `replan.weights.correctness` | `AGENT_DAG_REPLAN_WEIGHT_CORRECTNESS` | `0.5` |
@@ -272,7 +272,7 @@ curl -s 'http://localhost:8080/analytics/schema/tables' -H 'X-Api-Key: dev-key-a
 curl -s 'http://localhost:8080/analytics/schema/tables/orders' -H 'X-Api-Key: dev-key-acme'
 ```
 
-### 业务流程智能体（process）—— `/agent/process/run`（默认关）
+### 业务流程智能体（process）—— `/agent/process/run`（默认开，有副作用）
 
 业务流程智能体也是 DAG 特化：专用 `ProcessPlanner` 把「帮我发起退款并跟进」这类诉求拆成「发起 → 查状态 → 如实汇报」子任务，worker 用 `refund_start` / `workflow_status` / `workflow_tasks` 动作驱动 workflow-service（`:8082`）。
 
@@ -282,7 +282,7 @@ curl -s 'http://localhost:8080/analytics/schema/tables/orders' -H 'X-Api-Key: de
 - `refund_start` 经内部 JWT 透传调用方的租户与 `scope`，`workflow_tasks` 等审批相关调用天然受 `approve` 约束（无权限 → workflow-service 403 → 动作翻译成中文提示），智能体不越权。
 - 智能体只在**流程外**编排（发起/查询/汇报），不把推理塞进 Flowable 同步 ServiceTask（那会阻塞事务）；流程内的 assess/resolve LLM 决策由 workflow-service 自己承担。
 
-默认关（有副作用）：需 `AGENT_WORKFLOW_ENABLED=true`（agent 侧）+ `WORKFLOW_ENABLED=true`（workflow 侧，其 assess/resolve 还会调 conversation-service）。workflow 客户端读超时默认放宽到 60s（`refund/start` 同步跑两次 LLM ServiceTask）。
+默认开（有副作用）：需 `AGENT_WORKFLOW_ENABLED=true`（agent 侧，默认开）+ `WORKFLOW_ENABLED=true`（workflow 侧默认开，其 assess/resolve 还会调 conversation-service）。workflow 客户端读超时默认放宽到 60s（`refund/start` 同步跑两次 LLM ServiceTask）。
 
 ```bash
 curl -s -X POST 'http://localhost:8080/agent/process/run' \
@@ -418,11 +418,11 @@ curl -s -X POST 'http://localhost:8080/agent/chain' \
 2. 命中不确定/拒答标记（`uncertainty-markers`，中英混排）→ 低置信 → 升级；
 3. 可选自评（`self-rating=true`）：启发式通过后再让便宜模型对自己答案 temp=0 打 0–1 分，低于 `confidence-threshold` 也升级。
 
-### 开关（`app.chat.cascade.*`，默认整块关闭）
+### 开关（`app.chat.cascade.*`，默认开）
 
 | 属性 | 环境变量 | 默认 |
 |---|---|---|
-| `enabled`（关闭时端点/模型全不装配，对 `/chat` 零影响） | `CHAT_CASCADE_ENABLED` | `false` |
+| `enabled`（置 `false` 时端点/模型全不装配，对 `/chat` 零影响） | `CHAT_CASCADE_ENABLED` | `true` |
 | `cheap-model`（留空退化为网关默认模型） | `CHAT_CASCADE_CHEAP_MODEL` | 空 |
 | `strong-model`（留空退化为网关默认模型） | `CHAT_CASCADE_STRONG_MODEL` | 空 |
 | `confidence-threshold`（仅 `self-rating` 生效） | `CHAT_CASCADE_CONFIDENCE_THRESHOLD` | `0.6` |
@@ -440,9 +440,9 @@ curl -s -X POST 'http://localhost:8080/chat/cascade' \
 
 ---
 
-## 7. 动作与开关（default 多为关）
+## 7. 动作与开关（高风险动作默认关）
 
-ReAct 动作是「一个接口 `AgentAction` + `@ConditionalOnProperty` 可插拔实现」的注册表。默认装配的 `rag_search` / `analytics_sql` / `current_time` 在 `AGENT_ENABLED=true` 时即挂载；其余动作默认关闭，避免未配置依赖时影响 agent-service 启动。
+ReAct 动作是「一个接口 `AgentAction` + `@ConditionalOnProperty` 可插拔实现」的注册表。`rag_search` / `analytics_sql` / `schema_explore` / `current_time` 在 `AGENT_ENABLED=true` 时即挂载；`order_query` 与业务流程动作（`refund_start` / `workflow_status` / `workflow_tasks`）现亦默认开；`code_exec` / `mcp_call` / `browser_*` 等高风险动作仍默认关闭，避免未配置依赖时影响 agent-service 启动。
 
 > **想让 Agent 主动调你自己的接口（如查订单）？** 写一个 `AgentAction` 注册进去即可，不改循环一行代码——手把手示例、`description()` 即工具说明书、副作用双门控、租户/trace 自动透传、以及 langchain4j 原生 `@Tool` 的对比，见 [让 Agent 主动调接口（工具调用 / 自定义动作接入）](让Agent主动调接口.md)。
 
@@ -506,7 +506,7 @@ mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install
 
 | 属性（`app.agent.vision.*`） | 环境变量 | 默认 |
 |---|---|---|
-| `enabled` | `AGENT_VISION_ENABLED` | `false` |
+| `enabled` | `AGENT_VISION_ENABLED` | `true`（`browser_see` 还需 browser 同开） |
 | `base-url` | `VISION_BASE_URL` | `http://localhost:8090` |
 | `read-timeout`（视觉调用较慢，放宽） | `AGENT_VISION_READ_TIMEOUT` | `60s` |
 
@@ -521,9 +521,9 @@ mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install
 
 ---
 
-### 7.9 refund_start / workflow_status / workflow_tasks —— 业务流程（默认关）
+### 7.9 refund_start / workflow_status / workflow_tasks —— 业务流程（默认开，有副作用）
 
-业务流程智能体的三个动作，双门控 `{app.agent.enabled, app.agent.workflow.enabled}` 默认关（有副作用，不进通用工具集，防误发起退款）。经带租户/trace 透传的 `workflowRestTemplate` 调 workflow-service（`:8082`）。
+业务流程智能体的三个动作，双门控 `{app.agent.enabled, app.agent.workflow.enabled}`（两者现均默认开 → 动作默认挂载；仍以双门控 + 副作用隔离防误发起退款，生产不放心可置 `AGENT_WORKFLOW_ENABLED=false`）。经带租户/trace 透传的 `workflowRestTemplate` 调 workflow-service（`:8082`）。
 
 | 动作 | 说明 | 权限 |
 |---|---|---|
@@ -535,13 +535,13 @@ mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install
 
 | 属性（`app.agent.workflow.*`） | 环境变量 | 默认 |
 |---|---|---|
-| `enabled` | `AGENT_WORKFLOW_ENABLED` | `false` |
+| `enabled` | `AGENT_WORKFLOW_ENABLED` | `true` |
 | `base-url` | `WORKFLOW_BASE_URL` | `http://localhost:8082` |
 | `read-timeout`（refund/start 同步跑两次 LLM，放宽） | `AGENT_WORKFLOW_READ_TIMEOUT` | `60s` |
 
 ---
 
-### 7.10 order_query —— 按订单号查订单（默认关）
+### 7.10 order_query —— 按订单号查订单（默认开）
 
 按订单号做**确定性、参数化、只读**的单条订单查询：`actionInput`=订单号（如 `101`），经带租户/trace 透传的 `orderRestTemplate` 调独立 **order-service（`:8093`）** 的 `GET /orders/{orderNo}`，返回状态/金额/客户/下单日期。与 `analytics_sql` 的分工：本动作是精确单查（快、天然防注入），统计/聚合（总额/趋势/top-N）走 `analytics_sql`。
 
@@ -550,7 +550,7 @@ mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install
 
 | 属性（`app.agent.order.*`） | 环境变量 | 默认 |
 |---|---|---|
-| `enabled` | `AGENT_ORDER_ENABLED` | `false` |
+| `enabled` | `AGENT_ORDER_ENABLED` | `true` |
 | `base-url` | `ORDER_BASE_URL` | `http://localhost:8093` |
 
 order-service 侧开关：`ORDER_DB_URL`/`ORDER_DB_USER`/`ORDER_DB_PASSWORD`（持久化 MySQL）、`ORDER_SEED_DEMO`（默认 `true`，接真库置 `false`）。

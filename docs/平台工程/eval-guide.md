@@ -5,7 +5,7 @@
 1. **检索质量评测**（`/eval/retrieval`）—— 纯 IR 指标 **Recall@k / Precision@k / MRR / Hit@k**，不经 LLM，只量向量检索器把相关文档捞回来了没。
 2. **通用回归 harness**（`/eval/run`、`/eval/suites/{name}/run`、`/eval/dual-run`、`/eval/gate`）—— 一个**外部回归测试客户端**：按 case 发真实 HTTP 请求打平台端点，做 contains / JSON-path / 语义 / oracle / 可选 LLM-Judge 与 embedding 断言，输出 JSON 报告；并支持**对照冻结单体（oracle）的双跑门禁**。
 
-> **这是哪个服务、默认什么状态**：`eval-service`，所有 `/eval/**` 端点**常开**（无需 enable 开关）。可选的 **LLM-Judge 断言**（`EVAL_JUDGE_ENABLED`）与 **embedding 相似度断言**（`EVAL_EMBEDDING_ENABLED`）**默认关**。检索评测与通用 harness 本身开箱可用。
+> **这是哪个服务、默认什么状态**：`eval-service`，所有 `/eval/**` 端点**常开**（无需 enable 开关）。可选的 **LLM-Judge 断言**（`EVAL_JUDGE_ENABLED`）与 **embedding 相似度断言**（`EVAL_EMBEDDING_ENABLED`）**默认开**（仅在 case 显式带 `judgeExpected` / `embeddingExpected` 时才真正触发）。检索评测与通用 harness 本身开箱可用。
 
 > **端点约定**：所有 curl 走 `edge-gateway`（`http://localhost:8080`，带 `X-Api-Key`）。网关校验 api-key → 签发短时内部 JWT → 路由到 `eval-service`。示例统一用 `dev-key-acme`（其 scope 含 `eval`）。`eval-service` 自身监听 `:8089`，仅供服务间直连 / 本地调试。
 >
@@ -359,9 +359,9 @@ Recall@k = ───────────────────────
 | `EVAL_API_KEY` | （空） | eval-service 回打目标端点（`/rag/query`、case endpoint）携带的 api-key。**必须设为有效网关 key**，否则目标调用 401（检索评测全 0 召回）。其租户决定检索侧租户 |
 | `EVAL_API_KEY_HEADER` | `X-API-Key` | 上面 key 的请求头名（大小写不敏感，等价 `X-Api-Key`）|
 | `EVAL_RESPONSE_SNIPPET_LIMIT` | `512` | 报告里响应片段截断长度（下限 32）|
-| `EVAL_JUDGE_ENABLED` | `false` | 开启 LLM-Judge 断言（`judgeExpected`），走网关确定性 ChatModel |
+| `EVAL_JUDGE_ENABLED` | `true` | 开启 LLM-Judge 断言（`judgeExpected`），走网关确定性 ChatModel |
 | `EVAL_JUDGE_MIN_SCORE` | `0.7` | Judge 通过阈值（case 未带 `judgeMinScore` 时的默认）|
-| `EVAL_EMBEDDING_ENABLED` | `false` | 开启 embedding 相似度断言（`embeddingExpected`）|
+| `EVAL_EMBEDDING_ENABLED` | `true` | 开启 embedding 相似度断言（`embeddingExpected`）|
 | `EVAL_EMBEDDING_MIN_SCORE` | `0.75` | embedding 断言通过阈值 |
 | `EVAL_EMBEDDING_MODEL` | `embedding-default` | 开启 embedding 断言时用的模型名（LiteLLM 逻辑名）|
 | `EVAL_GATE_PASS_RATE_TOLERANCE` | `0.05` | 双跑门禁：candidate 相对 oracle 允许的 passRate 下滑 |

@@ -2,7 +2,7 @@
 
 平台有两种部署形态：**本地 docker-compose 一体化栈**（开发/演示）和 **k8s / Helm 伞状 chart**（生产）。二者共享同一套服务命名与跨服务 base-url——k8s Service 名 == compose 服务名 == 各服务 env 里硬编码的主机名，因此从 compose 迁到 k8s 近零改动。
 
-前置：JDK 21、Maven、Docker/Docker Compose、可用的 LiteLLM（可再接 Ollama/OpenAI/Anthropic）。默认所有增强能力（Kafka 事件总线、RS256、GraphRAG、语义缓存、agent 高级动作、Casdoor SSO `edge.casdoor.enabled=false`、RAG 文档级授权 `app.rag.authz.mode=disabled` 等）**关闭**、走内存/确定性实现，零外部依赖——`app.rag.authz.mode=enforce` 时才需外部 `auth-platform-server`(:8200) 可达。
+前置：JDK 21、Maven、Docker/Docker Compose、可用的 LiteLLM（可再接 Ollama/OpenAI/Anthropic）。**多数行为增强开关现默认开**（RAG 混排/ES/rerank/query-expansion/contextual/GraphRAG/multimodal、对话 rag/router/vision/护栏/级联/记忆画像、agent vision/analytics/workflow/order/dag-replan、nl2sql、interop discovery、eval、vision）——不依赖外部资源者走栈内基础设施或内存/确定性实现即可跑通。**仍默认关**的是 `conversation.mcp`、`agent.code-exec/mcp/browser`、`voice`、`channel.feishu/dingtalk/events`、RAG 文档级授权 `app.rag.authz.mode=enforce`、自助注册、成本（cost），开启前须自备对应外部资源。身份侧 **Casdoor SSO 现为整栈默认**：edge `EDGE_CASDOOR_ENABLED=true` + `EDGE_CASDOOR_MODE=only`（严格 Casdoor-only，非 open-path 无有效 token → 401，需先起外部 auth 栈；`dual` 为灰度回滚窗口，验不过透传 legacy）；`app.rag.authz.mode=enforce` 时才需外部 `auth-platform-server`(:8200) 可达。全部开关明细见 [operations.md](../参考/operations.md)。
 
 ---
 
@@ -40,7 +40,11 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 | `deploy/smoke-a2a.sh` | A2A 对外互操作冒烟（agent-card 发现 + `message/send`） |
 | `deploy/smoke-failover.sh` | 干掉一个 LiteLLM 上游、验证 fallback |
 
-compose 编排的各服务端口：edge-gateway `8080`、config-server `8888`、conversation `8081`、workflow `8082`、analytics `8083`、knowledge `8084`、agent `8085`、async-task `8086`、channel `8087`、interop `8088`、eval `8089`、vision `8090`、voice `8091`。
+compose 编排的各服务端口（容器内部）：edge-gateway `8080`、config-server `8888`、conversation `8081`、workflow `8082`、analytics `8083`、knowledge `8084`、agent `8085`、async-task `8086`、channel `8087`、interop `8088`、eval `8089`、vision `8090`、voice `8091`、auth `8092`、order `8093`；前端 `capability-showcase-frontend` 容器 80。服务间调用/内部路由一律用容器端口。
+
+> **宿主端口重映射**：推荐用 `bash deploy/start-all.sh` 起整栈（配已提交的 `deploy/.env`），它把宿主端口挪开以避开本机 Apollo——网关 `EDGE_HOST_PORT=18080`、vision `VISION_HOST_PORT=18090`、MySQL `MYSQL_HOST_PORT=13307`；前端固定宿主 `8093`，order-service 宿主 `8094`（宿主 8093 已被前端占用）。裸 `docker compose up` 时网关宿主为 `8080`（会与 Apollo 冲突，故上文 curl 用 `:8080` 仅适用裸起）。
+
+> **身份/RBAC 整栈默认**：compose 默认 `AUTH_STORE=jdbc`、`AUTH_RBAC_ENABLED=true`、`AUTH_RBAC_ADMIN_WRITES_ENABLED=true`、`AUTH_RBAC_INHERITANCE_ENABLED=true`、bootstrap admin=`alice`（各服务 yml 兜底默认则全关、`AUTH_STORE=in-memory`）；edge `EDGE_CASDOOR_ENABLED=true` + `EDGE_CASDOOR_MODE=only`、前端 `SHOWCASE_AUTH_MODE=oidc`——故裸起整栈需先起外部 Casdoor/auth 栈，否则登录/业务全 401（应急可临时 `EDGE_CASDOOR_MODE=dual`）。
 
 > **voice-service（:8091）** 已纳入 `docker-compose.yml`（`build` 上下文 `../voice-service`，其 Dockerfile 已随模块提供）与 Helm 伞状 chart。默认关闭（`VOICE_ENABLED=false` → voice 相关 Bean 全不装配、零依赖零网络），此时容器空跑仅占端口。启用时按 OpenAI 兼容 ASR/TTS 协议配置：`VOICE_ENABLED=true`、`VOICE_PROVIDER=openai`、`VOICE_BASE_URL=https://api.openai.com/v1`（可指云 OpenAI / Azure / 本地 whisper+tts 网关）、`VOICE_API_KEY=<key>`（生产走 Secret/ESO，不入 ConfigMap）。它的「大脑」是 conversation-service，容器/集群内已默认注入 `VOICE_CONVERSATION_BASE_URL=http://conversation-service:8081`。完整语音开关（`VOICE_ASR_MODEL`/`VOICE_TTS_MODEL`/`VOICE_TTS_VOICE` 等）见 [operations.md](../参考/operations.md)。
 

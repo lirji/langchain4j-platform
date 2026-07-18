@@ -78,7 +78,7 @@ curl -s -X POST "$BASE_URL/rag/documents" \
 }
 ```
 > 记下 `docId`,后面查单个/删除要用。`docId` 由标题决定,重复上传同名文档会覆盖并让 `version` 递增。
-> Body 里还支持 `imageBase64`+`contentType` 传图:走原生 CLIP 多模态 embedding,向量入独立的 `knowledge_images_<tenant>` collection,需 `RAG_MULTIMODAL_ENABLED=true`(默认关,关闭时上传图片返回 400)。⚠️ 旧的 `caption`/`ocrText` 图→文字字段已移除。
+> Body 里还支持 `imageBase64`+`contentType` 传图:走原生 CLIP 多模态 embedding,向量入独立的 `knowledge_images_<tenant>` collection,由 `RAG_MULTIMODAL_ENABLED` 控制(默认开,置 `false` 关闭时上传图片返回 400)。⚠️ 旧的 `caption`/`ocrText` 图→文字字段已移除。
 
 ### 2. 上传文件(multipart)
 ```bash
@@ -212,7 +212,7 @@ curl -s -X POST "$BASE_URL/chat?chatId=demo" \
 ```
 > - `chatId`(query,默认 `default`):多轮会话隔离键;`message`(body)是用户输入。
 > - 响应回显 `tenantId` / `userId` —— 直观验证「租户身份从网关的内部 JWT 一路透传到下游」。
-> - 服务端可选叠加:**RAG 增强**(`CONVERSATION_RAG_ENABLED=true` 时先检索知识库再作答)+ **L1 语义缓存**(命中直接返回)。默认关闭即纯直连 LLM。
+> - 服务端叠加:**RAG 增强**(`CONVERSATION_RAG_ENABLED=true` 时先检索知识库再作答)+ **L1 语义缓存**(命中直接返回),二者均默认开启;把这两个开关置 `false` 即回到纯直连 LLM。
 > - 需要 `chat` scope(`dev-key-acme-ingest` 有)。
 
 ### 8. ReAct 智能体 `/agent/run`

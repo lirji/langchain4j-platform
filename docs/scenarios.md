@@ -18,7 +18,7 @@
 下游服务只信任内部 JWT，对「会话 vs api-key」无感知，租户身份随之跨每一跳传播并还原进 `TenantContext`（多租户硬隔离）。
 服务直连端口（conversation:8081 … voice:8091、auth:8092）仅供本地调试，不建议对外。另有能力展示前端 `capability-showcase-frontend`（:8093）浏览器跨域直调网关。
 
-**默认开关基线**：两套「默认」——application.yml 裸跑多为内存/关闭（单测零外部依赖）；docker-compose demo 为一键体验把 RAG 持久化 + ES 全文混排 + 登录 RBAC 等打开并自带基础设施。下表「默认」以 application.yml 为准。
+**默认开关基线**：单测是纯 POJO、不启动 Spring，**零外部依赖恒成立**。application.yml 层面 **2026-07 起多数行为增强开关默认已开**（与 compose demo 对齐）——RAG 向量库(qdrant)/ES 全文混排/rerank/查询扩展/上下文/GraphRAG/多模态、对话 RAG/路由/视觉/护栏/级联/记忆画像、NL2SQL、agent 内建动作与 DAG replan、interop discovery、eval、vision、Casdoor SSO(`only`) 均默认开，故**完整启动已需相应基础设施**（真正零依赖单跑需显式退回 `in-memory` + 关 ES/Casdoor 等）。仍**默认关**：`conversation.mcp`、agent `code_exec`/`mcp`/`browser`、`voice`、飞书/钉钉、channel-events、文档级 ReBAC(`RAG_AUTHZ_MODE=disabled`)、自助注册、`cost`，以及 yml 层的 RBAC 落库（compose demo 会自带基础设施并开 RBAC 落库）。下表「默认」以 application.yml 为准。
 下表「状态」列如实标注每个场景当前跑到哪一步——「核心可跑」= 端点就位、内存/确定性实现可直接验；
 「代码就位・默认关」= 逻辑与单测就位，但需显式开开关 + 配真实 provider / 外部应用才能端到端。
 
@@ -28,17 +28,17 @@
 
 | 场景 | 子能力 | 入口端点（经 :8080） | 状态 | 详细文档 |
 | --- | --- | --- | --- | --- |
-| **① 企业知识库问答（RAG）** | 文档入库 + 四路混排（向量/关键词/ES BM25/图谱）+ 带引用多轮问答 + 多租户隔离 + 公共共享库 + 可选文档/部门级授权(ReBAC) | `POST /rag/documents`、`POST /rag/query`、`POST /chat` | 核心可跑；compose demo 默认 qdrant + ES 全文混排 + RRF；RAG 增强/公共库/文档级授权默认关 | `rag-guide.md`、`es-hybrid-rerank.md`、`rbac-and-public-kb.md`、`memory-guide.md` |
-| **② 智能客服** · NL2SQL/ChatBI | 自然语言查业务库（6 层 SQL 护栏） | `POST /chat/sql`（别名 `/analytics/sql`） | 代码就位・默认关（需只读 DB + tool-calling 模型） | `nl2sql-guide.md` |
+| **① 企业知识库问答（RAG）** | 文档入库 + 四路混排（向量/关键词/ES BM25/图谱）+ 带引用多轮问答 + 多租户隔离 + 公共共享库 + 可选文档/部门级授权(ReBAC) | `POST /rag/documents`、`POST /rag/query`、`POST /chat` | 核心可跑；默认 qdrant + ES 全文混排 + RRF；RAG 增强/公共库**默认开**、文档/部门级授权(ReBAC)默认关 | `rag-guide.md`、`es-hybrid-rerank.md`、`rbac-and-public-kb.md`、`memory-guide.md` |
+| **② 智能客服** · NL2SQL/ChatBI | 自然语言查业务库（6 层 SQL 护栏） | `POST /chat/sql`（别名 `/analytics/sql`） | 默认开（`NL2SQL_ENABLED=true`）；端到端需只读 DB + tool-calling 模型 | `nl2sql-guide.md` |
 | **② 智能客服** · 工作流审批 | 退款等挂人工审批的长流程（Flowable） | `POST /workflow/refund/start` | 核心可跑（需 MySQL）；终态通知可切事件总线 | `workflow-guide.md` |
 | **② 智能客服** · 渠道接入 | 飞书 / 钉钉群内 @机器人 入站事件桥 | `POST /channel/feishu/events`、`POST /channel/dingtalk/events` | 代码就位・默认关（需真应用 + 公网回调联调） | `dingtalk-guide.md` |
 | **② 智能客服** · 语音渠道 | 音频 → ASR → 对话 → TTS 语音闭环 | `POST /voice/chat`、`/voice/chat/stream` | 代码就位・默认关（需配 ASR/TTS provider） | `voice-guide.md` |
 | **③ 深度 Agent / 多 Agent 编排** · 通用编排 | ReAct 单 Agent + DAG 多 Agent + chain/vote/reflexion | `POST /agent/run`、`/agent/dag/run`、`/agent/dag/plan-run` | 核心可跑（`AGENT_ENABLED=true` 默认开）；受限动作默认关 | `agent-guide.md`、`workflow-guide.md`、`code-exec.md` |
 | **③ 深度 Agent** · 数据分析智能体 | 自然语言问数 → DAG 拆「探表→取数→算→解读」+ 按需探表 | `POST /agent/analyst/run`、`GET /analytics/schema/tables` | 核心可跑；真正取数/探表需 analytics 侧 `NL2SQL_ENABLED` | `agent-guide.md`、`nl2sql-guide.md` |
-| **③ 深度 Agent** · 业务流程智能体（人在环） | NL 发起/跟进退款审批，审批仍由人在流程外完成 | `POST /agent/process/run` | 代码就位・默认关（`AGENT_WORKFLOW_ENABLED` + `WORKFLOW_ENABLED`） | `agent-guide.md`、`workflow-guide.md` |
-| **④ 多模态视觉** | 看图对话 + 图片 caption/描述 + 图片 RAG | `POST /chat/vision`、`/vision/caption` | 代码就位・默认关（整服务需 `VISION_ENABLED`+模型） | `vision-guide.md` |
+| **③ 深度 Agent** · 业务流程智能体（人在环） | NL 发起/跟进退款审批，审批仍由人在流程外完成 | `POST /agent/process/run` | 默认开（`AGENT_WORKFLOW_ENABLED` + `WORKFLOW_ENABLED` 均默认开、有副作用人在环，需 workflow-service 可达） | `agent-guide.md`、`workflow-guide.md` |
+| **④ 多模态视觉** | 看图对话 + 图片 caption/描述 + 图片 RAG | `POST /chat/vision`、`/vision/caption` | 默认开（`VISION_ENABLED=true`，但须配 `VISION_MODEL`，否则启动 fail-fast） | `vision-guide.md` |
 | **⑤ 互操作（A2A / MCP）** | 对外 Agent 协作面（真 A2A + MCP tool surface） | `POST /interop/a2a`、`GET /.well-known/agent-card.json`、`/interop/mcp/**` | 核心可跑（端点常开）；live discovery 默认关 | `a2a-guide.md`、`mcp-guide.md` |
-| **⑥ 登录与权限（auth / RBAC / SSO）** | 账号登录 → 会话令牌 + 边缘换发内部 JWT；角色/权限管理面 + 公共知识库授权；+ Casdoor OIDC SSO 多租户登录 + SpiceDB 文档级授权（均默认关） | `POST /auth/login`、`GET /auth/me`、`/auth/admin/**` | 核心可跑（compose demo 直开 RBAC + 写）；Casdoor SSO / 文档级授权代码就位・默认关 | `rbac-and-public-kb.md` |
+| **⑥ 登录与权限（auth / RBAC / SSO）** | 账号登录 → 会话令牌 + 边缘换发内部 JWT；角色/权限管理面 + 公共知识库授权；+ Casdoor OIDC SSO 多租户登录（整栈默认开、`only` 严格）+ SpiceDB 文档级授权（默认关） | `POST /auth/login`、`GET /auth/me`、`/auth/admin/**` | 核心可跑（compose demo 直开 RBAC + 写、Casdoor `only`）；文档级授权代码就位・默认关 | `rbac-and-public-kb.md` |
 
 > **说明**：「智能客服」不是单个服务，而是**由 NL2SQL + 工作流审批 + 渠道接入（飞书/钉钉/语音）拼成的闭环**——
 > 用户从任一渠道进来 → 意图分流（退款/投诉走工作流，查数走 NL2SQL，其余走 RAG 对话）→ 长流程挂人工审批 → 终态主动回推。
@@ -61,8 +61,7 @@
 - **前置提速**：可选 L1 语义缓存（问题级、按租户分桶、在 RAG 之前，命中即短路 RAG+LLM）与多轮记忆（会话隔离滑窗）。
 
 **状态**：**核心可跑**——单测零依赖；`docker-compose` demo 开箱即是「qdrant 向量 + nomic 语义 embedding + ES(smartcn) 全文混排 + RRF」的完整 RAG 栈（application.yml 裸跑亦默认 qdrant + ES，仅 embedding 默认 hash；真正零依赖单跑需显式退回 in-memory + `RAG_ES_ENABLED=false`）。
-其余增强**默认关、按需开**：检索重排（`RAG_RERANK_ENABLED`）、查询扩展（`RAG_QUERY_EXPANSION_ENABLED`）、
-上下文增强（`RAG_CONTEXTUAL_ENABLED`）、`/chat` RAG 增强（`CONVERSATION_RAG_ENABLED`）、公共库（`RAG_PUBLIC_ENABLED`）均默认关（GraphRAG `RAG_GRAPH_ENABLED` 现默认开）。
+检索重排（`RAG_RERANK_ENABLED`）、查询扩展（`RAG_QUERY_EXPANSION_ENABLED`）、上下文增强（`RAG_CONTEXTUAL_ENABLED`）、`/chat` RAG 增强（`CONVERSATION_RAG_ENABLED`）、公共库（`RAG_PUBLIC_ENABLED`）、GraphRAG（`RAG_GRAPH_ENABLED`，`store=jdbc`）**现均默认开**；按需关闭置对应开关为 `false`。
 
 **深入看**：接入/向量库选型/GraphRAG/语义缓存联动 → `rag-guide.md`；多轮记忆与长期画像 → `memory-guide.md`；
 L1 语义缓存单篇 → `semantic-cache.md`；检索召回评测（Recall@k / MRR）→ `eval-guide.md`。
@@ -80,8 +79,8 @@ L1 语义缓存单篇 → `semantic-cache.md`；检索召回评测（Recall@k / 
 
 **入口**：`POST /chat/sql`（别名 `/analytics/sql`，analytics :8083），body `{"message":"..."}` → 返回 `{question, sql, rowCount, rows, answer, ...}`。
 
-**状态**：**代码就位・默认关**。整套 NL2SQL 装配是 `@ConditionalOnProperty(app.nl2sql.enabled)`，默认 `NL2SQL_ENABLED=false` —— 关时端点不注册（零开销）。
-开启需：`NL2SQL_ENABLED=true` + 一个可达的只读业务库（`NL2SQL_DB_URL` / `NL2SQL_DB_READONLY_URL` / `NL2SQL_SEED_SCRIPT`）+ 支持 tool-calling 的 chat 模型。
+**状态**：**默认开**。整套 NL2SQL 装配是 `@ConditionalOnProperty(app.nl2sql.enabled)`，默认 `NL2SQL_ENABLED=true`（置 `false` 时端点不注册、零开销）。
+端到端需：一个可达的只读业务库（`NL2SQL_DB_URL` / `NL2SQL_DB_READONLY_URL` / `NL2SQL_SEED_SCRIPT`）+ 支持 tool-calling 的 chat 模型。
 
 **深入看** → `nl2sql-guide.md`（护栏细节、Schema 注入、few-shot、启用 curl）。
 
@@ -145,7 +144,7 @@ SSE 复用 `/agent/tasks/{taskId}/stream`（可见 `dag-planned / dag-worker-* /
 - 另有链式 `POST /agent/chain`（步间确定性 gate）、投票 `POST /agent/vote`（N 次取共识）、反思 `POST /agent/reflexive[/stream]`（answer→critique→improve 自省环）。
 
 **状态**：**核心可跑**——`AGENT_ENABLED=true`（默认开），ReAct / DAG / reflexion / voting 端点即挂载，内存任务态 + SSE 可直接验；
-链式 `steps` 默认空需先配置；DAG replan（`AGENT_DAG_REPLAN_ENABLED`）默认关。
+链式 `steps` 默认空需先配置；DAG replan（`AGENT_DAG_REPLAN_ENABLED`）**现默认开**。
 **受限动作全部默认关**：`code_exec`（同/子 JVM 执行，中等隔离非强沙箱）、`mcp_call`、`browser_*`、`browser_see`（视觉，需 browser + vision 双开）。
 
 **深入看**：五种模式 / 动作 / 任务态 → `agent-guide.md`；受限代码执行的隔离边界与坑 → `code-exec.md`；
@@ -182,7 +181,7 @@ worker 调 `refund_start` / `workflow_status` / `workflow_tasks` 驱动 workflow
 **入口**（agent :8085）：`POST /agent/process/run`，body `{"goal":"..."}` → `AgentDagRunReply`；
 `POST /agent/process/run/async`（可选 `webhookUrl`）→ `202` + `AgentAsyncTask`。
 
-**状态**：**代码就位・默认关**——双门控默认关，需两侧同开：agent 侧 `AGENT_WORKFLOW_ENABLED=true`、
+**状态**：**默认开（有副作用·人在环）**——双门控 `AGENT_WORKFLOW_ENABLED` + `WORKFLOW_ENABLED` 均默认开、需 workflow-service 可达：agent 侧 `AGENT_WORKFLOW_ENABLED=true`、
 workflow 侧 `WORKFLOW_ENABLED=true`（其 assess/resolve 还调 conversation-service）+ 一个可登录 MySQL（Flowable 自管表）。
 
 **深入看** → `agent-guide.md`（业务流程智能体 / `refund_start`·`workflow_status`·`workflow_tasks` 动作）；底层退款审批引擎 → `workflow-guide.md`。
@@ -198,7 +197,7 @@ workflow 侧 `WORKFLOW_ENABLED=true`（其 assess/resolve 还调 conversation-se
 - **图片 RAG（CLIP 多模态 embedding）**：`POST /rag/image` 入库、`POST /rag/image-search` 文本跨模态检索图片（图片向量存独立 collection，与文本隔离）。
 - 还供 agent 的 `browser_see` 动作复用（截图 → 看图）。
 
-**状态**：**代码就位・默认关**。`vision-service` **默认整服务不装配**（`VISION_ENABLED=false`；开启但 `VISION_MODEL` 留空则启动 fail-fast）；
+**状态**：**核心可跑（需配模型）**。`vision-service` `VISION_ENABLED=true` **默认装配**，但 `VISION_MODEL` 留空则启动 fail-fast；
 对话入口另需 `CONVERSATION_VISION_ENABLED=true` + `CONVERSATION_VISION_BASE_URL`（默认 `http://localhost:8090`）；
 图片 RAG 需 `RAG_MULTIMODAL_ENABLED=true` + CLIP/jina-clip embedding；agent 视觉动作需 `AGENT_VISION_ENABLED=true`。开启后需一个多模态模型（如 `gpt-4o-mini` / `qwen2.5-vl`，经 LiteLLM 路由）。
 
@@ -217,7 +216,7 @@ workflow 侧 `WORKFLOW_ENABLED=true`（其 assess/resolve 还调 conversation-se
 
 **状态**：**核心可跑**——端点常开，A2A JSON-RPC + agent-card + MCP surface 可直接验；
 `message/stream` 已是真 SSE、push 通知默认经 agent webhook 触发（零外部依赖，push 配置默认内存存储，多副本需换 Redis/JDBC）；
-live discovery（`INTEROP_DISCOVERY_ENABLED`）默认关，下游不可达时确定性回退静态默认。
+live discovery（`INTEROP_DISCOVERY_ENABLED`）**默认开**，从下游动态发现 skills/tools，下游不可达时确定性回退静态默认。
 
 **深入看**：A2A 协议 / 流式 / push → `a2a-guide.md`；MCP surface 与 client → `mcp-guide.md`。
 
@@ -225,14 +224,14 @@ live discovery（`INTEROP_DISCOVERY_ENABLED`）默认关，下游不可达时确
 
 ## ⑥ 登录与权限（auth / RBAC）
 
-**做什么**：给平台加对外鉴权路径（与 api-key 并存），并提供角色/权限管理面。有两条并存的登录路径：**(a) 自建会话登录**——`auth-service`（`:8092`）「账号密码 → 会话令牌」，`edge-gateway` 的 `SessionBearerAuthFilter` 验签后换发内部 JWT；**(b) Casdoor OIDC SSO（已落地，默认关）**——外部 Casdoor 作 IdP，`edge-gateway` 的 `CasdoorTokenExchangeFilter` 验 Casdoor JWT 后换发内部 JWT。下游服务零改动、对登录方式无感知。
+**做什么**：给平台加对外鉴权路径（与 api-key 并存），并提供角色/权限管理面。有两条并存的登录路径：**(a) 自建会话登录**——`auth-service`（`:8092`）「账号密码 → 会话令牌」，`edge-gateway` 的 `SessionBearerAuthFilter` 验签后换发内部 JWT；**(b) Casdoor OIDC SSO（已落地，整栈默认开、`only` 严格）**——外部 Casdoor 作 IdP，`edge-gateway` 的 `CasdoorTokenExchangeFilter` 验 Casdoor JWT 后换发内部 JWT。下游服务零改动、对登录方式无感知。
 
 - **登录/会话**：`POST /auth/login`（账号密码 → 会话 accessToken 60min + httpOnly 刷新 cookie 7d）、`POST /auth/refresh`（一次性轮转）、`POST /auth/logout`、`GET /auth/me`、`GET /auth/public-config`、`POST /auth/register`（自助注册，默认关）。前 5 个 + register 在边缘免鉴权放行。
 - **RBAC**：种子角色 `viewer/editor/analyst/approver/admin`；有效 scopes = 角色展开 ∪ 直配，签发令牌时展开。新增平台 scope `role-admin`（管理面门禁）、`public-ingest`（写公共库），只经 admin 角色获得、不挂 api-key。
 - **管理面**：`/auth/admin/{users,roles}/**`（`role-admin` scope），写端点受 `admin-writes-enabled`（关→503）+ `If-Match` 乐观锁（428/412）。护栏禁止移除最后一个 role-admin、删被引用角色（409）。
 - **前端**：能力展示前端已移除内置 RBAC 管理控制台（平台管理统一由 Casdoor + auth-platform 承担）；RAG 租户/共享双视图保留（`VITE_SHARED_KB_UI_ENABLED` kill switch）。
-- **（已落地，默认关）Casdoor OIDC SSO**：`edge-gateway` 的 `CasdoorTokenExchangeFilter`（order `-120`，最早）用 Casdoor JWKS 验 `Authorization: Bearer` 后换发内部 JWT。由 `EDGE_CASDOOR_ENABLED=false`（默认）门控；`EDGE_CASDOOR_MODE=dual(默认)/only` 两档——`dual` 灰度期 Casdoor 验过即换发、验不过透传给 legacy(session/api-key) filter，`only` 严格 Casdoor-only（非 open path 无有效 token → 401、不回落，tenant 恒取 owner）。
-- **（已落地，默认关）多租户登录（方案 C：Casdoor Shared Application + 选组织）**：前端 `LoginView` 登录前先选/输租户(=Casdoor org)，`getUserManager(tenant)` 用 shared app 的 `<base>-org-<tenant>` 客户端（base client_id 默认 `ragshared0client00000001`，`VITE_CASDOOR_CLIENT_ID`），每 org token `aud=<base>-org-<org>`、`owner=org`。前端登录模式 `VITE_AUTH_MODE=apikey(默认)/oidc/dual`。
+- **（已落地，整栈默认开）Casdoor OIDC SSO**：`edge-gateway` 的 `CasdoorTokenExchangeFilter`（order `-120`，最早）用 Casdoor JWKS 验 `Authorization: Bearer` 后换发内部 JWT。由 `EDGE_CASDOOR_ENABLED=true`（**默认开**）门控；`EDGE_CASDOOR_MODE=only(默认)/dual` 两档——`dual` 灰度期 Casdoor 验过即换发、验不过透传给 legacy(session/api-key) filter，`only` 严格 Casdoor-only（非 open path 无有效 token → 401、不回落，tenant 恒取 owner）。
+- **（已落地，随 Casdoor 默认开）多租户登录（方案 C：Casdoor Shared Application + 选组织）**：前端 `LoginView` 登录前先选/输租户(=Casdoor org)，`getUserManager(tenant)` 用 shared app 的 `<base>-org-<tenant>` 客户端（base client_id 默认 `ragshared0client00000001`，`VITE_CASDOOR_CLIENT_ID`），每 org token `aud=<base>-org-<org>`、`owner=org`。前端登录模式 `VITE_AUTH_MODE=apikey(源码默认)/oidc(整栈烘焙)/dual`。
 - **（默认关）SpiceDB 文档级授权 + 部门身份链**：`RAG_AUTHZ_MODE=enforce` 时 RAG 检索接 `auth-platform`(SpiceDB ReBAC) 按 `view` 权过滤（见场景 ①）。身份链：Casdoor 嵌套 group → edge 推导部门 → `dept` claim → `TenantContext.department`，供文档按上传人部门（`home_dept`）隔离。
 
 **状态**：**核心可跑**——`docker-compose` demo 默认 `AUTH_STORE=jdbc` + `AUTH_RBAC_ENABLED=true` + 写开放 + 种子账号，登录/管理面开箱即验（`bash deploy/smoke-rbac.sh`）；application.yml 裸跑默认 `in-memory` + RBAC 全关（只用直配 scopes 登录）。自助注册 `AUTH_REGISTRATION_ENABLED` 恒默认关。
@@ -247,13 +246,13 @@ live discovery（`INTEROP_DISCOVERY_ENABLED`）默认关，下游不可达时确
 
 | 场景 / 子能力 | 关键环境变量 | 默认 | 效果 |
 | --- | --- | --- | --- |
-| ① RAG `/chat` 增强 | `CONVERSATION_RAG_ENABLED` | `false` | `/chat` 是否先查 RAG 再作答 |
+| ① RAG `/chat` 增强 | `CONVERSATION_RAG_ENABLED` | `true` | `/chat` 是否先查 RAG 再作答 |
 | ① 持久化向量库 | `RAG_VECTOR_STORE_PROVIDER` | `qdrant` | yml/compose 默认 qdrant；可退 `in-memory`/切 `pgvector`/`milvus`/`chroma`/`doris` |
 | ① 真 embedding | `RAG_EMBEDDING_PROVIDER` | `hash`（compose `ollama`） | `openai`/`ollama` 语义向量（compose 默认 nomic 768 维） |
 | ① ES 全文混排 | `RAG_ES_ENABLED` / `RAG_FUSION_STRATEGY` | `true` / 空→rrf | ES BM25 并入四路混排、多源 RRF 融合 |
-| ① 公共/共享知识库 | `RAG_PUBLIC_ENABLED` | `false` | 查询并入 `__public__` 分区；写需 `public-ingest` scope |
-| ① L1 语义缓存 | `CONVERSATION_SEMANTIC_CACHE_ENABLED` | `false` | 命中即短路 RAG+LLM |
-| ② NL2SQL 整装配 | `NL2SQL_ENABLED`（`app.nl2sql.enabled`） | `false` | 关时 `/chat/sql` 端点不注册 |
+| ① 公共/共享知识库 | `RAG_PUBLIC_ENABLED` | `true` | 查询并入 `__public__` 分区；写需 `public-ingest` scope |
+| ① L1 语义缓存 | `CONVERSATION_SEMANTIC_CACHE_ENABLED` | `true` | 命中即短路 RAG+LLM |
+| ② NL2SQL 整装配 | `NL2SQL_ENABLED`（`app.nl2sql.enabled`） | `true` | 默认注册 `/chat/sql`；端到端需只读 DB + tool-calling 模型（置 `false` 则端点不注册） |
 | ② 工作流审批 | 端点常开 | — | 需可登录 MySQL（Flowable 自管表） |
 | ② 工作流终态通知 | `WORKFLOW_TERMINAL_NOTIFICATION_MODE` | 本地 | 可切 `async-task`（中心 outbox） |
 | ② 飞书入站事件桥 | `FEISHU_*`（app id/secret/verification/encrypt） | 关 | `/channel/feishu/events` 生效 |
@@ -261,23 +260,23 @@ live discovery（`INTEROP_DISCOVERY_ENABLED`）默认关，下游不可达时确
 | ② 语音闭环整服务 | `VOICE_ENABLED` | `false` | 关时 voice-service 不装配 |
 | ② 语音 provider | `VOICE_PROVIDER` / `VOICE_BASE_URL` / `VOICE_API_KEY` | `openai` / — | ASR/TTS 后端 |
 | ③ Agent 核心 | `AGENT_ENABLED` | `true` | ReAct/DAG/reflexion/voting/chain 端点 |
-| ③ DAG replan 闭环 | `AGENT_DAG_REPLAN_ENABLED` | `false` | critique 低分则修订重跑 |
+| ③ DAG replan 闭环 | `AGENT_DAG_REPLAN_ENABLED` | `true` | critique 低分则修订重跑 |
 | ③ 受限代码执行 | `AGENT_CODE_EXEC_ENABLED` | `false` | JShell/子进程，中等隔离非强沙箱；数据分析精确计算复用 |
-| ③ 数据分析取数/探表 | `NL2SQL_ENABLED`（analytics 侧） | `false` | 关时 `analytics_sql` / `schema_explore` 被 Noop 降级 |
-| ③ 业务流程智能体（人在环） | `AGENT_WORKFLOW_ENABLED`（+ workflow 侧 `WORKFLOW_ENABLED`） | `false` | 开后 `/agent/process/**` 生效 |
-| ④ 视觉整服务 | `VISION_ENABLED`（+`VISION_MODEL`） | `false` | 关时 vision-service 不装配 |
-| ④ 看图对话入口 | `CONVERSATION_VISION_ENABLED` | `false` | `/chat/vision` 生效 |
-| ④ 图片 RAG（CLIP） | `RAG_MULTIMODAL_ENABLED` | `false` | `/rag/image*` 生效 |
+| ③ 数据分析取数/探表 | `NL2SQL_ENABLED`（analytics 侧） | `true` | 置 `false` 时 `analytics_sql` / `schema_explore` 被 Noop 降级 |
+| ③ 业务流程智能体（人在环） | `AGENT_WORKFLOW_ENABLED`（+ workflow 侧 `WORKFLOW_ENABLED`） | `true` | `/agent/process/**` 默认生效（有副作用·人在环，需 workflow-service 可达） |
+| ④ 视觉整服务 | `VISION_ENABLED`（+`VISION_MODEL`） | `true` | 默认装配 vision-service；`VISION_MODEL` 留空则启动 fail-fast |
+| ④ 看图对话入口 | `CONVERSATION_VISION_ENABLED` | `true` | `/chat/vision` 生效 |
+| ④ 图片 RAG（CLIP） | `RAG_MULTIMODAL_ENABLED` | `true` | `/rag/image*` 生效；需可达的多模态 embedding 后端 |
 | ⑤ 互操作面 | 端点常开 | — | A2A / agent-card / MCP surface |
-| ⑤ live discovery | `INTEROP_DISCOVERY_ENABLED` | `false` | 从下游动态发现 skills/tools |
+| ⑤ live discovery | `INTEROP_DISCOVERY_ENABLED` | `true` | 从下游动态发现 skills/tools（下游不可达时回退静态默认） |
 | ⑥ RBAC 整套 | `AUTH_RBAC_ENABLED`（compose demo `true`） | `false` | 关时仅用直配 scopes 登录，`/auth/admin/**` 不注册 |
 | ⑥ RBAC 管理写 | `AUTH_RBAC_ADMIN_WRITES_ENABLED`（compose demo `true`） | `false` | 关时写端点 503 |
 | ⑥ 账号存储 | `AUTH_STORE`（compose `jdbc`） | `in-memory` | jdbc 落 MySQL `auth` 库 |
 | ⑥ 自助注册 | `AUTH_REGISTRATION_ENABLED` | `false` | 须与 RBAC 同开，否则 `/auth/register` 403 |
 | ①⑥ 文档级授权（SpiceDB ReBAC） | `RAG_AUTHZ_MODE` | `disabled` | `shadow` 只观测 / `enforce` 按 `view` 权过滤检索、绑上传人部门；需 `auth-platform-server`(:8200) |
-| ⑥ Casdoor OIDC SSO | `EDGE_CASDOOR_ENABLED` | `false` | 开后 edge 验 Casdoor JWT 换发内部 JWT |
-| ⑥ Casdoor 认证模式 | `EDGE_CASDOOR_MODE` | `dual` | `dual` 验不过回落 legacy / `only` 严格（无有效 token→401） |
-| ⑥ 前端登录模式 | `VITE_AUTH_MODE` | `apikey` | `oidc`/`dual` 启用 Casdoor 多租户登录（方案 C shared-app + 选组织） |
+| ⑥ Casdoor OIDC SSO | `EDGE_CASDOOR_ENABLED` | `true` | edge 验 Casdoor JWT 换发内部 JWT（整栈默认开） |
+| ⑥ Casdoor 认证模式 | `EDGE_CASDOOR_MODE` | `only` | `only` 严格（无有效 token→401，恒取 owner）/ `dual` 灰度回滚：验不过回落 legacy |
+| ⑥ 前端登录模式 | `VITE_AUTH_MODE` | `apikey`（源码）/`oidc`（整栈烘焙） | `oidc`/`dual` 启用 Casdoor 多租户登录（方案 C shared-app + 选组织） |
 
 ---
 

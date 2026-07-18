@@ -10,18 +10,19 @@
 http://localhost:8080
 ```
 
-外部调用带**两种凭据之一**：
+外部调用带**凭据**（**当前默认走 Casdoor SSO Bearer**，见下第 3 条；下例的 api-key / 会话 Bearer 为遗留档，`only` 默认下会被拒 401）：
 
 ```text
-X-Api-Key: <api-key>                         # 方式一：api-key
-Authorization: Bearer <会话 accessToken>      # 方式二：登录会话令牌（先 POST /auth/login）
+Authorization: Bearer <Casdoor JWT>          # 默认：外部 Casdoor SSO Bearer（EDGE_CASDOOR_MODE=only）
+X-Api-Key: <api-key>                          # 遗留：api-key（需 EDGE_CASDOOR_MODE=dual 或 ENABLED=false）
+Authorization: Bearer <会话 accessToken>      # 遗留：登录会话令牌（先 POST /auth/login，同上）
 Content-Type: application/json
 ```
 
 - 网关按凭据换发内部 JWT：`SessionBearerAuthFilter`（order -110）验会话 Bearer，或 `ApiKeyToInternalTokenFilter`（order -100）校验 `X-Api-Key` → 签发短时内部 JWT（`X-Internal-Token`）→ 按路径路由到下游服务。下游只认内部 JWT，对「会话 vs api-key」无感知，**不建议外部直接构造 `X-Internal-Token`**。
-- **第三条凭据（默认关）**：`CasdoorTokenExchangeFilter`（order **-120**，最早跑）接受外部 **Casdoor SSO** 签发的 Bearer JWT，JWKS 验签后换发同形状内部 JWT。`EDGE_CASDOOR_ENABLED=false` 时不装配；开启后 `dual` 档与上两条并存（Casdoor 优先、失败回退）、`only` 档独占（失败 401 不回退）。详见 `operations.md` 第 4.2 节。
+- **默认凭据路径（Casdoor SSO）**：`CasdoorTokenExchangeFilter`（order **-120**，最早跑）接受外部 **Casdoor SSO** 签发的 Bearer JWT，JWKS 验签后换发同形状内部 JWT。**当前默认 `EDGE_CASDOOR_ENABLED=true` + `EDGE_CASDOOR_MODE=only`（严格 Casdoor-only）**——此档下上面两种遗留凭据（api-key / 会话 Bearer）会被拒（401）；下文示例用 api-key 须先把边缘切到 `EDGE_CASDOOR_MODE=dual` 或 `EDGE_CASDOOR_ENABLED=false`。详见 `operations.md` 第 4.2 节。
 - 免鉴权放行的路径（`EdgeOpenPaths.isOpen`，两个 filter 共用）：`/actuator*`、`/.well-known/*`、`/health`、`/auth/login`、`/auth/register`、`/auth/refresh`、`/auth/logout`、`/auth/public-config`、`/channel/feishu/events`、`/channel/dingtalk/events`。其中 `GET /.well-known/agent-card.json` 是对外免鉴权的 A2A 发现端点；`/auth/me` **不在**放行内，仍需会话 Bearer。
-- 网关路由前缀（`edge-gateway/application.yml`）：`/auth`、`/auth/**` → auth；`/chat`、`/chat/**`、`/extract`、`/extract/**`、`/memory`、`/memory/**` → conversation；`/chat/sql`、`/analytics`、`/analytics/**` → analytics；`/workflow`、`/workflow/**` → workflow；`/rag`、`/rag/**`、`/knowledge`、`/knowledge/**` → knowledge；`/agent`、`/agent/**` → agent；`/async`、`/async/**` → async-task；`/channel`、`/channel/**` → channel；`/interop`、`/interop/**`、`/.well-known/agent-card.json` → interop；`/eval`、`/eval/**` → eval；`/vision`、`/vision/**` → vision；`/voice`、`/voice/**` → voice。
+- 网关路由前缀（`edge-gateway/application.yml`）：`/auth`、`/auth/**` → auth；`/chat`、`/chat/**`、`/extract`、`/extract/**`、`/memory`、`/memory/**` → conversation；`/chat/sql`、`/analytics`、`/analytics/**` → analytics；`/workflow`、`/workflow/**` → workflow；`/rag`、`/rag/**`、`/knowledge`、`/knowledge/**` → knowledge；`/agent`、`/agent/**` → agent；`/async`、`/async/**` → async-task；`/channel`、`/channel/**` → channel；`/interop`、`/interop/**`、`/.well-known/agent-card.json` → interop；`/eval`、`/eval/**` → eval；`/vision`、`/vision/**` → vision；`/voice`、`/voice/**` → voice；`/orders`、`/orders/**` → order。
 - 本文所有端点均可**经网关**访问（`是否经网关：是`）。少量端点是给服务间调用/回调设计的（如 `/conversation/workflow/*`、`/channel/callbacks/*`），虽然也在网关路由前缀内，但通常由内部服务而非终端用户调用，下面会单独标注。
 - 默认开关：平台大量能力是 feature-flag 化的（`@ConditionalOnProperty` / `@ConditionalOnBean`），**默认关闭**的端点在未开启时不注册（404）。每节标注对应开关。
 
@@ -112,7 +113,7 @@ curl -s -X POST 'http://localhost:8080/auth/login' \
 - 用途：普通聊天，可选 RAG 上下文增强。
 - 请求：`{ "message": "..." }`；可选 query `chatId=u1`。
 - 响应核心字段：`reply`、`chatId`、`tenantId`、`userId`。
-- 经网关：是。默认开启。RAG 增强默认关闭，需 `CONVERSATION_RAG_ENABLED=true`（另配 `KNOWLEDGE_BASE_URL` 等）。
+- 经网关：是。默认开启。RAG 增强**默认开启**（`CONVERSATION_RAG_ENABLED=true`，另配 `KNOWLEDGE_BASE_URL` 等；置 `false` 退回纯 LLM 直答）。
 
 ### POST `/chat/stream`
 
@@ -132,14 +133,14 @@ curl -sN -X POST 'http://localhost:8080/chat/stream?chatId=u1' \
 - 用途：LLM-as-Router——先对问题分类，再分派到对应处理后回答。与 `/chat` 共享多轮记忆（键 `<tenantId>::<chatId>`）。
 - 请求：`{ "message": "..." }`；可选 query `chatId=u1`。
 - 响应：`{ reply, route, reason, classifyMs, answerMs, chatId, tenantId, userId }`。
-- 经网关：是。**默认关闭**，需 `CONVERSATION_ROUTER_ENABLED=true`（`app.conversation.router.enabled`）。未启用时 controller 仍在，返回明确禁用提示（非 404）。
+- 经网关：是。**默认开启**（`CONVERSATION_ROUTER_ENABLED=true`，`app.conversation.router.enabled`）。置 `false` 时 controller 仍在，返回明确禁用提示（非 404）。
 
 ### POST `/chat/vision`
 
 - 用途：看图对话——图片 + 问题委托给 vision-service。
 - 请求：`multipart/form-data`，表单字段 `image`（必填）+ 可选 `message`（作为 vision-service 的 `instruction`，非空即看图问答）。
 - 响应：`{ reply, model, chars, tenantId, userId }`。缺图片 → 返回错误提示。
-- 经网关：是。**默认关闭**，需 `CONVERSATION_VISION_ENABLED=true`（另配 `CONVERSATION_VISION_BASE_URL`，默认 `http://localhost:8090`）。未启用时返回明确禁用提示（非 404）。
+- 经网关：是。**默认开启**（`CONVERSATION_VISION_ENABLED=true`，另配 `CONVERSATION_VISION_BASE_URL`，默认 `http://localhost:8090`）。置 `false` 时返回明确禁用提示（非 404）。
 
 ```bash
 curl -s -X POST 'http://localhost:8080/chat/vision' \
@@ -159,19 +160,19 @@ curl -s -X POST 'http://localhost:8080/chat/vision' \
 - 用途：带长期用户画像记忆的对话（跨会话记住用户偏好/事实）。租户+用户取自内部 JWT，天然只操作自己的画像。
 - 请求：`{ "message": "..." }`；可选 query `chatId=u1`。
 - 响应：`{ reply, chatId, tenantId, userId }`。
-- 经网关：是。**默认关闭**，需 `CONVERSATION_MEMORY_PROFILE_ENABLED=true`。未启用时返回明确禁用提示（非 404）。
+- 经网关：是。**默认开启**（`CONVERSATION_MEMORY_PROFILE_ENABLED=true`）。置 `false` 时返回明确禁用提示（非 404）。
 
 ### GET `/memory/profile`
 
 - 用途：查看当前用户长期画像条目。
 - 响应：`{ count, items, tenantId }`。
-- 经网关：是。默认关闭（同上 `CONVERSATION_MEMORY_PROFILE_ENABLED`）。
+- 经网关：是。默认开启（同上 `CONVERSATION_MEMORY_PROFILE_ENABLED`）。
 
 ### DELETE `/memory/profile`
 
 - 用途：清空当前用户长期画像（PII 合规删除）。
 - 响应：`{ removed, tenantId }`。
-- 经网关：是。默认关闭（同上）。
+- 经网关：是。默认开启（同上）。
 
 ### DELETE `/chat/cache`
 
@@ -197,7 +198,7 @@ curl -s -X POST 'http://localhost:8080/extract?type=ticket' \
 - 用途：模型级联——便宜模型先答，低置信才升级强模型。
 - 请求：`{ "message": "..." }`。
 - 响应核心字段：`answer`、`served`（`cheap`|`strong`）、`cheapConfident`。
-- 经网关：是。**默认关闭**，需 `app.chat.cascade.enabled=true`（`@ConditionalOnBean(CascadeService.class)`）。
+- 经网关：是。**默认开启**（`app.chat.cascade.enabled=true`，`@ConditionalOnBean(CascadeService.class)`；置 `false` 则不注册）。
 
 ### POST `/conversation/workflow/reply`
 
@@ -221,7 +222,7 @@ curl -s -X POST 'http://localhost:8080/extract?type=ticket' \
 - 支持两种 content-type：
   - `application/json`（`Map<String,String>`）：`title`（必填）、`text`、`contentType`（默认 `text/plain`，有 `imageBase64` 时默认 `image/png`）、`category`、图片可传 `imageBase64`。
   - `multipart/form-data`：表单字段 `file`（必填）+ 可选 `category`。
-- 图片 ingestion：`image/*` 文件或 `imageBase64` 走 OpenAI 兼容多模态 embedding（存入独立的 `knowledge_images_<tenant>` collection），`RAG_MULTIMODAL_ENABLED`（application.yml 默认关→上传图片 400；compose 默认开，路由在但未配真实端点时调用期报错）。⚠️ 旧的 `caption`/`ocrText` 字段与 `RAG_IMAGE_TEXT_*` 图→文字路径已移除。
+- 图片 ingestion：`image/*` 文件或 `imageBase64` 走 OpenAI 兼容多模态 embedding（存入独立的 `knowledge_images_<tenant>` collection），`RAG_MULTIMODAL_ENABLED`（yml/compose 默认开，但需可达的多模态端点，未配真实端点时调用期报错；置 `false` 则上传图片 400）。⚠️ 旧的 `caption`/`ocrText` 字段与 `RAG_IMAGE_TEXT_*` 图→文字路径已移除。
 - 公共/共享库：可传 `visibility=public|shared` 写入 `__public__` 公共分区，需 `public-ingest` scope（否则 403）；缺省写本租户私有库。
 - 文档级授权（仅 `RAG_AUTHZ_MODE=enforce`，**默认 `disabled` 不影响**）：**新建**（非共享）文档时把 `owner`（上传人）+ `home_dept`（上传人部门）关系写入外部 auth-platform；若判不出上传人部门（内部 JWT 无 `dept`）→ **403**「cannot determine uploader's home department」。**同名覆盖**既有非共享文档需对其有 `edit` 权限（否则 403，覆盖不夺原 owner）。disabled/shadow 不触发上述拦截。
 - 响应：`DocumentInfo`。
@@ -274,14 +275,14 @@ JSON 示例：
 - 用途：图片入库（原生 CLIP 多模态 embedding，向量存入独立的 `knowledge_images_<tenant>` collection）。需要 `ingest` scope。
 - 请求：`multipart/form-data`，表单字段 `image`（`image/*`，必填）。
 - 响应：`{ id, fileName, type: "image" }`。
-- 经网关：是。**默认关闭**，需 `RAG_MULTIMODAL_ENABLED=true`（关闭时返回 400）。
+- 经网关：是。**默认开启**（`RAG_MULTIMODAL_ENABLED=true`，需可达多模态端点；置 `false` 时返回 400）。
 
 ### POST `/rag/image-search`
 
 - 用途：文本 query 跨模态检索图片。
 - 请求：`application/json` `{ query（必填）, topK?, minScore? }`（缺省用 `RAG_MULTIMODAL_TOP_K` / `RAG_MULTIMODAL_MIN_SCORE`）。
 - 响应：`{ query, results:[{ id, fileName, score }] }`。严格按当前租户隔离。
-- 经网关：是。**默认关闭**，需 `RAG_MULTIMODAL_ENABLED=true`。
+- 经网关：是。**默认开启**（`RAG_MULTIMODAL_ENABLED=true`，需可达多模态端点）。
 
 ### POST `/rag/query`（别名 `/knowledge/query`）
 
@@ -301,12 +302,19 @@ JSON 示例：
 
 - 用途：GraphRAG 实体邻居查询。
 - 请求：`{ query, maxHops, maxTriples, category }`。
-- 经网关：是。**默认关闭**，需 GraphRAG 开启（`RAG_GRAPH_ENABLED=true`，`@ConditionalOnBean(GraphSearchService.class)`）。
+- 经网关：是。**默认开启**（`RAG_GRAPH_ENABLED=true` 默认开，`@ConditionalOnBean(GraphSearchService.class)`；置 `false` 则不注册）。
 
 ### GET `/rag/graph/entities`
 
 - 用途：列出当前租户图谱实体。可选 query `category=org`。响应 `{ category, entities, size }`。
-- 经网关：是。默认关闭（同上 GraphRAG 开关）。
+- 经网关：是。默认开启（同上 GraphRAG 开关，`RAG_GRAPH_ENABLED=true`）。
+
+### POST `/rag/obsidian/import`
+
+- 用途：把一个 zip 打包的 Obsidian vault 批量导入 RAG——每篇 `.md` 笔记成为一个文档、`[[双链]]` 成为 GraphRAG 三元组。需具备 `ingest` 权限的凭证。
+- 请求：`multipart/form-data`，表单字段 `file`（vault zip，必填）+ 可选 `category`。缺文件 → 400。
+- 响应：`ObsidianImportResult`。
+- 经网关：是（`/rag/**` 路由）。默认开启（端点常开）。
 
 ---
 
@@ -317,13 +325,25 @@ JSON 示例：
 - 用途：NL2SQL / ChatBI，自然语言转 SQL 并执行、解读。
 - 请求：`{ "question": "..." }`（`AnalyticsSqlRequest`，裸 JSON 兼容）。
 - 响应：`{ question, sql, rowCount, rows, answer, guardBlocked }`（`sql` 刻意一并回传，便于审计/复跑）。
-- 经网关：是。**默认关闭**，需 `app.nl2sql.enabled=true`。
+- 经网关：是。**默认开启**（`app.nl2sql.enabled=true`）。
+
+### GET `/analytics/schema/tables`
+
+- 用途：NL2SQL 探表——列出白名单表名（供数据分析智能体按需探索库结构，而非只靠 `SqlAssistant` 静态注入的 schema）。
+- 响应：`AnalyticsTablesReply`（`{ tables[] }`）。仅白名单表（`app.nl2sql.allow-tables`，与 `SqlGuard` L3 同源）。租户隔离沿用 `TenantContext`。
+- 经网关：是。与 `/chat/sql` 同门控 `app.nl2sql.enabled=true`（默认开）。
+
+### GET `/analytics/schema/tables/{table}`
+
+- 用途：查单张白名单表的结构元数据（表名 / 列 / 类型 / 注释 / 枚举取值，不含业务行数据）。非白名单/不存在的表一律 404，不泄露其是否存在。
+- 响应：`AnalyticsTableSchemaReply`（`{ table, schema }`）。
+- 经网关：是。默认开启（同上门控）。
 
 ---
 
 ## Workflow（workflow-service）
 
-整个 controller 需 `app.workflow.enabled=true`（**默认关闭**）。审批相关端点需 `approve` scope。
+整个 controller 需 `app.workflow.enabled=true`（**默认开启**；需可达 MySQL）。审批相关端点需 `approve` scope。
 
 ### POST `/workflow/refund/start`
 
@@ -421,29 +441,41 @@ JSON 示例：
 
 - 用途：Reflexion 自省环，同步跑完返回含各轮评分轨迹的 `ReflexionReply`。
 - 请求：`{ "question": "..." }`（`ReflexionRequest`）。
-- 经网关：是。**默认关闭**（`@ConditionalOnBean(ReflexionService.class)`）。
+- 经网关：是。默认开启（`AGENT_ENABLED=true` 时装配 `ReflexionService`，`@ConditionalOnBean`）。
 
 ### POST `/agent/reflexive/stream`
 
 - 用途：Reflexion SSE，分阶段推 `attempt-start`/`answer`/`critique`/`done` 事件。请求同上。
-- 经网关：是。默认关闭（同上）。
+- 经网关：是。默认开启（同上）。
 
 ### POST `/agent/vote`
 
 - 用途：并行跑 N 次 + 聚合投票。请求 `{ question, n? }`（`n` 可选，默认 `app.agent.voting.n`）。响应 `VoteReply`（votes/decision/agreement/confident）。
-- 经网关：是。**默认关闭**（`@ConditionalOnBean(VotingService.class)`）。
+- 经网关：是。默认开启（`AGENT_ENABLED=true` 时装配 `VotingService`，`@ConditionalOnBean`）。
 
 ### POST `/agent/chain`
 
 - 用途：Prompt Chaining，跑 yml 预定义链（`app.agent.chaining.steps`）。请求 `{ "input": "..." }`（`ChainRunRequest`）。未配 steps → 400。
-- 经网关：是。**默认关闭**（`@ConditionalOnBean(PromptChainService.class)`）。
+- 经网关：是。默认开启（`AGENT_ENABLED=true` 时装配 `PromptChainService`，`@ConditionalOnBean`；`steps` 默认空需先配置）。
+
+### POST `/agent/analyst/run`（+ `/agent/analyst/run/async`）
+
+- 用途：数据分析智能体——传自然语言数据问题 `{ "goal": "..." }`，基于多 Agent DAG 自动拆「探表→取数→计算→解读」并行/依赖子任务，synthesis 收口给出带 SQL 与数字依据的结论。`/async` 变体返回任务快照（可选 `webhookUrl`）。
+- 响应：`AgentDagRunReply`（含 levels / 各子任务结果 / synthesis / 可选 critique attempts）；缺 `goal` → 400。
+- 经网关：是。默认开启（`AGENT_ENABLED=true`）。
+
+### POST `/agent/process/run`（+ `/agent/process/run/async`）
+
+- 用途：业务流程智能体（人在环）——传自然语言流程诉求 `{ "goal": "..." }`，DAG 拆「发起 → 查询 → 汇报」子任务执行，synthesis 如实告知进展（绝不代替审批）。
+- 响应：`AgentDagRunReply`；缺 `goal` → 400。
+- 经网关：是。**双门控**——`AGENT_ENABLED=true` 且 `AGENT_WORKFLOW_ENABLED=true`（两者默认开）。
 
 ### GET `/agent/capabilities`
 
 - 用途：live capability discovery，返回 agent-service 当前暴露的 MCP 工具描述（`McpToolDescriptor[]`：`platform.agent.run`、`platform.agent.run_async`、`platform.agent.dag.plan_run`、`platform.agent.dag.plan_run_async`）。
 - 经网关：是。默认开启（`@ConditionalOnBean(DeepAgentService.class)`）。
 
-> 其他 agent 动作开关（默认关闭）：`AGENT_CODE_EXEC_ENABLED`（JShell 非沙箱）、`AGENT_MCP_ENABLED`（`mcp_call`）、`AGENT_BROWSER_ENABLED`（Playwright 浏览器动作）、`AGENT_DAG_REPLAN_ENABLED`（Critic/Replan 闭环）。详见 README。
+> 其他 agent 动作开关（默认关闭）：`AGENT_CODE_EXEC_ENABLED`（JShell 非沙箱）、`AGENT_MCP_ENABLED`（`mcp_call`）、`AGENT_BROWSER_ENABLED`（Playwright 浏览器动作）。`AGENT_DAG_REPLAN_ENABLED`（Critic/Replan 闭环）现已**默认开**。详见 README。
 
 ---
 
@@ -612,6 +644,12 @@ A2A + MCP surface。全部默认开启。
 
 - 用途：查看评测能力（支持的断言类型、dualRun 模式/指标、baseline/snapshot 位置）。经网关：是。
 
+### POST `/eval/retrieval`
+
+- 用途：检索质量评测（Recall@k / Precision@k / MRR / Hit@k，不经 LLM）——逐 case 经 `/rag/query` 检索并算 IR 指标，补 LLM-Judge passRate 未覆盖的召回层。
+- 请求：`RetrievalRunRequest`（`{ cases[], topK?, category?, targetBaseUrl? }`；`cases` 不能为空，否则 400）。
+- 经网关：是。端点常开。
+
 ### POST `/eval/run`
 
 - 用途：执行一组 HTTP eval case。
@@ -651,7 +689,7 @@ A2A + MCP surface。全部默认开启。
 
 ## Vision（vision-service）
 
-整个 controller 需 `app.vision.enabled=true`（**默认关闭**）。
+整个 controller 需 `app.vision.enabled=true`（**默认开启**；但 `VISION_MODEL` 留空则启动 fail-fast，须配一个 LiteLLM `model_list` 里的多模态模型逻辑名）。
 
 ### POST `/vision/caption`（别名 `/vision/describe`）
 
@@ -660,7 +698,7 @@ A2A + MCP surface。全部默认开启。
   - `multipart/form-data`：表单字段 `file`（必填）+ 可选 `instruction`。
 - `instruction` 留空 → 用配置的默认 caption/OCR 指令；`mimeType` 缺省兜底 `image/png`。守卫/入参校验失败 → 400。
 - 响应：`VisionCaptionReply`（`{ text, modelName, length }`）。
-- 经网关：是（受 `vision` scope 约束）。默认关闭。
+- 经网关：是（受 `vision` scope 约束）。默认开启（须配 `VISION_MODEL`）。
 
 ---
 
@@ -709,7 +747,7 @@ curl -s -X POST 'http://localhost:8080/voice/chat?chatId=u1' \
 - 用途：按订单号查当前租户的订单详情。
 - 请求：路径参数 `orderNo`（如 `101`），无 body。
 - 响应：命中 → `200` + `OrderView`（`{ orderNo, customer, amount, status, createdAt }`，`amount` 为字符串如 `"1200.00"`，`status` 为中文枚举 `已支付/已发货/已取消/已退款`）；未命中或**属于别的租户** → `404`（租户隔离，不泄露存在性）。
-- 经网关：是（`/orders,/orders/**`）。order-service 恒开；agent 侧调用需 `AGENT_ORDER_ENABLED=true`（默认关，走 Noop 降级）。
+- 经网关：是（`/orders,/orders/**`）。order-service 恒开；agent 侧 `order_query` 动作 `AGENT_ORDER_ENABLED=true`（默认开；置 `false` 走 Noop 降级）。
 
 ```bash
 # 直连 order-service（api-key 兜底 → 租户 tenantA；演示种子含 101-109）
@@ -719,4 +757,4 @@ curl -o /dev/null -w '%{http_code}\n' -H 'X-Api-Key: dev-key-tenantA-admin' \
      http://localhost:8093/orders/2001   # → 404（tenantB 的单，租户隔离）
 ```
 
-> 主要开关：order-service 侧 `ORDER_DB_URL`/`ORDER_DB_USER`/`ORDER_DB_PASSWORD`（持久化 MySQL）、`ORDER_SEED_DEMO=true`（默认，接真库置 false）；agent 侧 `AGENT_ORDER_ENABLED=false`、`ORDER_BASE_URL=http://localhost:8093`。compose 宿主机端口映射 `8094:8093`（8093 被展示前端占用）。
+> 主要开关：order-service 侧 `ORDER_DB_URL`/`ORDER_DB_USER`/`ORDER_DB_PASSWORD`（持久化 MySQL）、`ORDER_SEED_DEMO=true`（默认，接真库置 false）；agent 侧 `AGENT_ORDER_ENABLED=true`（默认开）、`ORDER_BASE_URL=http://localhost:8093`。compose 宿主机端口映射 `8094:8093`（8093 被展示前端占用）。

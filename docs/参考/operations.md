@@ -7,7 +7,7 @@
 
 两层网关：
 
-- **`edge-gateway`（:8080）** —— 唯一对外入口。按入站凭据换发短时内部 JWT（`X-Internal-Token`），按路径路由到各服务。三条签发路径按 order 依次尝试：`CasdoorTokenExchangeFilter`（Casdoor Bearer，order -120，**默认关**）→ `SessionBearerAuthFilter`（会话 Bearer，order -110）→ `ApiKeyToInternalTokenFilter`（校验 `X-Api-Key`，order -100）。
+- **`edge-gateway`（:8080）** —— 唯一对外入口。按入站凭据换发短时内部 JWT（`X-Internal-Token`），按路径路由到各服务。三条签发路径按 order 排列：`CasdoorTokenExchangeFilter`（Casdoor Bearer，order -120，**默认开 + `only`**，严格 Casdoor-only）→ `SessionBearerAuthFilter`（会话 Bearer，order -110）→ `ApiKeyToInternalTokenFilter`（校验 `X-Api-Key`，order -100）。`only` 档下后两条遗留凭据被拒（401），本地无 Casdoor 时切 `EDGE_CASDOOR_MODE=dual` 或 `EDGE_CASDOOR_ENABLED=false` 回退。
 - **LiteLLM（:4000，外部，非 Java 模块）** —— LLM 网关。所有模型调用走一个 OpenAI 兼容端点，provider 路由/failover/模型名映射都在 `deploy/litellm/config.yaml` 里。
 
 ---
@@ -23,7 +23,7 @@
 | LiteLLM | 由 compose 提供；不用 compose 时需自行准备一个可达的 OpenAI 兼容端点，并把 `GATEWAY_BASE_URL` 指过去。compose 的 `chat-default` 默认映射 DeepSeek，需宿主环境 `DEEPSEEK_API_KEY` |
 
 > **单测零外部依赖**：测试是纯 POJO（不加载 Spring context），`mvn test` 无需任何基础设施。
-> **两套「默认」需分清**：① **application.yml 裸跑默认**——多数能力（对话记忆、agent 动作、DAG 重规划、事件总线、async/图谱/registry 的部分档）为内存/关闭；但 knowledge-service 的 application.yml 现已默认 `RAG_VECTOR_STORE_PROVIDER=qdrant`、`RAG_REGISTRY_STORE=redis`、`RAG_GRAPH_STORE=jdbc`、`RAG_ES_ENABLED=true`（仅 embedding 默认 `hash` 不真调），故**单跑 knowledge-service 期望 qdrant/redis/mysql/ES 可达**；要真正零依赖单跑需显式 `RAG_VECTOR_STORE_PROVIDER=in-memory RAG_REGISTRY_STORE=in-memory RAG_GRAPH_STORE=in-memory RAG_ES_ENABLED=false`。② **docker-compose demo 默认**——为一键体验把 RAG 持久化（qdrant/redis/jdbc/ES）、nomic 语义 embedding、hanlp 分词、多模态、登录 RBAC 等打开，并自带全部基础设施。
+> **两套「默认」需分清**：① **application.yml 裸跑默认**——2026-07 起多数**行为增强**已默认打开（RAG 增强、多轮记忆/长期画像、注入/PII 护栏、语义缓存、模型级联、意图路由、看图对话、RAG rerank/查询扩展/上下文/GraphRAG/ES/公共库/多模态、DAG 重规划、agent 动作 vision/analytics/workflow/order、interop discovery、eval judge/embedding、vision 等），仅 MCP、code-exec、浏览器、语音、渠道入站/事件、RAG enforce 授权、自助注册、成本归因等仍默认关；**基础设施类**（事件总线、async/registry 存储的部分档）仍默认内存/关闭，embedding 默认 `hash` 不真调，保单测零依赖。但 knowledge-service 的 application.yml 现已默认 `RAG_VECTOR_STORE_PROVIDER=qdrant`、`RAG_REGISTRY_STORE=redis`、`RAG_GRAPH_STORE=jdbc`、`RAG_ES_ENABLED=true`，故**单跑 knowledge-service 期望 qdrant/redis/mysql/ES 可达**；要真正零依赖单跑需显式 `RAG_VECTOR_STORE_PROVIDER=in-memory RAG_REGISTRY_STORE=in-memory RAG_GRAPH_STORE=in-memory RAG_ES_ENABLED=false`。② **docker-compose demo 默认**——再叠加真实基础设施（qdrant/redis/jdbc/ES）、nomic 语义 embedding、hanlp 分词、多模态端点、登录 RBAC 等，并自带全部基础设施。
 
 ---
 
@@ -78,7 +78,7 @@ mvn -pl platform-security -Dtest=InternalTokenTest test   # 单类（务必带 -
 
 | 服务 / 组件 | 端口 | 经网关暴露的路径前缀 | 说明 |
 |---|---:|---|---|
-| edge-gateway | 8080 | —（对外入口本身） | 校验 api-key，换发内部 JWT |
+| edge-gateway | 8080（`start-all.sh` 宿主重映射 18080） | —（对外入口本身） | 校验入站凭证（默认 Casdoor Bearer），换发内部 JWT |
 | conversation-service | 8081 | `/chat`、`/chat/**` | Chat + 可选 RAG 增强、语义缓存、级联 |
 | workflow-service | 8082 | `/workflow`、`/workflow/**` | Flowable 退款审批流 + outbox |
 | analytics-service | 8083 | `/chat/sql`、`/analytics`、`/analytics/**` | NL2SQL / ChatBI |
@@ -88,7 +88,7 @@ mvn -pl platform-security -Dtest=InternalTokenTest test   # 单类（务必带 -
 | channel-service | 8087 | `/channel`、`/channel/**` | 渠道出站/回调 + 可选 Kafka 事件 |
 | interop-service | 8088 | `/interop`、`/interop/**`、`/.well-known/agent-card.json` | A2A + MCP surface |
 | eval-service | 8089 | `/eval`、`/eval/**` | 回归测试客户端 |
-| vision-service | 8090 | `/vision`、`/vision/**` | 多模态图像描述（caption/describe） |
+| vision-service | 8090（`start-all.sh` 宿主重映射 18090） | `/vision`、`/vision/**` | 多模态图像描述（caption/describe） |
 | voice-service | 8091 | `/voice`、`/voice/**` | ASR + 对话 + TTS 语音闭环 |
 | auth-service | 8092 | `/auth`、`/auth/**` | 账号登录 / 注册 / 刷新 / RBAC 管理 |
 | order-service | 8093（宿主 8094） | `/orders`、`/orders/**` | 按订单号只读查订单（agent order_query 下游）；持久化 MySQL、按租户隔离。宿主机 8093 被展示前端占用，compose 映射 8094 |
@@ -108,12 +108,12 @@ mvn -pl platform-security -Dtest=InternalTokenTest test   # 单类（务必带 -
 
 ## 4. 鉴权与租户
 
-外部调用**默认有两种并存的凭据**（经网关 :8080，任选其一）：
+**当前默认 = Casdoor SSO ONLY**（`EDGE_CASDOOR_ENABLED=true` + `EDGE_CASDOOR_MODE=only`）：非 open-path 请求须带**外部 Casdoor 签发的 `Authorization: Bearer <Casdoor JWT>`**，网关 JWKS 验签后换发内部 JWT（见第 4.2 节），tenant 恒取 token 的 `owner`。此档下 api-key / 登录会话 Bearer 会被拒（401）。
+
+要用下面两种**遗留凭据**（本地无 Casdoor 时的常用路径），须先把边缘切到 `EDGE_CASDOOR_MODE=dual`（验不过再回退旧凭据）或 `EDGE_CASDOOR_ENABLED=false`（经网关 :8080，任选其一）：
 
 1. **`X-Api-Key`**：网关按 api-key 查租户绑定，签发短时内部 JWT。
 2. **`Authorization: Bearer <会话 accessToken>`**：先 `POST /auth/login` 拿会话令牌，网关 `SessionBearerAuthFilter`（order -110，早于 api-key filter -100）验签会话令牌后换发内部 JWT。
-
-另有**默认关**的第三条 **Casdoor SSO Bearer** 路径（`CasdoorTokenExchangeFilter`，order -120，最早跑）——开启后与上两条并存或独占，见第 4.2 节。
 
 三条路径产出同形状的 `X-Internal-Token`，下游只认它、对 Casdoor / 登录 / api-key 无感知（详见第 4.1 / 4.2 节）。
 
@@ -149,7 +149,7 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 
 | 用户名 | 租户 | 角色 | 有效 scopes 要点 |
 |---|---|---|---|
-| `alice` | acme | admin | 全量 + `role-admin` + `public-ingest`（可进 RBAC 控制台） |
+| `alice` | acme | admin | 全量 + `role-admin` + `public-ingest`（可调后端 `/auth/admin/**` API；前端 RBAC 控制台已移除） |
 | `bob` | globex | viewer | chat |
 | `analyst-a` | tenantA | analyst | chat, analytics |
 
@@ -162,24 +162,24 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 - **RBAC**：`AUTH_RBAC_ENABLED`（yml 默认 false / compose demo true）开启后 `/auth/admin/**` 管理面可用，需 `role-admin` scope；写端点再受 `AUTH_RBAC_ADMIN_WRITES_ENABLED`（关→503）与 `If-Match` 乐观锁（缺失 428 / 冲突 412）约束。`AUTH_RBAC_BOOTSTRAP_ADMIN_USERS`（默认 `alice`）指定初始 admin。
 - **存储**：`AUTH_STORE`（yml `in-memory` / compose `jdbc`）；jdbc 档自动建 `USERS`/`USER_ROLE`/`ROLES`/`ROLE_SCOPE`/`AUTH_SESSION`（`AUTH_DB_URL`/`_USER`/`_PASSWORD`）。种子 `AUTH_SEED_ENABLED`（默认 true，生产建议 false）。自助注册 `AUTH_REGISTRATION_ENABLED`（默认 false，须与 RBAC 同开）。
 
-### 4.2 Casdoor SSO Bearer（边缘身份切换，`edge.casdoor.*`，默认关）
+### 4.2 Casdoor SSO Bearer（边缘身份切换，`edge.casdoor.*`，**默认开 + `only`**）
 
-边缘可接**外部 Casdoor（OIDC/SSO 身份，非本仓库模块）**签发的 JWT 作第三条凭据：`CasdoorTokenExchangeFilter`（order **-120**，早于会话 -110 / api-key -100）用 **JWKS 验签** Casdoor JWT，通过后**剥掉入站 `X-Internal-Token`/`Authorization`/`X-Api-Key`**（防伪造、Casdoor token 不进内网），从 claims 取 `owner`（租户）/`sub`（用户）/scope/`groups`→部门，重新签发内部 JWT。**总开关默认关**——`EDGE_CASDOOR_ENABLED=false` 时此 filter/decoder 全不装配、行为与接入前一致。
+边缘接**外部 Casdoor（OIDC/SSO 身份，非本仓库模块）**签发的 JWT 作**默认凭据**：`CasdoorTokenExchangeFilter`（order **-120**，早于会话 -110 / api-key -100）用 **JWKS 验签** Casdoor JWT，通过后**剥掉入站 `X-Internal-Token`/`Authorization`/`X-Api-Key`**（防伪造、Casdoor token 不进内网），从 claims 取 `owner`（租户）/`sub`（用户）/scope/`groups`→部门，重新签发内部 JWT。**总开关默认开**——`EDGE_CASDOOR_ENABLED=true`（默认）装配此 filter/decoder；置 `false` 则全不装配、回到 api-key/会话双凭据。
 
-- **`dual`（默认，安全）**：有合法 Casdoor Bearer 就用它换发；无 Bearer 或验签失败 → **透传**给会话 / api-key filter 兜底（灰度过渡窗口）。
-- **`only`（最终态）**：无 Bearer 或验签失败 → 直接 **401**，**不回退**旧凭据；且要求 `tenant-claim=owner`（启动即校验，否则 fail-fast）。
+- **`only`（默认，最终态）**：无 Bearer 或验签失败 → 直接 **401**，**不回退**旧凭据；且要求 `tenant-claim=owner`（启动即校验，否则 fail-fast）。
+- **`dual`（灰度回滚）**：有合法 Casdoor Bearer 就用它换发；无 Bearer 或验签失败 → **透传**给会话 / api-key filter 兜底（本地无 Casdoor 或过渡期用）。
 - **audience 绑定**：接受 `aud == <base>`（传统单 app）或 `aud == <base>-org-<org>`（Casdoor Shared Application，且已验签 `owner` 必须 == `<org>`），否则 401。
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `EDGE_CASDOOR_ENABLED` | `false` | 总开关；关时不装配 Casdoor filter/decoder（默认双凭据不变） |
-| `EDGE_CASDOOR_MODE` | `dual` | `dual`（Casdoor 优先、失败回退旧凭据）或 `only`（仅 Casdoor，失败 401、无回退）；仅此二值 |
+| `EDGE_CASDOOR_ENABLED` | `true` | 总开关；默认开、装配 Casdoor filter/decoder；关时回到 api-key/会话双凭据 |
+| `EDGE_CASDOOR_MODE` | `only` | `only`（默认，仅 Casdoor，失败 401、无回退）或 `dual`（Casdoor 优先、失败回退旧凭据）；仅此二值 |
 | `CASDOOR_ISSUER` | `http://localhost:8000` | Casdoor issuer（校验 `iss`） |
 | `CASDOOR_JWKS` | `http://localhost:8000/.well-known/jwks`（compose `http://host.docker.internal:8000/.well-known/jwks`） | JWKS 端点（RS256 验签公钥，自动缓存/轮转） |
 | `CASDOOR_AUDIENCES` | `ragshared0client00000001`（compose `ragshared0client00000001,ea46d9a8033b0be2d8ed`） | 允许的 audience 基名（逗号分隔），须与 Casdoor 应用 client_id 一致 |
 | `CASDOOR_SCOPE_CLAIM` / `CASDOOR_SCOPE_NAME_FIELD` | `permissions` / `name` | 从 Casdoor JWT 提取 scope 的 claim 名与对象内字段名 |
 
-> 开启需先起外部 Casdoor 并配好 org/应用/组。启用后（尤其 `only`）建议先按 `dual` 灰度、再切 `only`；`enabled=true` 但 `jwk-set-uri`/`issuer`/`audiences` 缺失将启动即失败。部门来自 Casdoor 嵌套 group（`<org>/<group>` 且同 org 前缀，唯一命中才生效，0 个或多个 → 空、不阻断登录），随内部 JWT 的可选 `dept` claim 传给下游做部门级知识隔离。
+> 默认 `only` 已启用，需先起外部 Casdoor 并配好 org/应用/组；本地无 Casdoor 时先 `EDGE_CASDOOR_MODE=dual`（回退旧凭据）或 `EDGE_CASDOOR_ENABLED=false`。灰度上线可先 `dual` 再切 `only`；`enabled=true` 但 `jwk-set-uri`/`issuer`/`audiences` 缺失将启动即失败。部门来自 Casdoor 嵌套 group（`<org>/<group>` 且同 org 前缀，唯一命中才生效，0 个或多个 → 空、不阻断登录），随内部 JWT 的可选 `dept` claim 传给下游做部门级知识隔离。
 
 ### 内部 JWT 签名（`platform.security.*`）
 
@@ -232,11 +232,11 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 
 ## 7. Conversation（`app.conversation.*` / `app.chat.*`）
 
-### RAG 上下文增强（默认关）
+### RAG 上下文增强（默认开）
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `CONVERSATION_RAG_ENABLED` | `false` | `/chat` 前是否调 knowledge-service 做 RAG 增强 |
+| `CONVERSATION_RAG_ENABLED` | `true` | `/chat` 前是否调 knowledge-service 做 RAG 增强（默认开，置 `false` 退回纯 LLM） |
 | `KNOWLEDGE_BASE_URL` | `http://localhost:8084` | knowledge-service 地址 |
 | `CONVERSATION_RAG_TOP_K` | `5` | 检索条数 |
 | `CONVERSATION_RAG_MIN_SCORE` | `0.0` | 检索最低分 |
@@ -257,43 +257,43 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 | `CONVERSATION_MEMORY_TOKEN_MODEL` | `gpt-4o-mini` | `tokens` 档 tokenizer 依据 |
 | `CONVERSATION_MEMORY_REDIS_TTL` | `P7D` | `redis` 档会话 TTL（ISO-8601，如 `P7D` / `PT12H`） |
 
-### 长期画像（用户画像记忆，默认关）
+### 长期画像（用户画像记忆，默认开）
 
 跨会话抽取用户持久事实，对话前作为 context 新鲜注入。端点：`POST /chat/memory`、`GET/DELETE /memory/profile`。开启后每轮多一次 temp=0 抽取。
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `CONVERSATION_MEMORY_PROFILE_ENABLED` | `false` | 长期画像开关 |
+| `CONVERSATION_MEMORY_PROFILE_ENABLED` | `true` | 长期画像开关（默认开） |
 | `CONVERSATION_MEMORY_PROFILE_STORE` | `in-memory` | 画像存储（`in-memory`；redis 变体待补） |
 | `CONVERSATION_MEMORY_PROFILE_MAX_ITEMS` | `50` | 每用户画像条目上限 |
 | `CONVERSATION_MEMORY_PROFILE_RECALL_LIMIT` | `12` | 每轮注入的画像条数上限 |
 | `CONVERSATION_MEMORY_PROFILE_ASYNC` | `true` | 抽取是否异步（不阻塞回复） |
 
-### 对话护栏（PII / 提示注入，默认全关）
+### 对话护栏（PII / 提示注入，默认全开）
 
-移植自单体 `PromptInjection` / `PII`。默认全关、零回归；生产建议开启（安全合规）。
+移植自单体 `PromptInjection` / `PII`。默认全开（安全合规）；如需放行可显式关闭。
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `CONVERSATION_GUARDRAIL_INJECTION_ENABLED` | `false` | 提示注入检测开关 |
+| `CONVERSATION_GUARDRAIL_INJECTION_ENABLED` | `true` | 提示注入检测开关（默认开） |
 | `CONVERSATION_GUARDRAIL_INJECTION_MODE` | `block` | `block`（拒答）\| `sanitize`（剥离控制 token）\| `audit`（仅记日志放行） |
-| `CONVERSATION_GUARDRAIL_PII_ENABLED` | `false` | 输出里的 email / 手机号 / 身份证就地脱敏 |
+| `CONVERSATION_GUARDRAIL_PII_ENABLED` | `true` | 输出里的 email / 手机号 / 身份证就地脱敏（默认开） |
 
-### 意图路由（LLM-as-Router，默认关）
+### 意图路由（LLM-as-Router，默认开）
 
 分类 query（RAG / TOOL / CHAT）后分派 —— RAG 走检索、TOOL/CHAT 裸答。端点：`POST /chat/auto`。开启后每轮多一次 temp=0 分类调用。
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `CONVERSATION_ROUTER_ENABLED` | `false` | 意图路由开关（驱动 `/chat/auto`） |
+| `CONVERSATION_ROUTER_ENABLED` | `true` | 意图路由开关（驱动 `/chat/auto`，默认开） |
 
-### 视觉对话（`/chat/vision`，默认关）
+### 视觉对话（`/chat/vision`，默认开）
 
-`/chat/vision` 把「图片 + 问题」委托给 vision-service（视觉能力在那边）。默认关。
+`/chat/vision` 把「图片 + 问题」委托给 vision-service（视觉能力在那边）。默认开。
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `CONVERSATION_VISION_ENABLED` | `false` | 视觉对话开关（驱动 `/chat/vision`） |
+| `CONVERSATION_VISION_ENABLED` | `true` | 视觉对话开关（驱动 `/chat/vision`，默认开） |
 | `CONVERSATION_VISION_BASE_URL` | `http://localhost:8090` | vision-service 地址 |
 | `CONVERSATION_VISION_CONNECT_TIMEOUT` / `_READ_TIMEOUT` | `1s` / `60s` | HTTP 超时 |
 
@@ -305,11 +305,11 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 |---|---|---|
 | `GATEWAY_STREAMING_ENABLED` | `true` | 流式 `StreamingChatModel` bean 开关（驱动 `/chat/stream`） |
 
-### L1 语义缓存（默认关，pre-RAG、租户桶、问题级）
+### L1 语义缓存（默认开，pre-RAG、租户桶、问题级）
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `CONVERSATION_SEMANTIC_CACHE_ENABLED` | `false` | 开关；关时对 `/chat` 零影响 |
+| `CONVERSATION_SEMANTIC_CACHE_ENABLED` | `true` | 开关（默认开）；关时对 `/chat` 零影响 |
 | `CONVERSATION_SEMANTIC_CACHE_THRESHOLD` | `0.95` | 命中相似度阈值 |
 | `CONVERSATION_SEMANTIC_CACHE_MAX_ENTRIES` | `1000` | 每租户最大条数 |
 | `CONVERSATION_SEMANTIC_CACHE_STORE` | `redis` | `redis`（默认，需可达 redis）或 `in-memory` |
@@ -317,11 +317,11 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 | `CONVERSATION_SEMANTIC_CACHE_EMBEDDING_MODEL` | `embedding-default` | 缓存 embedding 模型名 |
 | `CONVERSATION_SEMANTIC_CACHE_REDIS_TTL` | `0s` | redis 档条目 TTL（0 = 不过期） |
 
-### Model Cascade（便宜模型先答 → 低置信升级强模型，默认关）
+### Model Cascade（便宜模型先答 → 低置信升级强模型，默认开）
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `CHAT_CASCADE_ENABLED` | `false` | 开关；关时对 `/chat` 零影响 |
+| `CHAT_CASCADE_ENABLED` | `true` | 开关（默认开）；关时对 `/chat` 零影响 |
 | `CHAT_CASCADE_CHEAP_MODEL` | 空 | 便宜模型逻辑名（留空退化为网关默认模型） |
 | `CHAT_CASCADE_STRONG_MODEL` | 空 | 强模型逻辑名 |
 | `CHAT_CASCADE_CONFIDENCE_THRESHOLD` | `0.6` | 升级阈值 |
@@ -428,29 +428,29 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `RAG_PUBLIC_ENABLED` | `false` | 开启后各租户查询在隔离查自己分区基础上并入 `__public__` 公共分区（向量/keyword/ES 三路并，graph 不并），命中标 `visibility=public` |
+| `RAG_PUBLIC_ENABLED` | `true` | 默认开：各租户查询在隔离查自己分区基础上并入 `__public__` 公共分区（向量/keyword/ES 三路并，graph 不并），命中标 `visibility=public` |
 | `RAG_PUBLIC_TENANT_ID` | `__public__` | 保留公共租户分区名（禁止真实租户/注册用户占用） |
 
 > 写共享库 `POST /rag/documents`（`visibility=public|shared`）需 `public-ingest` scope（否则 403）；`GET /rag/config` 回显 `publicKbEnabled` 供前端决定是否展示共享库视图。详见 [RBAC 与公共知识库指南](../平台工程/rbac-and-public-kb.md)。
 
-### RAG 检索增强（rerank / 查询扩展 / 上下文化，默认全关）
+### RAG 检索增强（rerank / 查询扩展 / 上下文化，默认全开）
 
-三项可选的 LLM 检索增强，默认全关、零回归。开启后共用 `RAG_LLM_*`（缺省复用 `platform.gateway.*`）网关模型。
+三项 LLM 检索增强默认全开，共用 `RAG_LLM_*`（缺省复用 `platform.gateway.*`）网关模型；如需零回归可显式关闭。
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `RAG_RERANK_ENABLED` | `false` | 召回后重排序开关 |
+| `RAG_RERANK_ENABLED` | `true` | 召回后重排序开关（默认开，llm 档零外部依赖；jina 档需 key） |
 | `RAG_RERANK_TYPE` | `llm` | `llm`（复用共享 temp=0 ChatModel 打分）或 `jina`（Jina reranker 云 API） |
 | `RAG_RERANK_CANDIDATE_MULTIPLIER` | `3` | 送入重排的候选倍数（先多召回再截断到 top-k） |
 | `RAG_RERANK_JINA_MODEL` | `jina-reranker-v2-base-multilingual` | `jina` 档 reranker 模型（配合 `JINA_API_KEY`） |
-| `RAG_QUERY_EXPANSION_ENABLED` | `false` | 查询扩展开关：把 1 query 扩成 N 变体多路召回 |
+| `RAG_QUERY_EXPANSION_ENABLED` | `true` | 查询扩展开关（默认开）：把 1 query 扩成 N 变体多路召回 |
 | `RAG_QUERY_EXPANSION_MAX_VARIANTS` | `4` | 扩展变体上限 |
-| `RAG_CONTEXTUAL_ENABLED` | `false` | Contextual Retrieval：入库时逐 chunk 加文档级上下文前缀再嵌入（每 chunk 一次 LLM 调用） |
+| `RAG_CONTEXTUAL_ENABLED` | `true` | Contextual Retrieval（默认开）：入库时逐 chunk 加文档级上下文前缀再嵌入（每 chunk 一次 LLM 调用） |
 | `RAG_CONTEXTUAL_MAX_DOC_CHARS` | `8000` | 生成上下文前缀时读取的文档字符上限 |
 
 > keyword hybrid 检索的中文分词可切 `RAG_HYBRID_TOKENIZER=hanlp`（默认 `simple` 零依赖；`hanlp` 更准，需 HanLP 词典，随 knowledge 依赖引入）。
 
-### GraphRAG（默认关，确定性三元组抽取）
+### GraphRAG（默认开，确定性三元组抽取）
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
@@ -467,10 +467,10 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 
 > 无 Flyway/Liquibase：JDBC store 靠 `Jdbc*Store` 类里的 `CREATE TABLE IF NOT EXISTS` 自建表。
 
-### 图片多模态 embedding（CLIP，`RAG_MULTIMODAL_*`，默认关）
+### 图片多模态 embedding（CLIP，`RAG_MULTIMODAL_*`，默认开）
 
 原生 CLIP / jina-clip 多模态 embedding：图片直接向量化，存入**独立的 image collection**（基名 `knowledge_images`，
-每租户 `knowledge_images_<tenant>`，与文本集合 `knowledge_segments` 物理/维度隔离）。**默认关闭**，此时上传图片会返回
+每租户 `knowledge_images_<tenant>`，与文本集合 `knowledge_segments` 物理/维度隔离）。**默认开启**（需可达的多模态 embedding 端点，缺后端调用期报错）；关闭时上传图片会返回
 明确 400（提示需开启此开关），不再静默转文字。
 
 > ⚠️ 破坏性变更：旧的「图 → 文字（caption/OCR）」路径（`RAG_IMAGE_TEXT_*` / `ImageTextProvider`）已整体移除，
@@ -478,7 +478,7 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `RAG_MULTIMODAL_ENABLED` | `false` | 图片多模态开关；关闭时上传图片返回 400 |
+| `RAG_MULTIMODAL_ENABLED` | `true` | 图片多模态开关（默认开，需可达多模态端点）；关闭时上传图片返回 400 |
 | `RAG_MULTIMODAL_BASE_URL` | `http://localhost:8000/v1` | OpenAI 兼容 `/embeddings` 端点（指向 vLLM/TEI/云 jina） |
 | `RAG_MULTIMODAL_API_KEY` | 空 | 端点鉴权 key（可选） |
 | `RAG_MULTIMODAL_MODEL` | `jinaai/jina-clip-v2` | 多模态 embedding 模型 |
@@ -524,20 +524,20 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 | `AGENT_MCP_HTTP_URL` | `http://localhost:3001/mcp` | http transport 端点 |
 | `AGENT_MCP_STDIO_COMMAND` | 空 | stdio transport 启动命令 |
 
-### browser-use + vision（默认关）
+### browser-use + vision（浏览器默认关 / 视觉后端默认开）
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `AGENT_BROWSER_ENABLED` | `false` | Playwright 浏览器动作（`browser_open/click/type/screenshot`）；首次需装 chromium 二进制 |
-| `AGENT_VISION_ENABLED` | `false` | 视觉后端；`browser_see` 双门控在 browser + vision 同时 true |
+| `AGENT_VISION_ENABLED` | `true` | 视觉后端（默认开）；`browser_see` 双门控仍需 browser + vision 同时 true |
 | `VISION_BASE_URL` | `http://localhost:8090` | vision-service 地址 |
 
-### DAG 重规划（Critic/Replanner，默认关）
+### DAG 重规划（Critic/Replanner，默认开）
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `AGENT_DAG_MAX_TASKS` | `6` | 自动规划 DAG 最大子任务数 |
-| `AGENT_DAG_REPLAN_ENABLED` | `false` | 质量闭环开关 |
+| `AGENT_DAG_REPLAN_ENABLED` | `true` | 质量闭环开关（默认开） |
 | `AGENT_DAG_REPLAN_THRESHOLD` | `0.75` | 综合分阈值 |
 | `AGENT_DAG_REPLAN_MAX_REPLANS` | `1` | 最大重规划轮数 |
 
@@ -556,7 +556,7 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 | `AGENT_TASK_WEBHOOK_ENABLED` | `true` | 终态本地 webhook 投递 |
 | `AGENT_TASK_WEBHOOK_MAX_ATTEMPTS` / `_BACKOFF` | `3` / `250ms` | 重投参数 |
 | `AGENT_TASK_WEBHOOK_CONNECT_TIMEOUT` / `_READ_TIMEOUT` | `1s` / `3s` | 超时 |
-| `AGENT_ASYNC_EXTERNAL_ENABLED` | `false` | 是否镜像任务到 async-task-service |
+| `AGENT_ASYNC_EXTERNAL_ENABLED` | `true` | 是否镜像任务到 async-task-service（默认开） |
 | `AGENT_ASYNC_EXTERNAL_AUTHORITATIVE` | `false` | 是否以 async-task-service 为权威存储 |
 | `AGENT_ASYNC_EXTERNAL_MIRROR_WEBHOOK` | `false` | 权威档下是否把 webhook 交中心投递（避免重复回调） |
 | `AGENT_ASYNC_WORKER_ID` / `AGENT_ASYNC_LEASE_SECONDS` | `agent-service` / `300` | worker 认领 lease |
@@ -587,7 +587,7 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `WORKFLOW_ENABLED` | `false`（compose 中设 `true`） | workflow 服务开关 |
+| `WORKFLOW_ENABLED` | `true` | workflow 服务开关（默认开；端点恒在，需可达 MySQL） |
 | `WORKFLOW_DB_URL` / `_USER` / `_PASSWORD` | MySQL `flowable` 库 / `root` / `root` | Flowable datasource |
 | `WORKFLOW_AI_CLIENT_MODE` | `http` | `http`（经 tenant/trace 传播调 conversation-service，推荐 prod）或 `local`（本地 ChatModel 兜底） |
 | `CONVERSATION_BASE_URL` | `http://localhost:8081` | `http` 档 conversation-service 地址 |
@@ -601,7 +601,7 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `NL2SQL_ENABLED` | `false`（compose 中设 `true`） | NL2SQL 开关 |
+| `NL2SQL_ENABLED` | `true` | NL2SQL 开关（默认开；需可达 MySQL demo 库） |
 | `NL2SQL_DB_URL` / `NL2SQL_DB_READONLY_URL` | MySQL `nl2sql_demo` 库 | admin / 只读数据源 |
 | `NL2SQL_DB_ADMIN_USER` / `_PASSWORD` | `root` / `root` | admin 账号（建库/种子） |
 | `NL2SQL_DB_READONLY_USER` / `_PASSWORD` | `nl2sql_ro` / `nl2sql_ro` | 执行 NL2SQL 的只读账号 |
@@ -649,7 +649,7 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `AGENT_BASE_URL` | `http://localhost:8085` | 代理 agent 能力的目标 |
-| `INTEROP_DISCOVERY_ENABLED` | `false` | live 能力发现；关时用静态 registry（零下游依赖） |
+| `INTEROP_DISCOVERY_ENABLED` | `true` | live 能力发现（默认开）；关时用静态 registry（零下游依赖） |
 | `INTEROP_CAPABILITY_TTL` | `60s` | 能力缓存 TTL |
 | `INTEROP_A2A_AGENT_NAME` / `_BASE_URL` / `_VERSION` | `langchain4j-platform` / `http://localhost:8080` / `0.1.0` | A2A agent-card 字段 |
 
@@ -659,8 +659,8 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 |---|---|---|
 | `EVAL_TARGET_BASE_URL` | `http://edge-gateway:8080` | 默认回归目标 |
 | `EVAL_API_KEY` / `EVAL_API_KEY_HEADER` | 空 / `X-API-Key` | 调目标时带的 key |
-| `EVAL_JUDGE_ENABLED` / `EVAL_JUDGE_MIN_SCORE` | `false` / `0.7` | LLM judge 断言 |
-| `EVAL_EMBEDDING_ENABLED` / `EVAL_EMBEDDING_MIN_SCORE` | `false` / `0.75` | 语义相似度断言 |
+| `EVAL_JUDGE_ENABLED` / `EVAL_JUDGE_MIN_SCORE` | `true` / `0.7` | LLM judge 断言（默认开） |
+| `EVAL_EMBEDDING_ENABLED` / `EVAL_EMBEDDING_MIN_SCORE` | `true` / `0.75` | 语义相似度断言（默认开） |
 | `EVAL_GATE_PASS_RATE_TOLERANCE` / `_AVERAGE_SCORE_TOLERANCE` | `0.05` / `0.05` | 双跑门禁容差 |
 | `EVAL_GATE_MIN_AGREEMENT` / `EVAL_GATE_RUNS` | `0.6` / `1` | 一致性阈值与每 case 重复次数 |
 | `EVAL_BASELINE_DIRECTORY` / `_REPORT_DIRECTORY` / `_SNAPSHOT_DIRECTORY` | 空 | baseline / 报告 / 快照目录 |
@@ -669,7 +669,7 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `VISION_ENABLED` | `false` | 总开关；关时 `VisionModel` / `VisionController` 全不装配 |
+| `VISION_ENABLED` | `true` | 总开关（默认开；但 `VISION_MODEL` 留空则启动 fail-fast）；关时 `VisionModel` / `VisionController` 全不装配 |
 | `VISION_MODEL` | 空 | 视觉逻辑模型名（LiteLLM `model_list` 里的多模态模型）；**开启但留空 → 启动 fail-fast** |
 | `VISION_TEMPERATURE` | `0.2` | 看图转写偏确定性 |
 | `VISION_MAX_IMAGE_BYTES` | `10485760`（10MB） | 单图字节上限 |
