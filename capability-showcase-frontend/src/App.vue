@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, type ComponentPublicInstance } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute } from 'vue-router'
 import AppHeader from './components/layout/AppHeader.vue'
@@ -62,10 +62,27 @@ useFocusTrap({
 
 useGlobalShortcuts()
 
+/**
+ * iOS Safari 软键盘视口校正：壳层自身不滚动（app-shell overflow:hidden），但 iOS 弹键盘时
+ * 会真实滚动 window 以露出输入框，键盘收起后 scrollY 偶发滞留 >0 —— 顶栏（含 ☰）被顶出
+ * 屏幕上沿，表现为"菜单按钮消失、刷新才恢复"。键盘收起（可视高≈布局高）且有残留时归零。
+ */
+function restoreViewportAfterKeyboard(): void {
+  const vv = window.visualViewport
+  if (!vv) return
+  if (vv.height >= window.innerHeight - 80 && (window.scrollY > 0 || vv.offsetTop > 0)) {
+    window.scrollTo(0, 0)
+  }
+}
+
 onMounted(() => {
   ui.applyTheme()
   ui.applyDensity()
   void catalog.load()
+  window.visualViewport?.addEventListener('resize', restoreViewportAfterKeyboard)
+})
+onUnmounted(() => {
+  window.visualViewport?.removeEventListener('resize', restoreViewportAfterKeyboard)
 })
 </script>
 
