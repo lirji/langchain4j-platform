@@ -659,6 +659,12 @@ const moreCaps = computed<Capability[]>(() =>
   font-family: var(--font-mono);
   font-size: var(--fs-xs);
 }
+/* 触屏 16px 防 iOS 聚焦缩放（scoped 特异性压过全局 .form-control 的 coarse 覆盖，须在此单补） */
+@media (pointer: coarse) {
+  .ag__tasks {
+    font-size: 16px;
+  }
+}
 .ag__gate {
   font-size: var(--fs-sm);
   color: var(--warning);

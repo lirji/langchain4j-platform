@@ -246,6 +246,12 @@ function download(): void {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
 }
+/* 触屏 16px 防 iOS 聚焦缩放 */
+@media (pointer: coarse) {
+  .rv__search-input {
+    font-size: 16px;
+  }
+}
 .rv__search-input:focus {
   outline: none;
   border-color: var(--primary);

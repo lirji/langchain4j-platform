@@ -276,6 +276,12 @@ function eventTone(name: string): string {
   border-color: var(--stream);
   box-shadow: 0 0 0 3px var(--stream-border);
 }
+/* 触屏 16px 防 iOS 聚焦缩放 */
+@media (pointer: coarse) {
+  .sse__search-input {
+    font-size: 16px;
+  }
+}
 .sse__search-count {
   font-family: var(--font-mono);
   font-size: 11px;

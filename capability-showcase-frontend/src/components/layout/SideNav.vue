@@ -232,6 +232,12 @@ function clearFilter(): void {
 .nav__search-input::placeholder {
   color: var(--text-subtle);
 }
+/* 触屏 16px 防 iOS 聚焦缩放：<16px 输入聚焦会放大页面，残留 zoom 使 fixed 抽屉错位 */
+@media (pointer: coarse) {
+  .nav__search-input {
+    font-size: 16px;
+  }
+}
 .nav__search-kbd {
   flex: 0 0 auto;
   font-family: var(--font-mono);
