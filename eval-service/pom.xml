@@ -31,6 +31,10 @@
             <groupId>com.lrj.platform</groupId>
             <artifactId>platform-observability</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.lrj.platform</groupId>
+            <artifactId>platform-security</artifactId>
+        </dependency>
         <!-- 可选 LLM-judge / embedding 比较模式：复用唯一网关 ChatModel + OpenAI 兼容 embedding。 -->
         <dependency>
             <groupId>com.lrj.platform</groupId>

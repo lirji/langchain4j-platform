@@ -37,7 +37,7 @@ client ──X-Api-Key/Bearer──▶ edge-gateway (Spring Cloud Gateway)
 | `platform-metering` | 共享库 | token budget + cost attribution |
 | `platform-eventbus` | 共享库 | 跨服务事件总线抽象（内存默认，可选 Kafka）；channel 出入站事件走它 |
 | `auth-service` | 服务 | `/auth/login`·`/refresh`·`/logout`·`/me`·`/public-config`·`/register` 账号登录 + 会话令牌；`/auth/admin/**` RBAC 角色/权限管理面（`role-admin` scope + If-Match 乐观锁） |
-| `conversation-service` | 服务 | `/chat`（可选 RAG 增强）+ `/chat/stream` SSE 流式 + `/chat/auto` 意图路由 + `/chat/vision` 视觉对话 + `/chat/mcp` MCP 工具对话 + `/chat/cascade` 级联模型 + `/chat/memory`·`/memory/profile` 长期画像 + `/extract` 结构化抽取；多轮记忆、PII/注入护栏可选开启 |
+| `conversation-service` | 服务 | `/chat`（可选 RAG 增强）+ `/chat/stream` SSE 流式 + `/chat/auto` 意图路由（订单意图确定性查询 order-service）+ `/chat/vision` 视觉对话 + `/chat/mcp` MCP 工具对话 + `/chat/cascade` 级联模型 + `/chat/memory`·`/memory/profile` 长期画像 + `/extract` 结构化抽取；多轮记忆、PII/注入护栏可选开启 |
 | `workflow-service` | 服务 | `/workflow/**` Flowable 退款审批流 + outbox |
 | `analytics-service` | 服务 | `/chat/sql`、`/analytics/sql` NL2SQL / ChatBI；`/analytics/schema/tables`(+`/{table}`) 按需探表（供数据分析智能体） |
 | `knowledge-service` | 服务 | `/rag/documents/**` 文档上传/列表/删除 + `/rag/query` 四路混排（向量 + 内存关键词 + Elasticsearch BM25 全文 + 图谱，RRF 融合，可选 rerank / query-expansion / contextual / HanLP 分词）；`/rag/image*` 多模态；`/rag/graph/**` GraphRAG；`/rag/config` 运行时配置 + 公共/共享知识库；`/rag/obsidian/import` Obsidian 导入；可选**文档级 ReBAC 授权**（委托外部 auth-platform，`RAG_AUTHZ_MODE`=disabled/shadow/enforce 默认关，含部门层级隔离 + 单篇分享） |
@@ -135,7 +135,7 @@ curl -s -X POST 'http://localhost:8080/rag/obsidian/import' \
   -F 'file=@./my-vault.zip' -F 'category=notes'
 ```
 
-图片走原生 CLIP 多模态 embedding：向量存入独立的 image collection（`knowledge_images_<tenant>`，与文本集合隔离），文本 query 可跨模态检索图片。**默认开**（`RAG_MULTIMODAL_ENABLED=true`，需可达的多模态 embedding 后端 `RAG_MULTIMODAL_BASE_URL`——缺后端时图片入库/检索会报错）；置 `false` 时上传图片返回 400。
+图片走原生 CLIP 多模态 embedding：向量存入独立的 image collection（`knowledge_images_<tenant>`，与文本集合隔离），文本 query 可跨模态检索图片。**默认关闭**（`RAG_MULTIMODAL_ENABLED=false`）；启用时必须同时配置可达的 `RAG_MULTIMODAL_BASE_URL`，缺失会在启动期 fail-fast，避免运行时回落到容器内 localhost。
 
 > ⚠️ **破坏性变更**：旧的「图 → 文字（caption/OCR）」路径已移除，上传图片不再接受 `caption`/`ocrText` 字段，`RAG_IMAGE_TEXT_*` / `ImageTextProvider` 全部删除。
 
@@ -251,12 +251,17 @@ CONVERSATION_GUARDRAIL_PII_ENABLED=true    # 出入参 PII 脱敏
 CONVERSATION_GUARDRAIL_INJECTION_ENABLED=true  # 提示注入检测，_MODE=block|sanitize|audit
 ```
 
-意图路由 `/chat/auto`（`CONVERSATION_ROUTER_ENABLED=true`）按分类分发；级联 `/chat/cascade`（`CHAT_CASCADE_ENABLED=true`，便宜模型先答、低置信度升级 `CHAT_CASCADE_STRONG_MODEL`）；`/chat/mcp` 让对话直接调用外部 MCP 工具；`/extract?type=ticket` 做结构化抽取：
+意图路由 `/chat/auto`（`CONVERSATION_ROUTER_ENABLED=true`）按分类分发；订单查询走高置信快路径，提取订单号后以当前登录租户直接查询 order-service（`CONVERSATION_ROUTER_ORDER_ENABLED=true`），不让模型猜业务数据。级联 `/chat/cascade`（`CHAT_CASCADE_ENABLED=true`，便宜模型先答、低置信度升级 `CHAT_CASCADE_STRONG_MODEL`）；`/chat/mcp` 让对话直接调用外部 MCP 工具；`/extract?type=ticket` 做结构化抽取：
 
 ```bash
 curl -s -X POST 'http://localhost:8080/chat/auto?chatId=u1' \
   -H 'X-Api-Key: dev-key-acme' -H 'Content-Type: application/json' \
   -d '{"message":"帮我退款"}'
+
+# 订单 TOOL 快路径：按当前凭证的 tenant 查询，不跨租户泄露
+curl -s -X POST 'http://localhost:8080/chat/auto?chatId=u1' \
+  -H 'X-Api-Key: dev-key-acme' -H 'Content-Type: application/json' \
+  -d '{"message":"查询退款订单 204"}'
 
 curl -s -X POST 'http://localhost:8080/extract?type=ticket' \
   -H 'X-Api-Key: dev-key-acme' -H 'Content-Type: application/json' \

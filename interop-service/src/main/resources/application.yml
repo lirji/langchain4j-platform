@@ -24,6 +24,8 @@ app:
       agent-name: ${INTEROP_A2A_AGENT_NAME:langchain4j-platform}
       base-url: ${INTEROP_A2A_BASE_URL:http://localhost:8080}
       version: ${INTEROP_A2A_VERSION:0.1.0}
+      # 必须与 edge 认证模式一致：only=Bearer，dual=Bearer/API key，apikey=legacy。
+      auth-mode: ${INTEROP_A2A_AUTH_MODE:only}
       # A2A push 中继：agent 任务终态 webhook 回到 interop 自己，再按 A2A 信封回推客户端。
       push-callback-base-url: ${INTEROP_A2A_PUSH_CALLBACK_BASE_URL:http://localhost:8088}
       # 回推客户端时的 HMAC 签名密钥；空则不签名。生产建议配一个共享密钥供客户端校验回调真伪。
@@ -32,7 +34,8 @@ app:
 platform:
   security:
     jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
-    allow-api-key-fallback: true
+    allow-api-key-fallback: ${INTERNAL_API_KEY_FALLBACK:false}
+    authentication-required: ${INTERNAL_AUTH_REQUIRED:true}
     api-keys:
       dev-key-acme:
         tenant: acme

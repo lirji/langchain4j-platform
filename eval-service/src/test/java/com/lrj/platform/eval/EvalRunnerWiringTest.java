@@ -1,5 +1,8 @@
 package com.lrj.platform.eval;
 
+import com.lrj.platform.security.InternalSecurityProperties;
+import com.lrj.platform.security.InternalToken;
+import com.lrj.platform.security.OutboundServiceTokenForwarder;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -15,6 +18,13 @@ class EvalRunnerWiringTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withBean(RestTemplateBuilder.class, RestTemplateBuilder::new)
+            .withBean(OutboundServiceTokenForwarder.class, () -> {
+                InternalSecurityProperties props = new InternalSecurityProperties();
+                return new OutboundServiceTokenForwarder(
+                        new InternalToken(props.getJwtSecret(), props.getJwtTtl()),
+                        props.getServiceTokenHeader(),
+                        props.getServiceTokenAllowedOrigins());
+            })
             .withUserConfiguration(EvalConfig.class, EvalRunner.class);
 
     @Test

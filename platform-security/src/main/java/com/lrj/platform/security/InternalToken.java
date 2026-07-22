@@ -39,6 +39,9 @@ import java.util.Set;
  */
 public final class InternalToken {
 
+    private static final String TOKEN_USE_CLAIM = "token_use";
+    private static final String SERVICE_TOKEN_USE = "service_callback";
+
     /** 签发用密钥：HS256 为对称 {@link SecretKey}，RS256 为 {@link PrivateKey}；仅验签节点可为 null。 */
     private final Key signingKey;
     /** 验签用密钥：HS256 为对称 {@link SecretKey}，RS256 为 {@link PublicKey}；仅签发节点可为 null。 */
@@ -97,6 +100,15 @@ public final class InternalToken {
 
     /** 把当前租户编成短时签名 JWT。 */
     public String mint(TenantContext.Tenant tenant) {
+        return mint(tenant, null);
+    }
+
+    /** 签发仅供栈内服务回调 edge 的令牌；edge 会校验专用用途声明，普通内部 JWT 不能替代。 */
+    public String mintService(TenantContext.Tenant tenant) {
+        return mint(tenant, SERVICE_TOKEN_USE);
+    }
+
+    private String mint(TenantContext.Tenant tenant, String tokenUse) {
         if (signingKey == null) {
             throw new IllegalStateException(
                     "当前节点未配置签发密钥（RS256 需 platform.security.jwt.private-key），无法签发内部 JWT");
@@ -108,6 +120,9 @@ public final class InternalToken {
                 .claim("scopes", List.copyOf(tenant.scopes() == null ? Set.of() : tenant.scopes()))
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(ttl)));
+        if (tokenUse != null) {
+            builder.claim(TOKEN_USE_CLAIM, tokenUse);
+        }
         // 可选加法字段 dept（部门层级授权用）：旧 reader 忽略此 claim；新 reader 遇旧 token 缺失时 department=null。
         if (tenant.department() != null && !tenant.department().isBlank()) {
             builder.claim("dept", tenant.department());
@@ -117,6 +132,15 @@ public final class InternalToken {
 
     /** 校验签名 + 过期，重建 Tenant；无效返回 null（调用方决定拒绝或降级 anonymous）。 */
     public TenantContext.Tenant verify(String jwt) {
+        return verify(jwt, false);
+    }
+
+    /** 校验栈内服务回调令牌；缺少专用用途声明的普通内部 JWT 必须拒绝。 */
+    public TenantContext.Tenant verifyService(String jwt) {
+        return verify(jwt, true);
+    }
+
+    private TenantContext.Tenant verify(String jwt, boolean serviceRequired) {
         if (jwt == null || jwt.isBlank()) return null;
         if (verificationKey == null) return null;
         try {
@@ -130,6 +154,9 @@ public final class InternalToken {
             }
             Jws<Claims> jws = parser.build().parseSignedClaims(jwt);
             Claims c = jws.getPayload();
+            if (serviceRequired && !SERVICE_TOKEN_USE.equals(c.get(TOKEN_USE_CLAIM, String.class))) {
+                return null;
+            }
             Object rawScopes = c.get("scopes");
             Set<String> scopes = new LinkedHashSet<>();
             if (rawScopes instanceof List<?> list) {

@@ -115,7 +115,7 @@ const focusedIsStream = computed(
     <InfoNote tone="warning" class="mm__banner">
       语音能力默认未注册：需开启 <code>app.voice.enabled</code> 后端才会挂载。图像侧
       （<code>app.vision.enabled</code>、<code>app.conversation.vision.enabled</code>、
-      <code>app.rag.multimodal-embedding.enabled</code>）默认已开启，但需相应模型后端（VISION_MODEL / CLIP）就绪。
+      <code>app.rag.multimodal-embedding.enabled</code>）也会在未配置 CLIP provider 时保持关闭。
       未启用能力可预览请求 / 复制 curl，但不可执行（运行器会标注具体 flag）。首期仅支持文件上传，暂不做浏览器录音采集。
     </InfoNote>
 

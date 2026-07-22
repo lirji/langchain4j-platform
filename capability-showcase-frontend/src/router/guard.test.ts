@@ -20,6 +20,8 @@ describe('sanitizeRedirect', () => {
   it('拒绝开放重定向与非法值', () => {
     expect(sanitizeRedirect('//evil.com')).toBeNull()
     expect(sanitizeRedirect('http://evil.com')).toBeNull()
+    expect(sanitizeRedirect('/\\evil')).toBeNull()
+    expect(sanitizeRedirect('/ok\u0000bad')).toBeNull()
     expect(sanitizeRedirect('')).toBeNull()
     expect(sanitizeRedirect(123)).toBeNull()
     expect(sanitizeRedirect(undefined)).toBeNull()

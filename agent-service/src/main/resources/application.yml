@@ -15,7 +15,8 @@ platform:
     model-name: ${GATEWAY_MODEL:chat-default}
   security:
     jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
-    allow-api-key-fallback: true
+    allow-api-key-fallback: ${INTERNAL_API_KEY_FALLBACK:false}
+    authentication-required: ${INTERNAL_AUTH_REQUIRED:true}
     api-keys:
       dev-key-acme:
         tenant: acme
@@ -129,6 +130,7 @@ app:
     # strategy=synthesis：聚合器 LLM（temp=0 判官变体）收口，适用于自由文本题。
     voting:
       n: ${AGENT_VOTING_N:3}
+      max-candidates: ${AGENT_VOTING_MAX_CANDIDATES:10}
       strategy: ${AGENT_VOTING_STRATEGY:majority}
       min-agreement: ${AGENT_VOTING_MIN_AGREEMENT:0.5}
     # Reflexion 自省环（单答案 answer→critique→improve，加权聚合达阈值即停）。POST /agent/reflexive[/stream]。

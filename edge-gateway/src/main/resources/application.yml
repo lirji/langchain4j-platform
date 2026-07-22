@@ -13,6 +13,13 @@ spring:
     import: "optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}"
   cloud:
     gateway:
+      httpclient:
+        connect-timeout: ${EDGE_DOWNSTREAM_CONNECT_TIMEOUT_MS:3000}
+        pool:
+          # Docker recreate 后旧连接/IP 必须快速淘汰；配合下方 5s DNS TTL 自动恢复，无需重启 edge。
+          max-idle-time: ${EDGE_DOWNSTREAM_MAX_IDLE_TIME:10s}
+          max-life-time: ${EDGE_DOWNSTREAM_MAX_LIFE_TIME:30s}
+          eviction-interval: ${EDGE_DOWNSTREAM_EVICTION_INTERVAL:5s}
       # 前后端分离：允许独立部署的能力展示前端（及其它可信前端）跨域调用业务能力。
       # 生产务必用白名单具体来源，不要 *（X-Api-Key/Authorization 敏感）。
       # allow-credentials=true（刷新令牌 httpOnly cookie 跨域必需）时，allowedHeaders 不能为 *、
@@ -116,6 +123,9 @@ platform:
 # 验不过透传给 legacy(session/api-key) filter。scope 由 Casdoor 展开进 token，edge 只透传 + 固定 allowlist
 # （与角色数量无关）。tenantId←owner、userId←sub。
 edge:
+  http-client:
+    dns-cache-ttl: ${EDGE_DNS_CACHE_TTL:5s}
+    dns-query-timeout: ${EDGE_DNS_QUERY_TIMEOUT:3s}
   casdoor:
     enabled: ${EDGE_CASDOOR_ENABLED:true}
     # dual（灰度，验不过透传 legacy）| only（严格 Casdoor-only，非 open path 无有效 token → 401；tenant 恒取 owner）。

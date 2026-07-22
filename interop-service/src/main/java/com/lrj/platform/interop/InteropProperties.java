@@ -106,6 +106,8 @@ public class InteropProperties {
                         + "proxied to agent-service.";
         private String baseUrl = "http://localhost:8080";
         private String version = "0.1.0";
+        /** edge 认证合同：only（Bearer）| dual（Bearer/API key 二选一）| apikey（legacy）。 */
+        private String authMode = "only";
 
         /** push 中继回调基址：agent 任务终态 webhook 回到 interop 自己（内网直连、不经 edge-gateway）。 */
         private String pushCallbackBaseUrl = "http://localhost:8088";
@@ -151,6 +153,14 @@ public class InteropProperties {
 
         public void setVersion(String version) {
             this.version = version;
+        }
+
+        public String getAuthMode() {
+            return authMode;
+        }
+
+        public void setAuthMode(String authMode) {
+            this.authMode = authMode;
         }
 
         public String getPushCallbackBaseUrl() {

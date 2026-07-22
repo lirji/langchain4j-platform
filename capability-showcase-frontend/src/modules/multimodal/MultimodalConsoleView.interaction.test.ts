@@ -217,6 +217,9 @@ describe('MultimodalConsoleView interaction', () => {
   })
 
   it('MM-18 rag.image.search 成功 JSON 契约与 rag.image.ingest multipart 契约', async () => {
+    // 模拟已配置图片向量 provider 的部署，默认目录保持 fail-closed。
+    capability('rag.image.search').state = 'ready'
+    capability('rag.image.ingest').state = 'scope-required'
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ results: [{ doc: 'd1' }] }))
     vi.stubGlobal('fetch', fetchMock)
     const wrapper = mount(MultimodalConsoleView, { props: { moduleId: 'multimodal' }, ...opts })
@@ -243,6 +246,8 @@ describe('MultimodalConsoleView interaction', () => {
   })
 
   it('MM-06 图片检索错误可访问，切换能力销毁旧错误状态', async () => {
+    // 模拟已配置图片向量 provider 的部署，测运行时错误呈现。
+    capability('rag.image.search').state = 'ready'
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(jsonResponse({ message: 'embedding unavailable' }, 503)),
@@ -380,16 +385,17 @@ describe('MultimodalConsoleView interaction', () => {
     wrapper.unmount()
   })
 
-  // 【issue-19 已修】voice 三能力目录 fail-closed（后端 VOICE_ENABLED:false）；vision/rag 侧默认开保持 ready。
+  // Voice 与图片 embedding 均在 provider 未配置时 fail-closed；vision caption 仍默认 ready。
   it('MM-14 voice 三能力目录 fail-closed，vision/rag 保持可用态，banner 文案准确', () => {
     for (const id of ['voice.transcribe', 'voice.chat', 'voice.chat.stream']) {
       expect(capability(id)).toMatchObject({ featureFlagDefault: false, state: 'flag-off' })
     }
-    for (const id of ['vision.caption.file', 'vision.caption.json', 'chat.vision', 'rag.image.search']) {
+    for (const id of ['vision.caption.file', 'vision.caption.json', 'chat.vision']) {
       expect(capability(id).state).toBe('ready')
     }
-    // rag.image.ingest 带 ingest scope → scope-required（issue-20）。
-    expect(capability('rag.image.ingest').state).toBe('scope-required')
+    for (const id of ['rag.image.ingest', 'rag.image.search']) {
+      expect(capability(id).state).toBe('flag-off')
+    }
     // banner 不再声称「多数能力默认未注册」。
     const wrapper = mount(MultimodalConsoleView, { props: { moduleId: 'multimodal' }, ...opts })
     expect(wrapper.text()).not.toContain('多数能力默认未注册')
@@ -397,9 +403,11 @@ describe('MultimodalConsoleView interaction', () => {
     wrapper.unmount()
   })
 
-  it('MM-15 rag.image.ingest 标 scope-required：gate 对缺 scope 的 Bearer 前置禁用（issue-20 已修）', () => {
+  it('MM-15 rag.image.ingest 开启后标 scope-required：gate 对缺 scope 的 Bearer 前置禁用（issue-20 已修）', () => {
     const ingest = capability('rag.image.ingest')
     expect(ingest.requiredScopes).toContain('ingest')
+    expect(ingest.state).toBe('flag-off')
+    ingest.state = 'scope-required'
     expect(ingest.state).toBe('scope-required')
   })
 

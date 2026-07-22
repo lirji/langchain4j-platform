@@ -1,6 +1,7 @@
 package com.lrj.platform.eval;
 
 import com.lrj.platform.gateway.GatewayChatModelFactory;
+import com.lrj.platform.security.OutboundServiceTokenForwarder;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import org.slf4j.Logger;
@@ -29,10 +30,12 @@ public class EvalConfig {
     private static final Logger log = LoggerFactory.getLogger(EvalConfig.class);
 
     @Bean
-    RestTemplate evalRestTemplate(RestTemplateBuilder builder) {
+    RestTemplate evalRestTemplate(RestTemplateBuilder builder,
+                                  OutboundServiceTokenForwarder serviceTokenForwarder) {
         return builder
                 .setConnectTimeout(Duration.ofSeconds(5))
                 .setReadTimeout(Duration.ofSeconds(30))
+                .additionalInterceptors(serviceTokenForwarder)
                 .build();
     }
 

@@ -78,7 +78,7 @@ curl -s -X POST "$BASE_URL/rag/documents" \
 }
 ```
 > 记下 `docId`,后面查单个/删除要用。`docId` 由标题决定,重复上传同名文档会覆盖并让 `version` 递增。
-> Body 里还支持 `imageBase64`+`contentType` 传图:走原生 CLIP 多模态 embedding,向量入独立的 `knowledge_images_<tenant>` collection,由 `RAG_MULTIMODAL_ENABLED` 控制(默认开,置 `false` 关闭时上传图片返回 400)。⚠️ 旧的 `caption`/`ocrText` 图→文字字段已移除。
+> Body 里还支持 `imageBase64`+`contentType` 传图:走原生 CLIP 多模态 embedding,向量入独立的 `knowledge_images_<tenant>` collection,由 `RAG_MULTIMODAL_ENABLED` 控制(默认关；启用时需配置可达端点，关闭时上传图片返回 400)。⚠️ 旧的 `caption`/`ocrText` 图→文字字段已移除。
 
 ### 2. 上传文件(multipart)
 ```bash

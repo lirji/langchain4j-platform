@@ -10,6 +10,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * VotingServiceTest：验证 {@link VotingService} 多投票者集成的两种策略——
@@ -17,6 +18,23 @@ import static org.assertj.core.api.Assertions.assertThat;
  * synthesis 聚合综合（agreement 为 NaN 且恒置信），以及按 n 精确 fan-out 投票者调用次数。
  */
 class VotingServiceTest {
+
+    @Test
+    void invalidCandidateCountFailsBeforeAnyModelCall() {
+        AtomicInteger calls = new AtomicInteger();
+        VotingProperties props = majorityProps(3, 0.5);
+        VotingService service = service(question -> {
+            calls.incrementAndGet();
+            return "answer";
+        }, null, props);
+
+        assertThatThrownBy(() -> service.vote("题", 0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("between 1 and 10");
+        assertThatThrownBy(() -> service.vote("题", 11))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(calls).hasValue(0);
+    }
 
     @AfterEach
     void clearTenant() {

@@ -130,8 +130,9 @@ curl -sN -X POST 'http://localhost:8080/chat/stream?chatId=u1' \
 
 ### POST `/chat/auto`
 
-- 用途：LLM-as-Router——先对问题分类，再分派到对应处理后回答。与 `/chat` 共享多轮记忆（键 `<tenantId>::<chatId>`）。
+- 用途：混合意图路由——订单查询先走确定性快路径（识别 `订单/order`、提取订单号、携带当前内部 JWT 调 `order-service`）；其它问题由 LLM 分类后分派。订单事实不经 LLM 猜测，仍由 order-service 在 SQL 层按 `tenant_id` 隔离。与 `/chat` 共享普通对话的多轮记忆（键 `<tenantId>::<chatId>`）；确定性订单答复不写入 LLM 对话记忆。
 - 请求：`{ "message": "..." }`；可选 query `chatId=u1`。
+- 订单号缺失 → 提示补充；当前租户无此订单 → `reply` 为未找到；下游不可用 → 返回明确的暂时不可用提示。订单快路径可用 `CONVERSATION_ROUTER_ORDER_ENABLED=false` 单独关闭。
 - 响应：`{ reply, route, reason, classifyMs, answerMs, chatId, tenantId, userId }`。
 - 经网关：是。**默认开启**（`CONVERSATION_ROUTER_ENABLED=true`，`app.conversation.router.enabled`）。置 `false` 时 controller 仍在，返回明确禁用提示（非 404）。
 
@@ -222,7 +223,7 @@ curl -s -X POST 'http://localhost:8080/extract?type=ticket' \
 - 支持两种 content-type：
   - `application/json`（`Map<String,String>`）：`title`（必填）、`text`、`contentType`（默认 `text/plain`，有 `imageBase64` 时默认 `image/png`）、`category`、图片可传 `imageBase64`。
   - `multipart/form-data`：表单字段 `file`（必填）+ 可选 `category`。
-- 图片 ingestion：`image/*` 文件或 `imageBase64` 走 OpenAI 兼容多模态 embedding（存入独立的 `knowledge_images_<tenant>` collection），`RAG_MULTIMODAL_ENABLED`（yml/compose 默认开，但需可达的多模态端点，未配真实端点时调用期报错；置 `false` 则上传图片 400）。⚠️ 旧的 `caption`/`ocrText` 字段与 `RAG_IMAGE_TEXT_*` 图→文字路径已移除。
+- 图片 ingestion：`image/*` 文件或 `imageBase64` 走 OpenAI 兼容多模态 embedding（存入独立的 `knowledge_images_<tenant>` collection）。`RAG_MULTIMODAL_ENABLED` 的 yml/compose 默认均为 `false`；启用时 `RAG_MULTIMODAL_BASE_URL` 必填且启动期校验，关闭时上传图片返回 400。⚠️ 旧的 `caption`/`ocrText` 字段与 `RAG_IMAGE_TEXT_*` 图→文字路径已移除。
 - 公共/共享库：可传 `visibility=public|shared` 写入 `__public__` 公共分区，需 `public-ingest` scope（否则 403）；缺省写本租户私有库。
 - 文档级授权（仅 `RAG_AUTHZ_MODE=enforce`，**默认 `disabled` 不影响**）：**新建**（非共享）文档时把 `owner`（上传人）+ `home_dept`（上传人部门）关系写入外部 auth-platform；若判不出上传人部门（内部 JWT 无 `dept`）→ **403**「cannot determine uploader's home department」。**同名覆盖**既有非共享文档需对其有 `edit` 权限（否则 403，覆盖不夺原 owner）。disabled/shadow 不触发上述拦截。
 - 响应：`DocumentInfo`。
@@ -275,14 +276,14 @@ JSON 示例：
 - 用途：图片入库（原生 CLIP 多模态 embedding，向量存入独立的 `knowledge_images_<tenant>` collection）。需要 `ingest` scope。
 - 请求：`multipart/form-data`，表单字段 `image`（`image/*`，必填）。
 - 响应：`{ id, fileName, type: "image" }`。
-- 经网关：是。**默认开启**（`RAG_MULTIMODAL_ENABLED=true`，需可达多模态端点；置 `false` 时返回 400）。
+- 经网关：是。**默认关闭**（需显式设置 `RAG_MULTIMODAL_ENABLED=true` 和可达的多模态端点；关闭时返回 400）。
 
 ### POST `/rag/image-search`
 
 - 用途：文本 query 跨模态检索图片。
 - 请求：`application/json` `{ query（必填）, topK?, minScore? }`（缺省用 `RAG_MULTIMODAL_TOP_K` / `RAG_MULTIMODAL_MIN_SCORE`）。
 - 响应：`{ query, results:[{ id, fileName, score }] }`。严格按当前租户隔离。
-- 经网关：是。**默认开启**（`RAG_MULTIMODAL_ENABLED=true`，需可达多模态端点）。
+- 经网关：是。**默认关闭**（需显式设置 `RAG_MULTIMODAL_ENABLED=true` 和可达多模态端点）。
 
 ### POST `/rag/query`（别名 `/knowledge/query`）
 

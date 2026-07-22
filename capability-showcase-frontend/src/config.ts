@@ -13,6 +13,8 @@
  *   语义为"只可强制关闭"——即便置 true，共享库是否真正可用仍由服务端运行时（rag config）决定；
  *   置 false 则前端彻底隐藏该入口（灰度/回滚）。DEMO_LOGIN_ENABLED 关闭后登录页不内置 demo 密码，避免生产泄露。
  */
+import { parseTenantAllowlist } from './auth/tenantSelection'
+
 const env = import.meta.env
 
 export const EDGE_BASE_URL: string = (env.VITE_EDGE_BASE_URL ?? '').replace(/\/$/, '')
@@ -57,6 +59,12 @@ export const CASDOOR_ISSUER: string = (env.VITE_CASDOOR_ISSUER ?? 'http://localh
  * 构造 UserManager（见 `auth/oidc.ts`）。须与 edge `edge.casdoor.audiences` 的 base 一致。
  */
 export const CASDOOR_CLIENT_ID: string = env.VITE_CASDOOR_CLIENT_ID ?? 'ragshared0client00000001'
+
+/**
+ * 登录前允许选择的 Casdoor organization。组织列表 API 需要已登录身份，故匿名登录页使用部署显式 allowlist。
+ * 未配置时仅开放本地已开通的 acme；显式空字符串保持空列表并 fail-closed。
+ */
+export const CASDOOR_TENANTS: readonly string[] = parseTenantAllowlist(env.VITE_CASDOOR_TENANTS ?? 'acme')
 
 /** OIDC 请求 scope（标准 OIDC；业务 scope 由 Casdoor permissions claim 展开，不在此请求）。 */
 export const CASDOOR_SCOPES: string = env.VITE_CASDOOR_SCOPES ?? 'openid profile email offline_access'

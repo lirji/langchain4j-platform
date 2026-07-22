@@ -38,14 +38,25 @@ public class InternalSecurityProperties {
     /** 外部 API key header 名（仅边缘识别）。 */
     private String apiKeyHeader = "X-Api-Key";
 
+    /** 内部服务回调 edge 时使用的短时签名令牌头；edge 校验后换成 {@link #internalHeader}。 */
+    private String serviceTokenHeader = "X-Platform-Service-Token";
+
+    /** 可接收服务回调令牌的可信 origin；防止自定义外部 URL 收到栈内凭据。 */
+    private List<String> serviceTokenAllowedOrigins = List.of("http://edge-gateway:8080");
+
     /** 边缘：apiKey -> 租户绑定。key = 明文 api key。 */
     private Map<String, KeyBinding> apiKeys = new LinkedHashMap<>();
 
-    /** 下游服务是否也接受直连的 {@code X-Api-Key}（本地调试用；生产可关，只信 JWT）。 */
-    private boolean allowApiKeyFallback = true;
+    /** 下游服务是否也接受直连的 {@code X-Api-Key}（仅显式本地调试时开启）。 */
+    private boolean allowApiKeyFallback = false;
+
+    /** 下游业务路径是否必须有有效内部 JWT；健康探针始终保持开放。 */
+    private boolean authenticationRequired = true;
 
     public boolean isAllowApiKeyFallback() { return allowApiKeyFallback; }
     public void setAllowApiKeyFallback(boolean allowApiKeyFallback) { this.allowApiKeyFallback = allowApiKeyFallback; }
+    public boolean isAuthenticationRequired() { return authenticationRequired; }
+    public void setAuthenticationRequired(boolean authenticationRequired) { this.authenticationRequired = authenticationRequired; }
 
     public String getJwtSecret() { return jwtSecret; }
     public void setJwtSecret(String jwtSecret) { this.jwtSecret = jwtSecret; }
@@ -57,6 +68,12 @@ public class InternalSecurityProperties {
     public void setInternalHeader(String internalHeader) { this.internalHeader = internalHeader; }
     public String getApiKeyHeader() { return apiKeyHeader; }
     public void setApiKeyHeader(String apiKeyHeader) { this.apiKeyHeader = apiKeyHeader; }
+    public String getServiceTokenHeader() { return serviceTokenHeader; }
+    public void setServiceTokenHeader(String serviceTokenHeader) { this.serviceTokenHeader = serviceTokenHeader; }
+    public List<String> getServiceTokenAllowedOrigins() { return serviceTokenAllowedOrigins; }
+    public void setServiceTokenAllowedOrigins(List<String> serviceTokenAllowedOrigins) {
+        this.serviceTokenAllowedOrigins = serviceTokenAllowedOrigins;
+    }
     public Map<String, KeyBinding> getApiKeys() { return apiKeys; }
     public void setApiKeys(Map<String, KeyBinding> apiKeys) { this.apiKeys = apiKeys; }
 

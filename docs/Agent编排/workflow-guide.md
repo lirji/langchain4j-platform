@@ -276,7 +276,7 @@ curl -X POST http://localhost:8080/agent/chain \
 
 ## B.2 Routing —— `POST /chat/auto`
 
-LLM-as-Router：`QueryClassifier`（temp=0 判官模型，分类需确定性）把问题分到 `RAG` / `TOOL` / `CHAT` 三条链路。默认开（`CONVERSATION_ROUTER_ENABLED=true`）；置 `false` 关闭时端点返回明确禁用提示。记忆键与 `/chat` 一致（`<tenantId>::<chatId>`），与普通对话共享多轮记忆。
+混合 Router：订单问题先由 `OrderQueryRoute` 做确定性高置信识别，提取订单号后携带当前租户身份调用 order-service，并以 `TOOL` 路由返回；其它问题再由 `QueryClassifier`（temp=0 判官模型）分到 `RAG` / `TOOL` / `CHAT` 三条链路。默认开（`CONVERSATION_ROUTER_ENABLED=true`，订单快路径另由 `CONVERSATION_ROUTER_ORDER_ENABLED=true` 控制）；置总开关为 `false` 时端点返回明确禁用提示。记忆键与 `/chat` 一致（`<tenantId>::<chatId>`），普通 LLM 对话共享多轮记忆，确定性订单答复不进入 LLM 记忆。
 
 ```bash
 # 启用：CONVERSATION_ROUTER_ENABLED=true 起 conversation-service

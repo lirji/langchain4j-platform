@@ -52,7 +52,11 @@ public class VotingService {
     }
 
     public VoteReply vote(String question, int n) {
-        int rounds = Math.max(1, n);
+        if (!isCandidateCountAllowed(n)) {
+            throw new IllegalArgumentException(
+                    "candidate count n must be between 1 and " + props.getMaxCandidates());
+        }
+        int rounds = n;
         List<String> votes = fanOut(question, rounds);
         String tenantId = TenantContext.current().tenantId();
 
@@ -64,6 +68,14 @@ public class VotingService {
             return new VoteReply(question, votes, "synthesis", merged, Double.NaN, true, tenantId);
         }
         return majority(question, votes, tenantId);
+    }
+
+    public boolean isCandidateCountAllowed(int n) {
+        return n >= 1 && n <= props.getMaxCandidates();
+    }
+
+    public int maxCandidates() {
+        return props.getMaxCandidates();
     }
 
     /** 并行跑 N 个投票者（复用注入的 agentTaskExecutor）。 */

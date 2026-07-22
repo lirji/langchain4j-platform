@@ -238,6 +238,9 @@ class A2aServiceTest {
         assertThat(card.skills()).extracting(A2aAgentCard.Skill::id)
                 .containsExactly(A2aService.SKILL_CHAT, A2aService.SKILL_RESEARCH);
         assertThat(card.url()).endsWith("/interop/a2a");
-        assertThat(card.securitySchemes()).containsKey("apiKey");
+        assertThat(card.securitySchemes()).containsOnlyKeys("bearerAuth");
+        assertThat(card.securitySchemes().get("bearerAuth").type()).isEqualTo("http");
+        assertThat(card.securitySchemes().get("bearerAuth").scheme()).isEqualTo("bearer");
+        assertThat(card.security()).containsExactly(Map.of("bearerAuth", List.of()));
     }
 }

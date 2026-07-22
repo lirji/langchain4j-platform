@@ -33,6 +33,10 @@ public class VotingController {
             return ResponseEntity.badRequest().body(Map.of("error", "question is required"));
         }
         Integer n = request.n();
+        if (n != null && !voting.isCandidateCountAllowed(n)) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", "n must be between 1 and " + voting.maxCandidates()));
+        }
         return ResponseEntity.ok(n != null ? voting.vote(question, n) : voting.vote(question));
     }
 }

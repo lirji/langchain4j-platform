@@ -5,6 +5,7 @@ import com.lrj.platform.knowledge.cache.SemanticCacheInvalidator;
 import com.lrj.platform.knowledge.graph.GraphIngestor;
 import com.lrj.platform.knowledge.graph.InMemoryGraphStore;
 import com.lrj.platform.knowledge.graph.RuleBasedGraphExtractor;
+import com.lrj.platform.knowledge.graph.Triple;
 import com.lrj.platform.knowledge.lifecycle.DocumentInfo;
 import com.lrj.platform.knowledge.lifecycle.DocumentRegistry;
 import com.lrj.platform.knowledge.lifecycle.DocumentService;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -125,6 +127,31 @@ class DocumentServiceTest {
 
         assertThat(graphStore.size()).isEqualTo(1);
         assertThat(graphStore.entities("acme", "org")).containsExactly("张三", "研发部");
+
+        assertThat(graphEnabledService.delete(info.docId())).isTrue();
+        assertThat(graphStore.size()).isZero();
+    }
+
+    @Test
+    void deleteRemovesObsidianWikilinksThatUseDocIdAsSource() {
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("ingest")));
+        InMemoryGraphStore graphStore = new InMemoryGraphStore();
+        GraphIngestor graphIngestor = new GraphIngestor(
+                new RuleBasedGraphExtractor(), graphStore, 10, Set.of(), Map.of(), Runnable::run, false);
+        DocumentService graphEnabledService = new DocumentService(
+                new InMemoryEmbeddingStore<>(),
+                new KnowledgeEmbeddingConfig.HashEmbeddingModel(),
+                new DocumentMirror(),
+                splitterFactory(),
+                new InMemoryDocumentRegistry(),
+                mock(AuditLogger.class),
+                graphIngestor);
+
+        DocumentInfo info = graphEnabledService.upload(
+                "请假制度.md", "text/markdown", "正文不含规则三元组", "hr");
+        graphStore.add(List.of(new Triple(
+                "请假制度", "链接到", "考勤制度", info.docId(), "acme", "hr")));
+        assertThat(graphStore.size()).isEqualTo(1);
 
         assertThat(graphEnabledService.delete(info.docId())).isTrue();
         assertThat(graphStore.size()).isZero();

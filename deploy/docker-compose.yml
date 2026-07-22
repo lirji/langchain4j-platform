@@ -169,6 +169,8 @@ services:
       CONVERSATION_RAG_CATEGORY: ${CONVERSATION_RAG_CATEGORY:-}
       # ── 能力展示：纯靠 DeepSeek 栈即可跑通的对话高级能力，默认打开（前端 catalog 对应 state=ready）──
       CONVERSATION_ROUTER_ENABLED: ${CONVERSATION_ROUTER_ENABLED:-true}          # /chat/auto 意图路由
+      CONVERSATION_ROUTER_ORDER_ENABLED: ${CONVERSATION_ROUTER_ORDER_ENABLED:-true}
+      ORDER_BASE_URL: http://order-service:8093
       CHAT_CASCADE_ENABLED: ${CHAT_CASCADE_ENABLED:-true}                        # /chat/cascade 级联降级（cheap/strong 留空退化默认模型）
       CONVERSATION_MEMORY_PROFILE_ENABLED: ${CONVERSATION_MEMORY_PROFILE_ENABLED:-true}  # /chat/memory + GET/DELETE /memory/profile 长期画像
       # chat.vision：依赖 vision-service 启用且配了可路由的视觉模型（见下方 vision-service）；否则 /chat/vision 上游不可用
@@ -180,11 +182,14 @@ services:
       CONVERSATION_MCP_TRANSPORT: ${CONVERSATION_MCP_TRANSPORT:-http}
       CONVERSATION_MCP_HTTP_URL: ${CONVERSATION_MCP_HTTP_URL:-http://host.docker.internal:3001/mcp}
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      INTERNAL_AUTH_REQUIRED: "true"
+      INTERNAL_API_KEY_FALLBACK: "false"
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:
       - litellm
       - knowledge-service
+      - order-service
     ports:
       - "8081:8081"
 
@@ -203,6 +208,9 @@ services:
       MANAGEMENT_TRACING_ENABLED: ${MANAGEMENT_TRACING_ENABLED:-false}
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      INTERNAL_AUTH_REQUIRED: "true"
+      INTERNAL_API_KEY_FALLBACK: "false"
+      CONVERSATION_BASE_URL: http://conversation-service:8081
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
       WORKFLOW_OUTBOX_HMAC_SECRET: ${WORKFLOW_OUTBOX_HMAC_SECRET:-dev-secret-change-me}
@@ -212,6 +220,7 @@ services:
       - mysql
       - litellm
       - async-task-service
+      - conversation-service
     ports:
       - "8082:8082"
 
@@ -231,6 +240,8 @@ services:
       MANAGEMENT_TRACING_ENABLED: ${MANAGEMENT_TRACING_ENABLED:-false}
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      INTERNAL_AUTH_REQUIRED: "true"
+      INTERNAL_API_KEY_FALLBACK: "false"
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:
@@ -307,12 +318,13 @@ services:
       RAG_GRAPH_DB_URL: jdbc:mysql://mysql:3306/knowledge_graph?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
       RAG_GRAPH_DB_USER: root
       RAG_GRAPH_DB_PASSWORD: root
-      # 图片 RAG（/rag/image、/rag/image-search）：装配 boot-safe，默认打开以在前端放行表单。
-      # 注意：实际图片向量化走 OpenAI 兼容的多模态 embedding 端点（RAG_MULTIMODAL_BASE_URL/MODEL），
-      # 未配真实端点时上传/检索会在调用期报错——能力已注册（前端 catalog=ready），functional 需自备端点。
-      RAG_MULTIMODAL_ENABLED: ${RAG_MULTIMODAL_ENABLED:-true}
+      # 图片 RAG 必须有显式、容器可达的 CLIP/jina embedding 端点才可开启；缺 provider 时诚实关闭。
+      RAG_MULTIMODAL_ENABLED: ${RAG_MULTIMODAL_ENABLED:-false}
+      RAG_MULTIMODAL_BASE_URL: ${RAG_MULTIMODAL_BASE_URL:-}
       # 指向栈内 redis 容器：registry/semantic-cache/rate-limit/token-budget/cost 默认已持久化到 redis
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      INTERNAL_AUTH_REQUIRED: "true"
+      INTERNAL_API_KEY_FALLBACK: "false"
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:
@@ -367,6 +379,8 @@ services:
       AGENT_ASYNC_LEASE_SECONDS: ${AGENT_ASYNC_LEASE_SECONDS:-300}
       ASYNC_TASK_BASE_URL: http://async-task-service:8086
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      INTERNAL_AUTH_REQUIRED: "true"
+      INTERNAL_API_KEY_FALLBACK: "false"
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:
@@ -383,6 +397,8 @@ services:
       context: ../async-task-service
     environment:
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      INTERNAL_AUTH_REQUIRED: "true"
+      INTERNAL_API_KEY_FALLBACK: "false"
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
       ASYNC_TASK_STORE: ${ASYNC_TASK_STORE:-jdbc}
@@ -403,7 +419,11 @@ services:
       context: ../auth-service
     environment:
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      INTERNAL_AUTH_REQUIRED: "true"
+      INTERNAL_API_KEY_FALLBACK: "false"
       SESSION_JWT_SECRET: ${SESSION_JWT_SECRET:-dev-only-session-secret-change-me-please-32b}
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
       AUTH_STORE: ${AUTH_STORE:-jdbc}
       AUTH_DB_URL: jdbc:mysql://mysql:3306/auth?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
       AUTH_DB_USER: root
@@ -422,6 +442,7 @@ services:
       AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
     depends_on:
       - mysql
+      - redis
     ports:
       - "8092:8092"
 
@@ -430,6 +451,8 @@ services:
       context: ../channel-service
     environment:
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      INTERNAL_AUTH_REQUIRED: "true"
+      INTERNAL_API_KEY_FALLBACK: "false"
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
       CHANNEL_OUTBOUND_ENABLED: ${CHANNEL_OUTBOUND_ENABLED:-false}
@@ -449,12 +472,15 @@ services:
       context: ../interop-service
     environment:
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      INTERNAL_AUTH_REQUIRED: "true"
+      INTERNAL_API_KEY_FALLBACK: "false"
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
       AGENT_BASE_URL: http://agent-service:8085
       CONVERSATION_BASE_URL: http://conversation-service:8081
       # A2A push 中继回调回到自身（容器内服务名）；agent 任务终态 webhook 打到这里再转发 A2A 客户端
       INTEROP_A2A_PUSH_CALLBACK_BASE_URL: http://interop-service:8088
+      INTEROP_A2A_AUTH_MODE: ${EDGE_CASDOOR_MODE:-only}
     depends_on:
       - agent-service
     ports:
@@ -465,9 +491,19 @@ services:
       context: ../eval-service
     environment:
       EVAL_TARGET_BASE_URL: http://edge-gateway:8080
-      EVAL_API_KEY: dev-key-acme
+      # Eval 沿调用者租户签发短时内部 service token 回流 edge；Casdoor-only 不再依赖 legacy API key。
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      INTERNAL_AUTH_REQUIRED: "true"
+      INTERNAL_API_KEY_FALLBACK: "false"
+      GATEWAY_BASE_URL: http://litellm:4000/v1
+      GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
+      GATEWAY_MODEL: chat-default
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:
       - edge-gateway
+      - litellm
+      - redis
     ports:
       - "8089:8089"
 
@@ -487,6 +523,8 @@ services:
       VISION_MODEL: ${VISION_MODEL:-vision-default}
       VISION_MAX_IMAGE_BYTES: ${VISION_MAX_IMAGE_BYTES:-10485760}
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      INTERNAL_AUTH_REQUIRED: "true"
+      INTERNAL_API_KEY_FALLBACK: "false"
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:
@@ -498,10 +536,8 @@ services:
     build:
       context: ../voice-service
     environment:
-      # 语音闭环（/voice/**）：装配 boot-safe（无 key 仅告警不崩），默认打开以在前端放行表单。
-      # 注意：ASR/TTS 实际走 VOICE_BASE_URL（默认云端 OpenAI），无 VOICE_API_KEY 时调用期 401——
-      # 能力已注册（前端 catalog=ready），functional 需自备 OpenAI 兼容 Key 或本地 whisper/tts 网关。
-      VOICE_ENABLED: ${VOICE_ENABLED:-true}
+      # 无 provider key 时与 catalog 一致地默认关闭；显式启用需同时注入 VOICE_API_KEY/可达本地 provider。
+      VOICE_ENABLED: ${VOICE_ENABLED:-false}
       VOICE_PROVIDER: ${VOICE_PROVIDER:-openai}
       VOICE_BASE_URL: ${VOICE_BASE_URL:-https://api.openai.com/v1}
       VOICE_API_KEY: ${VOICE_API_KEY:-${OPENAI_API_KEY:-}}
@@ -511,8 +547,13 @@ services:
       VOICE_TTS_FORMAT: ${VOICE_TTS_FORMAT:-mp3}
       VOICE_CONVERSATION_BASE_URL: http://conversation-service:8081
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      INTERNAL_AUTH_REQUIRED: "true"
+      INTERNAL_API_KEY_FALLBACK: "false"
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:
       - conversation-service
+      - redis
     ports:
       - "8091:8091"
 
@@ -535,6 +576,9 @@ services:
         VITE_CASDOOR_ISSUER: ${SHOWCASE_CASDOOR_ISSUER:-http://localhost:8000}
         # client_id 必须 = edge.casdoor.audiences（否则 aud 校验 401）。
         VITE_CASDOOR_CLIENT_ID: ${SHOWCASE_CASDOOR_CLIENT_ID:-ragshared0client00000001}
+        # 登录前 tenant allowlist：防止把不存在的 org 直接拼进 client_id。新租户先在 Casdoor 开通再加入。
+        # `-`（非 `:-`）保留显式空值，使运维可通过空 allowlist fail-closed；仅未声明变量时默认 acme。
+        VITE_CASDOOR_TENANTS: ${SHOWCASE_CASDOOR_TENANTS-acme}
         VITE_CASDOOR_SCOPES: ${SHOWCASE_CASDOOR_SCOPES:-openid profile email offline_access}
         # 回调/登出/静默续期 SPA 路径（须与 Casdoor app redirectUris 精确登记；silent 刻意无扩展名以走 SPA fallback）。
         VITE_CASDOOR_REDIRECT_PATH: ${SHOWCASE_CASDOOR_REDIRECT_PATH:-callback}
@@ -557,6 +601,8 @@ services:
       context: ../order-service
     environment:
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      INTERNAL_AUTH_REQUIRED: "true"
+      INTERNAL_API_KEY_FALLBACK: "false"
       ORDER_DB_URL: jdbc:mysql://mysql:3306/order_service?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
       ORDER_DB_USER: root
       ORDER_DB_PASSWORD: root

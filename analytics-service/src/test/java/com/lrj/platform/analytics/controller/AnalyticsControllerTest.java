@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -37,15 +39,28 @@ class AnalyticsControllerTest {
     }
 
     @Test
-    void chatSql_defaultsMissingQuestionToBlank() {
+    void chatSql_rejectsMissingQuestionBeforeCallingModel() {
         NlToSqlService service = mock(NlToSqlService.class);
-        AnalyticsSqlReply result = new AnalyticsSqlReply("", null, 0, List.of(), "", false);
-        when(service.ask("")).thenReturn(result);
         AnalyticsController controller = new AnalyticsController(service);
 
-        assertEquals(result, controller.chatSql(new AnalyticsSqlRequest(null)));
-        assertEquals(result, controller.chatSql(null));
-        verify(service, org.mockito.Mockito.times(2)).ask("");
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> controller.chatSql(new AnalyticsSqlRequest("   ")));
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> controller.chatSql(null));
+        verify(service, never()).ask(org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void chatSqlEndpoint_returns400ForBlankQuestion() throws Exception {
+        NlToSqlService service = mock(NlToSqlService.class);
+
+        standaloneSetup(new AnalyticsController(service)).build()
+                .perform(post("/analytics/sql")
+                        .contentType("application/json")
+                        .content("{\"question\":\"   \"}"))
+                .andExpect(status().isBadRequest());
+
+        verify(service, never()).ask(org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test

@@ -20,7 +20,7 @@ public class MultimodalEmbeddingProperties {
     private boolean enabled = false;
 
     /** OpenAI 兼容 embedding 端点根，会拼 {@code /embeddings}。指向 vLLM/TEI/云 jina。 */
-    private String baseUrl = "http://localhost:8000/v1";
+    private String baseUrl = "";
 
     /** API key。本地 vLLM/TEI 通常不校验，留 EMPTY 即可；云 jina 填真实 key。 */
     private String apiKey = "";

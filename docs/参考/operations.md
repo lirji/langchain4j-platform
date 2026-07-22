@@ -143,7 +143,7 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 | `dev-key-tenantA-admin` | tenantA | analyst-a | chat, analytics |
 | `dev-key-acme-ingest` | acme | alice | chat, ingest |
 
-> 下游服务各自也有一份小的 `platform.security.api-keys` 和 `allow-api-key-fallback: true`，仅用于**绕过网关直连调试**；生产可把 `allow-api-key-fallback` 关掉，令下游只信 JWT。
+> 下游业务端点默认 `authentication-required: true` 且 `allow-api-key-fallback: false`，没有有效内部 JWT 即 401；仅 health/info 探针开放。需要直连调试时才显式开启 `INTERNAL_API_KEY_FALLBACK=true`，不要用于生产。
 
 ### 登录账号（auth-service demo 种子，口令 `AUTH_DEMO_PASSWORD`，默认 `demo12345`）
 
@@ -281,11 +281,14 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 
 ### 意图路由（LLM-as-Router，默认开）
 
-分类 query（RAG / TOOL / CHAT）后分派 —— RAG 走检索、TOOL/CHAT 裸答。端点：`POST /chat/auto`。开启后每轮多一次 temp=0 分类调用。
+端点：`POST /chat/auto`。订单查询使用确定性 TOOL 快路径：识别订单意图、提取订单号并携带当前租户身份调用 order-service；不进入 LLM 分类，不允许模型猜订单事实。其它 query 分类为 RAG / TOOL / CHAT 后分派——RAG 走检索，其它 TOOL/CHAT 裸答；这些请求每轮多一次 temp=0 分类调用。
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `CONVERSATION_ROUTER_ENABLED` | `true` | 意图路由开关（驱动 `/chat/auto`，默认开） |
+| `CONVERSATION_ROUTER_ORDER_ENABLED` | `true` | `/chat/auto` 订单确定性快路径；关闭后订单问题回到普通 LLM 分类 |
+| `ORDER_BASE_URL` | `http://localhost:8093` | conversation-service 访问 order-service 的地址；Compose 内为 `http://order-service:8093` |
+| `CONVERSATION_ROUTER_ORDER_CONNECT_TIMEOUT` / `_READ_TIMEOUT` | `1s` / `5s` | 订单快路径连接/读取超时 |
 
 ### 视觉对话（`/chat/vision`，默认开）
 
@@ -470,7 +473,7 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 ### 图片多模态 embedding（CLIP，`RAG_MULTIMODAL_*`，默认开）
 
 原生 CLIP / jina-clip 多模态 embedding：图片直接向量化，存入**独立的 image collection**（基名 `knowledge_images`，
-每租户 `knowledge_images_<tenant>`，与文本集合 `knowledge_segments` 物理/维度隔离）。**默认开启**（需可达的多模态 embedding 端点，缺后端调用期报错）；关闭时上传图片会返回
+每租户 `knowledge_images_<tenant>`，与文本集合 `knowledge_segments` 物理/维度隔离）。**默认关闭**；开启时必须提供可达的多模态 embedding 端点，否则启动 fail-fast。关闭时上传图片会返回
 明确 400（提示需开启此开关），不再静默转文字。
 
 > ⚠️ 破坏性变更：旧的「图 → 文字（caption/OCR）」路径（`RAG_IMAGE_TEXT_*` / `ImageTextProvider`）已整体移除，
@@ -478,8 +481,8 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `RAG_MULTIMODAL_ENABLED` | `true` | 图片多模态开关（默认开，需可达多模态端点）；关闭时上传图片返回 400 |
-| `RAG_MULTIMODAL_BASE_URL` | `http://localhost:8000/v1` | OpenAI 兼容 `/embeddings` 端点（指向 vLLM/TEI/云 jina） |
+| `RAG_MULTIMODAL_ENABLED` | `false` | 图片多模态开关；开启时要求配置可达端点，关闭时上传图片返回 400 |
+| `RAG_MULTIMODAL_BASE_URL` | 空 | OpenAI 兼容 `/embeddings` 端点（指向 vLLM/TEI/云 jina）；开启时必填 |
 | `RAG_MULTIMODAL_API_KEY` | 空 | 端点鉴权 key（可选） |
 | `RAG_MULTIMODAL_MODEL` | `jinaai/jina-clip-v2` | 多模态 embedding 模型 |
 | `RAG_MULTIMODAL_DIMENSION` | `1024` | 图片向量维度 |
@@ -652,13 +655,15 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 | `INTEROP_DISCOVERY_ENABLED` | `true` | live 能力发现（默认开）；关时用静态 registry（零下游依赖） |
 | `INTEROP_CAPABILITY_TTL` | `60s` | 能力缓存 TTL |
 | `INTEROP_A2A_AGENT_NAME` / `_BASE_URL` / `_VERSION` | `langchain4j-platform` / `http://localhost:8080` / `0.1.0` | A2A agent-card 字段 |
+| `INTEROP_A2A_AUTH_MODE` | `only` | agent-card 鉴权声明：`only`=Bearer、`dual`=Bearer/API key、`legacy`=API key |
 
 ### Eval（`app.eval.*`）
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `EVAL_TARGET_BASE_URL` | `http://edge-gateway:8080` | 默认回归目标 |
-| `EVAL_API_KEY` / `EVAL_API_KEY_HEADER` | 空 / `X-API-Key` | 调目标时带的 key |
+| `EVAL_API_KEY` / `EVAL_API_KEY_HEADER` | 空 / `X-API-Key` | 可选 legacy/外部目标凭据；Compose Casdoor-only 不再设置该值 |
+| `INTERNAL_SERVICE_TOKEN_ALLOWED_ORIGINS` | `http://edge-gateway:8080` | 专用服务回调令牌允许发送的可信 origin 列表；不要加入不受控目标 |
 | `EVAL_JUDGE_ENABLED` / `EVAL_JUDGE_MIN_SCORE` | `true` / `0.7` | LLM judge 断言（默认开） |
 | `EVAL_EMBEDDING_ENABLED` / `EVAL_EMBEDDING_MIN_SCORE` | `true` / `0.75` | 语义相似度断言（默认开） |
 | `EVAL_GATE_PASS_RATE_TOLERANCE` / `_AVERAGE_SCORE_TOLERANCE` | `0.05` / `0.05` | 双跑门禁容差 |
@@ -722,7 +727,7 @@ curl -s http://localhost:8086/actuator/health   # async-task
 
 ### 下游服务返回 401
 
-绕过 `edge-gateway` 直连服务但没带 `X-Internal-Token`。调试业务 API 优先从 `localhost:8080` 走。若确需直连，可依赖下游的 `allow-api-key-fallback: true` + `X-Api-Key`（生产建议关闭该回退）。
+绕过 `edge-gateway` 直连服务但没带有效 `X-Internal-Token`。调试业务 API 优先从 `localhost:8080` 走；若确需直连，显式开启 `INTERNAL_API_KEY_FALLBACK=true` 后再使用映射的 `X-Api-Key`，完成后立即关闭。
 
 ### 内部 JWT 校验失败 / 启动报密钥太短
 

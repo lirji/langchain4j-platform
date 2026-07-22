@@ -60,6 +60,11 @@ public class CasdoorTokenExchangeFilter implements GlobalFilter, Ordered {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        // 栈内服务令牌已由更早的 InternalServiceTokenExchangeFilter 验签并换成内部头；
+        // 这不是 legacy 凭证，Casdoor-only 可安全透传，且不能再剥离刚写入的内部头。
+        if (Boolean.TRUE.equals(exchange.getAttribute(InternalServiceTokenExchangeFilter.VERIFIED_ATTRIBUTE))) {
+            return chain.filter(exchange);
+        }
         // 剥离客户端伪造的入站内部头：Casdoor 是最早(-120)的认证 filter，内部头只应由本链各 filter 换发注入，
         // 绝不能信任外部传入——否则可伪造有效内部 JWT 绕过 Casdoor/session/api-key 全部认证。
         ServerWebExchange ex = stripInboundInternalHeader(exchange);

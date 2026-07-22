@@ -460,7 +460,7 @@ modules:
   # ─────────────────────────── P0：Agent ───────────────────────────
   - id: agent
     title: 智能体 Agent Lab
-    description: ReAct 目标执行与异步任务流。agent-service。（DAG/链/投票/反思等高级能力二期补表单。）
+    description: ReAct 目标执行与异步任务流，以及 DAG、链式、投票、反思等高级编排能力。agent-service。
     order: 3
     priority: P0
     service: agent-service
@@ -1370,10 +1370,10 @@ modules:
           - { name: image, in: form-data, type: file, required: true, label: 图片, accept: "image/*" }
         requiredScopes: [ingest]
         featureFlag: app.rag.multimodal-embedding.enabled
-        featureFlagDefault: true
+        featureFlagDefault: false
         riskLevel: caution
-        # 带 requiredScopes 的能力须标 scope-required：gate 才会做 Bearer scope 预判 / api-key hint。
-        state: scope-required
+        # provider 未配置时先按开关 fail-closed；启用后 live config + requiredScopes 继续做 ingest 判定。
+        state: flag-off
         executableByDefault: true
       - id: rag.image.search
         module: multimodal
@@ -1395,9 +1395,9 @@ modules:
             body: '{"query":"系统架构示意图"}'
         requiredScopes: []
         featureFlag: app.rag.multimodal-embedding.enabled
-        featureFlagDefault: true
+        featureFlagDefault: false
         riskLevel: safe
-        state: ready
+        state: flag-off
         executableByDefault: true
   - id: interop-eval
     title: 互操作与评测 Interop & Eval Tools

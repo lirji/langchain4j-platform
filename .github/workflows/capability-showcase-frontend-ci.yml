@@ -1,0 +1,38 @@
+name: Capability Showcase Frontend CI
+
+on:
+  pull_request:
+    paths:
+      - 'capability-showcase-frontend/**'
+      - '.github/workflows/capability-showcase-frontend-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'capability-showcase-frontend/**'
+      - '.github/workflows/capability-showcase-frontend-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: capability-showcase-frontend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: capability-showcase-frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: capability-showcase-frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm test -- --run
+      - run: npm run type-check
+      - run: npm run build

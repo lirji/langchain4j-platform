@@ -42,6 +42,10 @@ public class MultimodalEmbeddingConfig {
     @Bean
     public MultimodalEmbeddingModel multimodalEmbeddingModel(MultimodalEmbeddingProperties props,
                                                              ObjectMapper mapper) {
+        if (props.getBaseUrl() == null || props.getBaseUrl().isBlank()) {
+            throw new IllegalStateException(
+                    "RAG multimodal embedding is enabled but RAG_MULTIMODAL_BASE_URL is blank");
+        }
         log.info("Native multimodal embedding enabled: model={} dim={}",
                 props.getModelName(), props.getDimension());
         return new DefaultMultimodalEmbeddingModel(props, mapper);

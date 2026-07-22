@@ -24,6 +24,9 @@ import java.util.Set;
 @Component
 public class ApiKeyToInternalTokenFilter implements GlobalFilter, Ordered {
 
+    private static final TenantContext.Tenant EDGE_SERVICE_IDENTITY =
+            new TenantContext.Tenant("_platform", "edge-gateway", Set.of("service"));
+
     private final InternalSecurityProperties props;
     private final InternalToken tokens;
 
@@ -36,7 +39,14 @@ public class ApiKeyToInternalTokenFilter implements GlobalFilter, Ordered {
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String path = exchange.getRequest().getPath().value();
         if (EdgeOpenPaths.isOpen(path)) {
-            return chain.filter(exchange);
+            // 登录、第三方回调、发现等入口对客户端开放，但下游端口本身仍强制内部 JWT。
+            // 用短时 edge 服务身份转发，既不把开放路径变成 anonymous，也不赋予租户业务 scope。
+            String jwt = tokens.mint(EDGE_SERVICE_IDENTITY);
+            ServerHttpRequest request = exchange.getRequest().mutate()
+                    .header(props.getInternalHeader(), jwt)
+                    .headers(headers -> headers.remove(props.getApiKeyHeader()))
+                    .build();
+            return chain.filter(exchange.mutate().request(request).build());
         }
 
         // 已被 SessionBearerAuthFilter 用会话令牌换发内部 JWT（双模）：直接放行，不再要求 X-Api-Key。
