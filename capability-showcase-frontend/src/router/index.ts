@@ -10,6 +10,7 @@ import ModuleHost from '../modules/ModuleHost.vue'
 import LoginView from '../modules/auth/LoginView.vue'
 import { REQUIRE_LOGIN, CASDOOR_REDIRECT_PATH } from '../config'
 import { useAuthStore } from '../stores/auth'
+import { sanitizeInternalPath } from '../auth/redirect'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -49,11 +50,7 @@ const routes: RouteRecordRaw[] = [
 ]
 
 /** 校验 redirect 只能是站内绝对路径，挡开放重定向（`//evil.com`、`http://…`）。 */
-export function sanitizeRedirect(raw: unknown): string | null {
-  if (typeof raw !== 'string' || !raw) return null
-  if (!raw.startsWith('/') || raw.startsWith('//')) return null
-  return raw
-}
+export const sanitizeRedirect = sanitizeInternalPath
 
 /**
  * 纯函数守卫裁决（便于单测，不依赖真实 router）：

@@ -20,7 +20,8 @@ platform:
   security:
     jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
     # 本地直连调试用的 api key → 租户映射（生产下游只信 JWT，可关 allow-api-key-fallback）
-    allow-api-key-fallback: true
+    allow-api-key-fallback: ${INTERNAL_API_KEY_FALLBACK:false}
+    authentication-required: ${INTERNAL_AUTH_REQUIRED:true}
     api-keys:
       dev-key-acme:
         tenant: acme
@@ -91,10 +92,16 @@ app:
     grounding:
       enabled: ${CONVERSATION_GROUNDING_ENABLED:true}
       threshold: ${CONVERSATION_GROUNDING_THRESHOLD:0.7}
-    # LLM-as-Router（对齐单体 ai/routing）：分类 query（RAG/TOOL/CHAT）后分派——RAG 走检索、TOOL/CHAT 裸答。
-    # 端点 POST /chat/auto。每轮多一次 temp=0 分类调用；默认开（置 false 关闭）。
+    # LLM-as-Router（对齐单体 ai/routing）：分类 query（RAG/TOOL/CHAT）后分派——订单 TOOL 走 order-service，
+    # RAG 走检索，其它 TOOL/CHAT 裸答。
+    # 端点 POST /chat/auto。非订单请求每轮多一次 temp=0 分类调用；默认开（置 false 关闭）。
     router:
       enabled: ${CONVERSATION_ROUTER_ENABLED:true}
+      order:
+        enabled: ${CONVERSATION_ROUTER_ORDER_ENABLED:true}
+        base-url: ${ORDER_BASE_URL:http://localhost:8093}
+        connect-timeout: ${CONVERSATION_ROUTER_ORDER_CONNECT_TIMEOUT:1s}
+        read-timeout: ${CONVERSATION_ROUTER_ORDER_READ_TIMEOUT:5s}
     # MCP 驱动对话（对齐单体 ai/mcp）：工具全部来自 MCP server。端点 POST /chat/mcp。默认关。
     mcp:
       enabled: ${CONVERSATION_MCP_ENABLED:false}

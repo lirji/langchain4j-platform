@@ -4,6 +4,8 @@ import com.lrj.platform.analytics.NlToSqlService;
 import com.lrj.platform.protocol.analytics.AnalyticsSqlReply;
 import com.lrj.platform.protocol.analytics.AnalyticsSqlRequest;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -30,7 +32,10 @@ public class AnalyticsController {
 
     @PostMapping({"/chat/sql", "/analytics/sql"})
     public AnalyticsSqlReply chatSql(@RequestBody(required = false) AnalyticsSqlRequest request) {
-        String question = request == null || request.question() == null ? "" : request.question();
+        String question = request == null || request.question() == null ? "" : request.question().trim();
+        if (question.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "question is required");
+        }
         return nlToSqlService.ask(question);
     }
 }

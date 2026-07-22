@@ -119,6 +119,12 @@ describe('auth store —— OIDC 驱动', () => {
     expect(oidc.startOidcLogin).toHaveBeenCalledWith('acme', '/m/agent/run')
   })
 
+  it('startOidcLogin 对未知租户 fail-closed，不调用底层 OIDC', async () => {
+    const auth = useAuthStore()
+    await expect(auth.startOidcLogin('not-exists', '/')).rejects.toThrow('租户 not-exists 不存在或未开放')
+    expect(oidc.startOidcLogin).not.toHaveBeenCalled()
+  })
+
   it('handleOidcCallback 建立会话并返回 returnTo（原 state）', async () => {
     oidc.completeLoginCallback.mockResolvedValue({ access_token: 'cas-tok-admin', state: '/m/x' })
     const auth = useAuthStore()

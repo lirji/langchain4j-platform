@@ -215,7 +215,7 @@ mvn -DskipTests package
 - 当精确文本片段过于脆弱时，`expectedJsonPaths` 会检查简单 JSON path，例如 `$.answer` 与 `$.items[0].name`。
 - `semanticExpected` + `semanticMinScore` 会对措辞可能变化的响应进行确定性 token cosine similarity 检查。
 - `oracleContains` 允许 baseline case 存储冻结单体响应片段；不匹配时 case result 会以 `oracleMatched=false` 失败，并返回 `oracleExpected`。
-- Docker Compose 设置 `EVAL_API_KEY=dev-key-acme`，因此默认 target 可以是 `edge-gateway`。
+- Docker Compose 不再设置 legacy `EVAL_API_KEY`；eval 回打默认 `edge-gateway` 时使用保留调用方租户的专用服务回调令牌，兼容 Casdoor-only。
 - 内置 `platform-smoke` suite 提供第一份可复用 baseline 文件。
 - 聚焦测试覆盖 suite loading、report writing、successful assertions、JSON-path assertions、semantic-tolerance assertions、oracle drift detection、missing expected text、HTTP 500 capture 与 validation failures。
 

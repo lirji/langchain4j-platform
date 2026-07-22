@@ -159,6 +159,7 @@ public class A2aService {
                 List.of("research", "async", "deep-agent"),
                 List.of("对比 PGVector / Milvus / Qdrant 三个向量库"), text, text);
 
+        SecurityDeclaration security = securityDeclaration();
         return new A2aAgentCard(
                 props.getA2a().getAgentName(),
                 props.getA2a().getAgentDescription(),
@@ -168,9 +169,32 @@ public class A2aService {
                 new A2aAgentCard.Capabilities(true, true, false),
                 text, text,
                 List.of(chat, research),
-                Map.of("apiKey", new A2aAgentCard.SecurityScheme(
-                        "apiKey", "header", "X-Api-Key", "Per-tenant API key (edge-gateway).")),
-                List.of(Map.of("apiKey", List.of())));
+                security.schemes(),
+                security.requirements());
+    }
+
+    private SecurityDeclaration securityDeclaration() {
+        A2aAgentCard.SecurityScheme bearer = new A2aAgentCard.SecurityScheme(
+                "http", "bearer", "JWT", null, null,
+                "Casdoor OIDC access token presented as Authorization: Bearer.");
+        A2aAgentCard.SecurityScheme apiKey = new A2aAgentCard.SecurityScheme(
+                "apiKey", null, null, "header", "X-Api-Key",
+                "Legacy per-tenant API key (edge-gateway dual/apikey mode only).");
+        String mode = props.getA2a().getAuthMode() == null
+                ? "only" : props.getA2a().getAuthMode().trim().toLowerCase(java.util.Locale.ROOT);
+        return switch (mode) {
+            case "dual" -> new SecurityDeclaration(
+                    Map.of("bearerAuth", bearer, "apiKey", apiKey),
+                    List.of(Map.of("bearerAuth", List.of()), Map.of("apiKey", List.of())));
+            case "apikey", "legacy" -> new SecurityDeclaration(
+                    Map.of("apiKey", apiKey), List.of(Map.of("apiKey", List.of())));
+            default -> new SecurityDeclaration(
+                    Map.of("bearerAuth", bearer), List.of(Map.of("bearerAuth", List.of())));
+        };
+    }
+
+    private record SecurityDeclaration(Map<String, A2aAgentCard.SecurityScheme> schemes,
+                                       List<Map<String, List<String>>> requirements) {
     }
 
     /** message 的 metadata.skill 决定走哪个 skill；缺省 chat。 */

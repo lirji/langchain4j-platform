@@ -438,7 +438,10 @@ public class DocumentService {
                         && Objects.equals(info.docId(), seg.metadata().getString("docId")));
         segmentIndexer.deleteByDoc(info.tenantId(), info.docId());
         if (graphIngestor != null) {
+            // 常规抽取关系用 displayName#index；Obsidian wikilink 直接写 GraphStore，sourceId=docId。
+            // 两种来源键都必须随文档生命周期清理，否则删除 vault 笔记后会留下孤儿边。
             graphIngestor.removeBySourcePrefix(info.tenantId(), info.displayName() + "#");
+            graphIngestor.removeBySourcePrefix(info.tenantId(), info.docId());
         }
     }
 

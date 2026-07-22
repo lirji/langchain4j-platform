@@ -9,16 +9,20 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
 /**
  * 经 {@code {targetBaseUrl}/rag/query}（默认打 edge-gateway，携带 {@code X-API-Key}，网关换发内部 JWT 转 knowledge）
- * 取检索命中，映射为 {@code displayName#index} 有序 id 列表。检索失败返回空列表（该 case recall=0，不中断整跑）。
+ * 取检索命中，映射为 {@code displayName#index} 有序 id 列表。目标鉴权/网络失败必须显式终止该次评测，
+ * 不能吞成空命中并生成伪造的 0 分报告。
  */
 @Component
 public class HttpRetrievalClient implements RetrievalClient {
@@ -50,9 +54,14 @@ public class HttpRetrievalClient implements RetrievalClient {
                 return List.of();
             }
             return reply.hits().stream().map(HttpRetrievalClient::sourceId).toList();
+        } catch (HttpStatusCodeException e) {
+            log.warn("retrieval target returned HTTP {} for '{}'", e.getStatusCode().value(), question);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "retrieval target returned HTTP " + e.getStatusCode().value(), e);
         } catch (RestClientException e) {
-            log.warn("retrieval query failed for '{}': {}", question, e.toString());
-            return List.of();
+            log.warn("retrieval target unavailable for '{}': {}", question, e.toString());
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "retrieval target unavailable", e);
         }
     }
 

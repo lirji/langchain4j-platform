@@ -5,13 +5,15 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.MDC;
+import org.springframework.http.MediaType;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
 /**
  * 下游服务的入站 filter：校验内部 JWT（由边缘签发、{@link OutboundTenantForwarder} 转发），
- * 校验通过则把 {@link TenantContext} + MDC 绑上，请求结束清理。
+ * 校验通过则把 {@link TenantContext} + MDC 绑上，请求结束清理；业务路径缺失/伪造令牌时默认 401，
+ * 防止绕过 edge 以 anonymous 身份调用模型或访问租户数据。
  *
  * <p>本地直连调试时也接受边缘同款 {@code X-Api-Key} → 租户映射（allowApiKeyFallback=true），
  * 方便不经网关单跑一个服务。生产可关闭 fallback，只信 JWT。
@@ -38,6 +40,12 @@ public class InternalTokenAuthFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
         TenantContext.Tenant tenant = resolve(request);
+        if (tenant == null && props.isAuthenticationRequired()) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            response.getWriter().write("{\"error\":\"valid internal authentication is required\"}");
+            return;
+        }
         boolean bound = false;
         if (tenant != null) {
             TenantContext.set(tenant);
@@ -54,6 +62,15 @@ public class InternalTokenAuthFilter extends OncePerRequestFilter {
                 MDC.remove(MDC_USER);
             }
         }
+    }
+
+    /** 容器编排与探针不持业务身份；只开放最小健康/信息面，不开放模型或数据端点。 */
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return "/actuator/health".equals(path)
+                || (path != null && path.startsWith("/actuator/health/"))
+                || "/actuator/info".equals(path);
     }
 
     private TenantContext.Tenant resolve(HttpServletRequest request) {

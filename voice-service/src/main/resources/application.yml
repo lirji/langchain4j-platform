@@ -15,7 +15,8 @@ spring:
 platform:
   security:
     jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
-    allow-api-key-fallback: true
+    allow-api-key-fallback: ${INTERNAL_API_KEY_FALLBACK:false}
+    authentication-required: ${INTERNAL_AUTH_REQUIRED:true}
     api-keys:
       dev-key-acme:
         tenant: acme

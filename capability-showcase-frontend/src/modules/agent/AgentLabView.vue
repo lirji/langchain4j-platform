@@ -351,7 +351,7 @@ const moreCaps = computed<Capability[]>(() =>
             />
           </label>
           <label v-if="showTasks" class="ag__adv-field ag__adv-field--wide">
-            任务 DAG（JSON 数组，可选）
+            任务 DAG（JSON 数组，必填）
             <textarea
               v-model="tasksText"
               class="form-control ag__tasks"

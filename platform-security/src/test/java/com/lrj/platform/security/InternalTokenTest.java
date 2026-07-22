@@ -53,4 +53,15 @@ class InternalTokenTest {
         assertNull(t.verify(null));
         assertNull(t.verify("  "));
     }
+
+    @Test
+    void serviceVerificationRequiresDedicatedTokenUse() {
+        InternalToken t = new InternalToken(SECRET, Duration.ofMinutes(5));
+        TenantContext.Tenant tenant = new TenantContext.Tenant("acme", "evaluator", Set.of("eval"));
+
+        assertNull(t.verifyService(t.mint(tenant)));
+        assertEquals(tenant, t.verifyService(t.mintService(tenant)));
+        // 下游收到 edge 换发后的同一服务令牌时，仍可按普通内部身份校验。
+        assertEquals(tenant, t.verify(t.mintService(tenant)));
+    }
 }

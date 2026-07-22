@@ -1,6 +1,8 @@
 package com.lrj.platform.knowledge;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.autoconfigure.context.ConfigurationPropertiesAutoConfiguration;
 import com.lrj.platform.knowledge.multimodal.MultimodalEmbeddingConfig;
 import com.lrj.platform.knowledge.multimodal.MultimodalRetrievalService;
 import com.lrj.platform.knowledge.store.CollectionManager;
@@ -119,9 +121,12 @@ class KnowledgeEmbeddingConfigTest {
     @Test
     void multimodalEnabled_wiresSeparateImageRouter_andPrimaryTextRouterResolves() {
         new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(ConfigurationPropertiesAutoConfiguration.class))
                 .withUserConfiguration(KnowledgeEmbeddingConfig.class, MultimodalEmbeddingConfig.class)
                 .withBean(ObjectMapper.class)
-                .withPropertyValues("app.rag.multimodal-embedding.enabled=true")
+                .withPropertyValues(
+                        "app.rag.multimodal-embedding.enabled=true",
+                        "app.rag.multimodal-embedding.base-url=http://clip.test/v1")
                 .run(context -> {
                     // 文本 + 图片两个 EmbeddingStoreRouter 共存；@Primary 让按类型注入解析到文本 router。
                     assertThat(context.getBeansOfType(EmbeddingStoreRouter.class)).hasSize(2);

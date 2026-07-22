@@ -23,7 +23,8 @@ platform:
       enabled: ${GATEWAY_STREAMING_ENABLED:false}
   security:
     jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
-    allow-api-key-fallback: true
+    allow-api-key-fallback: ${INTERNAL_API_KEY_FALLBACK:false}
+    authentication-required: ${INTERNAL_AUTH_REQUIRED:true}
     api-keys:
       dev-key-acme:
         tenant: acme
@@ -122,10 +123,10 @@ app:
       connect-timeout: ${RAG_CACHE_INVALIDATION_CONNECT_TIMEOUT:1s}
       read-timeout: ${RAG_CACHE_INVALIDATION_READ_TIMEOUT:2s}
     # 原生图片多模态 embedding（CLIP / jina-clip）：图片直接向量化 + text→image 检索。
-    # 默认开（需可达的多模态 embedding 后端 base-url）；/rag/documents 传图片与 /rag/image 走此路径，图片向量存独立 image collection；置 false 关闭。
+    # 默认关；显式开启必须同时提供可达的多模态 embedding base-url，避免容器回落 localhost 后调用期 500。
     multimodal-embedding:
-      enabled: ${RAG_MULTIMODAL_ENABLED:true}
-      base-url: ${RAG_MULTIMODAL_BASE_URL:http://localhost:8000/v1}
+      enabled: ${RAG_MULTIMODAL_ENABLED:false}
+      base-url: ${RAG_MULTIMODAL_BASE_URL:}
       api-key: ${RAG_MULTIMODAL_API_KEY:}
       model-name: ${RAG_MULTIMODAL_MODEL:jinaai/jina-clip-v2}
       dimension: ${RAG_MULTIMODAL_DIMENSION:1024}

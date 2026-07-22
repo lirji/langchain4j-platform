@@ -8,7 +8,7 @@ import {
   refreshRequest,
   registerRequest,
 } from '../api/auth'
-import { OIDC_ENABLED } from '../config'
+import { CASDOOR_TENANTS, OIDC_ENABLED } from '../config'
 import { useSessionStore } from './session'
 import { useHistoryStore } from './history'
 import { broadcastLogout } from '../utils/authChannel'
@@ -23,6 +23,7 @@ import {
   userFromAccessToken,
   type User,
 } from '../auth/oidc'
+import { validateTenantSelection } from '../auth/tenantSelection'
 
 /**
  * 认证 store（双驱动，DR-9）：持有登录后的会话访问令牌与用户视图。存储介质按驱动而异：
@@ -124,7 +125,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   /** 发起 Casdoor 重定向登录（方案C：按 tenant 用 shared app 的 <base>-org-<tenant> 客户端）。整页跳转。 */
   async function startOidcLogin(tenant: string, returnTo?: string): Promise<void> {
-    await oidcStartLogin(tenant, returnTo)
+    const allowedTenant = validateTenantSelection(tenant, CASDOOR_TENANTS)
+    await oidcStartLogin(allowedTenant, returnTo)
   }
 
   /** /callback 顶层回调：换 token、建立内存会话、订阅事件；返回 returnTo（原 state）供路由还原。 */

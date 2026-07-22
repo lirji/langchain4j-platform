@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * ApiKeyToInternalTokenFilterTest：验证 {@link ApiKeyToInternalTokenFilter} 的入站鉴权——已被 Bearer 注入内部 JWT 时
  * 即便无 {@code X-Api-Key} 也放行、有效 api-key 换发内部令牌并从下游请求剥除外部 api-key、缺凭证返回 401、
- * 开放路径（如 {@code /auth/login}）直接放行。
+ * 开放路径（如 {@code /auth/login}）以 edge 服务身份转发。
  */
 class ApiKeyToInternalTokenFilterTest {
 
@@ -79,11 +79,14 @@ class ApiKeyToInternalTokenFilterTest {
     }
 
     @Test
-    void openPathPassesThrough() {
+    void openPathCarriesEdgeServiceIdentity() {
         MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/auth/login"));
-        AtomicBoolean chainCalled = new AtomicBoolean(false);
-        filter.filter(exchange, passThrough(chainCalled)).block();
-        assertThat(chainCalled).isTrue();
+        java.util.concurrent.atomic.AtomicReference<ServerWebExchange> captured = new java.util.concurrent.atomic.AtomicReference<>();
+        filter.filter(exchange, ex -> { captured.set(ex); return Mono.empty(); }).block();
+
+        String internal = captured.get().getRequest().getHeaders().getFirst(props.getInternalHeader());
+        assertThat(tokens.verify(internal).tenantId()).isEqualTo("_platform");
+        assertThat(tokens.verify(internal).userId()).isEqualTo("edge-gateway");
     }
 
     private static GatewayFilterChain passThrough(AtomicBoolean flag) {

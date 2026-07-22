@@ -31,7 +31,8 @@ public class RoutingConfig {
 
     @Bean
     QueryRouterService queryRouterService(QueryClassifier classifier, Assistant assistant,
-                                          RagPromptAugmenter ragPromptAugmenter, ResolvedAssistantStyle style) {
-        return new QueryRouterService(classifier, assistant, ragPromptAugmenter, style);
+                                          RagPromptAugmenter ragPromptAugmenter, ResolvedAssistantStyle style,
+                                          OrderQueryRoute orderQueryRoute) {
+        return new QueryRouterService(classifier, assistant, ragPromptAugmenter, style, orderQueryRoute);
     }
 }

@@ -39,8 +39,13 @@ public record A2aAgentCard(String name,
                         List<String> outputModes) {
     }
 
-    /** apiKey 安全方案：type=apiKey, in=header, name=X-Api-Key（复用边缘 ApiKey 鉴权）。 */
+    /** OpenAPI/A2A security scheme 子集；Bearer 使用 type=http/scheme=bearer，legacy 使用 apiKey/in/name。 */
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record SecurityScheme(String type, String in, String name, String description) {
+    public record SecurityScheme(String type,
+                                 String scheme,
+                                 String bearerFormat,
+                                 String in,
+                                 String name,
+                                 String description) {
     }
 }

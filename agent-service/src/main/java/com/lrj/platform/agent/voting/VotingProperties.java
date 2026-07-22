@@ -14,6 +14,8 @@ public class VotingProperties {
 
     /** 并行投票次数。 */
     private int n = 3;
+    /** 单次请求允许的最大候选数，限制并行模型费用与线程占用。 */
+    private int maxCandidates = 10;
     /** 聚合策略：majority（确定性多数表决，仅离散/分类题）| synthesis（聚合器 LLM 收口，自由文本题）。 */
     private Strategy strategy = Strategy.MAJORITY;
     /** majority 策略的置信阈值：胜出票占比 ≥ 此值才 confident。 */
@@ -25,6 +27,14 @@ public class VotingProperties {
 
     public void setN(int n) {
         this.n = n;
+    }
+
+    public int getMaxCandidates() {
+        return maxCandidates;
+    }
+
+    public void setMaxCandidates(int maxCandidates) {
+        this.maxCandidates = maxCandidates;
     }
 
     public Strategy getStrategy() {

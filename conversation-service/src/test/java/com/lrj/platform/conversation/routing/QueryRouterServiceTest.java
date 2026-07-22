@@ -27,11 +27,12 @@ class QueryRouterServiceTest {
         QueryClassifier classifier = mock(QueryClassifier.class);
         Assistant assistant = mock(Assistant.class);
         RagPromptAugmenter augmenter = mock(RagPromptAugmenter.class);
+        OrderQueryRoute orderRoute = mock(OrderQueryRoute.class);
         when(classifier.classify("本项目用什么数据库")).thenReturn(new RouteDecision(RouteKind.RAG, "查文档"));
         when(augmenter.contextFor("本项目用什么数据库")).thenReturn("ctx");
         when(assistant.chat(eq(KEY), any(), any(), any(), any(), eq("本项目用什么数据库"), eq("ctx")))
                 .thenReturn("MySQL");
-        QueryRouterService svc = new QueryRouterService(classifier, assistant, augmenter, STYLE);
+        QueryRouterService svc = new QueryRouterService(classifier, assistant, augmenter, STYLE, orderRoute);
 
         RoutedReply r = svc.route(KEY, "本项目用什么数据库");
 
@@ -45,10 +46,11 @@ class QueryRouterServiceTest {
         QueryClassifier classifier = mock(QueryClassifier.class);
         Assistant assistant = mock(Assistant.class);
         RagPromptAugmenter augmenter = mock(RagPromptAugmenter.class);
+        OrderQueryRoute orderRoute = mock(OrderQueryRoute.class);
         when(classifier.classify("什么是 RAG")).thenReturn(new RouteDecision(RouteKind.CHAT, "通用概念"));
         when(assistant.chat(eq(KEY), any(), any(), any(), any(), eq("什么是 RAG"), eq("")))
                 .thenReturn("检索增强生成");
-        QueryRouterService svc = new QueryRouterService(classifier, assistant, augmenter, STYLE);
+        QueryRouterService svc = new QueryRouterService(classifier, assistant, augmenter, STYLE, orderRoute);
 
         RoutedReply r = svc.route(KEY, "什么是 RAG");
 
@@ -63,10 +65,11 @@ class QueryRouterServiceTest {
         QueryClassifier classifier = mock(QueryClassifier.class);
         Assistant assistant = mock(Assistant.class);
         RagPromptAugmenter augmenter = mock(RagPromptAugmenter.class);
+        OrderQueryRoute orderRoute = mock(OrderQueryRoute.class);
         when(classifier.classify("现在几点")).thenReturn(new RouteDecision(RouteKind.TOOL, "要当前时间"));
         when(assistant.chat(eq(KEY), any(), any(), any(), any(), eq("现在几点"), eq("")))
                 .thenReturn("现在是 10 点");
-        QueryRouterService svc = new QueryRouterService(classifier, assistant, augmenter, STYLE);
+        QueryRouterService svc = new QueryRouterService(classifier, assistant, augmenter, STYLE, orderRoute);
 
         RoutedReply r = svc.route(KEY, "现在几点");
 
@@ -79,15 +82,35 @@ class QueryRouterServiceTest {
         QueryClassifier classifier = mock(QueryClassifier.class);
         Assistant assistant = mock(Assistant.class);
         RagPromptAugmenter augmenter = mock(RagPromptAugmenter.class);
+        OrderQueryRoute orderRoute = mock(OrderQueryRoute.class);
         when(classifier.classify("x")).thenThrow(new RuntimeException("judge down"));
         when(augmenter.contextFor("x")).thenReturn("ctx");
         when(assistant.chat(eq(KEY), any(), any(), any(), any(), eq("x"), eq("ctx"))).thenReturn("ans");
-        QueryRouterService svc = new QueryRouterService(classifier, assistant, augmenter, STYLE);
+        QueryRouterService svc = new QueryRouterService(classifier, assistant, augmenter, STYLE, orderRoute);
 
         RoutedReply r = svc.route(KEY, "x");
 
         assertThat(r.decision().kind()).isEqualTo(RouteKind.RAG);
         assertThat(r.decision().reason()).contains("fallback");
         verify(augmenter).contextFor("x");
+    }
+
+    @Test
+    void orderIntent_usesDeterministicOrderRouteWithoutCallingLlm() {
+        QueryClassifier classifier = mock(QueryClassifier.class);
+        Assistant assistant = mock(Assistant.class);
+        RagPromptAugmenter augmenter = mock(RagPromptAugmenter.class);
+        OrderQueryRoute orderRoute = mock(OrderQueryRoute.class);
+        String message = "查询退款订单 204";
+        when(orderRoute.matches(message)).thenReturn(true);
+        when(orderRoute.query(message)).thenReturn("订单号：204\n状态：已退款");
+        QueryRouterService svc = new QueryRouterService(classifier, assistant, augmenter, STYLE, orderRoute);
+
+        RoutedReply routed = svc.route(KEY, message);
+
+        assertThat(routed.decision().kind()).isEqualTo(RouteKind.TOOL);
+        assertThat(routed.decision().reason()).contains("订单查询");
+        assertThat(routed.reply()).contains("204").contains("已退款");
+        verifyNoInteractions(classifier, assistant, augmenter);
     }
 }

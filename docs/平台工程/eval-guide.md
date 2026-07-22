@@ -7,9 +7,9 @@
 
 > **这是哪个服务、默认什么状态**：`eval-service`，所有 `/eval/**` 端点**常开**（无需 enable 开关）。可选的 **LLM-Judge 断言**（`EVAL_JUDGE_ENABLED`）与 **embedding 相似度断言**（`EVAL_EMBEDDING_ENABLED`）**默认开**（仅在 case 显式带 `judgeExpected` / `embeddingExpected` 时才真正触发）。检索评测与通用 harness 本身开箱可用。
 
-> **端点约定**：所有 curl 走 `edge-gateway`（`http://localhost:8080`，带 `X-Api-Key`）。网关校验 api-key → 签发短时内部 JWT → 路由到 `eval-service`。示例统一用 `dev-key-acme`（其 scope 含 `eval`）。`eval-service` 自身监听 `:8089`，仅供服务间直连 / 本地调试。
+> **端点约定**：所有 curl 走 `edge-gateway`（`http://localhost:8080`，默认 Casdoor-only，带 `Authorization: Bearer $ACCESS_TOKEN`）。令牌需含 `eval` scope；`eval-service` 自身监听 `:8089`，除探针外直连也必须有有效内部 JWT。
 >
-> **一个关键区别（必读）**：`/eval/**` 由**调用方 api-key** 授权（要 `eval` scope + 走 `eval` 限流桶，5/min）。但 eval-service **回打平台目标端点**（检索评测的 `/rag/query`、通用 harness 的 case endpoint）用的是**自己配置的 `EVAL_API_KEY`** —— 那是一次全新的网关跳，租户身份由 `EVAL_API_KEY` 决定，**与 `/eval/**` 调用方的租户无关**。`EVAL_API_KEY` 默认空，不设的话目标调用会被网关 401 挡下（检索评测会静默变成全 0 召回，见 §2.5 排错）。
+> **一个关键区别（必读）**：`/eval/**` 由调用方 Bearer 授权（要 `eval` scope + 走 eval 限流桶）。eval-service 回打可信 edge 时，会基于本次调用方的租户身份签发带专用用途声明的短时服务回调令牌；edge 验签后再转为下游内部身份，因此兼容 Casdoor-only，且检索租户与调用方一致。服务令牌只发送给 `INTERNAL_SERVICE_TOKEN_ALLOWED_ORIGINS`（默认仅 `http://edge-gateway:8080`）。目标 401/网络失败会显式报错，不再吞掉并生成伪 0 分。
 
 相关文档：[RAG 接入指南](../对话与检索/rag-guide.md)（入库 / 切分 / 检索）、[接口速查](../参考/api-reference.md)、[运维配置](../参考/operations.md)、[能力总览](../参考/capabilities.md)、[架构文档](../参考/架构文档.md)。
 
@@ -87,18 +87,18 @@ Recall@k = ─────────────────      Precision@k 
 
 ### 2.4 怎么跑
 
-**前提**：目标文档必须**已入库**，且 `tenantId` 与检索侧一致 —— 即入库时用的 api-key 的租户，要与 **`EVAL_API_KEY`** 的租户**相同**（检索评测的 `/rag/query` 由 `EVAL_API_KEY` 授权，不是 `/eval/retrieval` 调用方）。示例统一让两者都用 `acme` 租户（`dev-key-acme-ingest` 入库、`EVAL_API_KEY=dev-key-acme` 检索，同租户 `acme`）。
+**前提**：目标文档必须已入库，且入库和发起评测的 Bearer 属于同一租户；服务回调会保留该租户。以下 `$ACCESS_TOKEN` 需同时包含 `ingest` 与 `eval` scope，也可分别使用同租户的两个令牌。
 
 ```bash
 # 1) 先把文档入库到 knowledge-service（需 ingest scope 的 key，租户 = acme）
 curl -s -X POST 'http://localhost:8080/rag/documents' \
-  -H 'X-Api-Key: dev-key-acme-ingest' \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"displayName":"project-faq.md","text":"## 支持的 LLM Provider\nollama / openai / anthropic / gemini / deepseek ...","category":"faq"}'
 
 # 2) 跑检索评测（黄金集在请求体里；调用方 key 需 eval scope）
 curl -s -X POST 'http://localhost:8080/eval/retrieval' \
-  -H 'X-Api-Key: dev-key-acme' \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
         "topK": 5,
@@ -156,7 +156,7 @@ APP_RAG_CHUNKING_STRATEGY=markdown-header APP_RAG_CHUNKING_MAX_SIZE=600 mvn -pl 
 
 **预期**：切碎导致「5-provider」类整段内容漏召回时，对应 case 的 `recall` 会从 1.0 掉下来，`avgRecall` / `hitRate` 随之下滑——比 passRate 更早、更干净地暴露问题。
 
-> **排错**：`avgRecall` / `hitRate` **全为 0** 且 `retrievedIds` 全空 → 十有八九是 **`EVAL_API_KEY` 没设 / 设错租户**：`/rag/query` 被网关 401 挡下，`HttpRetrievalClient` 吞掉异常返回空列表（不中断整跑），于是每条 recall=0。核对 `EVAL_API_KEY` 是有效网关 key、且其租户与入库租户一致。
+> **排错**：目标调用 502 时先检查 `INTERNAL_SERVICE_TOKEN_ALLOWED_ORIGINS` 是否包含实际 edge origin、各容器 `INTERNAL_JWT_SECRET` 是否一致，以及目标地址是否仍指向 edge。401/网络异常不会再伪装成空命中或全 0 报告。
 
 ### 2.6 剩余（按信号强弱）
 
@@ -188,7 +188,7 @@ APP_RAG_CHUNKING_STRATEGY=markdown-header APP_RAG_CHUNKING_MAX_SIZE=600 mvn -pl 
 
 ```bash
 curl -s -X POST 'http://localhost:8080/eval/run' \
-  -H 'X-Api-Key: dev-key-acme' \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
         "targetBaseUrl": "http://edge-gateway:8080",
@@ -234,7 +234,7 @@ curl -s -X POST 'http://localhost:8080/eval/run' \
 
 ```bash
 curl -s -X POST 'http://localhost:8080/eval/suites/platform-smoke/run' \
-  -H 'X-Api-Key: dev-key-acme' \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{ "targetBaseUrl": "http://edge-gateway:8080" }' | jq
 ```
@@ -276,7 +276,7 @@ candidate 触发**任一**条即判回归（全带 `1e-6` 浮点容差，避免 
 ```bash
 # PR 快照模式：只实跑 candidate（走网关），oracle 读 platform-smoke 快照
 curl -s -o /tmp/gate.json -w '%{http_code}\n' -X POST 'http://localhost:8080/eval/gate' \
-  -H 'X-Api-Key: dev-key-acme' \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
         "suiteName": "platform-smoke",
@@ -314,7 +314,7 @@ jq . /tmp/gate.json
 `GET /eval/capabilities` 返回服务自述（断言类型、双跑模式与门禁状态码约定），常用于连通性 smoke（也是 `platform-smoke` suite 打的靶点）。
 
 ```bash
-curl -s 'http://localhost:8080/eval/capabilities' -H 'X-Api-Key: dev-key-acme' | jq
+curl -s 'http://localhost:8080/eval/capabilities' -H "Authorization: Bearer $ACCESS_TOKEN" | jq
 ```
 
 ---
@@ -356,8 +356,9 @@ Recall@k = ───────────────────────
 | 环境变量 | 默认 | 作用 |
 | --- | --- | --- |
 | `EVAL_TARGET_BASE_URL` | `http://edge-gateway:8080` | 回打平台的默认目标地址。**本地单服务跑请设 `http://localhost:8080`** |
-| `EVAL_API_KEY` | （空） | eval-service 回打目标端点（`/rag/query`、case endpoint）携带的 api-key。**必须设为有效网关 key**，否则目标调用 401（检索评测全 0 召回）。其租户决定检索侧租户 |
-| `EVAL_API_KEY_HEADER` | `X-API-Key` | 上面 key 的请求头名（大小写不敏感，等价 `X-Api-Key`）|
+| `EVAL_API_KEY` | （空） | 可选 legacy/外部目标凭据；默认 Casdoor-only 回打 edge 不使用它 |
+| `EVAL_API_KEY_HEADER` | `X-API-Key` | 上述可选 legacy key 的请求头名 |
+| `INTERNAL_SERVICE_TOKEN_ALLOWED_ORIGINS` | `http://edge-gateway:8080` | 允许接收服务回调令牌的可信 origin 列表；外部 oracle/candidate 不会自动收到内部令牌 |
 | `EVAL_RESPONSE_SNIPPET_LIMIT` | `512` | 报告里响应片段截断长度（下限 32）|
 | `EVAL_JUDGE_ENABLED` | `true` | 开启 LLM-Judge 断言（`judgeExpected`），走网关确定性 ChatModel |
 | `EVAL_JUDGE_MIN_SCORE` | `0.7` | Judge 通过阈值（case 未带 `judgeMinScore` 时的默认）|

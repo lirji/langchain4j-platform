@@ -35,6 +35,14 @@ public class PlatformSecurityAutoConfiguration {
         return new OutboundTenantForwarder(tokens, props.getInternalHeader());
     }
 
+    @Bean
+    @ConditionalOnMissingBean
+    public OutboundServiceTokenForwarder outboundServiceTokenForwarder(
+            InternalToken tokens, InternalSecurityProperties props) {
+        return new OutboundServiceTokenForwarder(
+                tokens, props.getServiceTokenHeader(), props.getServiceTokenAllowedOrigins());
+    }
+
     /** servlet 下游服务专属：入站 JWT 校验 filter。edge-gateway（reactive）不装配。 */
     @Configuration
     @ConditionalOnClass(name = "jakarta.servlet.Filter")

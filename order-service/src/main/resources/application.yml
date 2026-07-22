@@ -18,7 +18,8 @@ platform:
   # allow-api-key-fallback：本地直连调试用 X-Api-Key；生产置 false，只信 edge 签发的内部 JWT。
   security:
     jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
-    allow-api-key-fallback: true
+    allow-api-key-fallback: ${INTERNAL_API_KEY_FALLBACK:false}
+    authentication-required: ${INTERNAL_AUTH_REQUIRED:true}
     api-keys:
       dev-key-tenantA-admin:
         tenant: tenantA

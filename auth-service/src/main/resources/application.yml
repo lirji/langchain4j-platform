@@ -12,7 +12,8 @@ platform:
   security:
     # 内部 JWT：/auth/me 走"内部 JWT → TenantContext"链路（edge 换发）；本地直连调试可留 fallback。
     jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
-    allow-api-key-fallback: true
+    allow-api-key-fallback: ${INTERNAL_API_KEY_FALLBACK:false}
+    authentication-required: ${INTERNAL_AUTH_REQUIRED:true}
     # 会话令牌：与 edge-gateway 共用同一密钥（edge 验签、auth 签发）。
     session:
       jwt-secret: ${SESSION_JWT_SECRET:dev-only-session-secret-change-me-please-32b}

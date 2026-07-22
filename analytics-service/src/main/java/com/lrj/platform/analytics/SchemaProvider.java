@@ -61,8 +61,15 @@ public class SchemaProvider {
         StringBuilder all = new StringBuilder();
         try (Connection conn = ds.getConnection()) {
             DatabaseMetaData meta = conn.getMetaData();
+            String catalog = conn.getCatalog();
+            String schema;
+            try {
+                schema = conn.getSchema();
+            } catch (Exception | AbstractMethodError ignored) {
+                schema = null; // JDBC 4.0/旧驱动兼容；catalog 仍限制 MySQL 当前库。
+            }
             for (String table : props.getAllowTables()) {
-                List<String[]> cols = columns(meta, table);  // [name, type, remark]
+                List<String[]> cols = columns(meta, catalog, schema, table);  // [name, type, remark]
                 if (cols.isEmpty()) {
                     log.warn("NL2SQL 白名单表 '{}' 内省不到列（不存在或大小写不匹配），schema 跳过", table);
                     continue;
@@ -93,18 +100,23 @@ public class SchemaProvider {
         return all.toString().strip();
     }
 
-    private List<String[]> columns(DatabaseMetaData meta, String table) throws Exception {
+    private List<String[]> columns(DatabaseMetaData meta, String catalog, String schema, String table) throws Exception {
         // H2/CASE_INSENSITIVE 默认存大写；MySQL 常小写。依次尝试原名 / 大写 / 小写。
-        for (String candidate : List.of(table, table.toUpperCase(), table.toLowerCase())) {
-            List<String[]> out = new ArrayList<>();
-            try (ResultSet rs = meta.getColumns(null, null, candidate, null)) {
+        for (String candidate : new LinkedHashSet<>(List.of(table, table.toUpperCase(), table.toLowerCase()))) {
+            Map<String, String[]> unique = new LinkedHashMap<>();
+            // 必须限定当前连接 catalog/schema。catalog=null 在 MySQL 会扫描所有库，同名 orders 会混入另一套冲突列。
+            try (ResultSet rs = meta.getColumns(catalog, schema, candidate, null)) {
                 while (rs.next()) {
-                    out.add(new String[]{
+                    String[] column = new String[]{
                             rs.getString("COLUMN_NAME"),
                             rs.getString("TYPE_NAME"),
-                            rs.getString("REMARKS")});
+                            rs.getString("REMARKS")};
+                    if (column[0] != null) {
+                        unique.putIfAbsent(column[0].toLowerCase(Locale.ROOT), column);
+                    }
                 }
             }
+            List<String[]> out = new ArrayList<>(unique.values());
             if (!out.isEmpty()) return out;
         }
         return List.of();

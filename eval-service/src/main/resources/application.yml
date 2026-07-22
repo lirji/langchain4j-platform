@@ -31,6 +31,11 @@ app:
       model-name: ${EVAL_EMBEDDING_MODEL:embedding-default}
 
 platform:
+  security:
+    jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
+    service-token-allowed-origins: ${INTERNAL_SERVICE_TOKEN_ALLOWED_ORIGINS:http://edge-gateway:8080}
+    allow-api-key-fallback: ${INTERNAL_API_KEY_FALLBACK:false}
+    authentication-required: ${INTERNAL_AUTH_REQUIRED:true}
   gateway:
     base-url: ${GATEWAY_BASE_URL:http://localhost:4000/v1}
     api-key: ${GATEWAY_API_KEY:sk-litellm-master}

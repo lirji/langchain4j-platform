@@ -15,6 +15,7 @@ interface ImportMetaEnv {
   readonly VITE_AUTH_MODE?: 'apikey' | 'oidc' | 'dual'
   readonly VITE_CASDOOR_ISSUER?: string
   readonly VITE_CASDOOR_CLIENT_ID?: string
+  readonly VITE_CASDOOR_TENANTS?: string
   readonly VITE_CASDOOR_SCOPES?: string
   readonly VITE_CASDOOR_REDIRECT_PATH?: string
   readonly VITE_CASDOOR_POST_LOGOUT_PATH?: string

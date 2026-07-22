@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { useCatalogStore } from '../../stores/catalog'
 import { ApiError, humanizeError } from '../../api/errors'
-import { sanitizeRedirect } from '../../router'
-import { AUTH_MODE, DEMO_LOGIN_ENABLED, OIDC_ENABLED } from '../../config'
+import { sanitizeInternalPath } from '../../auth/redirect'
+import { validateTenantSelection } from '../../auth/tenantSelection'
+import { AUTH_MODE, CASDOOR_TENANTS, DEMO_LOGIN_ENABLED, OIDC_ENABLED } from '../../config'
+import { resolvePortalLaunch } from './portalLaunch'
 
 const auth = useAuthStore()
 const catalog = useCatalogStore()
@@ -23,6 +25,7 @@ const errorMsg = ref('')
 const casdoorBusy = ref(false) // 正在跳转 Casdoor
 
 const busy = computed(() => submitting.value || pending.value !== null)
+const hasOidcTenants = computed(() => CASDOOR_TENANTS.length > 0)
 
 /**
  * 是否展示账号密码表单：仅 apikey 模式（legacy 会话驱动）显示。
@@ -34,19 +37,54 @@ const showLegacyForm = computed(() => AUTH_MODE === 'apikey')
 /** 跳 Casdoor OIDC 登录：returnTo 经 state 随 IdP 往返，回调后还原。成功则整页跳转、不回此处。 */
 async function casdoorLogin(): Promise<void> {
   errorMsg.value = ''
-  const t = tenant.value.trim()
-  if (!t) {
-    errorMsg.value = '请先输入租户 / 组织名（Casdoor org）'
+  if (!hasOidcTenants.value) {
+    errorMsg.value = '当前未配置可用租户，请联系管理员'
     return
   }
+
+  let allowedTenant: string
+  try {
+    allowedTenant = validateTenantSelection(tenant.value, CASDOOR_TENANTS)
+  } catch (e) {
+    errorMsg.value = loginErrorText(e)
+    return
+  }
+
   casdoorBusy.value = true
   try {
-    await auth.startOidcLogin(t, sanitizeRedirect(route.query.redirect) ?? '/')
+    await auth.startOidcLogin(allowedTenant, sanitizeInternalPath(route.query.redirect) ?? '/')
   } catch (e) {
     casdoorBusy.value = false
     errorMsg.value = loginErrorText(e)
   }
 }
+
+// 只有目标站校验通过的 portal 参数才自动发起。普通 /login 和非法参数完全保持原交互。
+onMounted(() => {
+  if (!OIDC_ENABLED) return
+  const launch = resolvePortalLaunch(route.query)
+  if (!launch) return
+  tenant.value = launch.tenant
+
+  if (!hasOidcTenants.value) {
+    errorMsg.value = '当前未配置可用租户，请联系管理员'
+    return
+  }
+
+  let allowedTenant: string
+  try {
+    allowedTenant = validateTenantSelection(launch.tenant, CASDOOR_TENANTS)
+  } catch (e) {
+    errorMsg.value = loginErrorText(e)
+    return
+  }
+
+  casdoorBusy.value = true
+  void auth.startOidcLogin(allowedTenant, launch.returnTo).catch((e: unknown) => {
+    casdoorBusy.value = false
+    errorMsg.value = loginErrorText(e)
+  })
+})
 
 /**
  * 一键登录口令：仅从构建期注入的 VITE_DEMO_PASSWORD 读取——源码绝不内置任何明文口令。
@@ -81,7 +119,7 @@ async function doLogin(u: string, p: string): Promise<void> {
   errorMsg.value = ''
   await auth.login(u, p)
   void catalog.refreshLive() // 登录后触发一次 live discovery（best-effort）
-  const redirect = sanitizeRedirect(route.query.redirect) ?? '/'
+  const redirect = sanitizeInternalPath(route.query.redirect) ?? '/'
   await router.replace(redirect)
 }
 
@@ -164,20 +202,30 @@ async function demoLogin(u: string): Promise<void> {
           <div v-if="OIDC_ENABLED" class="lp-input-wrap">
             <span class="lp-input-ico" aria-hidden="true">🏢</span>
             <input
+              id="login-tenant"
               v-model="tenant"
               class="lp-input"
               type="text"
               autocomplete="organization"
               placeholder="租户 / 组织名（如 acme）"
-              :disabled="casdoorBusy"
+              :disabled="casdoorBusy || !hasOidcTenants"
+              aria-describedby="login-tenant-help"
+              spellcheck="false"
+              @input="errorMsg = ''"
               @keyup.enter="casdoorLogin"
             />
+          </div>
+          <p v-if="OIDC_ENABLED && hasOidcTenants" id="login-tenant-help" class="lp-tenant-help">
+            当前可用租户：{{ CASDOOR_TENANTS.join('、') }}
+          </p>
+          <div v-if="OIDC_ENABLED && !hasOidcTenants" class="lp-error" role="alert">
+            <span aria-hidden="true">⚠️</span><span>当前未配置可用租户，请联系管理员</span>
           </div>
           <button
             v-if="OIDC_ENABLED"
             type="button"
             class="lp-btn lp-btn--casdoor"
-            :disabled="casdoorBusy"
+            :disabled="casdoorBusy || !hasOidcTenants"
             @click="casdoorLogin"
           >
             <span v-if="casdoorBusy" class="lp-spin" aria-hidden="true" />
@@ -492,6 +540,12 @@ async function demoLogin(u: string): Promise<void> {
   border-color: var(--lp-primary);
   background: #fff;
   box-shadow: 0 0 0 3px rgba(45, 108, 223, 0.16);
+}
+.lp-tenant-help {
+  margin: -8px 2px 0;
+  color: var(--lp-muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 .login__pw-toggle {
   position: absolute;

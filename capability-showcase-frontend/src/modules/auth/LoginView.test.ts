@@ -9,13 +9,19 @@ import { useAuthStore } from '../../stores/auth'
 import LoginView from './LoginView.vue'
 
 // DEMO_LOGIN_ENABLED 由测试逐例控制（getter 读 hoisted 状态）；其余 config 导出保留真实值。
-const cfgState = vi.hoisted(() => ({ demoEnabled: true }))
+const cfgState = vi.hoisted(() => ({ demoEnabled: true, oidcEnabled: false, tenants: ['acme'] as string[] }))
 vi.mock('../../config', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../config')>()
   return {
     ...actual,
     get DEMO_LOGIN_ENABLED() {
       return cfgState.demoEnabled
+    },
+    get OIDC_ENABLED() {
+      return cfgState.oidcEnabled
+    },
+    get CASDOOR_TENANTS() {
+      return cfgState.tenants
     },
   }
 })
@@ -39,7 +45,7 @@ function jsonRes(status: number, body: unknown): Response {
 
 let router: Router
 
-async function mountLogin() {
+async function mountLogin(path = '/login') {
   router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -48,7 +54,7 @@ async function mountLogin() {
       { path: '/register', name: 'register', component: { template: '<div/>' } },
     ],
   })
-  router.push('/login')
+  router.push(path)
   await router.isReady()
   return mount(LoginView, { global: { plugins: [router] } })
 }
@@ -56,6 +62,8 @@ async function mountLogin() {
 beforeEach(() => {
   setActivePinia(createPinia())
   cfgState.demoEnabled = true
+  cfgState.oidcEnabled = false
+  cfgState.tenants = ['acme']
 })
 afterEach(() => vi.unstubAllGlobals())
 
@@ -130,5 +138,71 @@ describe('LoginView', () => {
     useAuthStore().publicConfig = { registrationEnabled: false, passwordMinLength: 8, passwordMaxLength: 64 }
     await nextTick()
     expect(wrapper.text()).not.toContain('去注册')
+  })
+
+  it('合法 portal 参数在 OIDC 模式下一次性自动发起 Casdoor', async () => {
+    cfgState.oidcEnabled = true
+    const auth = useAuthStore()
+    const start = vi.spyOn(auth, 'startOidcLogin').mockResolvedValue()
+
+    await mountLogin('/login?source=portal&auto=1&tenant=acme&redirect=%2Fm%2Frag')
+    await flushPromises()
+
+    expect(start).toHaveBeenCalledTimes(1)
+    expect(start).toHaveBeenCalledWith('acme', '/m/rag')
+  })
+
+  it('人工输入不存在租户时停留本页并显示错误', async () => {
+    cfgState.oidcEnabled = true
+    const auth = useAuthStore()
+    const start = vi.spyOn(auth, 'startOidcLogin')
+    const wrapper = await mountLogin('/login?redirect=%2Fm%2Frag')
+
+    await wrapper.get('#login-tenant').setValue('not-exists')
+    await wrapper.get('.lp-btn--casdoor').trigger('click')
+    await flushPromises()
+
+    expect(start).not.toHaveBeenCalled()
+    expect(wrapper.get('[role="alert"]').text()).toContain('租户 not-exists 不存在或未开放')
+    expect(wrapper.text()).toContain('当前可用租户：acme')
+  })
+
+  it('portal auto 的未知租户同样不跳转', async () => {
+    cfgState.oidcEnabled = true
+    const auth = useAuthStore()
+    const start = vi.spyOn(auth, 'startOidcLogin')
+
+    const wrapper = await mountLogin('/login?source=portal&auto=1&tenant=not-exists')
+    await flushPromises()
+
+    expect(start).not.toHaveBeenCalled()
+    expect(wrapper.get('[role="alert"]').text()).toContain('租户 not-exists 不存在或未开放')
+  })
+
+  it('allowlist 为空时禁用 OIDC 表单并 fail-closed', async () => {
+    cfgState.oidcEnabled = true
+    cfgState.tenants = []
+    const wrapper = await mountLogin()
+
+    expect(wrapper.get('#login-tenant').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.lp-btn--casdoor').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[role="alert"]').text()).toContain('当前未配置可用租户')
+  })
+
+  it('普通登录、非法 tenant 与非 OIDC 模式均不自动跳', async () => {
+    const auth = useAuthStore()
+    const start = vi.spyOn(auth, 'startOidcLogin').mockResolvedValue()
+
+    cfgState.oidcEnabled = true
+    await mountLogin('/login')
+    await flushPromises()
+    await mountLogin('/login?source=portal&auto=1&tenant=..%2Fevil')
+    await flushPromises()
+    expect(start).not.toHaveBeenCalled()
+
+    cfgState.oidcEnabled = false
+    await mountLogin('/login?source=portal&auto=1&tenant=acme')
+    await flushPromises()
+    expect(start).not.toHaveBeenCalled()
   })
 })

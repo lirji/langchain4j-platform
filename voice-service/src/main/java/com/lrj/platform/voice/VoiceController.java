@@ -2,7 +2,9 @@ package com.lrj.platform.voice;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -53,10 +55,13 @@ public class VoiceController {
             produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chatStream(@RequestPart("audio") MultipartFile audio,
                                  @RequestParam(required = false) String chatId) throws IOException {
-        if (audio == null || audio.isEmpty() || audio.getSize() > props.getMaxAudioBytes()) {
-            SseEmitter err = new SseEmitter();
-            err.completeWithError(new IllegalArgumentException("empty or oversized audio"));
-            return err;
+        ResponseEntity<?> bad = validate(audio);
+        if (bad != null) {
+            Object body = bad.getBody();
+            String message = body instanceof Map<?, ?> map && map.get("error") != null
+                    ? String.valueOf(map.get("error"))
+                    : "invalid audio";
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
         }
         String cid = (chatId == null || chatId.isBlank()) ? "voice-" + UUID.randomUUID() : chatId;
         return voiceStream.stream(audio.getBytes(), audio.getOriginalFilename(), cid);
