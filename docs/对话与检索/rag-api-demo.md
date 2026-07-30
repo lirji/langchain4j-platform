@@ -192,7 +192,8 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST "$BASE_URL/rag/documents" \
 
 ## 五、对话与智能体(走真实 LLM)
 
-> 这两个接口会**真正调用大模型**(经 LiteLLM → 本机 Ollama `llama3.1`),先确保 Ollama 在跑(`ollama pull llama3.1`)、LiteLLM 容器可达。响应耗时数秒到数十秒。
+> 这两个接口会**真正调用文本大模型**（当前经 LiteLLM → DeepSeek，失败时才回退本机
+> Ollama `llama3.1`），请先确保 LiteLLM 与文本上游可达。响应耗时数秒到数十秒。
 
 ### 7. 多轮对话 `/chat`
 ```bash
@@ -289,19 +290,22 @@ bash deploy/seed-kb.sh           # 导入 5 篇 + 打印每篇 chunk 数 + 跑�
 bash deploy/seed-kb.sh --purge   # 先删同名旧文档再导入(干净演示)
 ```
 
-### embedding:hash(默认) vs 语义(本机当前)
-- **磁盘默认是确定性 hash**(`RAG_EMBEDDING_PROVIDER=hash`,64 维)—— **不具备语义**,向量分数基本恒为 `~0.50`,排序全靠 hybrid 的关键词那一路。零依赖、稳定,但"排序不聪明"。
-- **本机当前已升级为 Ollama 语义 embedding**(`nomic-embed-text`,768 维):向量分数会真实拉开(`0.82~0.90`),多数 query 相关文档排到前列。启用方式(已固化成 override 文件):
+### embedding：application.yml 的 hash vs 部署默认百炼
+
+- **裸跑 application.yml** 是确定性 hash（64 维），零依赖但不具备真实语义。
+- **Docker/Helm 默认**是百炼 `text-embedding-v4`（1024 维、单批最多 10 条），目标集合基名
+  `knowledge_segments_bailian_v4`；召回后默认再用 `qwen3-rerank` 精排。
+- 凭据不写入仓库：把 `deploy/.env.example` 复制为 `deploy/.env`，只配置本机 CSV 绝对路径，
+  再用 `bash deploy/start-all.sh` 或 `bash deploy/start-local.sh --all` 启动。
+- 已有旧向量不要删库重灌，使用迁移脚本保留 point ID/payload 和旧 collection：
+
   ```bash
-  # 前置:ollama pull nomic-embed-text
-  docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.rag-full.yml \
-    up -d --no-deps knowledge-service
-  # 换 embedding=换维度:删旧 collection 再重导
-  curl -s -X DELETE http://127.0.0.1:6333/collections/knowledge_segments_acme
-  bash deploy/seed-kb.sh
+  BAILIAN_CREDENTIAL_CSV=/path/to/bailian-credentials.csv \
+    bash deploy/migrate-qdrant-embeddings.sh --activate
   ```
-- **已加 nomic 任务前缀**:代码里给查询/文档分别加了 `search_query:` / `search_document:` 前缀(`PrefixingEmbeddingModel`,由 `RAG_EMBEDDING_QUERY_PREFIX`/`DOCUMENT_PREFIX` 开启),对齐两者向量空间。示例 5 类 query 的 top1 命中从 3/5 提升到 4/5,且前缀只影响向量、**不写入存储原文**。剩下极短 query(如"顺丰隔天送到")相关文档仍可能落到第 2 位 —— 这是 nomic 在短中文上的固有上限,hybrid 关键词那一路仍重要,别关。
-- **换 embedding 必须重启 + 重导**:否则新旧维度混入同一 collection 会报 `DimensionMismatch`;而每次重启还会清空内存关键词镜像,所以务必重跑 `seed-kb.sh`。
+
+- **换 embedding 必须换 collection 或完整迁移**：否则 64/768/1024 维向量混入同一 collection 会被
+  `DimensionMismatch` 守卫拒绝。Ollama `nomic-embed-text` 仍可作为显式回滚 provider，但不再是部署默认。
 - **依赖修复**:qdrant client 1.17 需 protobuf ≥3.25,但 grpc-bom 1.59.1 传递的是 3.24 → 建 collection 报 `NoClassDefFoundError`。根 pom 已钉 `protobuf-java:3.25.8`。
 
 ---
@@ -310,7 +314,7 @@ bash deploy/seed-kb.sh --purge   # 先删同名旧文档再导入(干净演示)
 
 ```bash
 bash deploy/rag-demo.sh                        # RAG 闭环,保留数据便于演示
-bash deploy/rag-demo.sh --with-llm             # 额外演示 /chat + /agent/run(需 Ollama+LiteLLM 可达)
+bash deploy/rag-demo.sh --with-llm             # 额外演示 /chat + /agent/run（需 LiteLLM/文本上游可达）
 bash deploy/rag-demo.sh --cleanup              # 跑完自动删除本次上传的文档
 bash deploy/rag-demo.sh --with-llm --cleanup   # 两个开关可组合,顺序不限
 
@@ -330,10 +334,10 @@ BASE_URL=http://127.0.0.1:8080 bash deploy/rag-demo.sh
 | `403` | 用了没有 `ingest` scope 的 key 去上传/删除。换 `dev-key-acme-ingest`。 |
 | 连不上 / `Connection refused` | 网关端口不对。当前容器映射在 **18080**;若从 `docker-compose.yml` 重启则是 **8080**。用 `docker ps` 看 `edge-gateway` 的实际端口。 |
 | 检索 `hits` 为空 | 看你的存储模式(见 §六):**默认全内存**时重启清空所有索引,需重传;**qdrant/redis 持久化**时向量/登记表重启不丢,只有内存里的关键词镜像会丢(向量仍能命中,关键词那路需重传)。 |
-| 检索能中但**排序不准** | 默认 hash embedding 无语义、分数恒 `~0.50`。换真 embedding(`RAG_EMBEDDING_PROVIDER=ollama` 等)+ 重启 + 重导,见 §六说明。 |
+| 检索能中但**排序不准** | 检查 `/rag/config` 是否为 `openai/text-embedding-v4` + `bailian/qwen3-rerank`；若仍是 hash，确认启动脚本读到了 `BAILIAN_CREDENTIAL_CSV`。 |
 | 列表能看到文档但检索不到 | 内存模式下服务重启后登记还在(或 Redis 持久)、但内存索引没了。重传该文档即可被检索。 |
 | 直连 `:8084` 查不到数据 | 直连下游 `X-Api-Key` 被忽略,租户退化成 `anonymous`。**走网关**。 |
-| `/chat` 或 `/agent/run` 超时/报错 | 这俩要真调大模型。确认本机 Ollama 在跑(`ollama pull llama3.1`)、LiteLLM 容器可达。`/agent/run` 多步推理,耗时可达 1-2 分钟,`curl` 记得加 `-m 180`。 |
+| `/chat` 或 `/agent/run` 超时/报错 | 这俩要真调文本大模型。确认 LiteLLM 与 DeepSeek 可达；Ollama `llama3.1` 仅是主模型失败时的可选回退。`/agent/run` 多步推理可耗时 1–2 分钟。 |
 | `/agent/run` 返回 `finalAnswer` 为空、`stopReason=LOOP/MAX_STEPS` | 小模型 `llama3.1` 收敛差,非接口问题。演示用「单步收敛」目标,或在 `deploy/litellm/config.yaml` 换更强模型(Java 零改动)。 |
 
 ---

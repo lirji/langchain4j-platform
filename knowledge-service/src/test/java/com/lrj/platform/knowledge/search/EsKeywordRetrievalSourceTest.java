@@ -49,8 +49,8 @@ class EsKeywordRetrievalSourceTest {
         assertThat(hits).hasSize(2);
         assertThat(hits.get(0).score()).isEqualTo(1.0);      // 10/10
         assertThat(hits.get(1).score()).isEqualTo(0.5);      // 5/10
-        assertThat(hits.get(0).mergeKey()).isEqualTo("d1#0"); // 与向量/关键词对齐
-        assertThat(hits.get(0).id()).isEqualTo("es:d1#0");
+        assertThat(hits.get(0).mergeKey()).isEqualTo("d1#v1#0"); // 与同版本向量对齐
+        assertThat(hits.get(0).id()).isEqualTo("es:d1#v1#0");
         assertThat(hits.get(0).source()).isEqualTo("es");
     }
 

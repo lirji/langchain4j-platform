@@ -4,6 +4,8 @@
 # 叠加在基础 compose 之上，起一个带中文分析器(smartcn)的 Elasticsearch，并让 knowledge-service 开启 ES 混排 + RRF。
 #
 # 用法（在语义 embedding 之上再开 ES）：
+#   source deploy/load-bailian-env.sh
+#   load_bailian_env /path/to/bailian-credentials.csv
 #   docker compose -f deploy/docker-compose.yml \
 #                  -f deploy/docker-compose.rag-full.yml \
 #                  -f deploy/docker-compose.es.yml \

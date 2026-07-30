@@ -72,7 +72,9 @@
 
 1. **数据不迁移**——换 provider 得到空库，必须**重新 ingest**；
 2. **外部后端要先起来**（in-memory 除外），否则 knowledge-service 启动即失败；
-3. **维度守卫**——换 embedding（hash 64 维 ↔ nomic 768 维等）维度变了必须重建库，`DimensionMismatchException` 会拦不匹配；`shared` 隔离模式仅 `in-memory`/`qdrant` 支持。
+3. **维度守卫**——换 embedding（hash 64 维、nomic 768 维、百炼 text-embedding-v4 1024 维）
+   必须迁移到匹配维度的 collection，`DimensionMismatchException` 会拦不匹配；
+   `shared` 隔离模式仅 `in-memory`/`qdrant` 支持。
 
 ---
 

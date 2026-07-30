@@ -57,11 +57,17 @@ public class GraphRetrievalSource implements RetrievalSource {
             if (sourceId == null || sourceId.isBlank()) {
                 return new SourceParts(null, null);
             }
-            int sep = sourceId.lastIndexOf('#');
-            if (sep < 0 || sep == sourceId.length() - 1) {
-                return new SourceParts(sourceId, null);
+            int provenance = sourceId.lastIndexOf('/');
+            String visibleSource = provenance < 0
+                    ? sourceId
+                    : sourceId.substring(provenance + 1);
+            int sep = visibleSource.lastIndexOf('#');
+            if (sep < 0 || sep == visibleSource.length() - 1) {
+                return new SourceParts(visibleSource, null);
             }
-            return new SourceParts(sourceId.substring(0, sep), sourceId.substring(sep + 1));
+            return new SourceParts(
+                    visibleSource.substring(0, sep),
+                    visibleSource.substring(sep + 1));
         }
     }
 }

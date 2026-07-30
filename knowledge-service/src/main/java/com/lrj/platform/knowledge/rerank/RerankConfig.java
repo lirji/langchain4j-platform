@@ -8,16 +8,20 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.convert.DurationStyle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.time.Duration;
+
 /**
- * 重排器装配。默认 {@link NoopReranker}（不 rerank）。开启后按 {@code app.rag.rerank.type} 二选一：
- * {@code llm}（复用共享 temp=0 ChatModel 打分，零外部依赖）| {@code jina}（Jina reranker 云 API + Key）。
+ * 重排器装配。默认 {@link NoopReranker}（不 rerank）。开启后按 {@code app.rag.rerank.type} 三选一：
+ * {@code llm}（复用共享 temp=0 ChatModel 打分）| {@code jina}（Jina reranker 云 API）|
+ * {@code bailian}（阿里云百炼 qwen3-rerank）。
  *
  * <pre>
  * app.rag.rerank.enabled=true
- * app.rag.rerank.type=llm|jina
+ * app.rag.rerank.type=llm|jina|bailian
  * app.rag.rerank.candidate-multiplier=3   # 召回放大倍数（rerank 候选池）
  * app.rag.rerank.min-score=0.0            # 相关性阈值(0..1)：rerank 分低于此值的候选丢弃；0=不设阈值
  * </pre>
@@ -59,6 +63,24 @@ public class RerankConfig {
         return new JinaReranker(scoringModel, multiplier, minScore);
     }
 
+    @Bean
+    @ConditionalOnExpression("${app.rag.rerank.enabled:false} and '${app.rag.rerank.type:llm}'.equals('bailian')")
+    Reranker bailianReranker(
+            @Value("${app.rag.rerank.bailian.base-url:}") String baseUrl,
+            @Value("${app.rag.rerank.bailian.api-key:}") String apiKey,
+            @Value("${app.rag.rerank.bailian.model-name:qwen3-rerank}") String modelName,
+            @Value("${app.rag.rerank.bailian.instruct:Given a user question, retrieve passages that directly answer it.}") String instruct,
+            @Value("${app.rag.rerank.bailian.timeout:30s}") String timeout,
+            @Value("${app.rag.rerank.bailian.max-documents:500}") int maxDocuments,
+            @Value("${app.rag.rerank.candidate-multiplier:3}") int multiplier,
+            @Value("${app.rag.rerank.min-score:0.0}") double minScore) {
+        log.info("RAG rerank: bailian enabled model={} (candidate x{}, min-score={}, max-documents={})",
+                modelName, multiplier, minScore, maxDocuments);
+        BailianRerankClient client = new HttpBailianRerankClient(
+                baseUrl, apiKey, modelName, instruct, parseDuration(timeout));
+        return new BailianReranker(client, multiplier, minScore, maxDocuments);
+    }
+
     /** LLM 打分提示：只输出 0..1 的一个小数表示相关性。 */
     static String scorePrompt(String query, String text) {
         return """
@@ -89,5 +111,9 @@ public class RerankConfig {
             }
         }
         return 0.0;
+    }
+
+    private static Duration parseDuration(String value) {
+        return DurationStyle.detectAndParse(value);
     }
 }

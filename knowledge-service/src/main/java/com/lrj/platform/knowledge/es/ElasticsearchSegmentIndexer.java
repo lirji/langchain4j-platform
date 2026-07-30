@@ -87,4 +87,20 @@ public class ElasticsearchSegmentIndexer implements SegmentIndexer {
             log.warn("ES deleteByDoc failed (best-effort, ignored): tenant={} docId={} err={}", tenantId, docId, e.toString());
         }
     }
+
+    @Override
+    public void deleteByDocVersion(String tenantId, String docId, long version) {
+        if (!props.isIndexActive()) {
+            return;
+        }
+        try {
+            gateway.deleteByDocVersion(tenantId, docId, version);
+        } catch (RuntimeException e) {
+            if (props.isFailFast()) {
+                throw e;
+            }
+            log.warn("ES version GC failed (best-effort) tenant={} docId={} version={} err={}",
+                    tenantId, docId, version, e.toString());
+        }
+    }
 }

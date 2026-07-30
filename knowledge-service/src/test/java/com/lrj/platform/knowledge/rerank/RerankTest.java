@@ -98,6 +98,36 @@ class RerankTest {
     }
 
     @Test
+    void bailian_usesReturnedIndicesAndDropsBelowThreshold() {
+        List<Hit> candidates = List.of(
+                hit("initial-first", 0.9, "unrelated"),
+                hit("answer", 0.2, "refund arrives in one to five days"),
+                hit("weak", 0.1, "refund progress"));
+        BailianRerankClient client = (query, documents, topN) -> List.of(
+                new BailianRerankClient.RankedResult(1, 0.91),
+                new BailianRerankClient.RankedResult(2, 0.45),
+                new BailianRerankClient.RankedResult(0, 0.10));
+
+        List<Hit> out = new BailianReranker(client, 3, 0.5, 500)
+                .rerank("refund arrival time", candidates, 3);
+
+        assertThat(out).extracting(Hit::id).containsExactly("answer");
+    }
+
+    @Test
+    void bailian_failureFailsOpenToInitialOrder() {
+        List<Hit> candidates = List.of(hit("a", 0.9, "x"), hit("b", 0.8, "y"));
+        BailianRerankClient unavailable = (query, documents, topN) -> {
+            throw new RuntimeException("provider unavailable");
+        };
+
+        List<Hit> out = new BailianReranker(unavailable, 3, 0.5, 500)
+                .rerank("q", candidates, 1);
+
+        assertThat(out).extracting(Hit::id).containsExactly("a");
+    }
+
+    @Test
     void parseScore_extractsUnitInterval() {
         assertThat(RerankConfig.parseScore("0.8")).isEqualTo(0.8);
         assertThat(RerankConfig.parseScore("相关性 0.73 分")).isEqualTo(0.73);

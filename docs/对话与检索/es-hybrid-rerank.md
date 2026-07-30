@@ -39,13 +39,13 @@
 ## 开启（本地）
 
 ES 混排现为**默认**，无需任何开关——基础 `deploy/docker-compose.yml` 已含 `elasticsearch`+`kibana`
-服务，且 knowledge-service 默认 `RAG_ES_ENABLED=true` + nomic 语义 embedding。ES 已装中文分析器插件
+服务，且 knowledge-service 默认 `RAG_ES_ENABLED=true` + 百炼 `text-embedding-v4`。ES 已装中文分析器插件
 （`deploy/es/Dockerfile` 内 `elasticsearch-plugin install analysis-smartcn`）。
 
 ```bash
-# 一键（推荐）：ES/Kibana + nomic + RRF 已是默认；首次需 --all --build 构建 ES 镜像并重建全栈
+# 一键（推荐）：ES/Kibana + 百炼 embedding/rerank + RRF 已是默认
 ./deploy/start-local.sh --all --build
-# 前置：宿主机  ollama pull nomic-embed-text
+# 前置：deploy/.env 已配置 BAILIAN_CREDENTIAL_CSV
 
 # 或直接 compose（基础文件即含 ES/Kibana，无需再叠加 override）
 docker compose -f deploy/docker-compose.yml up -d --build elasticsearch knowledge-service

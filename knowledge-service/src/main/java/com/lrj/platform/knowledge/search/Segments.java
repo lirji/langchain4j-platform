@@ -19,8 +19,11 @@ public final class Segments {
         }
         String docId = segment.metadata().getString("docId");
         String index = segment.metadata().getString("index");
+        String version = segment.metadata().getString("version");
         if (docId != null && index != null) {
-            return docId + "#" + index;
+            return version == null
+                    ? docId + "#" + index
+                    : docId + "#v" + version + "#" + index;
         }
         return Objects.toString(docId, "segment") + "#" + Objects.hashCode(segment.text());
     }

@@ -20,6 +20,8 @@ import com.lrj.platform.knowledge.authz.AuthzMode;
 import com.lrj.platform.knowledge.authz.KnowledgeAuthz;
 import com.lrj.platform.knowledge.authz.NoopKnowledgeAuthz;
 import com.lrj.platform.knowledge.authz.RagAuthzProperties;
+import com.lrj.platform.knowledge.lifecycle.DocumentInfo;
+import com.lrj.platform.knowledge.lifecycle.DocumentRegistry;
 import com.lrj.platform.security.TenantContext;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -34,6 +36,8 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -82,6 +86,8 @@ public class KnowledgeQueryService {
     private KnowledgeAuthz knowledgeAuthz = new NoopKnowledgeAuthz();
     // 授权候选/批次上限：默认值即安全；生产由 Spring 注入 app.rag.authz.* 的 RagAuthzProperties。
     private RagAuthzProperties authzProps = new RagAuthzProperties();
+    // split query role 使用 Registry 作为版本可见性提交点；null 保持旧 combined/单测兼容。
+    private DocumentRegistry documentRegistry;
 
     @Autowired
     public KnowledgeQueryService(EmbeddingStoreRouter storeRouter,
@@ -294,6 +300,7 @@ public class KnowledgeQueryService {
         }
 
         List<Hit> candidates = fusion.fuse(groups, fusionStrategy, rrfK);
+        candidates = filterCommittedVersions(tenantId, candidates);
         // 细粒度读授权过滤（融合后、重排前；关闭时直通）。
         candidates = filterReadable(tenantId, userId, candidates);
         List<Hit> hits = reranker.rerank(query, candidates, limit);
@@ -354,6 +361,33 @@ public class KnowledgeQueryService {
         return out;
     }
 
+    private List<Hit> filterCommittedVersions(String tenantId, List<Hit> candidates) {
+        if (documentRegistry == null || candidates.isEmpty()) {
+            return candidates;
+        }
+        Map<String, DocumentInfo> registered = new HashMap<>();
+        return candidates.stream()
+                .filter(hit -> {
+                    if (hit.docId() == null || hit.version() == null) {
+                        return true;
+                    }
+                    String partition = hit.shared() ? publicKbTenantId : tenantId;
+                    String key = partition + '\u0000' + hit.docId();
+                    DocumentInfo info = registered.computeIfAbsent(
+                            key,
+                            ignored -> documentRegistry.get(partition, hit.docId()).orElse(null));
+                    if (info == null) {
+                        return false;
+                    }
+                    try {
+                        return info.version() == Integer.parseInt(hit.version());
+                    } catch (NumberFormatException ex) {
+                        return false;
+                    }
+                })
+                .toList();
+    }
+
     /** 测试注入自定义扩展器（生产由 Spring @Autowired 按开关装配）。 */
     void setQueryExpander(QueryExpander queryExpander) {
         this.queryExpander = queryExpander == null ? new NoopQueryExpander() : queryExpander;
@@ -388,6 +422,11 @@ public class KnowledgeQueryService {
         }
     }
 
+    @Autowired(required = false)
+    public void setDocumentRegistry(DocumentRegistry documentRegistry) {
+        this.documentRegistry = documentRegistry;
+    }
+
     /** 测试注入额外检索源（如 ES 源的 fake）。 */
     void setExtraSources(List<RetrievalSource> sources) {
         this.extraSources = sources == null ? List.of() : List.copyOf(sources);
@@ -419,5 +458,13 @@ public class KnowledgeQueryService {
      * false=来自当前租户。经 {@code KnowledgeQueryController.toReply} 映射为 {@code KnowledgeHit.visibility}。
      */
     public record Hit(String id, Double score, String docId, String displayName,
-                      String category, String index, String text, String source, boolean shared) {}
+                      String category, String index, String version, String text,
+                      String source, boolean shared) {
+
+        public Hit(String id, Double score, String docId, String displayName,
+                   String category, String index, String text, String source,
+                   boolean shared) {
+            this(id, score, docId, displayName, category, index, null, text, source, shared);
+        }
+    }
 }

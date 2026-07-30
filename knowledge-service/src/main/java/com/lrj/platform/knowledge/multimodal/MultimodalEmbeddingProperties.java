@@ -9,23 +9,26 @@ package com.lrj.platform.knowledge.multimodal;
  * jina-clip），实现「文本 query ↔ 图片」互检索——保留图内不可言说的视觉信息（区别于早先「图先转文字
  * 描述、再走普通文本 embedding」的 caption→text 路径，那种做法丢失视觉信息，本平台已弃用）。
  *
- * <p>跟主文本 embedding（{@code app.rag.embedding.provider}）<strong>解耦</strong>：多模态 embedding
- * 端点单独指向一个 CLIP / jina-clip 服务（vLLM / TEI / 云 jina），走 OpenAI 兼容的 {@code /embeddings}
- * 协议。刻意<strong>不注册成 {@code EmbeddingModel} Bean</strong>——否则会跟主文本 {@code EmbeddingModel}
- * 撞类型、扰乱 RAG 自动装配，只暴露自定义 {@link MultimodalEmbeddingModel} 接口。
+ * <p>跟主文本 embedding（{@code app.rag.embedding.provider}）<strong>解耦</strong>：可选择百炼原生
+ * Qwen-VL embedding，也可指向 CLIP / jina-clip 的 OpenAI 兼容端点。刻意<strong>不注册成
+ * {@code EmbeddingModel} Bean</strong>——否则会跟主文本 {@code EmbeddingModel} 撞类型、扰乱 RAG
+ * 自动装配，只暴露自定义 {@link MultimodalEmbeddingModel} 接口。
  */
 public class MultimodalEmbeddingProperties {
 
     /** 总开关。关闭（默认）时整条多模态 embedding 链不装配，图片上传将被拒绝并提示开启本开关。 */
     private boolean enabled = false;
 
-    /** OpenAI 兼容 embedding 端点根，会拼 {@code /embeddings}。指向 vLLM/TEI/云 jina。 */
+    /** {@code openai}（CLIP/jina 兼容）或 {@code bailian}（DashScope 原生）。 */
+    private String provider = "openai";
+
+    /** 提供方 API 根。OpenAI 兼容模式拼 {@code /embeddings}；百炼模式拼原生多模态向量路径。 */
     private String baseUrl = "";
 
-    /** API key。本地 vLLM/TEI 通常不校验，留 EMPTY 即可；云 jina 填真实 key。 */
+    /** API key。本地 vLLM/TEI 可留空；百炼或云端模型必须通过环境变量注入。 */
     private String apiKey = "";
 
-    /** 多模态 embedding 模型名，如 {@code jinaai/jina-clip-v2} / {@code openai/clip-vit-base-patch32}。 */
+    /** 多模态 embedding 模型名，如 {@code qwen3-vl-embedding} / {@code jinaai/jina-clip-v2}。 */
     private String modelName = "jinaai/jina-clip-v2";
 
     /**
@@ -61,6 +64,8 @@ public class MultimodalEmbeddingProperties {
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    public String getProvider() { return provider; }
+    public void setProvider(String provider) { this.provider = provider; }
     public String getBaseUrl() { return baseUrl; }
     public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
     public String getApiKey() { return apiKey; }

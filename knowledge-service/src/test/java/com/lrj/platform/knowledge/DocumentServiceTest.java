@@ -12,6 +12,7 @@ import com.lrj.platform.knowledge.lifecycle.DocumentService;
 import com.lrj.platform.knowledge.lifecycle.InMemoryDocumentRegistry;
 import com.lrj.platform.security.TenantContext;
 import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.store.embedding.filter.Filter;
 import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -96,6 +97,30 @@ class DocumentServiceTest {
         assertThat(info.sizeBytes()).isEqualTo(12_345);
         assertThat(mirror.all()).singleElement()
                 .satisfies(segment -> assertThat(segment.text()).contains("退款趋势图"));
+    }
+
+    @Test
+    void delete_isBestEffort_whenVectorStoreRemoveThrows() {
+        // 回归：Qdrant 等后端的 removeAll(Filter) 删除失败会抛普通 RuntimeException（非 UnsupportedOperationException），
+        // 早期窄 catch 漏网导致删除 RAG 文档报 500。此处用一个 removeAll(Filter) 恒抛的 store 复现，断言删除仍成功、
+        // 逻辑元数据与词法镜像照常清除（向量残留仅记 WARN，尽力而为）。
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("ingest")));
+        DocumentMirror localMirror = new DocumentMirror();
+        DocumentRegistry localRegistry = new InMemoryDocumentRegistry();
+        DocumentService svc = new DocumentService(
+                new ThrowingRemoveEmbeddingStore(),
+                new KnowledgeEmbeddingConfig.HashEmbeddingModel(),
+                localMirror,
+                splitterFactory(),
+                localRegistry,
+                mock(AuditLogger.class));
+
+        DocumentInfo info = svc.upload("guide.md", "text/markdown", "hello knowledge base", "manual");
+        assertThat(localMirror.size()).isGreaterThan(0);
+
+        assertThat(svc.delete(info.docId())).isTrue();   // 不再抛异常 / 不再 500
+        assertThat(svc.list()).isEmpty();
+        assertThat(localMirror.size()).isZero();
     }
 
     @Test
@@ -216,6 +241,14 @@ class DocumentServiceTest {
         @Override
         public void invalidateCurrentTenant() {
             calls++;
+        }
+    }
+
+    /** 模拟 Qdrant 等后端：addAll 正常入库，但 removeAll(Filter) 删除失败抛普通 RuntimeException。 */
+    static final class ThrowingRemoveEmbeddingStore extends InMemoryEmbeddingStore<TextSegment> {
+        @Override
+        public void removeAll(Filter filter) {
+            throw new RuntimeException("simulated qdrant delete failure");
         }
     }
 

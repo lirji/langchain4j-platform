@@ -14,6 +14,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.Locale;
+
 /**
  * 原生多模态 embedding 装配。<strong>整个 config 条件化在
  * {@code app.rag.multimodal-embedding.enabled=true}</strong>——关闭（默认）时相关 Bean 全不存在，
@@ -48,7 +50,19 @@ public class MultimodalEmbeddingConfig {
         }
         log.info("Native multimodal embedding enabled: model={} dim={}",
                 props.getModelName(), props.getDimension());
-        return new DefaultMultimodalEmbeddingModel(props, mapper);
+        String provider = props.getProvider() == null ? "" : props.getProvider().trim().toLowerCase(Locale.ROOT);
+        return switch (provider) {
+            case "bailian" -> {
+                if (props.getApiKey() == null || props.getApiKey().isBlank()) {
+                    throw new IllegalStateException(
+                            "RAG multimodal provider=bailian requires RAG_MULTIMODAL_API_KEY");
+                }
+                yield new BailianMultimodalEmbeddingModel(props, mapper);
+            }
+            case "openai" -> new DefaultMultimodalEmbeddingModel(props, mapper);
+            default -> throw new IllegalStateException(
+                    "Unsupported RAG multimodal embedding provider: " + props.getProvider());
+        };
     }
 
     /**

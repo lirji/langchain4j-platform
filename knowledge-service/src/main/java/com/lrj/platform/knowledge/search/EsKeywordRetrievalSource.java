@@ -77,9 +77,12 @@ public class EsKeywordRetrievalSource implements RetrievalSource {
         for (EsSearchHit h : hits) {
             double base = normalize ? h.score() / max : h.score();
             double score = base * esWeight;
-            String mergeKey = h.docId() + "#" + h.index();
+            String mergeKey = h.version() == null
+                    ? h.docId() + "#" + h.index()
+                    : h.docId() + "#v" + h.version() + "#" + h.index();
             String id = "es:" + mergeKey;
-            out.add(new RetrievalHit(id, mergeKey, score, h.docId(), h.displayName(), h.category(), h.index(), h.text(), "es", shared));
+            out.add(new RetrievalHit(id, mergeKey, score, h.docId(), h.displayName(),
+                    h.category(), h.index(), h.version(), h.text(), "es", shared));
         }
     }
 }

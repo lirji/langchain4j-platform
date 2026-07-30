@@ -91,6 +91,7 @@ public class VectorRetrievalSource implements RetrievalSource {
                 segment.metadata().getString("displayName"),
                 segment.metadata().getString("category"),
                 segment.metadata().getString("index"),
+                segment.metadata().getString("version"),
                 segment.text(),
                 "vector",
                 shared);

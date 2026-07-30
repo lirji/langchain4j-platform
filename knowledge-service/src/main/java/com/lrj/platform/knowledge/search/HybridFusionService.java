@@ -86,7 +86,8 @@ public class HybridFusionService {
             RetrievalHit r = e.getValue();
             Set<String> sources = sourcesByKey.get(key);
             String source = sources.size() > 1 ? "hybrid" : sources.iterator().next();
-            out.add(new Hit(r.id(), scoreByKey.get(key), r.docId(), r.displayName(), r.category(), r.index(), r.text(),
+            out.add(new Hit(r.id(), scoreByKey.get(key), r.docId(), r.displayName(),
+                    r.category(), r.index(), r.version(), r.text(),
                     source, sharedByKey.getOrDefault(key, r.shared())));
         }
         out.sort(Comparator.comparingDouble(HybridFusionService::scoreOrZero).reversed());
@@ -94,7 +95,8 @@ public class HybridFusionService {
     }
 
     private static Hit toHit(RetrievalHit r) {
-        return new Hit(r.id(), r.score(), r.docId(), r.displayName(), r.category(), r.index(), r.text(), r.source(), r.shared());
+        return new Hit(r.id(), r.score(), r.docId(), r.displayName(), r.category(),
+                r.index(), r.version(), r.text(), r.source(), r.shared());
     }
 
     /** 同源同 chunk：保留分更高者（保留其 source/visibility，如向量多变体命中仍为 vector）。 */
@@ -114,6 +116,7 @@ public class HybridFusionService {
                 firstNonNull(existing.displayName(), incoming.displayName()),
                 firstNonNull(existing.category(), incoming.category()),
                 firstNonNull(existing.index(), incoming.index()),
+                firstNonNull(existing.version(), incoming.version()),
                 firstNonNull(existing.text(), incoming.text()),
                 "hybrid",
                 existing.shared() && incoming.shared());

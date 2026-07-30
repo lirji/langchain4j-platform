@@ -9,8 +9,11 @@ import com.lrj.platform.knowledge.graph.InMemoryGraphStore;
 import com.lrj.platform.knowledge.graph.RuleBasedGraphExtractor;
 import com.lrj.platform.knowledge.graph.TokenEntityLinker;
 import com.lrj.platform.knowledge.lifecycle.DocumentRegistry;
+import com.lrj.platform.knowledge.lifecycle.DocumentInfo;
 import com.lrj.platform.knowledge.lifecycle.DocumentService;
 import com.lrj.platform.knowledge.lifecycle.InMemoryDocumentRegistry;
+import com.lrj.platform.knowledge.search.RetrievalHit;
+import com.lrj.platform.knowledge.search.RetrievalSource;
 import com.lrj.platform.security.TenantContext;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -19,6 +22,8 @@ import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -188,6 +193,45 @@ class KnowledgeQueryServiceTest {
                     assertThat(hit.displayName()).isEqualTo("people.md");
                     assertThat(hit.text()).isEqualTo("张三 --隶属于-> 研发部");
                 });
+    }
+
+    @Test
+    void queryOnlyExposesVersionCommittedByRegistry() {
+        registry.put(new DocumentInfo(
+                "doc-1", "acme", "guide.md", "text/markdown",
+                10, 1, 1, Instant.parse("2026-07-30T00:00:00Z"), "manual"));
+        queries.setDocumentRegistry(registry);
+        queries.setExtraSources(List.of(new RetrievalSource() {
+            @Override
+            public String name() {
+                return "version-test";
+            }
+
+            @Override
+            public boolean enabled() {
+                return true;
+            }
+
+            @Override
+            public List<RetrievalHit> retrieve(
+                    com.lrj.platform.knowledge.search.RetrievalRequest request
+            ) {
+                return List.of(
+                        new RetrievalHit(
+                                "old", "doc-1#v1#0", 0.5, "doc-1", "guide.md",
+                                "manual", "0", "1", "committed", "es", false),
+                        new RetrievalHit(
+                                "new", "doc-1#v2#0", 0.9, "doc-1", "guide.md",
+                                "manual", "0", "2", "not committed", "es", false));
+            }
+        }));
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
+
+        var result = queries.query("guide", 10, 0.0, null);
+
+        assertThat(result.hits()).extracting(KnowledgeQueryService.Hit::id)
+                .contains("old")
+                .doesNotContain("new");
     }
 
     private static DocumentSplitterFactory splitterFactory() {

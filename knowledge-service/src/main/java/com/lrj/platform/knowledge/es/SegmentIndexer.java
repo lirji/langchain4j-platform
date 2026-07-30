@@ -19,4 +19,9 @@ public interface SegmentIndexer {
 
     /** 删除某文档的全部 chunk（按 tenantId + docId）。 */
     void deleteByDoc(String tenantId, String docId);
+
+    /** 精确删除某文档的一个历史版本；用于超出回滚窗口后的派生索引 GC。 */
+    default void deleteByDocVersion(String tenantId, String docId, long version) {
+        // Backends predating versioned ingestion fail safe by retaining old data.
+    }
 }

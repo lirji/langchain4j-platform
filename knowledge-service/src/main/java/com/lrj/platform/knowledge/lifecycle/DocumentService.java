@@ -423,14 +423,22 @@ public class DocumentService {
     }
 
     private void deleteInternal(DocumentInfo info) {
+        // 物理痕迹清理（向量库 / 词法镜像 / ES / 图谱）一律【尽力而为】：以 registry 元数据删除为逻辑删除的准绳，
+        // 任一物理 sink 失败都不得让整个删除返回 500——单条清理失败只记 WARN（残留孤儿向量/边由运维对账），
+        // 保证文档仍能从用户工作区消失。
+        //
+        // 历史上此处仅 catch UnsupportedOperationException，但没有任何后端真的抛这个类型：langchain4j 1.13.1 内存
+        // 实现支持 removeAll(Filter)（正常删）、其“不支持”改抛 UnsupportedFeatureException(extends RuntimeException)、
+        // Qdrant 等后端删除失败抛普通 RuntimeException、切换 embedding 维度抛 DimensionMismatchException(extends
+        // RuntimeException)——全都漏过原窄 catch 上抛成 500，即“删除 RAG 文档报 500”的根因。故这里收宽到 RuntimeException。
         try {
             Filter filter = Filter.and(
                     metadataKey("tenantId").isEqualTo(info.tenantId()),
                     metadataKey("docId").isEqualTo(info.docId()));
             storeRouter.forTenant(info.tenantId(), embeddingModel.dimension()).removeAll(filter);
-        } catch (UnsupportedOperationException ex) {
-            log.warn("EmbeddingStore does not support removeAll(Filter); skipping vector delete for docId={}",
-                    info.docId(), ex);
+        } catch (RuntimeException ex) {
+            log.warn("vector store delete failed (best-effort; leaving orphaned vectors) tenant={} docId={}: {}",
+                    info.tenantId(), info.docId(), ex.toString());
         }
         documentMirror.removeWhere(seg ->
                 seg.metadata() != null
@@ -439,9 +447,15 @@ public class DocumentService {
         segmentIndexer.deleteByDoc(info.tenantId(), info.docId());
         if (graphIngestor != null) {
             // 常规抽取关系用 displayName#index；Obsidian wikilink 直接写 GraphStore，sourceId=docId。
-            // 两种来源键都必须随文档生命周期清理，否则删除 vault 笔记后会留下孤儿边。
-            graphIngestor.removeBySourcePrefix(info.tenantId(), info.displayName() + "#");
-            graphIngestor.removeBySourcePrefix(info.tenantId(), info.docId());
+            // 两种来源键都必须随文档生命周期清理，否则删除 vault 笔记后会留下孤儿边。同样尽力而为，
+            // JDBC 图谱库（默认 store=jdbc）删除抛 DataAccessException 也不阻断文档删除。
+            try {
+                graphIngestor.removeBySourcePrefix(info.tenantId(), info.displayName() + "#");
+                graphIngestor.removeBySourcePrefix(info.tenantId(), info.docId());
+            } catch (RuntimeException ex) {
+                log.warn("graph store delete failed (best-effort; leaving orphaned edges) tenant={} docId={}: {}",
+                        info.tenantId(), info.docId(), ex.toString());
+            }
         }
     }
 

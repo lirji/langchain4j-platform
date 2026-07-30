@@ -90,6 +90,24 @@
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- Knowledge 原文权威存储：AWS SDK v2 支持 S3 及 endpoint/path-style 兼容实现（如 MinIO）。 -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.46.8</version>
+            <exclusions>
+                <!-- Spring Boot 3.3 BOM pins HttpClient5 below the API expected by AWS apache5-client. -->
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>apache5-client</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>url-connection-client</artifactId>
+            <version>2.46.8</version>
+        </dependency>
 
         <dependency>
             <groupId>com.lrj.platform</groupId>

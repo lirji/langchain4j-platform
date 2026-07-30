@@ -65,4 +65,25 @@ class GraphIngestorTest {
         assertThat(removed).isEqualTo(1);
         assertThat(store.size()).isZero();
     }
+
+    @Test
+    void versionedIngestionUsesGcSafeSourceId() {
+        GraphIngestor ingestor = new GraphIngestor(
+                new RuleBasedGraphExtractor(), store, 10, Set.of(), Map.of(),
+                Runnable::run, false);
+        TextSegment segment = TextSegment.from(
+                "张三|隶属于|研发部",
+                Metadata.from(Map.of(
+                        "tenantId", "acme",
+                        "docId", "doc-1",
+                        "file_name", "people.md",
+                        "version", "3",
+                        "index", "7")));
+
+        ingestor.ingest(List.of(segment));
+
+        assertThat(store.neighbors(Set.of("张三"), 1, "acme", null))
+                .extracting(Triple::sourceId)
+                .containsExactly("doc-1/v3/people.md#7");
+    }
 }

@@ -68,7 +68,7 @@ public class GraphIngestor {
             ExtractedTriples extracted = extractor.extract(segment.text());
             String tenantId = segment.metadata().getString("tenantId");
             String category = segment.metadata().getString("category");
-            String sourceId = TaggedSourceContentInjector.inferId(segment, i);
+            String sourceId = versionedSourceId(segment, i);
             int accepted = 0;
             for (RawTriple raw : extracted.triples()) {
                 if (accepted >= maxTriplesPerChunk) {
@@ -91,6 +91,16 @@ public class GraphIngestor {
         if (!triples.isEmpty()) {
             log.info("ingested graph triples count={}", triples.size());
         }
+    }
+
+    private static String versionedSourceId(TextSegment segment, int index) {
+        String docId = segment.metadata().getString("docId");
+        String version = segment.metadata().getString("version");
+        if (docId != null && !docId.isBlank() && version != null && !version.isBlank()) {
+            return docId + "/v" + version + "/"
+                    + TaggedSourceContentInjector.inferId(segment, index);
+        }
+        return TaggedSourceContentInjector.inferId(segment, index);
     }
 
     private boolean allowed(String relation) {

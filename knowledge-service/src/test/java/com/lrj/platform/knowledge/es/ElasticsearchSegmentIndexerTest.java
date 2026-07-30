@@ -41,7 +41,7 @@ class ElasticsearchSegmentIndexerTest {
         indexer.index(List.of(segment("acme", "d1", "0", "hello"), segment("acme", "d1", "1", "world")));
 
         assertThat(gateway.indexed).hasSize(2);
-        assertThat(gateway.indexed.get(0).id()).isEqualTo("acme/d1/0");
+        assertThat(gateway.indexed.get(0).id()).isEqualTo("acme/d1/v1/0");
         assertThat(gateway.indexed.get(0).tenantId()).isEqualTo("acme");
         assertThat(gateway.indexed.get(0).text()).isEqualTo("hello");
     }
@@ -96,5 +96,15 @@ class ElasticsearchSegmentIndexerTest {
         indexer.deleteByDoc("acme", "d1");
         assertThat(gateway.deleted).hasSize(1);
         assertThat(gateway.deleted.get(0)).containsExactly("acme", "d1");
+    }
+
+    @Test
+    void versionGcDelegatesExactTenantDocumentAndVersion() {
+        var indexer = new ElasticsearchSegmentIndexer(gateway, props(true, false));
+
+        indexer.deleteByDocVersion("acme", "d1", 3);
+
+        assertThat(gateway.deletedVersions).hasSize(1);
+        assertThat(gateway.deletedVersions.get(0)).containsExactly("acme", "d1", 3L);
     }
 }

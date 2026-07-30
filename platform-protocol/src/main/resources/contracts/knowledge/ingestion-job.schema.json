@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform.local/contracts/knowledge/ingestion-job.schema.json",
+  "title": "Knowledge Ingestion Job",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "jobId",
+    "documentId",
+    "documentVersion",
+    "status",
+    "sinks",
+    "contentHash",
+    "traceId"
+  ],
+  "properties": {
+    "jobId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "documentId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "documentVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "status": {
+      "enum": [
+        "RECEIVED",
+        "PROCESSING",
+        "READY",
+        "PARTIAL",
+        "FAILED",
+        "DELETING",
+        "DELETED"
+      ]
+    },
+    "sinks": {
+      "type": "object",
+      "additionalProperties": {
+        "enum": [
+          "PENDING",
+          "RUNNING",
+          "SUCCEEDED",
+          "FAILED"
+        ]
+      }
+    },
+    "contentHash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "traceId": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

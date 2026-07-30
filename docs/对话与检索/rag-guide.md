@@ -5,7 +5,10 @@
 以及 `conversation-service` 侧的 `/chat` RAG 增强与 L1 语义缓存。
 
 所有能力都遵循平台一贯的「接口 + `@ConditionalOnProperty` 多实现」写法。**单测零外部依赖**（纯 POJO）。
-注意两套「默认」：`knowledge-service` 的 **application.yml 现默认 `qdrant` 向量库 + `hash` embedding + ES 全文混排 + JDBC 图谱**（单跑期望 qdrant/redis/mysql/ES 可达，真正零依赖单跑需显式退回 `in-memory` + `RAG_ES_ENABLED=false`）；**docker-compose demo** 再把 embedding 切到 Ollama `nomic`、分词切 `hanlp`。其余向量库后端（pgvector/milvus/chroma/doris）默认关闭，靠环境变量显式开启；而 rerank/查询扩展/上下文增强/公共知识库/图片多模态已随 application.yml 默认开启。
+注意两套「默认」：`knowledge-service` 的 **application.yml 默认 `qdrant` + `hash` embedding + ES 全文混排 +
+JDBC 图谱**；**Docker/Helm 部署**覆盖为百炼 `text-embedding-v4`（1024 维）+
+`qwen3-rerank`，Docker 还将 `vision-default` 映射为百炼 `qwen3-vl-plus`。真正零依赖单跑需显式退回
+`in-memory` + `hash` + `RAG_ES_ENABLED=false`。Ollama embedding 仍作为可选 provider 保留，但不再是部署默认。
 
 > 端点约定：业务接口都建议走 `edge-gateway`（`http://localhost:8080`，带 `X-Api-Key`）。
 > `knowledge-service` 自身监听 `:8084`，仅供服务间直连或本地调试。下文 curl 示例统一走边缘网关。
@@ -51,6 +54,8 @@
 - **图片多模态**：JSON 用 `imageBase64`，或 multipart 用同名 `file`（`image/*`）——走原生 CLIP 多模态 embedding，由 `RAG_MULTIMODAL_ENABLED` 控制（**默认关**；开启时必须配置可达端点，关闭时上传图片返回 400）。详见第 3 节。
 
 同一租户下 `title`（displayName）相同的文档会**覆盖并递增版本号**（`docId` 由 `tenantId:displayName` 哈希得到，删除旧向量后重建）。
+覆盖时具体删除和重建哪些索引、字段如何变化、原始文件是否保留及各存储的一致性边界，见
+[知识库文档更新与存储](知识库文档更新与存储.md)。
 
 > **enforce 授权下的上传（默认关，不影响 disabled）**：当 `app.rag.authz.mode=enforce` 时，**新建**文档会同步写入授权关系——文档 owner = 上传人、并绑定其**部门**（`home_dept`，来自身份链还原出的 `TenantContext.department`）；同名覆盖只更新内容、保留原 owner（不夺权）。因此 enforce 下**上传人无法确定归属部门时上传直接 403**（拒绝创建无部门归属的文档）。`disabled`/`shadow` 下不写关系、不拦截，上传行为与接入前一致。文档分享（`POST /rag/documents/{docId}/share`）在 enforce 下要求调用者对该文档有 `share` 权。
 
@@ -108,10 +113,10 @@ RAG_REGISTRY_STORE=in-memory   # 单机/单测；默认是 redis
 
 ---
 
-## 3. 图片多模态 embedding（CLIP）
+## 3. 图片多模态 embedding
 
 > ⚠️ **破坏性变更**：旧的「图 → 文字（caption/OCR）」路径已整体移除。上传图片不再接受 `caption` / `ocrText`
-> 字段，也不再有 `RAG_IMAGE_TEXT_*` / `ImageTextProvider`。图片现在走**原生 CLIP / jina-clip 多模态 embedding**：
+> 字段，也不再有 `RAG_IMAGE_TEXT_*` / `ImageTextProvider`。图片现在走**原生 Qwen-VL / CLIP / jina-clip 多模态 embedding**：
 > 图片直接向量化，向量存入**独立的 image collection**（基名 `knowledge_images`，每租户 `knowledge_images_<tenant>`，
 > 与文本集合 `knowledge_segments` 物理/维度隔离），不再转成文字混进文本索引。
 
@@ -120,10 +125,19 @@ RAG_REGISTRY_STORE=in-memory   # 单机/单测；默认是 redis
 
 ### 开启
 
-指向一个 OpenAI 兼容的 `/embeddings` 端点（vLLM / TEI / 云 jina 均可）：
+标准本地百炼启动会由 `deploy/load-bailian-env.sh` 配置原生 Qwen3-VL：
+
+```bash
+source deploy/load-bailian-env.sh
+load_bailian_env
+# provider=bailian, model=qwen3-vl-embedding, dimension=1024
+```
+
+也可显式指向 OpenAI 兼容的 `/embeddings` 端点（vLLM / TEI / 云 jina）：
 
 ```bash
 RAG_MULTIMODAL_ENABLED=true
+RAG_MULTIMODAL_PROVIDER=openai
 RAG_MULTIMODAL_BASE_URL=http://localhost:8000/v1
 RAG_MULTIMODAL_API_KEY=                       # 可选
 RAG_MULTIMODAL_MODEL=jinaai/jina-clip-v2
@@ -231,21 +245,45 @@ bash deploy/smoke-qdrant-rag.sh
 
 | provider | 默认 | 维度 | 说明 |
 |---|---|---|---|
-| `hash` | ✅ 默认 | 64 | 确定性 SHA-256 哈希向量，零依赖，不真调 embedding，适合开发/单测 |
-| `openai` | | provider 决定 | OpenAI 兼容 embedding，**经 LiteLLM 网关**（默认复用 `platform.gateway.*`） |
+| `hash` | application.yml 默认 | 64 | 确定性 SHA-256 哈希向量，零依赖，不真调 embedding，适合开发/单测 |
+| `openai` | Docker/Helm 默认 | provider 决定 | OpenAI 兼容 embedding；可独立直连百炼，未配独立地址时才复用 `platform.gateway.*` |
 | `ollama` | | 模型决定 | 直连本机/远端 Ollama embedding 模型 |
 
-### OpenAI 兼容（经 LiteLLM）
+### OpenAI 兼容
 
 ```bash
 RAG_EMBEDDING_PROVIDER=openai
-RAG_EMBEDDING_MODEL=embedding-default        # LiteLLM model_list 里的逻辑模型名
-GATEWAY_BASE_URL=http://localhost:4000/v1    # 缺省复用 platform.gateway.base-url
-GATEWAY_API_KEY=sk-litellm-master            # 缺省复用 platform.gateway.api-key
+RAG_EMBEDDING_MODEL=embedding-default
+RAG_EMBEDDING_BASE_URL=http://localhost:4000/v1  # 不设则复用 platform.gateway.base-url
+RAG_EMBEDDING_API_KEY=sk-litellm-master          # 不设则复用 platform.gateway.api-key
 RAG_EMBEDDING_DIMENSIONS=0                    # >0 时向 provider 请求指定维度
 RAG_EMBEDDING_TIMEOUT=60s
 RAG_EMBEDDING_MAX_RETRIES=3
 RAG_EMBEDDING_MAX_SEGMENTS_PER_BATCH=0        # >0 时分批
+```
+
+### 阿里云百炼
+
+百炼文本向量接口兼容 OpenAI `/embeddings`，可直接使用 `openai` provider。`text-embedding-v4`
+单批最多 10 条，建议显式指定 1024 维并限制批次：
+
+```bash
+RAG_EMBEDDING_PROVIDER=openai
+RAG_EMBEDDING_BASE_URL=https://<WorkspaceId>.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
+RAG_EMBEDDING_API_KEY=<DASHSCOPE_API_KEY>
+RAG_EMBEDDING_MODEL=text-embedding-v4
+RAG_EMBEDDING_DIMENSIONS=1024
+RAG_EMBEDDING_MAX_SEGMENTS_PER_BATCH=10
+RAG_VECTOR_STORE_BASE_COLLECTION=knowledge_segments_bailian_v4
+```
+
+Docker 一键脚本读取 `deploy/.env` 中的 `BAILIAN_CREDENTIAL_CSV`，不会把 Key 写入 `.env` 或 Git。
+已有 Qdrant 切片可无损迁移到新向量空间；脚本只读源 collection，保留 point ID/payload，
+并在全部计数核对通过后才切换服务：
+
+```bash
+BAILIAN_CREDENTIAL_CSV=/path/to/bailian-export.csv \
+  bash deploy/migrate-qdrant-embeddings.sh --activate
 ```
 
 ### Ollama
@@ -313,14 +351,22 @@ RAG_RANKING_GRAPH_WEIGHT=1.0
 
 ### 检索增强：rerank / 查询扩展 / 上下文分块
 
-三个正交增强，默认全关，可任意叠加：
+三个正交增强可任意叠加；当前整栈默认开启，均可通过各自的 `*_ENABLED=false` 显式关闭：
 
 ```bash
 # ① 重排（rerank）：先召回 topK×N 候选，再用 rerank 模型精排回 topK
 RAG_RERANK_ENABLED=true
-RAG_RERANK_TYPE=llm                                  # llm（走 LiteLLM 判官打分）| jina（cross-encoder）
+RAG_RERANK_TYPE=bailian                              # Docker/Helm 默认；另可 llm | jina
 RAG_RERANK_CANDIDATE_MULTIPLIER=3                    # 召回候选倍数
 RAG_RERANK_JINA_MODEL=jina-reranker-v2-base-multilingual   # RAG_RERANK_TYPE=jina 时
+
+# 阿里云百炼 qwen3-rerank（与 embedding 共用 API Key，但 base URL 路径不同）
+RAG_RERANK_TYPE=bailian
+RAG_RERANK_BAILIAN_BASE_URL=https://<WorkspaceId>.cn-beijing.maas.aliyuncs.com/compatible-api/v1
+RAG_RERANK_BAILIAN_API_KEY=<DASHSCOPE_API_KEY>
+RAG_RERANK_BAILIAN_MODEL=qwen3-rerank
+RAG_RERANK_BAILIAN_TIMEOUT=30s
+RAG_RERANK_BAILIAN_MAX_DOCUMENTS=500
 
 # ② 查询扩展（query expansion）：把原始 query 改写成多个变体分别检索后合并去重
 RAG_QUERY_EXPANSION_ENABLED=true
@@ -331,7 +377,7 @@ RAG_CONTEXTUAL_ENABLED=true
 RAG_CONTEXTUAL_MAX_DOC_CHARS=8000                    # 生成上下文时读取的文档最大字符数
 ```
 
-- **rerank** 作用在召回后、排序前：`topK × RAG_RERANK_CANDIDATE_MULTIPLIER` 个候选进 rerank，取回 `topK`。`llm` 无需额外服务；`jina` 需要可达的 jina rerank 端点。
+- **rerank** 作用在召回后、排序前：`topK × RAG_RERANK_CANDIDATE_MULTIPLIER` 个候选进 rerank，取回 `topK`。`llm` 复用聊天模型；`jina` 调 Jina；`bailian` 批量调用 `qwen3-rerank`，失败时保留初始融合顺序（fail-open）。
 - **query expansion** 作用在召回前：一次请求实际会做多次向量/keyword 检索再融合，成本更高、召回更全。
 - **contextual** 作用在 ingest 期：只影响之后新入库的文档，已入库文档需重新上传才能带上上下文。
 
@@ -463,7 +509,7 @@ CONVERSATION_SEMANTIC_CACHE_REDIS_TTL=0s                 # redis 档，0 表示�
 |---|---|---|---|
 | 向量库 provider | `RAG_VECTOR_STORE_PROVIDER` | `qdrant` | 同（`qdrant`） |
 | 租户隔离 | `RAG_VECTOR_STORE_ISOLATION` | `collection-per-tenant` | 同 |
-| embedding provider | `RAG_EMBEDDING_PROVIDER` | `hash`（64 维） | `ollama` / `nomic-embed-text`（768 维） |
+| embedding provider | `RAG_EMBEDDING_PROVIDER` | `hash`（64 维） | `openai` / 百炼 `text-embedding-v4`（1024 维） |
 | 文档注册表 | `RAG_REGISTRY_STORE` | `redis` | 同 |
 | 图片多模态 embedding | `RAG_MULTIMODAL_ENABLED` | `false` | 同；开启时需自备 CLIP 端点并配置 base URL |
 | keyword 混合检索 | `RAG_HYBRID_ENABLED` | `true` | 同 |
@@ -471,7 +517,7 @@ CONVERSATION_SEMANTIC_CACHE_REDIS_TTL=0s                 # redis 档，0 表示�
 | ES 全文混排 | `RAG_ES_ENABLED` | `true` | 同 |
 | ES 分析器 | `RAG_ES_ANALYZER` | `smartcn` | 同 |
 | 融合策略 | `RAG_FUSION_STRATEGY` | 空（ES 开→有效默认 `rrf`） | 显式 `rrf` |
-| 重排 rerank | `RAG_RERANK_ENABLED` | `true` | 同 |
+| 重排 rerank | `RAG_RERANK_ENABLED` / `RAG_RERANK_TYPE` | `true` / `llm` | `true` / `bailian`（`qwen3-rerank`） |
 | 查询扩展 | `RAG_QUERY_EXPANSION_ENABLED` | `true` | 同 |
 | 上下文分块 | `RAG_CONTEXTUAL_ENABLED` | `true` | 同 |
 | GraphRAG | `RAG_GRAPH_ENABLED` | `true` | 同 |

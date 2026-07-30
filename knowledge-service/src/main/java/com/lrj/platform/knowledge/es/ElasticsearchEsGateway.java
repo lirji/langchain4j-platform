@@ -178,10 +178,23 @@ public class ElasticsearchEsGateway implements EsGateway, AutoCloseable {
 
     @Override
     public void deleteByDoc(String tenantId, String docId) {
+        deleteByFilters(tenantId, docId, null);
+    }
+
+    @Override
+    public void deleteByDocVersion(String tenantId, String docId, long version) {
+        deleteByFilters(tenantId, docId, Long.toString(version));
+    }
+
+    private void deleteByFilters(String tenantId, String docId, String version) {
         requireTenant(tenantId);
         ArrayNode filter = mapper.createArrayNode();
         filter.add(mapper.createObjectNode().set("term", mapper.createObjectNode().put("tenantId", tenantId)));
         filter.add(mapper.createObjectNode().set("term", mapper.createObjectNode().put("docId", docId)));
+        if (version != null) {
+            filter.add(mapper.createObjectNode().set(
+                    "term", mapper.createObjectNode().put("version", version)));
+        }
         ObjectNode body = mapper.createObjectNode();
         body.set("query", mapper.createObjectNode().set("bool", mapper.createObjectNode().set("filter", filter)));
         try {

@@ -1,17 +1,16 @@
-# 语义 RAG 全量模式(override):knowledge-service 用持久化后端 + Ollama 语义 embedding。
-# 【注意】nomic 语义 embedding + qdrant/redis/jdbc 持久化现已并入基础 docker-compose.yml 默认，本 override 已冗余；
+# 语义 RAG 全量模式(override):knowledge-service 用持久化后端 + 百炼语义 embedding/rerank。
+# 【注意】百炼 text-embedding-v4 + qwen3-rerank + qdrant/redis/jdbc 已并入基础 compose 默认，本 override 已冗余；
 #         保留仅为兼容既有文档/脚本的显式分层用法。基础栈默认即等价于这份配置。
 #
 # 用法(叠加在基础 compose 上):
+#   source deploy/load-bailian-env.sh
+#   load_bailian_env /path/to/bailian-credentials.csv
 #   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.rag-full.yml up -d --no-deps knowledge-service
 #
-# 前置:宿主机 Ollama 已 `ollama pull nomic-embed-text`;redis / qdrant / mysql 已在跑。
-# 换 embedding = 换向量维度(hash 64 → nomic 768),切换后需删旧 Qdrant collection 并重新导入
-# (bash deploy/seed-kb.sh)。详见 docs/对话与检索/rag-api-demo.md §六。
+# 前置:百炼凭据已注入，redis/qdrant/mysql 已在跑。旧向量迁移使用
+# `bash deploy/migrate-qdrant-embeddings.sh --activate`，脚本保留旧 collection 供回滚。
 services:
   knowledge-service:
-    extra_hosts:
-      - "host.docker.internal:host-gateway"   # 容器内回连宿主机 Ollama
     environment:
       # 持久化后端(默认全 in-memory,重启即丢)
       RAG_VECTOR_STORE_PROVIDER: qdrant        # 向量 → Qdrant(卷 qdrant-data)
@@ -19,13 +18,24 @@ services:
       RAG_GRAPH_ENABLED: "true"                # 开 GraphRAG
       RAG_GRAPH_STORE: jdbc                    # 三元组 → MySQL(knowledge_graph.RAG_GRAPH_TRIPLE)
       RAG_GRAPH_INCLUDE_IN_QUERY: "true"
-      # 语义 embedding(默认是无语义的 hash)
-      RAG_EMBEDDING_PROVIDER: ollama
-      RAG_EMBEDDING_MODEL: nomic-embed-text    # 768 维,宿主机 Ollama
-      RAG_EMBEDDING_OLLAMA_BASE_URL: http://host.docker.internal:11434
-      # nomic 非对称任务前缀(尾部空格必须保留):对齐 query/document 向量空间,提升检索准确率
-      RAG_EMBEDDING_QUERY_PREFIX: "search_query: "
-      RAG_EMBEDDING_DOCUMENT_PREFIX: "search_document: "
+      # 百炼 text-embedding-v4（OpenAI-compatible /embeddings，1024 维，单批最多 10 条）
+      RAG_EMBEDDING_PROVIDER: openai
+      RAG_EMBEDDING_MODEL: text-embedding-v4
+      RAG_EMBEDDING_BASE_URL: ${RAG_EMBEDDING_BASE_URL:-}
+      RAG_EMBEDDING_API_KEY: ${RAG_EMBEDDING_API_KEY:-}
+      APP_RAG_EMBEDDING_BASE_URL: ${RAG_EMBEDDING_BASE_URL:-}
+      APP_RAG_EMBEDDING_API_KEY: ${RAG_EMBEDDING_API_KEY:-}
+      RAG_EMBEDDING_DIMENSIONS: "1024"
+      RAG_EMBEDDING_MAX_SEGMENTS_PER_BATCH: "10"
+      RAG_VECTOR_STORE_BASE_COLLECTION: knowledge_segments_bailian_v4
+      QDRANT_COLLECTION_NAME: knowledge_segments_bailian_v4
+      # 百炼 qwen3-rerank（compatible-api /reranks）
+      RAG_RERANK_ENABLED: "true"
+      RAG_RERANK_TYPE: bailian
+      RAG_RERANK_BAILIAN_BASE_URL: ${RAG_RERANK_BAILIAN_BASE_URL:-}
+      RAG_RERANK_BAILIAN_API_KEY: ${RAG_RERANK_BAILIAN_API_KEY:-}
+      RAG_RERANK_BAILIAN_MODEL: qwen3-rerank
+      RAG_RERANK_BAILIAN_MAX_DOCUMENTS: "500"
       # 混合检索关键词半边用 HanLP 中文分词(默认 simple=bigram);仅影响 keyword/graph 分支,不碰向量。
       # 依赖已在 knowledge-service/pom.xml(portable 内置词典)。重启会清空内存 DocumentMirror,需重灌填充。
       RAG_HYBRID_TOKENIZER: hanlp

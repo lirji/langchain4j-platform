@@ -1,0 +1,158 @@
+# 可选的 Knowledge 运行面拆分拓扑。不会替换基础 knowledge-service，也不会修改 edge 路由。
+# 本地验证时显式指定服务；生产凭据必须改用 Secret/IAM，不能使用这里的开发默认值。
+services:
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - knowledge-source-data:/data
+    ports:
+      - "${MINIO_API_HOST_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_HOST_PORT:-9001}:9001"
+
+  minio-init:
+    image: quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z
+    depends_on:
+      - minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      RAG_SOURCE_S3_BUCKET: ${RAG_SOURCE_S3_BUCKET:-knowledge-sources}
+      KNOWLEDGE_INGEST_S3_ACCESS_KEY: ${KNOWLEDGE_INGEST_S3_ACCESS_KEY:-knowledge-ingest}
+      KNOWLEDGE_INGEST_S3_SECRET_KEY: ${KNOWLEDGE_INGEST_S3_SECRET_KEY:-knowledge-ingest-dev-secret}
+      KNOWLEDGE_WORKER_S3_ACCESS_KEY: ${KNOWLEDGE_WORKER_S3_ACCESS_KEY:-knowledge-worker}
+      KNOWLEDGE_WORKER_S3_SECRET_KEY: ${KNOWLEDGE_WORKER_S3_SECRET_KEY:-knowledge-worker-dev-secret}
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        until mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"; do
+          sleep 1
+        done
+        mc mb --ignore-existing "local/$${RAG_SOURCE_S3_BUCKET}"
+        printf '%s\n' \
+          '{"Version":"2012-10-17","Statement":[' \
+          '{"Effect":"Allow","Action":["s3:PutObject","s3:DeleteObject","s3:AbortMultipartUpload","s3:ListMultipartUploadParts"],"Resource":["arn:aws:s3:::'"$${RAG_SOURCE_S3_BUCKET}"'/documents/*"]},' \
+          '{"Effect":"Allow","Action":["s3:ListBucketMultipartUploads"],"Resource":["arn:aws:s3:::'"$${RAG_SOURCE_S3_BUCKET}"'"]}' \
+          ']}' > /tmp/knowledge-ingest-policy.json
+        printf '%s\n' \
+          '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetObject"],"Resource":["arn:aws:s3:::'"$${RAG_SOURCE_S3_BUCKET}"'/documents/*"]}]}' \
+          > /tmp/knowledge-worker-policy.json
+        mc admin policy create local knowledge-ingest-write /tmp/knowledge-ingest-policy.json
+        mc admin policy create local knowledge-worker-read /tmp/knowledge-worker-policy.json
+        mc admin user add local "$${KNOWLEDGE_INGEST_S3_ACCESS_KEY}" "$${KNOWLEDGE_INGEST_S3_SECRET_KEY}" || true
+        mc admin user add local "$${KNOWLEDGE_WORKER_S3_ACCESS_KEY}" "$${KNOWLEDGE_WORKER_S3_SECRET_KEY}" || true
+        mc admin user enable local "$${KNOWLEDGE_INGEST_S3_ACCESS_KEY}"
+        mc admin user enable local "$${KNOWLEDGE_WORKER_S3_ACCESS_KEY}"
+        mc admin policy attach local knowledge-ingest-write --user "$${KNOWLEDGE_INGEST_S3_ACCESS_KEY}"
+        mc admin policy attach local knowledge-worker-read --user "$${KNOWLEDGE_WORKER_S3_ACCESS_KEY}"
+
+  knowledge-query:
+    extends:
+      file: docker-compose.yml
+      service: knowledge-service
+    environment:
+      RAG_RUNTIME_ROLE: query
+      # 使用 split 专属变量，避免基础 deploy/.env 中不完整的 openai 配置污染可选拓扑。
+      # 真实语义环境应成组覆盖 KNOWLEDGE_SPLIT_EMBEDDING_*。
+      RAG_EMBEDDING_PROVIDER: ${KNOWLEDGE_SPLIT_EMBEDDING_PROVIDER:-hash}
+      RAG_EMBEDDING_MODEL: ${KNOWLEDGE_SPLIT_EMBEDDING_MODEL:-text-embedding-v4}
+      RAG_EMBEDDING_BASE_URL: ${KNOWLEDGE_SPLIT_EMBEDDING_BASE_URL:-}
+      RAG_EMBEDDING_API_KEY: ${KNOWLEDGE_SPLIT_EMBEDDING_API_KEY:-}
+      APP_RAG_EMBEDDING_BASE_URL: ${KNOWLEDGE_SPLIT_EMBEDDING_BASE_URL:-}
+      APP_RAG_EMBEDDING_API_KEY: ${KNOWLEDGE_SPLIT_EMBEDDING_API_KEY:-}
+      RAG_VECTOR_STORE_PROVIDER: ${RAG_VECTOR_STORE_PROVIDER:-qdrant}
+      RAG_VECTOR_STORE_BASE_COLLECTION: ${KNOWLEDGE_SPLIT_VECTOR_BASE_COLLECTION:-knowledge_segments_split_hash}
+      RAG_REGISTRY_STORE: ${RAG_REGISTRY_STORE:-redis}
+      RAG_HYBRID_ENABLED: ${RAG_HYBRID_ENABLED:-true}
+      # 外部 rerank 也必须显式成组启用，避免基础 .env 的 provider 开关缺少 endpoint/key。
+      RAG_RERANK_ENABLED: ${KNOWLEDGE_SPLIT_RERANK_ENABLED:-false}
+      RAG_ES_ENABLED: ${RAG_ES_ENABLED:-true}
+      RAG_ES_QUERY_ENABLED: ${RAG_ES_QUERY_ENABLED:-true}
+      RAG_GRAPH_ENABLED: "false"
+    ports: !override
+      - "${KNOWLEDGE_QUERY_HOST_PORT:-18084}:8084"
+
+  knowledge-ingest-api:
+    extends:
+      file: docker-compose.yml
+      service: knowledge-service
+    environment: &knowledge-ingest-environment
+      RAG_RUNTIME_ROLE: ingest-api
+      RAG_INGESTION_STORE: jdbc
+      RAG_INGESTION_DB_URL: jdbc:mysql://mysql:3306/knowledge_ingestion?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      RAG_INGESTION_DB_USER: root
+      RAG_INGESTION_DB_PASSWORD: root
+      RAG_SOURCE_STORE: s3
+      RAG_SOURCE_S3_ENDPOINT: http://minio:9000
+      RAG_SOURCE_S3_REGION: us-east-1
+      RAG_SOURCE_S3_BUCKET: ${RAG_SOURCE_S3_BUCKET:-knowledge-sources}
+      RAG_SOURCE_S3_ACCESS_KEY: ${KNOWLEDGE_INGEST_S3_ACCESS_KEY:-knowledge-ingest}
+      RAG_SOURCE_S3_SECRET_KEY: ${KNOWLEDGE_INGEST_S3_SECRET_KEY:-knowledge-ingest-dev-secret}
+      RAG_SOURCE_S3_PATH_STYLE: "true"
+      RAG_GRAPH_ENABLED: "false"
+      RAG_ES_ENABLED: "false"
+      RAG_RERANK_ENABLED: "false"
+      RAG_QUERY_EXPANSION_ENABLED: "false"
+      RAG_CONTEXTUAL_ENABLED: "false"
+      RAG_VECTOR_STORE_PROVIDER: in-memory
+      # ingest-api 只持久化原文和 job，不应因外部 embedding 配置缺失而拒绝启动。
+      RAG_EMBEDDING_PROVIDER: hash
+      RAG_REGISTRY_STORE: ${RAG_REGISTRY_STORE:-redis}
+    depends_on: !override
+      mysql:
+        condition: service_started
+      redis:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+    ports: !override
+      - "${KNOWLEDGE_INGEST_API_HOST_PORT:-18095}:8084"
+
+  knowledge-ingest-worker:
+    extends:
+      file: docker-compose.yml
+      service: knowledge-service
+    environment:
+      <<: *knowledge-ingest-environment
+      RAG_RUNTIME_ROLE: ingest-worker
+      RAG_SOURCE_S3_ACCESS_KEY: ${KNOWLEDGE_WORKER_S3_ACCESS_KEY:-knowledge-worker}
+      RAG_SOURCE_S3_SECRET_KEY: ${KNOWLEDGE_WORKER_S3_SECRET_KEY:-knowledge-worker-dev-secret}
+      RAG_EMBEDDING_PROVIDER: ${KNOWLEDGE_SPLIT_EMBEDDING_PROVIDER:-hash}
+      RAG_EMBEDDING_MODEL: ${KNOWLEDGE_SPLIT_EMBEDDING_MODEL:-text-embedding-v4}
+      RAG_EMBEDDING_BASE_URL: ${KNOWLEDGE_SPLIT_EMBEDDING_BASE_URL:-}
+      RAG_EMBEDDING_API_KEY: ${KNOWLEDGE_SPLIT_EMBEDDING_API_KEY:-}
+      APP_RAG_EMBEDDING_BASE_URL: ${KNOWLEDGE_SPLIT_EMBEDDING_BASE_URL:-}
+      APP_RAG_EMBEDDING_API_KEY: ${KNOWLEDGE_SPLIT_EMBEDDING_API_KEY:-}
+      RAG_GRAPH_ENABLED: ${RAG_GRAPH_ENABLED:-true}
+      RAG_ES_ENABLED: ${RAG_ES_ENABLED:-true}
+      RAG_VECTOR_STORE_PROVIDER: ${RAG_VECTOR_STORE_PROVIDER:-qdrant}
+      RAG_VECTOR_STORE_BASE_COLLECTION: ${KNOWLEDGE_SPLIT_VECTOR_BASE_COLLECTION:-knowledge_segments_split_hash}
+      RAG_REGISTRY_STORE: ${RAG_REGISTRY_STORE:-redis}
+      RAG_INGESTION_ASYNC_TASK_ENABLED: "true"
+      RAG_INGESTION_ASYNC_TASK_BASE_URL: http://async-task-service:8086
+      RAG_INGESTION_WORKER_POLL_DELAY: ${RAG_INGESTION_WORKER_POLL_DELAY:-1000}
+      RAG_INGESTION_WORKER_INITIAL_DELAY: ${RAG_INGESTION_WORKER_INITIAL_DELAY:-1000}
+      RAG_INGESTION_VERSION_GC_ENABLED: ${RAG_INGESTION_VERSION_GC_ENABLED:-false}
+      RAG_INGESTION_VERSION_GC_RETAIN_VERSIONS: ${RAG_INGESTION_VERSION_GC_RETAIN_VERSIONS:-2}
+      RAG_INGESTION_VERSION_GC_GRACE_PERIOD: ${RAG_INGESTION_VERSION_GC_GRACE_PERIOD:-P7D}
+    depends_on:
+      mysql:
+        condition: service_started
+      redis:
+        condition: service_started
+      qdrant:
+        condition: service_started
+      elasticsearch:
+        condition: service_healthy
+      async-task-service:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+    ports: !override []
+
+volumes:
+  knowledge-source-data:

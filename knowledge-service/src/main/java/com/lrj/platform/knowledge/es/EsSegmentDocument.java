@@ -17,8 +17,8 @@ public record EsSegmentDocument(
         String text,
         long createdAt) {
 
-    /** ES 文档主键：tenantId/docId/index，稳定且幂等。 */
+    /** ES 文档主键：tenantId/docId/version/index，版本提交前不会覆盖当前可见版本。 */
     public String id() {
-        return tenantId + "/" + docId + "/" + index;
+        return tenantId + "/" + docId + "/v" + version + "/" + index;
     }
 }

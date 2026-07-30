@@ -26,7 +26,24 @@ public record RetrievalHit(
         String displayName,
         String category,
         String index,
+        String version,
         String text,
         String source,
         boolean shared) {
+
+    public RetrievalHit(
+            String id,
+            String mergeKey,
+            double score,
+            String docId,
+            String displayName,
+            String category,
+            String index,
+            String text,
+            String source,
+            boolean shared
+    ) {
+        this(id, mergeKey, score, docId, displayName, category, index,
+                null, text, source, shared);
+    }
 }

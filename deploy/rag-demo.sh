@@ -4,7 +4,7 @@
 #
 # 用法：
 #   bash deploy/rag-demo.sh                        # RAG 闭环，保留数据便于演示
-#   bash deploy/rag-demo.sh --with-llm             # 额外演示 /chat 与 /agent/run（需 Ollama+LiteLLM 可达）
+#   bash deploy/rag-demo.sh --with-llm             # 额外演示 /chat 与 /agent/run（需 LiteLLM/文本上游可达）
 #   bash deploy/rag-demo.sh --cleanup              # 跑完后删除本次上传的文档
 #   bash deploy/rag-demo.sh --with-llm --cleanup   # 两个开关可组合，顺序不限
 #   BASE_URL=http://127.0.0.1:8080 bash deploy/rag-demo.sh   # 覆盖网关地址
@@ -75,12 +75,12 @@ curl -fsS "$BASE_URL/rag/documents/$DOC_ID" -H "X-Api-Key: $API_KEY" \
   | python3 -m json.tool --no-ensure-ascii
 
 if [[ "$WITH_LLM" == "1" ]]; then
-  hr "LLM-1 多轮对话（POST /chat，需 Ollama+LiteLLM 可达）"
+  hr "LLM-1 多轮对话（POST /chat，需 LiteLLM/文本上游可达）"
   CHAT="$(curl -s -m 90 -X POST "$BASE_URL/chat?chatId=demo" \
     -H "X-Api-Key: $API_KEY" -H "Content-Type: application/json" \
     -d '{"message":"用一句话介绍你自己"}')" || CHAT=""
   if [[ -z "$CHAT" ]]; then
-    echo "⚠️  /chat 无响应：确认本机 Ollama 在跑（ollama pull llama3.1）、LiteLLM 容器可达。" >&2
+    echo "⚠️  /chat 无响应：确认 LiteLLM 与 DeepSeek 可达；Ollama llama3.1 仅是可选故障回退。" >&2
   else
     echo "$CHAT" | python3 -m json.tool --no-ensure-ascii 2>/dev/null || echo "$CHAT"
   fi
@@ -90,7 +90,7 @@ if [[ "$WITH_LLM" == "1" ]]; then
     -H "X-Api-Key: $API_KEY" -H "Content-Type: application/json" \
     -d '{"goal":"用 current_time 工具查询 Asia/Shanghai 的当前时间，然后直接给出最终答案。"}')" || AGENT=""
   if [[ -z "$AGENT" ]]; then
-    echo "⚠️  /agent/run 无响应：同上检查 Ollama/LiteLLM，或超时（可用更大的 -m 重试）。" >&2
+    echo "⚠️  /agent/run 无响应：检查 LiteLLM/文本上游，或增大超时后重试。" >&2
   else
     echo "$AGENT" | python3 -m json.tool --no-ensure-ascii 2>/dev/null || echo "$AGENT"
     AGENT="$AGENT" python3 - <<'PY'

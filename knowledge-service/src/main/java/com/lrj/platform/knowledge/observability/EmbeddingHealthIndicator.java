@@ -18,22 +18,22 @@ public class EmbeddingHealthIndicator implements HealthIndicator {
 
     private final String provider;
     private final String ollamaBaseUrl;
-    private final String gatewayBaseUrl;
+    private final String openAiBaseUrl;
 
     public EmbeddingHealthIndicator(
             @Value("${app.rag.embedding.provider:hash}") String provider,
             @Value("${app.rag.embedding.ollama.base-url:}") String ollamaBaseUrl,
-            @Value("${platform.gateway.base-url:}") String gatewayBaseUrl) {
+            @Value("${app.rag.embedding.base-url:${platform.gateway.base-url:}}") String openAiBaseUrl) {
         this.provider = provider;
         this.ollamaBaseUrl = ollamaBaseUrl;
-        this.gatewayBaseUrl = gatewayBaseUrl;
+        this.openAiBaseUrl = openAiBaseUrl;
     }
 
     @Override
     public Health health() {
         String target = switch (provider == null ? "hash" : provider.toLowerCase()) {
             case "ollama" -> ollamaBaseUrl;
-            case "openai", "openai-compat", "gateway" -> gatewayBaseUrl;
+            case "openai", "openai-compat", "gateway" -> openAiBaseUrl;
             default -> null; // hash 等进程内实现无网络端点
         };
         if (target == null || target.isBlank()) {

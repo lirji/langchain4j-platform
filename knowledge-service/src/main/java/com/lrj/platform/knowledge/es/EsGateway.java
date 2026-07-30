@@ -17,6 +17,11 @@ public interface EsGateway {
     /** 按 tenantId + docId 删除该文档全部 chunk。 */
     void deleteByDoc(String tenantId, String docId);
 
+    /** 按 tenantId + docId + version 精确删除一个历史版本。 */
+    default void deleteByDocVersion(String tenantId, String docId, long version) {
+        // Optional for older/test gateways.
+    }
+
     /** 全文检索：text 字段 match，tenantId(+category) filter，返回带 BM25 分的命中（相关性降序）。 */
     List<EsSearchHit> search(String tenantId, String category, String queryText, int limit);
 }

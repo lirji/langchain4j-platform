@@ -33,6 +33,44 @@ platform:
 
 app:
   rag:
+    # combined 保持兼容 façade；query/ingest-api/ingest-worker 用同一 artifact 拆独立 Deployment。
+    # 独立角色会在启动期强制使用 JDBC job store；ingest 角色还会强制使用 S3 source store。
+    runtime:
+      role: ${RAG_RUNTIME_ROLE:combined}
+    ingestion:
+      version-gc:
+        enabled: ${RAG_INGESTION_VERSION_GC_ENABLED:false}
+        retain-versions: ${RAG_INGESTION_VERSION_GC_RETAIN_VERSIONS:2}
+        grace-period: ${RAG_INGESTION_VERSION_GC_GRACE_PERIOD:P7D}
+        poll-interval: ${RAG_INGESTION_VERSION_GC_POLL_INTERVAL:PT1H}
+        batch-size: ${RAG_INGESTION_VERSION_GC_BATCH_SIZE:100}
+      store: ${RAG_INGESTION_STORE:memory} # memory | jdbc
+      processing-timeout: ${RAG_INGESTION_PROCESSING_TIMEOUT:15m}
+      reconcile-batch-size: ${RAG_INGESTION_RECONCILE_BATCH_SIZE:100}
+      worker-batch-size: ${RAG_INGESTION_WORKER_BATCH_SIZE:10}
+      worker-poll-delay: ${RAG_INGESTION_WORKER_POLL_DELAY:1000}
+      worker-initial-delay: ${RAG_INGESTION_WORKER_INITIAL_DELAY:1000}
+      async-task:
+        enabled: ${RAG_INGESTION_ASYNC_TASK_ENABLED:false}
+        base-url: ${RAG_INGESTION_ASYNC_TASK_BASE_URL:http://async-task-service:8086}
+        connect-timeout: ${RAG_INGESTION_ASYNC_TASK_CONNECT_TIMEOUT:1s}
+        read-timeout: ${RAG_INGESTION_ASYNC_TASK_READ_TIMEOUT:2s}
+      datasource:
+        url: ${RAG_INGESTION_DB_URL:jdbc:mysql://localhost:3306/knowledge_ingestion?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+        username: ${RAG_INGESTION_DB_USER:root}
+        password: ${RAG_INGESTION_DB_PASSWORD:}
+        driver-class-name: ${RAG_INGESTION_DB_DRIVER:com.mysql.cj.jdbc.Driver}
+        maximum-pool-size: ${RAG_INGESTION_DB_MAX_POOL_SIZE:8}
+    # Knowledge 原文权威存储。dev/test 默认 memory；拆分 ingest worker 的生产环境必须使用 s3。
+    source:
+      store: ${RAG_SOURCE_STORE:memory} # memory | s3
+      endpoint: ${RAG_SOURCE_S3_ENDPOINT:}
+      region: ${RAG_SOURCE_S3_REGION:us-east-1}
+      bucket: ${RAG_SOURCE_S3_BUCKET:knowledge-sources}
+      prefix: ${RAG_SOURCE_S3_PREFIX:documents}
+      access-key: ${RAG_SOURCE_S3_ACCESS_KEY:}
+      secret-key: ${RAG_SOURCE_S3_SECRET_KEY:}
+      path-style: ${RAG_SOURCE_S3_PATH_STYLE:true}
     # 细粒度授权（接 auth-platform / SpiceDB ReBAC）。默认 disabled —— 与接入前逐字一致。
     # disabled | shadow（照写关系、读路径双算记差异但不拦截，灰度观测）| enforce（读路径按 ReBAC 真过滤）。
     # mode != disabled 时经下方 authz.client.server-url 调 auth-platform-server(:8200)。
@@ -105,6 +143,9 @@ app:
         buckets: ${RAG_DORIS_BUCKETS:4}
     embedding:
       provider: ${RAG_EMBEDDING_PROVIDER:hash}
+      # OpenAI-compatible provider 可单独直连百炼等服务；未配置时继续复用平台 LiteLLM 网关。
+      base-url: ${RAG_EMBEDDING_BASE_URL:${platform.gateway.base-url:http://localhost:4000/v1}}
+      api-key: ${RAG_EMBEDDING_API_KEY:${platform.gateway.api-key:sk-litellm-master}}
       model-name: ${RAG_EMBEDDING_MODEL:embedding-default}
       dimensions: ${RAG_EMBEDDING_DIMENSIONS:0}
       timeout: ${RAG_EMBEDDING_TIMEOUT:60s}
@@ -126,6 +167,7 @@ app:
     # 默认关；显式开启必须同时提供可达的多模态 embedding base-url，避免容器回落 localhost 后调用期 500。
     multimodal-embedding:
       enabled: ${RAG_MULTIMODAL_ENABLED:false}
+      provider: ${RAG_MULTIMODAL_PROVIDER:openai}
       base-url: ${RAG_MULTIMODAL_BASE_URL:}
       api-key: ${RAG_MULTIMODAL_API_KEY:}
       model-name: ${RAG_MULTIMODAL_MODEL:jinaai/jina-clip-v2}
@@ -171,17 +213,25 @@ app:
       fail-fast: ${RAG_ES_FAIL_FAST:false}   # 写失败：false=best-effort(默认) / true=让上传失败
       connect-timeout-ms: ${RAG_ES_CONNECT_TIMEOUT_MS:2000}
       socket-timeout-ms: ${RAG_ES_SOCKET_TIMEOUT_MS:5000}
-    # 重排序：默认开。按 type 二选一（llm=复用共享 temp=0 ChatModel 打分；jina=Jina reranker 云 API）；置 false 关闭
+    # 重排序：llm（共享 ChatModel）| jina（Jina 云 API）| bailian（百炼 qwen3-rerank）
     rerank:
       enabled: ${RAG_RERANK_ENABLED:true}
-      type: ${RAG_RERANK_TYPE:llm}                # llm | jina
+      type: ${RAG_RERANK_TYPE:llm}                # llm | jina | bailian
       candidate-multiplier: ${RAG_RERANK_CANDIDATE_MULTIPLIER:3}
       # 相关性阈值(0..1)：rerank 打分低于此值的候选在截断到 topK 前丢弃 —— 让 topK 成为"上限"而非"必凑满"。
-      # 0=不设阈值(库默认，行为不变)。仅真实重排器(llm/jina)生效；过高可能返回空(=无够相关文档)。
+      # 0=不设阈值(库默认，行为不变)。仅真实重排器(llm/jina/bailian)生效；过高可能返回空(=无够相关文档)。
       min-score: ${RAG_RERANK_MIN_SCORE:0.0}
       jina:
         api-key: ${JINA_API_KEY:}
         model-name: ${RAG_RERANK_JINA_MODEL:jina-reranker-v2-base-multilingual}
+      bailian:
+        # qwen3-rerank 用 compatible-api，不是 embedding 的 compatible-mode。
+        base-url: ${RAG_RERANK_BAILIAN_BASE_URL:}
+        api-key: ${RAG_RERANK_BAILIAN_API_KEY:${RAG_EMBEDDING_API_KEY:}}
+        model-name: ${RAG_RERANK_BAILIAN_MODEL:qwen3-rerank}
+        instruct: ${RAG_RERANK_BAILIAN_INSTRUCT:Given a user question, retrieve passages that directly answer it.}
+        timeout: ${RAG_RERANK_BAILIAN_TIMEOUT:30s}
+        max-documents: ${RAG_RERANK_BAILIAN_MAX_DOCUMENTS:500}
     # 查询扩展：默认开。用共享 temp=0 ChatModel 把 1 query 扩成 N 变体多路召回；置 false 关闭
     query-expansion:
       enabled: ${RAG_QUERY_EXPANSION_ENABLED:true}
@@ -237,6 +287,13 @@ management:
     health:
       probes:
         enabled: true
+      # Spring Boot 的默认 readiness 组只包含 ReadinessState，不会自动带入外部依赖。
+      # 显式纳入向量库和 embedding，避免 Qdrant 重启后的 gRPC backoff 窗口提前接流。
+      # 测试/本地切换到非 qdrant provider 时允许该成员缺席。
+      validate-group-membership: false
+      group:
+        readiness:
+          include: readinessState,qdrant,embedding
   # es-hybrid-rerank：不用 Spring 自动配置的 ES 客户端，关掉其自带 ES 健康指示器（否则 ping localhost:9200 → DOWN）。
   health:
     elasticsearch:

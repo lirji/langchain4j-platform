@@ -11,6 +11,7 @@ public class FakeEsGateway implements EsGateway {
 
     public final List<EsSegmentDocument> indexed = new ArrayList<>();
     public final List<String[]> deleted = new ArrayList<>();
+    public final List<Object[]> deletedVersions = new ArrayList<>();
     public int ensureIndexCalls = 0;
     public List<EsSearchHit> searchResult = List.of();
     public RuntimeException bulkError;
@@ -36,6 +37,11 @@ public class FakeEsGateway implements EsGateway {
     @Override
     public void deleteByDoc(String tenantId, String docId) {
         deleted.add(new String[]{tenantId, docId});
+    }
+
+    @Override
+    public void deleteByDocVersion(String tenantId, String docId, long version) {
+        deletedVersions.add(new Object[]{tenantId, docId, version});
     }
 
     @Override
