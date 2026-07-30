@@ -1,0 +1,14 @@
+{
+  "benchmark": "agent-linear-cold",
+  "topology": "linear",
+  "cases": 5,
+  "httpSuccesses": 5,
+  "rubricPassed": 2,
+  "rubricCompletionRate": 0.4,
+  "criticAccepted": 5,
+  "criticAcceptanceRate": 1,
+  "replanned": 0,
+  "averageDurationMs": 61704,
+  "p50DurationMs": 64296,
+  "p95DurationMs": 75901
+}

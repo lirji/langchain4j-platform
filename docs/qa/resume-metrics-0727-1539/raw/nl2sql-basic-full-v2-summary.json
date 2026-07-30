@@ -1,0 +1,13 @@
+{
+  "benchmark": "nl2sql-basic-full-v2",
+  "cases": 150,
+  "executionSuccesses": 150,
+  "executionSuccessRate": 1,
+  "correct": 147,
+  "resultAccuracy": 0.98,
+  "guardBlocked": 0,
+  "guardBlockedRate": 0,
+  "averageDurationMs": 346.03333333333336,
+  "p50DurationMs": 24,
+  "p95DurationMs": 2246
+}

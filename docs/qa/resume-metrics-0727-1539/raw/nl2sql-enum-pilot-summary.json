@@ -1,0 +1,13 @@
+{
+  "benchmark": "nl2sql-enum-pilot",
+  "cases": 15,
+  "executionSuccesses": 15,
+  "executionSuccessRate": 1,
+  "correct": 14,
+  "resultAccuracy": 0.9333333333333333,
+  "guardBlocked": 0,
+  "guardBlockedRate": 0,
+  "averageDurationMs": 1915,
+  "p50DurationMs": 1899,
+  "p95DurationMs": 2325
+}

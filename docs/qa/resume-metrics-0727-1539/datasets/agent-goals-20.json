@@ -1,0 +1,235 @@
+[
+  {
+    "id": "rag-architecture",
+    "goal": "说明本平台RAG从文档入库到带引用回答的完整链路，并指出至少两项质量优化措施",
+    "required": [
+      "文档",
+      "分块",
+      "向量",
+      "BM25",
+      "RRF",
+      "引用"
+    ],
+    "forbidden": [
+      "所有检索只依赖关键词"
+    ]
+  },
+  {
+    "id": "tenant-isolation",
+    "goal": "设计本平台知识库多租户隔离验证方案，覆盖身份传播、存储分区、负向测试和观测",
+    "required": [
+      "JWT",
+      "tenant",
+      "分区",
+      "跨租户",
+      "测试"
+    ],
+    "forbidden": []
+  },
+  {
+    "id": "nl2sql-security",
+    "goal": "总结NL2SQL安全护栏并解释每层分别防止什么风险",
+    "required": [
+      "SELECT",
+      "白名单",
+      "LIMIT",
+      "超时",
+      "tenant"
+    ],
+    "forbidden": []
+  },
+  {
+    "id": "agent-dag",
+    "goal": "解释多Agent DAG如何进行拓扑分层、同层并行、结果汇总和失败重规划",
+    "required": [
+      "拓扑",
+      "并行",
+      "synthesis",
+      "critic",
+      "replan"
+    ],
+    "forbidden": []
+  },
+  {
+    "id": "observability",
+    "goal": "为一次RAG慢查询制定从网关到模型调用的可观测性排查步骤",
+    "required": [
+      "trace",
+      "网关",
+      "检索",
+      "模型",
+      "P95"
+    ],
+    "forbidden": []
+  },
+  {
+    "id": "cache-consistency",
+    "goal": "分析语义缓存的收益、误命中风险、租户隔离和知识库更新后的失效策略",
+    "required": [
+      "命中",
+      "阈值",
+      "租户",
+      "失效",
+      "更新"
+    ],
+    "forbidden": []
+  },
+  {
+    "id": "rag-evaluation",
+    "goal": "制定RAG离线评测方案，说明Recall@K、Precision@K、MRR和引用指标的口径",
+    "required": [
+      "Recall",
+      "Precision",
+      "MRR",
+      "引用",
+      "黄金集"
+    ],
+    "forbidden": []
+  },
+  {
+    "id": "model-gateway",
+    "goal": "说明LiteLLM网关在模型路由、故障转移、缓存和成本归因中的职责",
+    "required": [
+      "路由",
+      "故障",
+      "缓存",
+      "成本"
+    ],
+    "forbidden": []
+  },
+  {
+    "id": "document-update",
+    "goal": "解释同名知识库文档更新时旧版本如何被替换以及各存储如何保持一致",
+    "required": [
+      "docId",
+      "版本",
+      "向量",
+      "Elasticsearch",
+      "删除"
+    ],
+    "forbidden": []
+  },
+  {
+    "id": "public-kb",
+    "goal": "比较租户私有知识库和公共知识库的读写权限与检索合并规则",
+    "required": [
+      "私有",
+      "公共",
+      "权限",
+      "检索",
+      "__public__"
+    ],
+    "forbidden": []
+  },
+  {
+    "id": "eventbus",
+    "goal": "设计一个跨服务异步事件处理方案，包含投递、幂等、重试和可观测性",
+    "required": [
+      "事件",
+      "幂等",
+      "重试",
+      "观测"
+    ],
+    "forbidden": []
+  },
+  {
+    "id": "workflow-human",
+    "goal": "说明退款审批流程中的Agent、人类审批和工作流状态机如何协作",
+    "required": [
+      "Agent",
+      "审批",
+      "状态",
+      "人工"
+    ],
+    "forbidden": []
+  },
+  {
+    "id": "memory-design",
+    "goal": "比较短期对话记忆和长期用户画像的存储、隔离与使用场景",
+    "required": [
+      "短期",
+      "长期",
+      "存储",
+      "租户"
+    ],
+    "forbidden": []
+  },
+  {
+    "id": "a2a-mcp",
+    "goal": "比较A2A与MCP在本平台的定位、通信对象和适用场景",
+    "required": [
+      "A2A",
+      "MCP",
+      "Agent",
+      "工具"
+    ],
+    "forbidden": []
+  },
+  {
+    "id": "rate-limit",
+    "goal": "设计按租户和接口族实施限流与预算控制的方案",
+    "required": [
+      "租户",
+      "接口",
+      "限流",
+      "预算"
+    ],
+    "forbidden": []
+  },
+  {
+    "id": "rag-failure",
+    "goal": "列出向量库、Elasticsearch和重排器分别不可用时RAG应如何降级",
+    "required": [
+      "向量",
+      "Elasticsearch",
+      "重排",
+      "降级"
+    ],
+    "forbidden": []
+  },
+  {
+    "id": "sql-correctness",
+    "goal": "制定NL2SQL正确率评测流程，区分执行成功与结果正确",
+    "required": [
+      "执行",
+      "结果",
+      "黄金",
+      "标准化"
+    ],
+    "forbidden": []
+  },
+  {
+    "id": "agent-quality",
+    "goal": "制定多Agent复杂任务完成率评测方案，避免模型自己生成又自己评分的偏差",
+    "required": [
+      "Rubric",
+      "确定性",
+      "Critic",
+      "偏差"
+    ],
+    "forbidden": []
+  },
+  {
+    "id": "deployment",
+    "goal": "给出本平台从本地Compose到生产部署的配置与密钥治理检查清单",
+    "required": [
+      "Compose",
+      "配置",
+      "密钥",
+      "生产"
+    ],
+    "forbidden": []
+  },
+  {
+    "id": "resume-metrics",
+    "goal": "为RAG、Agent和NL2SQL设计可写进简历且可复现的指标证据包",
+    "required": [
+      "RAG",
+      "Agent",
+      "NL2SQL",
+      "测试集",
+      "报告"
+    ],
+    "forbidden": []
+  }
+]

@@ -1,0 +1,382 @@
+{
+  "summary": {
+    "benchmark": "semantic-cache-exact-repeat",
+    "cold": {
+      "count": 30,
+      "averageDurationMs": 2463.4333333333334,
+      "p50DurationMs": 2481,
+      "p95DurationMs": 2878
+    },
+    "warm": {
+      "count": 30,
+      "averageDurationMs": 6.666666666666667,
+      "p50DurationMs": 6,
+      "p95DurationMs": 10
+    },
+    "speedup": 369.515
+  },
+  "cold": [
+    {
+      "question": "上传文档时，如果图片多模态功能未开启，系统会如何处理？",
+      "status": 200,
+      "durationMs": 2621,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-0\",\"reply\":\"返回明确的 400 错误，提示需开启 `RAG_MULTIMODAL_ENABLED` 开关，不会静默忽略。\"}"
+    },
+    {
+      "question": "在混合检索中，当ES参与查询时，默认的融合策略是什么？",
+      "status": 200,
+      "durationMs": 2565,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-1\",\"reply\":\"当 ES 参与查询时，默认的融合策略是 **RRF**（倒数秩融合，`k=60`）[doc=rag-guide.md#55][doc=向量检索-ann与rrf.md#29]。\"}"
+    },
+    {
+      "question": "如何配置才能使图片多模态嵌入功能生效？",
+      "status": 200,
+      "durationMs": 2547,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-2\",\"reply\":\"设置环境变量 `RAG_MULTIMODAL_ENABLED=true`，并确保配置了可达的 CLIP 端点；该功能默认关闭，关闭时上传图片会返回 400 [doc=rag-guide.md#14]。\"}"
+    },
+    {
+      "question": "文档上传时，如果标题相同，系统会如何处理？",
+      "status": 200,
+      "durationMs": 2481,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-3\",\"reply\":\"同一租户下，标题（`displayName`）相同的文档会**覆盖并递增版本号**：`docId` 由 `tenantId:displayName` 哈希得到，删除旧向量后重建索引。 [doc=rag-guide.md#15]\"}"
+    },
+    {
+      "question": "在enforce授权模式下，上传文档时如果无法确定归属部门，会发生什么？",
+      "status": 200,
+      "durationMs": 2719,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-4\",\"reply\":\"会直接返回 403，拒绝创建该文档。[doc=rag-guide.md#16][doc=架构文档.md#103]\"}"
+    },
+    {
+      "question": "GraphRAG的图存储默认使用什么后端？如何切换为进程内模式？",
+      "status": 200,
+      "durationMs": 2450,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-5\",\"reply\":\"默认使用 `jdbc`（持久化到 MySQL）；切换为进程内模式只需设置环境变量 `RAG_GRAPH_STORE=in-memory`。\"}"
+    },
+    {
+      "question": "L1语义缓存在什么位置？它如何影响请求处理流程？",
+      "status": 200,
+      "durationMs": 2373,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-6\",\"reply\":\"L1 语义缓存位于 `conversation-service` 的 `/chat` 接口中，在 **RAG + LLM 之前**（pre-RAG）[doc=rag-guide.md#82]。它将用户原始问题向量化后在当前租户桶内做相似度检索，命中则直接返回缓存回复，短路后续 embedding/检索/LLM；未命中则走正常流程并回填缓存。\"}"
+    },
+    {
+      "question": "切换embedding provider后，为什么需要重建向量库collection？",
+      "status": 200,
+      "durationMs": 3029,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-7\",\"reply\":\"切换 embedding provider（如从 OpenAI 换到 Ollama）通常会导致向量维度变化，而 collection 已按旧维度建好索引，写入新维度向量时会触发 `DimensionMismatchException` 拒绝存储，防止静默坏数据。因此必须为每个租户重建或清空对应 collection。[doc=rag-guide.md#41][doc=rag-guide.md#48]\"}"
+    },
+    {
+      "question": "在enforce授权模式下，文档级授权过滤如何处理无docId命中的候选（如GraphRAG三元组）？",
+      "status": 200,
+      "durationMs": 2540,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-8\",\"reply\":\"无 docId 命中的候选（如 GraphRAG 三元组）因无法进行资源级判权，会被 **fail-closed 直接丢弃**。[doc=rag-guide.md#56]\"}"
+    },
+    {
+      "question": "rerank和query expansion两个增强功能分别作用于检索流程的哪个阶段？",
+      "status": 200,
+      "durationMs": 2708,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-9\",\"reply\":\"rerank 作用于**召回后、排序前**，对候选结果进行精排；query expansion 作用于**召回前**，将原始 query 改写为多个变体分别检索再融合。\"}"
+    },
+    {
+      "question": "平台支持的6个向量库中，哪个库默认使用精确暴力搜索而非近似最近邻？",
+      "status": 200,
+      "durationMs": 2707,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-10\",\"reply\":\"Milvus。默认 `FLAT` 索引是精确暴力搜索，要获得 ANN 性能必须显式把 `RAG_MILVUS_INDEX_TYPE` 设为 `HNSW` 或 `IVF_*`。[doc=向量检索-ann与rrf.md#20]\"}"
+    },
+    {
+      "question": "RRF融合策略中，平滑常数k的默认值是多少？增大k值对排名结果有什么影响？",
+      "status": 200,
+      "durationMs": 2300,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-11\",\"reply\":\"默认值是 **60**。增大 k 会压低头部名次的优势，让第 1 名和第 2 名的贡献差变小，结果更「民主」。 [doc=向量检索-ann与rrf.md#25]\"}"
+    },
+    {
+      "question": "在pgvector向量库中，如果希望使用库内向量与全文检索的混合排序，需要设置什么参数？",
+      "status": 200,
+      "durationMs": 2648,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-12\",\"reply\":\"设置 `RAG_PGVECTOR_SEARCH_MODE=HYBRID`，同时通过 `rrf-k` 参数控制 RRF 融合时的平滑系数。\"}"
+    },
+    {
+      "question": "平台中哪两个向量库默认使用HNSW索引？",
+      "status": 200,
+      "durationMs": 2826,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-13\",\"reply\":\"平台默认的 **Qdrant** 使用 HNSW 索引；另一个支持 HNSW 的 **Milvus** 其默认索引是 FLAT，需手动切换 [doc=向量检索-ann与rrf.md#11][doc=向量检索-ann与rrf.md#36]。\"}"
+    },
+    {
+      "question": "为什么RRF分数不能作为相关度阈值使用？",
+      "status": 200,
+      "durationMs": 2878,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-14\",\"reply\":\"RRF 分数是名次分（`Σ 1/(k+rank)`），只反映文档在**多路召回中的排名共识**，不携带「有多相关」的绝对信息，因此不能拿它当相关度阈值。想设相关度地板请用 `RAG_RERANK_MIN_SCORE`（rerank 判官打的 0..1 相关分）。[doc=向量检索-ann与rrf.md#27][doc=向量检索-ann与rrf.md#33]\"}"
+    },
+    {
+      "question": "切换向量库provider时，需要重新执行什么操作才能使用数据？",
+      "status": 200,
+      "durationMs": 2139,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-15\",\"reply\":\"切换 `RAG_VECTOR_STORE_PROVIDER` 环境变量后，只需重启 `knowledge-service`，新的 `CollectionManager` 会在启动时自动初始化索引，无需手动建表或迁移数据。\\n\\n⚠️ 可信度提示：支撑度 0.50 < 0.70，可能含未被资料支撑的内容。请以原始资料为准。\"}"
+    },
+    {
+      "question": "在跨源RRF融合中，如果ES不参与查询，默认使用什么融合策略？",
+      "status": 200,
+      "durationMs": 2540,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-16\",\"reply\":\"`weighted_max`（同一分块跨源取加权分 max，并标 `hybrid`）。[doc=es-hybrid-rerank.md#4]\"}"
+    },
+    {
+      "question": "HNSW索引中，哪个参数是唯一可以在查询时调整召回率与延迟的旋钮？",
+      "status": 200,
+      "durationMs": 1784,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-17\",\"reply\":\"`ef_search`。\\n\\n⚠️ 可信度提示：支撑度 0.50 < 0.70，可能含未被资料支撑的内容。请以原始资料为准。\"}"
+    },
+    {
+      "question": "平台中哪两个向量库支持shared隔离模式？",
+      "status": 200,
+      "durationMs": 2456,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-18\",\"reply\":\"`in-memory` 和 `qdrant` 支持 `shared` 隔离模式。 [doc=向量检索-ann与rrf.md#23]\"}"
+    },
+    {
+      "question": "如果希望看到原始相关分而非RRF名次分，可以采取哪两种方法？",
+      "status": 200,
+      "durationMs": 2851,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-19\",\"reply\":\"1. 关掉 ES，退回 `weighted_max` 融合；  \\n2. 开启 rerank，直接看 rerank 后的判官分。 [doc=向量检索-ann与rrf.md#34]\"}"
+    },
+    {
+      "question": "当Elasticsearch服务不可达时，系统会如何处理查询请求？",
+      "status": 200,
+      "durationMs": 2637,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-20\",\"reply\":\"ES 不可达时，ES 检索源自动降级返回空，其余源（向量、内存关键词、图谱）照常查询，不影响服务启动与整体返回。[doc=es-hybrid-rerank.md#0][doc=es-hybrid-rerank.md#16][doc=数据库与中间件清单.md#32]\"}"
+    },
+    {
+      "question": "在ES开启的情况下，系统默认使用哪种融合策略？为什么？",
+      "status": 200,
+      "durationMs": 2433,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-21\",\"reply\":\"默认使用 `rrf`（倒数排名融合）。因为 RRF 只看名次、不看分数量纲，能免疫 BM25 与余弦向量之间的分数量级差异，ES 参与时稳定性更好。[doc=es-hybrid-rerank.md#4][doc=rag-guide.md#91]\"}"
+    },
+    {
+      "question": "如何配置使得系统只写入ES但不进行ES查询？",
+      "status": 200,
+      "durationMs": 2453,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-22\",\"reply\":\"设置 `RAG_ES_INDEX_ENABLED=true` 且 `RAG_ES_QUERY_ENABLED=false`，此时系统只向 ES 写入索引，查询时仍然使用原有的融合策略（weighted_max），不会发起 ES 查询。\"}"
+    },
+    {
+      "question": "如果我想关闭ES混排功能，应该设置哪个环境变量？",
+      "status": 200,
+      "durationMs": 2090,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-23\",\"reply\":\"设置 `RAG_ES_ENABLED=false`。\\n\\n⚠️ 可信度提示：支撑度 0.00 < 0.70，可能含未被资料支撑的内容。请以原始资料为准。\"}"
+    },
+    {
+      "question": "在weighted_max策略下，BM25分数是如何与向量分数对齐的？",
+      "status": 200,
+      "durationMs": 2083,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-24\",\"reply\":\"在 `weighted_max` 策略下，`EsKeywordRetrievalSource` 会按本次查询的最高分把 BM25 归一化到 [0,1] 区间，再与向量余弦分数（已在 [0,1]）做跨源取最大。[doc=es-hybrid-rerank.md#5]\"}"
+    },
+    {
+      "question": "开启ES后，历史数据需要如何处理才能被ES检索到？",
+      "status": 200,
+      "durationMs": 2361,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-25\",\"reply\":\"需要重新上传历史文档（通过 `seed-kb.sh` 或上传 API 重灌），因为 registry 只存元数据，不会自动迁移历史数据到 ES [doc=es-hybrid-rerank.md#18]。\"}"
+    },
+    {
+      "question": "系统在ES写入失败时的默认行为是什么？如何改为严格模式？",
+      "status": 200,
+      "durationMs": 2025,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-26\",\"reply\":\"ES 默认 `RAG_ES_FAIL_FAST=false`，写入失败只记警告不中断；设为 `true` 即进入严格模式，失败时会向上抛出异常。 [doc=知识库文档更新与存储.md#36]\"}"
+    },
+    {
+      "question": "ES索引的默认名称和中文分析器分别是什么？",
+      "status": 200,
+      "durationMs": 1896,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-27\",\"reply\":\"默认索引名 `knowledge_segments_text`，默认中文分析器 `smartcn`。[doc=es-hybrid-rerank.md#7]\"}"
+    },
+    {
+      "question": "在灰度阶段，如何先验证ES写入再开启查询，且融合策略保持为weighted_max？",
+      "status": 200,
+      "durationMs": 2260,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-28\",\"reply\":\"在灰度阶段，先设 `RAG_ES_INDEX_ENABLED=true, RAG_ES_QUERY_ENABLED=false` 只验证写入，同时 `RAG_ES_ENABLED=false`（或 `RAG_FUSION_STRATEGY=weighted_max` 显式指定），此时融合策略有效默认仍为 `weighted_max`、不会翻到 RRF。\"}"
+    },
+    {
+      "question": "当RAG_FUSION_STRATEGY留空时，系统如何决定使用哪种融合策略？",
+      "status": 200,
+      "durationMs": 2503,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-cold-29\",\"reply\":\"留空时，系统根据 ES 是否参与查询自动决定：若 ES 参与则有效默认 `rrf`，否则使用 `weighted_max`。[doc=rag-guide.md#55]\"}"
+    }
+  ],
+  "warm": [
+    {
+      "question": "上传文档时，如果图片多模态功能未开启，系统会如何处理？",
+      "status": 200,
+      "durationMs": 7,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-0\",\"reply\":\"返回明确的 400 错误，提示需开启 `RAG_MULTIMODAL_ENABLED` 开关，不会静默忽略。\"}"
+    },
+    {
+      "question": "在混合检索中，当ES参与查询时，默认的融合策略是什么？",
+      "status": 200,
+      "durationMs": 6,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-1\",\"reply\":\"当 ES 参与查询时，默认的融合策略是 **RRF**（倒数秩融合，`k=60`）[doc=rag-guide.md#55][doc=向量检索-ann与rrf.md#29]。\"}"
+    },
+    {
+      "question": "如何配置才能使图片多模态嵌入功能生效？",
+      "status": 200,
+      "durationMs": 7,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-2\",\"reply\":\"设置环境变量 `RAG_MULTIMODAL_ENABLED=true`，并确保配置了可达的 CLIP 端点；该功能默认关闭，关闭时上传图片会返回 400 [doc=rag-guide.md#14]。\"}"
+    },
+    {
+      "question": "文档上传时，如果标题相同，系统会如何处理？",
+      "status": 200,
+      "durationMs": 6,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-3\",\"reply\":\"同一租户下，标题（`displayName`）相同的文档会**覆盖并递增版本号**：`docId` 由 `tenantId:displayName` 哈希得到，删除旧向量后重建索引。 [doc=rag-guide.md#15]\"}"
+    },
+    {
+      "question": "在enforce授权模式下，上传文档时如果无法确定归属部门，会发生什么？",
+      "status": 200,
+      "durationMs": 6,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-4\",\"reply\":\"会直接返回 403，拒绝创建该文档。[doc=rag-guide.md#16][doc=架构文档.md#103]\"}"
+    },
+    {
+      "question": "GraphRAG的图存储默认使用什么后端？如何切换为进程内模式？",
+      "status": 200,
+      "durationMs": 6,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-5\",\"reply\":\"默认使用 `jdbc`（持久化到 MySQL）；切换为进程内模式只需设置环境变量 `RAG_GRAPH_STORE=in-memory`。\"}"
+    },
+    {
+      "question": "L1语义缓存在什么位置？它如何影响请求处理流程？",
+      "status": 200,
+      "durationMs": 6,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-6\",\"reply\":\"L1 语义缓存位于 `conversation-service` 的 `/chat` 接口中，在 **RAG + LLM 之前**（pre-RAG）[doc=rag-guide.md#82]。它将用户原始问题向量化后在当前租户桶内做相似度检索，命中则直接返回缓存回复，短路后续 embedding/检索/LLM；未命中则走正常流程并回填缓存。\"}"
+    },
+    {
+      "question": "切换embedding provider后，为什么需要重建向量库collection？",
+      "status": 200,
+      "durationMs": 6,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-7\",\"reply\":\"切换 embedding provider（如从 OpenAI 换到 Ollama）通常会导致向量维度变化，而 collection 已按旧维度建好索引，写入新维度向量时会触发 `DimensionMismatchException` 拒绝存储，防止静默坏数据。因此必须为每个租户重建或清空对应 collection。[doc=rag-guide.md#41][doc=rag-guide.md#48]\"}"
+    },
+    {
+      "question": "在enforce授权模式下，文档级授权过滤如何处理无docId命中的候选（如GraphRAG三元组）？",
+      "status": 200,
+      "durationMs": 6,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-8\",\"reply\":\"无 docId 命中的候选（如 GraphRAG 三元组）因无法进行资源级判权，会被 **fail-closed 直接丢弃**。[doc=rag-guide.md#56]\"}"
+    },
+    {
+      "question": "rerank和query expansion两个增强功能分别作用于检索流程的哪个阶段？",
+      "status": 200,
+      "durationMs": 7,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-9\",\"reply\":\"rerank 作用于**召回后、排序前**，对候选结果进行精排；query expansion 作用于**召回前**，将原始 query 改写为多个变体分别检索再融合。\"}"
+    },
+    {
+      "question": "平台支持的6个向量库中，哪个库默认使用精确暴力搜索而非近似最近邻？",
+      "status": 200,
+      "durationMs": 6,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-10\",\"reply\":\"Milvus。默认 `FLAT` 索引是精确暴力搜索，要获得 ANN 性能必须显式把 `RAG_MILVUS_INDEX_TYPE` 设为 `HNSW` 或 `IVF_*`。[doc=向量检索-ann与rrf.md#20]\"}"
+    },
+    {
+      "question": "RRF融合策略中，平滑常数k的默认值是多少？增大k值对排名结果有什么影响？",
+      "status": 200,
+      "durationMs": 9,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-11\",\"reply\":\"默认值是 **60**。增大 k 会压低头部名次的优势，让第 1 名和第 2 名的贡献差变小，结果更「民主」。 [doc=向量检索-ann与rrf.md#25]\"}"
+    },
+    {
+      "question": "在pgvector向量库中，如果希望使用库内向量与全文检索的混合排序，需要设置什么参数？",
+      "status": 200,
+      "durationMs": 5,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-12\",\"reply\":\"设置 `RAG_PGVECTOR_SEARCH_MODE=HYBRID`，同时通过 `rrf-k` 参数控制 RRF 融合时的平滑系数。\"}"
+    },
+    {
+      "question": "平台中哪两个向量库默认使用HNSW索引？",
+      "status": 200,
+      "durationMs": 7,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-13\",\"reply\":\"平台默认的 **Qdrant** 使用 HNSW 索引；另一个支持 HNSW 的 **Milvus** 其默认索引是 FLAT，需手动切换 [doc=向量检索-ann与rrf.md#11][doc=向量检索-ann与rrf.md#36]。\"}"
+    },
+    {
+      "question": "为什么RRF分数不能作为相关度阈值使用？",
+      "status": 200,
+      "durationMs": 7,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-14\",\"reply\":\"RRF 分数是名次分（`Σ 1/(k+rank)`），只反映文档在**多路召回中的排名共识**，不携带「有多相关」的绝对信息，因此不能拿它当相关度阈值。想设相关度地板请用 `RAG_RERANK_MIN_SCORE`（rerank 判官打的 0..1 相关分）。[doc=向量检索-ann与rrf.md#27][doc=向量检索-ann与rrf.md#33]\"}"
+    },
+    {
+      "question": "切换向量库provider时，需要重新执行什么操作才能使用数据？",
+      "status": 200,
+      "durationMs": 5,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-15\",\"reply\":\"切换 `RAG_VECTOR_STORE_PROVIDER` 环境变量后，只需重启 `knowledge-service`，新的 `CollectionManager` 会在启动时自动初始化索引，无需手动建表或迁移数据。\\n\\n⚠️ 可信度提示：支撑度 0.50 < 0.70，可能含未被资料支撑的内容。请以原始资料为准。\"}"
+    },
+    {
+      "question": "在跨源RRF融合中，如果ES不参与查询，默认使用什么融合策略？",
+      "status": 200,
+      "durationMs": 6,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-16\",\"reply\":\"`weighted_max`（同一分块跨源取加权分 max，并标 `hybrid`）。[doc=es-hybrid-rerank.md#4]\"}"
+    },
+    {
+      "question": "HNSW索引中，哪个参数是唯一可以在查询时调整召回率与延迟的旋钮？",
+      "status": 200,
+      "durationMs": 5,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-17\",\"reply\":\"`ef_search`。\\n\\n⚠️ 可信度提示：支撑度 0.50 < 0.70，可能含未被资料支撑的内容。请以原始资料为准。\"}"
+    },
+    {
+      "question": "平台中哪两个向量库支持shared隔离模式？",
+      "status": 200,
+      "durationMs": 5,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-18\",\"reply\":\"`in-memory` 和 `qdrant` 支持 `shared` 隔离模式。 [doc=向量检索-ann与rrf.md#23]\"}"
+    },
+    {
+      "question": "如果希望看到原始相关分而非RRF名次分，可以采取哪两种方法？",
+      "status": 200,
+      "durationMs": 6,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-19\",\"reply\":\"1. 关掉 ES，退回 `weighted_max` 融合；  \\n2. 开启 rerank，直接看 rerank 后的判官分。 [doc=向量检索-ann与rrf.md#34]\"}"
+    },
+    {
+      "question": "当Elasticsearch服务不可达时，系统会如何处理查询请求？",
+      "status": 200,
+      "durationMs": 6,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-20\",\"reply\":\"ES 不可达时，ES 检索源自动降级返回空，其余源（向量、内存关键词、图谱）照常查询，不影响服务启动与整体返回。[doc=es-hybrid-rerank.md#0][doc=es-hybrid-rerank.md#16][doc=数据库与中间件清单.md#32]\"}"
+    },
+    {
+      "question": "在ES开启的情况下，系统默认使用哪种融合策略？为什么？",
+      "status": 200,
+      "durationMs": 6,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-21\",\"reply\":\"默认使用 `rrf`（倒数排名融合）。因为 RRF 只看名次、不看分数量纲，能免疫 BM25 与余弦向量之间的分数量级差异，ES 参与时稳定性更好。[doc=es-hybrid-rerank.md#4][doc=rag-guide.md#91]\"}"
+    },
+    {
+      "question": "如何配置使得系统只写入ES但不进行ES查询？",
+      "status": 200,
+      "durationMs": 5,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-22\",\"reply\":\"设置 `RAG_ES_INDEX_ENABLED=true` 且 `RAG_ES_QUERY_ENABLED=false`，此时系统只向 ES 写入索引，查询时仍然使用原有的融合策略（weighted_max），不会发起 ES 查询。\"}"
+    },
+    {
+      "question": "如果我想关闭ES混排功能，应该设置哪个环境变量？",
+      "status": 200,
+      "durationMs": 10,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-23\",\"reply\":\"设置 `RAG_ES_ENABLED=false`。\\n\\n⚠️ 可信度提示：支撑度 0.00 < 0.70，可能含未被资料支撑的内容。请以原始资料为准。\"}"
+    },
+    {
+      "question": "在weighted_max策略下，BM25分数是如何与向量分数对齐的？",
+      "status": 200,
+      "durationMs": 12,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-24\",\"reply\":\"在 `weighted_max` 策略下，`EsKeywordRetrievalSource` 会按本次查询的最高分把 BM25 归一化到 [0,1] 区间，再与向量余弦分数（已在 [0,1]）做跨源取最大。[doc=es-hybrid-rerank.md#5]\"}"
+    },
+    {
+      "question": "开启ES后，历史数据需要如何处理才能被ES检索到？",
+      "status": 200,
+      "durationMs": 6,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-25\",\"reply\":\"需要重新上传历史文档（通过 `seed-kb.sh` 或上传 API 重灌），因为 registry 只存元数据，不会自动迁移历史数据到 ES [doc=es-hybrid-rerank.md#18]。\"}"
+    },
+    {
+      "question": "系统在ES写入失败时的默认行为是什么？如何改为严格模式？",
+      "status": 200,
+      "durationMs": 8,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-26\",\"reply\":\"ES 默认 `RAG_ES_FAIL_FAST=false`，写入失败只记警告不中断；设为 `true` 即进入严格模式，失败时会向上抛出异常。 [doc=知识库文档更新与存储.md#36]\"}"
+    },
+    {
+      "question": "ES索引的默认名称和中文分析器分别是什么？",
+      "status": 200,
+      "durationMs": 9,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-27\",\"reply\":\"默认索引名 `knowledge_segments_text`，默认中文分析器 `smartcn`。[doc=es-hybrid-rerank.md#7]\"}"
+    },
+    {
+      "question": "在灰度阶段，如何先验证ES写入再开启查询，且融合策略保持为weighted_max？",
+      "status": 200,
+      "durationMs": 7,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-28\",\"reply\":\"在灰度阶段，先设 `RAG_ES_INDEX_ENABLED=true, RAG_ES_QUERY_ENABLED=false` 只验证写入，同时 `RAG_ES_ENABLED=false`（或 `RAG_FUSION_STRATEGY=weighted_max` 显式指定），此时融合策略有效默认仍为 `weighted_max`、不会翻到 RRF。\"}"
+    },
+    {
+      "question": "当RAG_FUSION_STRATEGY留空时，系统如何决定使用哪种融合策略？",
+      "status": 200,
+      "durationMs": 7,
+      "body": "{\"userId\":\"benchmark\",\"tenantId\":\"resume-bench\",\"chatId\":\"cache-warm-29\",\"reply\":\"留空时，系统根据 ES 是否参与查询自动决定：若 ES 参与则有效默认 `rrf`，否则使用 `weighted_max`。[doc=rag-guide.md#55]\"}"
+    }
+  ]
+}

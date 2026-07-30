@@ -1,0 +1,14 @@
+{
+  "benchmark": "agent-parallel-cold",
+  "topology": "parallel",
+  "cases": 5,
+  "httpSuccesses": 5,
+  "rubricPassed": 1,
+  "rubricCompletionRate": 0.2,
+  "criticAccepted": 5,
+  "criticAcceptanceRate": 1,
+  "replanned": 0,
+  "averageDurationMs": 39415.4,
+  "p50DurationMs": 41170,
+  "p95DurationMs": 43946
+}

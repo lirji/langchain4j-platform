@@ -1,0 +1,35 @@
+services:
+  edge-gateway:
+    environment:
+      EDGE_CASDOOR_MODE: dual
+      SPRING_APPLICATION_JSON: >-
+        {"platform":{"security":{"api-keys":{"resume-bench-key":{"tenant":"resume-bench","user":"benchmark","scopes":["chat","ingest","agent","eval"]}}}}}
+
+  knowledge-service:
+    environment:
+      # 入库与基础 Recall 对照不调用 LLM；确保 A/B 组只改变召回源和融合策略。
+      RAG_CONTEXTUAL_ENABLED: "false"
+      RAG_QUERY_EXPANSION_ENABLED: "false"
+      RAG_RERANK_ENABLED: "false"
+      RAG_HYBRID_ENABLED: "${BENCH_RAG_HYBRID:-true}"
+      RAG_ES_ENABLED: "${BENCH_RAG_ES_ENABLED:-true}"
+      RAG_ES_QUERY_ENABLED: "${BENCH_RAG_ES_QUERY_ENABLED:-true}"
+      RAG_GRAPH_ENABLED: "${BENCH_RAG_GRAPH_ENABLED:-true}"
+      RAG_GRAPH_INCLUDE_IN_QUERY: "${BENCH_RAG_GRAPH_INCLUDE_IN_QUERY:-true}"
+      RAG_FUSION_STRATEGY: "${BENCH_RAG_FUSION_STRATEGY:-rrf}"
+      RAG_QUERY_TOP_K: "10"
+
+  conversation-service:
+    environment:
+      LOGGING_LEVEL_COM_LRJ_PLATFORM_CONVERSATION_CACHE_SEMANTICCACHE: DEBUG
+
+  agent-service:
+    environment:
+      AGENT_DAG_REPLAN_ENABLED: "${BENCH_AGENT_REPLAN_ENABLED:-true}"
+      AGENT_DAG_REPLAN_THRESHOLD: "0.75"
+      AGENT_DAG_REPLAN_MAX_REPLANS: "1"
+
+  analytics-service:
+    environment:
+      # Spring JSON 可覆盖 Map 属性；basic 组传空对象，enum 组使用默认值。
+      SPRING_APPLICATION_JSON: '${BENCH_ANALYTICS_SPRING_JSON:-{"app":{"nl2sql":{"enum-columns":{"orders":["status"],"refunds":["status"]}}}}}'

@@ -1,0 +1,1405 @@
+{
+  "topK": 10,
+  "cases": [
+    {
+      "id": "rag-001",
+      "question": "上传文档时，如果图片多模态功能未开启，系统会如何处理？",
+      "relevantDocIds": [
+        "rag-guide.md"
+      ]
+    },
+    {
+      "id": "rag-002",
+      "question": "在混合检索中，当ES参与查询时，默认的融合策略是什么？",
+      "relevantDocIds": [
+        "rag-guide.md"
+      ]
+    },
+    {
+      "id": "rag-003",
+      "question": "如何配置才能使图片多模态嵌入功能生效？",
+      "relevantDocIds": [
+        "rag-guide.md"
+      ]
+    },
+    {
+      "id": "rag-004",
+      "question": "文档上传时，如果标题相同，系统会如何处理？",
+      "relevantDocIds": [
+        "rag-guide.md"
+      ]
+    },
+    {
+      "id": "rag-005",
+      "question": "在enforce授权模式下，上传文档时如果无法确定归属部门，会发生什么？",
+      "relevantDocIds": [
+        "rag-guide.md"
+      ]
+    },
+    {
+      "id": "rag-006",
+      "question": "GraphRAG的图存储默认使用什么后端？如何切换为进程内模式？",
+      "relevantDocIds": [
+        "rag-guide.md"
+      ]
+    },
+    {
+      "id": "rag-007",
+      "question": "L1语义缓存在什么位置？它如何影响请求处理流程？",
+      "relevantDocIds": [
+        "rag-guide.md"
+      ]
+    },
+    {
+      "id": "rag-008",
+      "question": "切换embedding provider后，为什么需要重建向量库collection？",
+      "relevantDocIds": [
+        "rag-guide.md"
+      ]
+    },
+    {
+      "id": "rag-009",
+      "question": "在enforce授权模式下，文档级授权过滤如何处理无docId命中的候选（如GraphRAG三元组）？",
+      "relevantDocIds": [
+        "rag-guide.md"
+      ]
+    },
+    {
+      "id": "rag-010",
+      "question": "rerank和query expansion两个增强功能分别作用于检索流程的哪个阶段？",
+      "relevantDocIds": [
+        "rag-guide.md"
+      ]
+    },
+    {
+      "id": "rag-011",
+      "question": "平台支持的6个向量库中，哪个库默认使用精确暴力搜索而非近似最近邻？",
+      "relevantDocIds": [
+        "向量检索-ann与rrf.md"
+      ]
+    },
+    {
+      "id": "rag-012",
+      "question": "RRF融合策略中，平滑常数k的默认值是多少？增大k值对排名结果有什么影响？",
+      "relevantDocIds": [
+        "向量检索-ann与rrf.md"
+      ]
+    },
+    {
+      "id": "rag-013",
+      "question": "在pgvector向量库中，如果希望使用库内向量与全文检索的混合排序，需要设置什么参数？",
+      "relevantDocIds": [
+        "向量检索-ann与rrf.md"
+      ]
+    },
+    {
+      "id": "rag-014",
+      "question": "平台中哪两个向量库默认使用HNSW索引？",
+      "relevantDocIds": [
+        "向量检索-ann与rrf.md"
+      ]
+    },
+    {
+      "id": "rag-015",
+      "question": "为什么RRF分数不能作为相关度阈值使用？",
+      "relevantDocIds": [
+        "向量检索-ann与rrf.md"
+      ]
+    },
+    {
+      "id": "rag-016",
+      "question": "切换向量库provider时，需要重新执行什么操作才能使用数据？",
+      "relevantDocIds": [
+        "向量检索-ann与rrf.md"
+      ]
+    },
+    {
+      "id": "rag-017",
+      "question": "在跨源RRF融合中，如果ES不参与查询，默认使用什么融合策略？",
+      "relevantDocIds": [
+        "向量检索-ann与rrf.md"
+      ]
+    },
+    {
+      "id": "rag-018",
+      "question": "HNSW索引中，哪个参数是唯一可以在查询时调整召回率与延迟的旋钮？",
+      "relevantDocIds": [
+        "向量检索-ann与rrf.md"
+      ]
+    },
+    {
+      "id": "rag-019",
+      "question": "平台中哪两个向量库支持shared隔离模式？",
+      "relevantDocIds": [
+        "向量检索-ann与rrf.md"
+      ]
+    },
+    {
+      "id": "rag-020",
+      "question": "如果希望看到原始相关分而非RRF名次分，可以采取哪两种方法？",
+      "relevantDocIds": [
+        "向量检索-ann与rrf.md"
+      ]
+    },
+    {
+      "id": "rag-021",
+      "question": "当Elasticsearch服务不可达时，系统会如何处理查询请求？",
+      "relevantDocIds": [
+        "es-hybrid-rerank.md"
+      ]
+    },
+    {
+      "id": "rag-022",
+      "question": "在ES开启的情况下，系统默认使用哪种融合策略？为什么？",
+      "relevantDocIds": [
+        "es-hybrid-rerank.md"
+      ]
+    },
+    {
+      "id": "rag-023",
+      "question": "如何配置使得系统只写入ES但不进行ES查询？",
+      "relevantDocIds": [
+        "es-hybrid-rerank.md"
+      ]
+    },
+    {
+      "id": "rag-024",
+      "question": "如果我想关闭ES混排功能，应该设置哪个环境变量？",
+      "relevantDocIds": [
+        "es-hybrid-rerank.md"
+      ]
+    },
+    {
+      "id": "rag-025",
+      "question": "在weighted_max策略下，BM25分数是如何与向量分数对齐的？",
+      "relevantDocIds": [
+        "es-hybrid-rerank.md"
+      ]
+    },
+    {
+      "id": "rag-026",
+      "question": "开启ES后，历史数据需要如何处理才能被ES检索到？",
+      "relevantDocIds": [
+        "es-hybrid-rerank.md"
+      ]
+    },
+    {
+      "id": "rag-027",
+      "question": "系统在ES写入失败时的默认行为是什么？如何改为严格模式？",
+      "relevantDocIds": [
+        "es-hybrid-rerank.md"
+      ]
+    },
+    {
+      "id": "rag-028",
+      "question": "ES索引的默认名称和中文分析器分别是什么？",
+      "relevantDocIds": [
+        "es-hybrid-rerank.md"
+      ]
+    },
+    {
+      "id": "rag-029",
+      "question": "在灰度阶段，如何先验证ES写入再开启查询，且融合策略保持为weighted_max？",
+      "relevantDocIds": [
+        "es-hybrid-rerank.md"
+      ]
+    },
+    {
+      "id": "rag-030",
+      "question": "当RAG_FUSION_STRATEGY留空时，系统如何决定使用哪种融合策略？",
+      "relevantDocIds": [
+        "es-hybrid-rerank.md"
+      ]
+    },
+    {
+      "id": "rag-031",
+      "question": "语义响应缓存位于对话流程的哪个阶段？",
+      "relevantDocIds": [
+        "semantic-cache.md"
+      ]
+    },
+    {
+      "id": "rag-032",
+      "question": "当语义缓存命中时，调用方在返回体中能否看到缓存标志？",
+      "relevantDocIds": [
+        "semantic-cache.md"
+      ]
+    },
+    {
+      "id": "rag-033",
+      "question": "语义缓存如何实现租户隔离？",
+      "relevantDocIds": [
+        "semantic-cache.md"
+      ]
+    },
+    {
+      "id": "rag-034",
+      "question": "默认的 embedding provider 是什么？它能否真正识别同义改写？",
+      "relevantDocIds": [
+        "semantic-cache.md"
+      ]
+    },
+    {
+      "id": "rag-035",
+      "question": "如果我想让语义缓存真正识别同义改写（如“怎么退款”和“退款流程是啥”），需要做什么配置？",
+      "relevantDocIds": [
+        "semantic-cache.md"
+      ]
+    },
+    {
+      "id": "rag-036",
+      "question": "缓存命中时，是否还会执行 RAG 检索和 LLM 生成？",
+      "relevantDocIds": [
+        "semantic-cache.md"
+      ]
+    },
+    {
+      "id": "rag-037",
+      "question": "当缓存关闭时，/chat 的行为会有什么变化？",
+      "relevantDocIds": [
+        "semantic-cache.md"
+      ]
+    },
+    {
+      "id": "rag-038",
+      "question": "Redis 存储后端和内存存储后端在容量控制上有什么不同？",
+      "relevantDocIds": [
+        "semantic-cache.md"
+      ]
+    },
+    {
+      "id": "rag-039",
+      "question": "如何定向失效某个特定原始问题的缓存？",
+      "relevantDocIds": [
+        "semantic-cache.md"
+      ]
+    },
+    {
+      "id": "rag-040",
+      "question": "知识库更新后，缓存如何自动失效？",
+      "relevantDocIds": [
+        "semantic-cache.md"
+      ]
+    },
+    {
+      "id": "rag-041",
+      "question": "如何通过边缘网关调用 NL2SQL 服务？",
+      "relevantDocIds": [
+        "nl2sql-guide.md"
+      ]
+    },
+    {
+      "id": "rag-042",
+      "question": "关闭 NL2SQL 功能后，analytics-service 还能正常启动吗？",
+      "relevantDocIds": [
+        "nl2sql-guide.md"
+      ]
+    },
+    {
+      "id": "rag-043",
+      "question": "NL2SQL 链路中，SQL 安全护栏的 L4 层具体做什么？",
+      "relevantDocIds": [
+        "nl2sql-guide.md"
+      ]
+    },
+    {
+      "id": "rag-044",
+      "question": "使用 dev-key-acme 调用 NL2SQL 查询退款数据会得到什么结果？",
+      "relevantDocIds": [
+        "nl2sql-guide.md"
+      ]
+    },
+    {
+      "id": "rag-045",
+      "question": "NL2SQL 的 SQL 安全护栏中，哪一层负责防止跨租户数据泄露？",
+      "relevantDocIds": [
+        "nl2sql-guide.md"
+      ]
+    },
+    {
+      "id": "rag-046",
+      "question": "NL2SQL 链路中，数字 grounding 在什么情况下会触发警告？",
+      "relevantDocIds": [
+        "nl2sql-guide.md"
+      ]
+    },
+    {
+      "id": "rag-047",
+      "question": "NL2SQL 的自修环机制如何防止无限重试？",
+      "relevantDocIds": [
+        "nl2sql-guide.md"
+      ]
+    },
+    {
+      "id": "rag-048",
+      "question": "NL2SQL 的 SchemaProvider 如何获取表结构信息？",
+      "relevantDocIds": [
+        "nl2sql-guide.md"
+      ]
+    },
+    {
+      "id": "rag-049",
+      "question": "NL2SQL 链路中，SQL 安全护栏的 L2 层如何防止注释绕过？",
+      "relevantDocIds": [
+        "nl2sql-guide.md"
+      ]
+    },
+    {
+      "id": "rag-050",
+      "question": "NL2SQL 的 SQL 安全护栏中，L1 和 L5 层分别由什么机制实现？",
+      "relevantDocIds": [
+        "nl2sql-guide.md"
+      ]
+    },
+    {
+      "id": "rag-051",
+      "question": "知识库文档更新时，系统如何确定文档的唯一身份？",
+      "relevantDocIds": [
+        "知识库文档更新与存储.md"
+      ]
+    },
+    {
+      "id": "rag-052",
+      "question": "重新上传同名文件时，文档的哪些属性会保持不变？",
+      "relevantDocIds": [
+        "知识库文档更新与存储.md"
+      ]
+    },
+    {
+      "id": "rag-053",
+      "question": "通过 JSON 方式更新文档时，如果 category 参数不传或传空，会有什么影响？",
+      "relevantDocIds": [
+        "知识库文档更新与存储.md"
+      ]
+    },
+    {
+      "id": "rag-054",
+      "question": "文档更新过程中，旧版本数据清理失败会带来什么后果？",
+      "relevantDocIds": [
+        "知识库文档更新与存储.md"
+      ]
+    },
+    {
+      "id": "rag-055",
+      "question": "同名文档在不同租户上传时，系统会如何处理？",
+      "relevantDocIds": [
+        "知识库文档更新与存储.md"
+      ]
+    },
+    {
+      "id": "rag-056",
+      "question": "文档更新后，哪些存储位置会写入新数据？",
+      "relevantDocIds": [
+        "知识库文档更新与存储.md"
+      ]
+    },
+    {
+      "id": "rag-057",
+      "question": "如果上传的正文与旧版本完全相同，系统会执行更新操作吗？",
+      "relevantDocIds": [
+        "知识库文档更新与存储.md"
+      ]
+    },
+    {
+      "id": "rag-058",
+      "question": "文档更新时，系统如何确保只有授权用户才能覆盖已有文档？",
+      "relevantDocIds": [
+        "知识库文档更新与存储.md"
+      ]
+    },
+    {
+      "id": "rag-059",
+      "question": "文档更新过程中，如果新 embedding 调用失败，但旧向量已删除，会导致什么问题？",
+      "relevantDocIds": [
+        "知识库文档更新与存储.md"
+      ]
+    },
+    {
+      "id": "rag-060",
+      "question": "图片文档的更新机制与文本文档有何不同？",
+      "relevantDocIds": [
+        "知识库文档更新与存储.md"
+      ]
+    },
+    {
+      "id": "rag-061",
+      "question": "多轮记忆和长期用户画像在键的构成上有什么不同？",
+      "relevantDocIds": [
+        "memory-guide.md"
+      ]
+    },
+    {
+      "id": "rag-062",
+      "question": "如何通过环境变量关闭长期用户画像功能？",
+      "relevantDocIds": [
+        "memory-guide.md"
+      ]
+    },
+    {
+      "id": "rag-063",
+      "question": "在对话中，长期用户画像的信息是如何注入到模型中的？",
+      "relevantDocIds": [
+        "memory-guide.md"
+      ]
+    },
+    {
+      "id": "rag-064",
+      "question": "多轮记忆的 `summary` 模式在溢出时如何处理旧消息？",
+      "relevantDocIds": [
+        "memory-guide.md"
+      ]
+    },
+    {
+      "id": "rag-065",
+      "question": "长期用户画像的抽取过程是同步还是异步的？默认情况下，如果异步，抽取失败会怎样？",
+      "relevantDocIds": [
+        "memory-guide.md"
+      ]
+    },
+    {
+      "id": "rag-066",
+      "question": "多轮记忆的 `redis` 存储后端相比 `in-memory` 有什么优势？",
+      "relevantDocIds": [
+        "memory-guide.md"
+      ]
+    },
+    {
+      "id": "rag-067",
+      "question": "长期用户画像的 `recall-limit` 配置项控制什么？",
+      "relevantDocIds": [
+        "memory-guide.md"
+      ]
+    },
+    {
+      "id": "rag-068",
+      "question": "如何通过 curl 查看当前用户的长期记忆？",
+      "relevantDocIds": [
+        "memory-guide.md"
+      ]
+    },
+    {
+      "id": "rag-069",
+      "question": "多轮记忆的 `tokens` 模式中，`token-model` 的作用是什么？它和实际调用的模型有关系吗？",
+      "relevantDocIds": [
+        "memory-guide.md"
+      ]
+    },
+    {
+      "id": "rag-070",
+      "question": "长期用户画像的 `max-items` 和 `recall-limit` 配置项共同作用，如何影响注入到对话中的记忆？",
+      "relevantDocIds": [
+        "memory-guide.md"
+      ]
+    },
+    {
+      "id": "rag-071",
+      "question": "Model Cascade 端点默认是否开启？",
+      "relevantDocIds": [
+        "model-cascade.md"
+      ]
+    },
+    {
+      "id": "rag-072",
+      "question": "级联功能中，当便宜模型答案被判为低置信时，系统会如何处理？",
+      "relevantDocIds": [
+        "model-cascade.md"
+      ]
+    },
+    {
+      "id": "rag-073",
+      "question": "如何通过环境变量关闭级联功能？",
+      "relevantDocIds": [
+        "model-cascade.md"
+      ]
+    },
+    {
+      "id": "rag-074",
+      "question": "便宜模型和强模型的逻辑模型名在 LiteLLM 配置中如何定义？",
+      "relevantDocIds": [
+        "model-cascade.md"
+      ]
+    },
+    {
+      "id": "rag-075",
+      "question": "级联功能中，如果便宜模型直接触发了工具调用，系统会升级到强模型吗？",
+      "relevantDocIds": [
+        "model-cascade.md"
+      ]
+    },
+    {
+      "id": "rag-076",
+      "question": "自评功能默认是开启还是关闭？开启后需要额外配置什么？",
+      "relevantDocIds": [
+        "model-cascade.md"
+      ]
+    },
+    {
+      "id": "rag-077",
+      "question": "便宜模型和强模型都留空时，级联功能会如何表现？",
+      "relevantDocIds": [
+        "model-cascade.md"
+      ]
+    },
+    {
+      "id": "rag-078",
+      "question": "级联功能中，便宜模型答案被判为低置信的两种默认启发式规则是什么？",
+      "relevantDocIds": [
+        "model-cascade.md"
+      ]
+    },
+    {
+      "id": "rag-079",
+      "question": "级联功能如何保证不绕过租户配额和成本审计？",
+      "relevantDocIds": [
+        "model-cascade.md"
+      ]
+    },
+    {
+      "id": "rag-080",
+      "question": "自评失败（解析不出分数或模型异常）时，系统会如何决策？",
+      "relevantDocIds": [
+        "model-cascade.md"
+      ]
+    },
+    {
+      "id": "rag-081",
+      "question": "如何通过网关访问 agent-service 的深度 Agent 端点？",
+      "relevantDocIds": [
+        "agent-guide.md"
+      ]
+    },
+    {
+      "id": "rag-082",
+      "question": "在 ReAct 循环中，模型返回的哪个字段会被写入 scratchpad？",
+      "relevantDocIds": [
+        "agent-guide.md"
+      ]
+    },
+    {
+      "id": "rag-083",
+      "question": "DAG 多 Agent 模式下，如果显式传入的 DAG 包含循环依赖，会返回什么错误？",
+      "relevantDocIds": [
+        "agent-guide.md"
+      ]
+    },
+    {
+      "id": "rag-084",
+      "question": "Reflexion 自省环的评分维度有哪些？",
+      "relevantDocIds": [
+        "agent-guide.md"
+      ]
+    },
+    {
+      "id": "rag-085",
+      "question": "Voting 投票共识的两种策略分别适用于什么类型的题目？",
+      "relevantDocIds": [
+        "agent-guide.md"
+      ]
+    },
+    {
+      "id": "rag-086",
+      "question": "业务流程智能体在处理退款时，能否自动完成审批？",
+      "relevantDocIds": [
+        "agent-guide.md"
+      ]
+    },
+    {
+      "id": "rag-087",
+      "question": "深度 Agent 的 stopReason 取值中，LOOP 和 TIMEOUT 分别代表什么含义？",
+      "relevantDocIds": [
+        "agent-guide.md"
+      ]
+    },
+    {
+      "id": "rag-088",
+      "question": "数据分析智能体（analyst）与直接使用 DAG plan-run 的主要区别是什么？",
+      "relevantDocIds": [
+        "agent-guide.md"
+      ]
+    },
+    {
+      "id": "rag-089",
+      "question": "在 DAG 多 Agent 中，如果 synthesis 评分低于阈值会触发什么机制？",
+      "relevantDocIds": [
+        "agent-guide.md"
+      ]
+    },
+    {
+      "id": "rag-090",
+      "question": "Prompt Chaining 端点默认返回 400 的原因是什么？",
+      "relevantDocIds": [
+        "agent-guide.md"
+      ]
+    },
+    {
+      "id": "rag-091",
+      "question": "平台中用于处理确定性订单查询的HTTP端点是什么？",
+      "relevantDocIds": [
+        "意图识别与Agent执行原理.md"
+      ]
+    },
+    {
+      "id": "rag-092",
+      "question": "当用户询问“现在几点”时，平台的路由系统会将其分类为哪种类型？",
+      "relevantDocIds": [
+        "意图识别与Agent执行原理.md"
+      ]
+    },
+    {
+      "id": "rag-093",
+      "question": "ReAct 循环中，模型返回的哪个字段会被追加到 scratchpad 中？",
+      "relevantDocIds": [
+        "意图识别与Agent执行原理.md"
+      ]
+    },
+    {
+      "id": "rag-094",
+      "question": "飞书渠道的意图识别与主路由的意图分类有何不同？",
+      "relevantDocIds": [
+        "意图识别与Agent执行原理.md"
+      ]
+    },
+    {
+      "id": "rag-095",
+      "question": "在 DAG 编排中，如果综合评分低于阈值，系统会执行什么操作？",
+      "relevantDocIds": [
+        "意图识别与Agent执行原理.md"
+      ]
+    },
+    {
+      "id": "rag-096",
+      "question": "AgentAction 的 description 方法在 ReAct 循环中起什么作用？",
+      "relevantDocIds": [
+        "意图识别与Agent执行原理.md"
+      ]
+    },
+    {
+      "id": "rag-097",
+      "question": "当 QueryClassifier 抛出异常时，路由系统会如何处理？",
+      "relevantDocIds": [
+        "意图识别与Agent执行原理.md"
+      ]
+    },
+    {
+      "id": "rag-098",
+      "question": "ReAct 循环中，Observation 和 note 分别被存储到哪些数据结构中？",
+      "relevantDocIds": [
+        "意图识别与Agent执行原理.md"
+      ]
+    },
+    {
+      "id": "rag-099",
+      "question": "平台如何确保 AgentBrain 返回的结构化决策能够被可靠解析？",
+      "relevantDocIds": [
+        "意图识别与Agent执行原理.md"
+      ]
+    },
+    {
+      "id": "rag-100",
+      "question": "DAG 编排中，同层任务如何执行？下游 worker 能访问上游的 scratchpad 吗？",
+      "relevantDocIds": [
+        "意图识别与Agent执行原理.md"
+      ]
+    },
+    {
+      "id": "rag-101",
+      "question": "在平台中，'workflow'一词有哪两种不同的含义？",
+      "relevantDocIds": [
+        "workflow-guide.md"
+      ]
+    },
+    {
+      "id": "rag-102",
+      "question": "如何通过curl命令发起一个低风险的退款请求？",
+      "relevantDocIds": [
+        "workflow-guide.md"
+      ]
+    },
+    {
+      "id": "rag-103",
+      "question": "Flowable引擎在平台中默认是开启还是关闭的？需要什么条件？",
+      "relevantDocIds": [
+        "workflow-guide.md"
+      ]
+    },
+    {
+      "id": "rag-104",
+      "question": "LLM编排模式中的Routing模式对应哪个端点？它默认是开启的吗？",
+      "relevantDocIds": [
+        "workflow-guide.md"
+      ]
+    },
+    {
+      "id": "rag-105",
+      "question": "审批超时后系统会如何处理？请结合文档中的两个信息点说明。",
+      "relevantDocIds": [
+        "workflow-guide.md"
+      ]
+    },
+    {
+      "id": "rag-106",
+      "question": "为什么平台选择Flowable而不是扩展现有的async状态机来处理退款审批？",
+      "relevantDocIds": [
+        "workflow-guide.md"
+      ]
+    },
+    {
+      "id": "rag-107",
+      "question": "在LLM编排模式中，如何实现一个带步骤间门控的固定顺序链？",
+      "relevantDocIds": [
+        "workflow-guide.md"
+      ]
+    },
+    {
+      "id": "rag-108",
+      "question": "如何通过curl命令查询本租户的待审批任务？需要什么scope？",
+      "relevantDocIds": [
+        "workflow-guide.md"
+      ]
+    },
+    {
+      "id": "rag-109",
+      "question": "终态回推的三种模式分别是什么？默认使用哪种？",
+      "relevantDocIds": [
+        "workflow-guide.md"
+      ]
+    },
+    {
+      "id": "rag-110",
+      "question": "在ServiceTask中，LLM调用失败时系统如何降级？请结合assess和resolve/reject说明。",
+      "relevantDocIds": [
+        "workflow-guide.md"
+      ]
+    },
+    {
+      "id": "rag-111",
+      "question": "如何让模型在对话中自主决定调用订单查询接口，而不是靠记忆回答？",
+      "relevantDocIds": [
+        "让Agent主动调接口.md"
+      ]
+    },
+    {
+      "id": "rag-112",
+      "question": "在平台中，实现工具调用的两种机制分别是什么？",
+      "relevantDocIds": [
+        "让Agent主动调接口.md"
+      ]
+    },
+    {
+      "id": "rag-113",
+      "question": "如果我想让一个通用对话 Agent 自主判断是否查订单，应该使用哪种机制？",
+      "relevantDocIds": [
+        "让Agent主动调接口.md"
+      ]
+    },
+    {
+      "id": "rag-114",
+      "question": "新增一个 AgentAction 动作需要修改循环代码吗？",
+      "relevantDocIds": [
+        "让Agent主动调接口.md"
+      ]
+    },
+    {
+      "id": "rag-115",
+      "question": "在 order_query 动作中，description() 方法的作用是什么？",
+      "relevantDocIds": [
+        "让Agent主动调接口.md"
+      ]
+    },
+    {
+      "id": "rag-116",
+      "question": "对于只读无副作用的查询动作，应该使用哪种门控策略？",
+      "relevantDocIds": [
+        "让Agent主动调接口.md"
+      ]
+    },
+    {
+      "id": "rag-117",
+      "question": "在 order_query 动作中，如果查询失败或订单不存在，run() 方法应该返回什么？",
+      "relevantDocIds": [
+        "让Agent主动调接口.md"
+      ]
+    },
+    {
+      "id": "rag-118",
+      "question": "如何确保 agent-service 调用 order-service 时自动传递租户身份？",
+      "relevantDocIds": [
+        "让Agent主动调接口.md"
+      ]
+    },
+    {
+      "id": "rag-119",
+      "question": "对于有副作用的动作（如发起退款），应该使用什么门控策略？",
+      "relevantDocIds": [
+        "让Agent主动调接口.md"
+      ]
+    },
+    {
+      "id": "rag-120",
+      "question": "在 order_query 动作中，如果订单数据在业务库里，只想自然语言问统计，需要写代码吗？",
+      "relevantDocIds": [
+        "让Agent主动调接口.md"
+      ]
+    },
+    {
+      "id": "rag-121",
+      "question": "检索质量评测端点 `/eval/retrieval` 在计算指标时是否经过大语言模型？",
+      "relevantDocIds": [
+        "eval-guide.md"
+      ]
+    },
+    {
+      "id": "rag-122",
+      "question": "通用回归 harness 中，如果某个 case 的 HTTP 响应状态码不是 2xx，会如何判定？",
+      "relevantDocIds": [
+        "eval-guide.md"
+      ]
+    },
+    {
+      "id": "rag-123",
+      "question": "在双跑门禁中，如果 candidate 的 passRate 低于 oracle 的 passRate 减去容差，会触发什么结果？",
+      "relevantDocIds": [
+        "eval-guide.md"
+      ]
+    },
+    {
+      "id": "rag-124",
+      "question": "如何通过命令行运行一个名为 `platform-smoke` 的预定义测试套件？",
+      "relevantDocIds": [
+        "eval-guide.md"
+      ]
+    },
+    {
+      "id": "rag-125",
+      "question": "通用回归 harness 中，`judgeExpected` 断言需要哪些条件才会真正触发？",
+      "relevantDocIds": [
+        "eval-guide.md"
+      ]
+    },
+    {
+      "id": "rag-126",
+      "question": "检索质量评测的黄金集（relevantDocIds）是存储在服务端文件还是由请求体提供？",
+      "relevantDocIds": [
+        "eval-guide.md"
+      ]
+    },
+    {
+      "id": "rag-127",
+      "question": "双跑门禁的 snapshot 模式和 live 模式在 oracle 来源上有什么不同？",
+      "relevantDocIds": [
+        "eval-guide.md"
+      ]
+    },
+    {
+      "id": "rag-128",
+      "question": "通用回归 harness 中，`semanticExpected` 断言使用什么方法计算相似度？默认阈值是多少？",
+      "relevantDocIds": [
+        "eval-guide.md"
+      ]
+    },
+    {
+      "id": "rag-129",
+      "question": "检索质量评测中，为什么推荐默认使用文件级 id 匹配而非精确级？",
+      "relevantDocIds": [
+        "eval-guide.md"
+      ]
+    },
+    {
+      "id": "rag-130",
+      "question": "双跑门禁中，`agreement` 指标是如何计算的？",
+      "relevantDocIds": [
+        "eval-guide.md"
+      ]
+    },
+    {
+      "id": "rag-131",
+      "question": "在平台中，跨服务 traceId 是如何在日志中实现关联的？",
+      "relevantDocIds": [
+        "observability-guide.md"
+      ]
+    },
+    {
+      "id": "rag-132",
+      "question": "如何在不修改服务代码的情况下启用 OpenTelemetry GenAI 追踪？",
+      "relevantDocIds": [
+        "observability-guide.md"
+      ]
+    },
+    {
+      "id": "rag-133",
+      "question": "平台中哪三个服务暴露了 tokenbudget 和 cost 端点？",
+      "relevantDocIds": [
+        "observability-guide.md"
+      ]
+    },
+    {
+      "id": "rag-134",
+      "question": "为什么边缘网关不参与 traceId 的生成？",
+      "relevantDocIds": [
+        "observability-guide.md"
+      ]
+    },
+    {
+      "id": "rag-135",
+      "question": "新平台中 LLM 调用的耗时和 token 用量信息通过什么机制获取？",
+      "relevantDocIds": [
+        "observability-guide.md"
+      ]
+    },
+    {
+      "id": "rag-136",
+      "question": "如何验证 traceId 在跨服务调用中正确传播？",
+      "relevantDocIds": [
+        "observability-guide.md"
+      ]
+    },
+    {
+      "id": "rag-137",
+      "question": "平台中哪些服务默认暴露了 prometheus 端点？",
+      "relevantDocIds": [
+        "observability-guide.md"
+      ]
+    },
+    {
+      "id": "rag-138",
+      "question": "新平台中 LLM 聚合指标与单体相比有什么变化？",
+      "relevantDocIds": [
+        "observability-guide.md"
+      ]
+    },
+    {
+      "id": "rag-139",
+      "question": "如何通过 Actuator 端点获取各租户的当日 token 用量和成本？",
+      "relevantDocIds": [
+        "observability-guide.md"
+      ]
+    },
+    {
+      "id": "rag-140",
+      "question": "平台中健康检查的 gateway 探测有什么设计取舍？",
+      "relevantDocIds": [
+        "observability-guide.md"
+      ]
+    },
+    {
+      "id": "rag-141",
+      "question": "LiteLLM 网关在接入 Postgres 后新增了哪些核心能力？",
+      "relevantDocIds": [
+        "litellm-gateway-guide.md"
+      ]
+    },
+    {
+      "id": "rag-142",
+      "question": "如何通过环境变量启用租户归因的 user 模式？",
+      "relevantDocIds": [
+        "litellm-gateway-guide.md"
+      ]
+    },
+    {
+      "id": "rag-143",
+      "question": "在 virtual-key 模式下，如果某个租户的 key 缺失，系统会如何处理？",
+      "relevantDocIds": [
+        "litellm-gateway-guide.md"
+      ]
+    },
+    {
+      "id": "rag-144",
+      "question": "LiteLLM 的响应缓存默认 TTL 是多少秒？",
+      "relevantDocIds": [
+        "litellm-gateway-guide.md"
+      ]
+    },
+    {
+      "id": "rag-145",
+      "question": "当主模型 deepseek-chat 故障时，LiteLLM 的 fallback 目标是什么？",
+      "relevantDocIds": [
+        "litellm-gateway-guide.md"
+      ]
+    },
+    {
+      "id": "rag-146",
+      "question": "为什么 virtual key 的 models 白名单必须同时包含 chat-default 和 chat-default-fallback？",
+      "relevantDocIds": [
+        "litellm-gateway-guide.md"
+      ]
+    },
+    {
+      "id": "rag-147",
+      "question": "LiteLLM 的预算拒绝和 key 缺失在日志特征上有何不同？",
+      "relevantDocIds": [
+        "litellm-gateway-guide.md"
+      ]
+    },
+    {
+      "id": "rag-148",
+      "question": "如何验证 Redis 响应缓存是否正常工作？",
+      "relevantDocIds": [
+        "litellm-gateway-guide.md"
+      ]
+    },
+    {
+      "id": "rag-149",
+      "question": "在 virtual-key 模式下，租户的 key 应如何安全注入服务？",
+      "relevantDocIds": [
+        "litellm-gateway-guide.md"
+      ]
+    },
+    {
+      "id": "rag-150",
+      "question": "LiteLLM 的 OTel span 默认是否开启？如何启用 Java 侧的追踪？",
+      "relevantDocIds": [
+        "litellm-gateway-guide.md"
+      ]
+    },
+    {
+      "id": "rag-151",
+      "question": "RBAC 权限体系中，用户的最终有效 scopes 由哪些部分组成？",
+      "relevantDocIds": [
+        "rbac-and-public-kb.md"
+      ]
+    },
+    {
+      "id": "rag-152",
+      "question": "在公共知识库中，如何写入一篇对所有租户可见的文档？",
+      "relevantDocIds": [
+        "rbac-and-public-kb.md"
+      ]
+    },
+    {
+      "id": "rag-153",
+      "question": "如果管理员修改了某个角色的 scope 列表，已登录用户的权限会立即更新吗？",
+      "relevantDocIds": [
+        "rbac-and-public-kb.md"
+      ]
+    },
+    {
+      "id": "rag-154",
+      "question": "当 AUTH_RBAC_ENABLED 为 false 时，用户登录后的权限如何确定？",
+      "relevantDocIds": [
+        "rbac-and-public-kb.md"
+      ]
+    },
+    {
+      "id": "rag-155",
+      "question": "公共知识库的文档存储在哪个分区？普通租户查询时如何看到公共库内容？",
+      "relevantDocIds": [
+        "rbac-and-public-kb.md"
+      ]
+    },
+    {
+      "id": "rag-156",
+      "question": "在 RBAC 继承模式下，给租户绑定基础角色后，该租户下的用户如何获得这些角色对应的权限？",
+      "relevantDocIds": [
+        "rbac-and-public-kb.md"
+      ]
+    },
+    {
+      "id": "rag-157",
+      "question": "API-key 能否用于执行角色管理操作（如创建用户或修改角色）？",
+      "relevantDocIds": [
+        "rbac-and-public-kb.md"
+      ]
+    },
+    {
+      "id": "rag-158",
+      "question": "如果某个用户仅通过租户基础角色获得了 role-admin scope，当管理员修改该租户绑定的角色时，系统如何防止最后一个 role-admin 被移除？",
+      "relevantDocIds": [
+        "rbac-and-public-kb.md"
+      ]
+    },
+    {
+      "id": "rag-159",
+      "question": "自助注册时，新用户默认获得什么角色？需要同时开启哪两个开关才能避免创建出无有效 scopes 的账号？",
+      "relevantDocIds": [
+        "rbac-and-public-kb.md"
+      ]
+    },
+    {
+      "id": "rag-160",
+      "question": "当 AUTH_RBAC_ADMIN_WRITES_ENABLED 为 false 时，管理员尝试通过 PUT /auth/admin/users/dave/roles 修改用户角色会得到什么响应？",
+      "relevantDocIds": [
+        "rbac-and-public-kb.md"
+      ]
+    },
+    {
+      "id": "rag-161",
+      "question": "平台事件总线如何实现跨系统链路的终态可靠投递？",
+      "relevantDocIds": [
+        "eventbus-guide.md"
+      ]
+    },
+    {
+      "id": "rag-162",
+      "question": "为什么平台不直接使用Kafka原生事务来保证事件投递的原子性？",
+      "relevantDocIds": [
+        "eventbus-guide.md"
+      ]
+    },
+    {
+      "id": "rag-163",
+      "question": "在消费侧去重中，先标记再处理会导致什么问题？",
+      "relevantDocIds": [
+        "eventbus-guide.md"
+      ]
+    },
+    {
+      "id": "rag-164",
+      "question": "KafkaEventPublisher的同步等待ack设计目的是什么？",
+      "relevantDocIds": [
+        "eventbus-guide.md"
+      ]
+    },
+    {
+      "id": "rag-165",
+      "question": "平台事件总线默认状态下是否依赖Kafka？",
+      "relevantDocIds": [
+        "eventbus-guide.md"
+      ]
+    },
+    {
+      "id": "rag-166",
+      "question": "workflow-service中kafka档如何避免与async-task通知双投？",
+      "relevantDocIds": [
+        "eventbus-guide.md"
+      ]
+    },
+    {
+      "id": "rag-167",
+      "question": "async-task-service生产Kafka档必须满足哪些条件？",
+      "relevantDocIds": [
+        "eventbus-guide.md"
+      ]
+    },
+    {
+      "id": "rag-168",
+      "question": "channel-service消费侧跨重启去重如何配置？",
+      "relevantDocIds": [
+        "eventbus-guide.md"
+      ]
+    },
+    {
+      "id": "rag-169",
+      "question": "端到端启用Kafka档时，如果只设置WORKFLOW_TERMINAL_NOTIFICATION_MODE=kafka而不开platform.eventbus.enabled会怎样？",
+      "relevantDocIds": [
+        "eventbus-guide.md"
+      ]
+    },
+    {
+      "id": "rag-170",
+      "question": "集成测试中如何验证outbox与引擎终态的事务原子性？",
+      "relevantDocIds": [
+        "eventbus-guide.md"
+      ]
+    },
+    {
+      "id": "rag-171",
+      "question": "外部客户端如何通过 A2A 协议调用 langchain4j-platform？",
+      "relevantDocIds": [
+        "a2a-guide.md"
+      ]
+    },
+    {
+      "id": "rag-172",
+      "question": "A2A Agent Card 的免鉴权端点是什么？",
+      "relevantDocIds": [
+        "a2a-guide.md"
+      ]
+    },
+    {
+      "id": "rag-173",
+      "question": "如何获取平台自有的互操作能力清单？",
+      "relevantDocIds": [
+        "a2a-guide.md"
+      ]
+    },
+    {
+      "id": "rag-174",
+      "question": "A2A JSON-RPC 单端点支持哪些方法？",
+      "relevantDocIds": [
+        "a2a-guide.md"
+      ]
+    },
+    {
+      "id": "rag-175",
+      "question": "message/send 方法中如何指定使用 deep-research 技能？",
+      "relevantDocIds": [
+        "a2a-guide.md"
+      ]
+    },
+    {
+      "id": "rag-176",
+      "question": "message/stream 方法返回的 SSE 帧中，artifact-update 事件在 chat 和 deep-research 技能下有何不同？",
+      "relevantDocIds": [
+        "a2a-guide.md"
+      ]
+    },
+    {
+      "id": "rag-177",
+      "question": "tasks/cancel 方法在任务已终态时返回什么错误？",
+      "relevantDocIds": [
+        "a2a-guide.md"
+      ]
+    },
+    {
+      "id": "rag-178",
+      "question": "push 通知中，interop 如何保证回调的真实性？",
+      "relevantDocIds": [
+        "a2a-guide.md"
+      ]
+    },
+    {
+      "id": "rag-179",
+      "question": "A2A 任务状态与 agent-service 内部状态如何映射？",
+      "relevantDocIds": [
+        "a2a-guide.md"
+      ]
+    },
+    {
+      "id": "rag-180",
+      "question": "live discovery 影响哪些端点？",
+      "relevantDocIds": [
+        "a2a-guide.md"
+      ]
+    },
+    {
+      "id": "rag-181",
+      "question": "平台 agent 作为 MCP client 时，默认是否开启？",
+      "relevantDocIds": [
+        "mcp-guide.md"
+      ]
+    },
+    {
+      "id": "rag-182",
+      "question": "如何让 agent 通过子进程方式启动一个本地 MCP server？",
+      "relevantDocIds": [
+        "mcp-guide.md"
+      ]
+    },
+    {
+      "id": "rag-183",
+      "question": "interop-service 暴露的 MCP 风格工具端点中，用于获取单个工具 schema 的路径是什么？",
+      "relevantDocIds": [
+        "mcp-guide.md"
+      ]
+    },
+    {
+      "id": "rag-184",
+      "question": "平台 agent 作为 MCP client 时，mcp_call 动作在什么条件下不会出现在 agent 工具清单中？",
+      "relevantDocIds": [
+        "mcp-guide.md"
+      ]
+    },
+    {
+      "id": "rag-185",
+      "question": "调用 interop-service 的 /interop/mcp/call 时，如果 tool 字段缺失，会返回什么错误？",
+      "relevantDocIds": [
+        "mcp-guide.md"
+      ]
+    },
+    {
+      "id": "rag-186",
+      "question": "平台 agent 作为 MCP client 时，http 传输方式使用哪个类？",
+      "relevantDocIds": [
+        "mcp-guide.md"
+      ]
+    },
+    {
+      "id": "rag-187",
+      "question": "interop-service 暴露的 MCP 工具中，platform.ping 工具的作用是什么？",
+      "relevantDocIds": [
+        "mcp-guide.md"
+      ]
+    },
+    {
+      "id": "rag-188",
+      "question": "如何同时启用 agent 作为 MCP client 并配置 http 传输方式？",
+      "relevantDocIds": [
+        "mcp-guide.md"
+      ]
+    },
+    {
+      "id": "rag-189",
+      "question": "interop-service 的工具目录默认如何获取？如果下游 agent-service 不可达会怎样？",
+      "relevantDocIds": [
+        "mcp-guide.md"
+      ]
+    },
+    {
+      "id": "rag-190",
+      "question": "调用 platform.agent.run 工具时，必须提供哪个参数？",
+      "relevantDocIds": [
+        "mcp-guide.md"
+      ]
+    },
+    {
+      "id": "rag-191",
+      "question": "平台对外暴露业务API的唯一入口是什么？",
+      "relevantDocIds": [
+        "架构文档.md"
+      ]
+    },
+    {
+      "id": "rag-192",
+      "question": "下游服务信任哪种令牌进行身份验证？",
+      "relevantDocIds": [
+        "架构文档.md"
+      ]
+    },
+    {
+      "id": "rag-193",
+      "question": "所有LLM调用在Java侧通过什么统一网关进行？",
+      "relevantDocIds": [
+        "架构文档.md"
+      ]
+    },
+    {
+      "id": "rag-194",
+      "question": "跨服务DTO放在哪个共享库中？",
+      "relevantDocIds": [
+        "架构文档.md"
+      ]
+    },
+    {
+      "id": "rag-195",
+      "question": "edge-gateway中三个签发内部JWT的GlobalFilter按什么顺序执行？",
+      "relevantDocIds": [
+        "架构文档.md"
+      ]
+    },
+    {
+      "id": "rag-196",
+      "question": "平台如何实现跨服务调用时租户身份的传播？",
+      "relevantDocIds": [
+        "架构文档.md"
+      ]
+    },
+    {
+      "id": "rag-197",
+      "question": "auth-service签发哪种令牌？内部JWT由谁签发？",
+      "relevantDocIds": [
+        "架构文档.md"
+      ]
+    },
+    {
+      "id": "rag-198",
+      "question": "平台如何实现审计和计量对业务代码透明？",
+      "relevantDocIds": [
+        "架构文档.md"
+      ]
+    },
+    {
+      "id": "rag-199",
+      "question": "平台采用什么机制达到effective exactly-once的事件投递？",
+      "relevantDocIds": [
+        "架构文档.md"
+      ]
+    },
+    {
+      "id": "rag-200",
+      "question": "config-server集中下发什么类型的配置？密钥如何管理？",
+      "relevantDocIds": [
+        "架构文档.md"
+      ]
+    }
+  ]
+}

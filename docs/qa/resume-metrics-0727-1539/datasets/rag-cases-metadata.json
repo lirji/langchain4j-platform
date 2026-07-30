@@ -1,0 +1,1602 @@
+[
+  {
+    "id": "rag-001",
+    "source": "docs/对话与检索/rag-guide.md",
+    "displayName": "rag-guide.md",
+    "question": "上传文档时，如果图片多模态功能未开启，系统会如何处理？",
+    "referenceAnswer": "关闭时上传任何图片都会返回明确的 400 错误，提示需开启此开关，不会静默处理。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-002",
+    "source": "docs/对话与检索/rag-guide.md",
+    "displayName": "rag-guide.md",
+    "question": "在混合检索中，当ES参与查询时，默认的融合策略是什么？",
+    "referenceAnswer": "ES参与查询时有效默认融合策略为rrf（1/(k+rank)，RAG_FUSION_RRF_K=60）。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-003",
+    "source": "docs/对话与检索/rag-guide.md",
+    "displayName": "rag-guide.md",
+    "question": "如何配置才能使图片多模态嵌入功能生效？",
+    "referenceAnswer": "设置RAG_MULTIMODAL_ENABLED=true，并配置RAG_MULTIMODAL_BASE_URL指向OpenAI兼容的/embeddings端点。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-004",
+    "source": "docs/对话与检索/rag-guide.md",
+    "displayName": "rag-guide.md",
+    "question": "文档上传时，如果标题相同，系统会如何处理？",
+    "referenceAnswer": "同一租户下title相同的文档会覆盖并递增版本号，docId由tenantId:displayName哈希得到，删除旧向量后重建。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-005",
+    "source": "docs/对话与检索/rag-guide.md",
+    "displayName": "rag-guide.md",
+    "question": "在enforce授权模式下，上传文档时如果无法确定归属部门，会发生什么？",
+    "referenceAnswer": "上传人无法确定归属部门时上传直接返回403，拒绝创建无部门归属的文档。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-006",
+    "source": "docs/对话与检索/rag-guide.md",
+    "displayName": "rag-guide.md",
+    "question": "GraphRAG的图存储默认使用什么后端？如何切换为进程内模式？",
+    "referenceAnswer": "默认使用jdbc（MySQL）持久化；设置RAG_GRAPH_STORE=in-memory可退回进程内不持久化模式。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-007",
+    "source": "docs/对话与检索/rag-guide.md",
+    "displayName": "rag-guide.md",
+    "question": "L1语义缓存在什么位置？它如何影响请求处理流程？",
+    "referenceAnswer": "位于conversation-service的/chat接口中，在RAG和LLM之前（pre-RAG）。命中时直接返回缓存回复，短路后续embedding/检索/LLM调用；未命中则正常流程并回填缓存。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-008",
+    "source": "docs/对话与检索/rag-guide.md",
+    "displayName": "rag-guide.md",
+    "question": "切换embedding provider后，为什么需要重建向量库collection？",
+    "referenceAnswer": "切换embedding provider通常改变向量维度，维度守卫会检测到目标collection已按别的维度建立，抛出DimensionMismatchException，因此必须为每个租户重建/清空对应collection。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-009",
+    "source": "docs/对话与检索/rag-guide.md",
+    "displayName": "rag-guide.md",
+    "question": "在enforce授权模式下，文档级授权过滤如何处理无docId命中的候选（如GraphRAG三元组）？",
+    "referenceAnswer": "无docId命中（如GraphRAG三元组）无法资源级判权，采用fail-closed策略丢弃。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-010",
+    "source": "docs/对话与检索/rag-guide.md",
+    "displayName": "rag-guide.md",
+    "question": "rerank和query expansion两个增强功能分别作用于检索流程的哪个阶段？",
+    "referenceAnswer": "rerank作用于召回后、排序前：先召回topK×N候选，再用rerank模型精排回topK。query expansion作用于召回前：把原始query改写成多个变体分别检索后合并去重。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-011",
+    "source": "docs/对话与检索/向量检索-ann与rrf.md",
+    "displayName": "向量检索-ann与rrf.md",
+    "question": "平台支持的6个向量库中，哪个库默认使用精确暴力搜索而非近似最近邻？",
+    "referenceAnswer": "Milvus默认index-type为FLAT，即精确暴力搜索，不是ANN。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-012",
+    "source": "docs/对话与检索/向量检索-ann与rrf.md",
+    "displayName": "向量检索-ann与rrf.md",
+    "question": "RRF融合策略中，平滑常数k的默认值是多少？增大k值对排名结果有什么影响？",
+    "referenceAnswer": "默认k=60。增大k值会使第1名和第2名的贡献差变小，结果更民主。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-013",
+    "source": "docs/对话与检索/向量检索-ann与rrf.md",
+    "displayName": "向量检索-ann与rrf.md",
+    "question": "在pgvector向量库中，如果希望使用库内向量与全文检索的混合排序，需要设置什么参数？",
+    "referenceAnswer": "需要设置RAG_PGVECTOR_SEARCH_MODE=HYBRID，并可通过RAG_PGVECTOR_RRF_K设置库内RRF的k值。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-014",
+    "source": "docs/对话与检索/向量检索-ann与rrf.md",
+    "displayName": "向量检索-ann与rrf.md",
+    "question": "平台中哪两个向量库默认使用HNSW索引？",
+    "referenceAnswer": "Qdrant和Chroma默认使用HNSW索引。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-015",
+    "source": "docs/对话与检索/向量检索-ann与rrf.md",
+    "displayName": "向量检索-ann与rrf.md",
+    "question": "为什么RRF分数不能作为相关度阈值使用？",
+    "referenceAnswer": "RRF分数是名次分，范围恒在约0.01~0.05之间，不携带绝对相关度信息。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-016",
+    "source": "docs/对话与检索/向量检索-ann与rrf.md",
+    "displayName": "向量检索-ann与rrf.md",
+    "question": "切换向量库provider时，需要重新执行什么操作才能使用数据？",
+    "referenceAnswer": "必须重新ingest数据，因为换provider后得到的是空库，数据不会自动迁移。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-017",
+    "source": "docs/对话与检索/向量检索-ann与rrf.md",
+    "displayName": "向量检索-ann与rrf.md",
+    "question": "在跨源RRF融合中，如果ES不参与查询，默认使用什么融合策略？",
+    "referenceAnswer": "当ES关闭或只写不查时，默认使用weighted_max策略，保留原始分量纲。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-018",
+    "source": "docs/对话与检索/向量检索-ann与rrf.md",
+    "displayName": "向量检索-ann与rrf.md",
+    "question": "HNSW索引中，哪个参数是唯一可以在查询时调整召回率与延迟的旋钮？",
+    "referenceAnswer": "ef_search参数，增大它可提高召回率但增加延迟。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-019",
+    "source": "docs/对话与检索/向量检索-ann与rrf.md",
+    "displayName": "向量检索-ann与rrf.md",
+    "question": "平台中哪两个向量库支持shared隔离模式？",
+    "referenceAnswer": "仅in-memory和qdrant支持shared隔离模式。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-020",
+    "source": "docs/对话与检索/向量检索-ann与rrf.md",
+    "displayName": "向量检索-ann与rrf.md",
+    "question": "如果希望看到原始相关分而非RRF名次分，可以采取哪两种方法？",
+    "referenceAnswer": "关闭ES退回weighted_max策略，或开启rerank后查看判官分。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-021",
+    "source": "docs/对话与检索/es-hybrid-rerank.md",
+    "displayName": "es-hybrid-rerank.md",
+    "question": "当Elasticsearch服务不可达时，系统会如何处理查询请求？",
+    "referenceAnswer": "ES客户端惰性连接，查询期ES源失败自动降级返回空，其余检索源照常工作。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-022",
+    "source": "docs/对话与检索/es-hybrid-rerank.md",
+    "displayName": "es-hybrid-rerank.md",
+    "question": "在ES开启的情况下，系统默认使用哪种融合策略？为什么？",
+    "referenceAnswer": "默认使用rrf（倒数排名融合），因为BM25分数无上界，与向量余弦[0,1]不可直接比较，rrf只看名次免疫量纲差。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-023",
+    "source": "docs/对话与检索/es-hybrid-rerank.md",
+    "displayName": "es-hybrid-rerank.md",
+    "question": "如何配置使得系统只写入ES但不进行ES查询？",
+    "referenceAnswer": "设置RAG_ES_INDEX_ENABLED=true且RAG_ES_QUERY_ENABLED=false。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-024",
+    "source": "docs/对话与检索/es-hybrid-rerank.md",
+    "displayName": "es-hybrid-rerank.md",
+    "question": "如果我想关闭ES混排功能，应该设置哪个环境变量？",
+    "referenceAnswer": "设置RAG_ES_ENABLED=false。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-025",
+    "source": "docs/对话与检索/es-hybrid-rerank.md",
+    "displayName": "es-hybrid-rerank.md",
+    "question": "在weighted_max策略下，BM25分数是如何与向量分数对齐的？",
+    "referenceAnswer": "EsKeywordRetrievalSource会按本次查询最高分把BM25归一到[0,1]（通过RAG_ES_NORMALIZE_SCORE配置）。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-026",
+    "source": "docs/对话与检索/es-hybrid-rerank.md",
+    "displayName": "es-hybrid-rerank.md",
+    "question": "开启ES后，历史数据需要如何处理才能被ES检索到？",
+    "referenceAnswer": "历史数据不自动迁移，需通过上传API重灌（如seed-kb.sh或重新上传）。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-027",
+    "source": "docs/对话与检索/es-hybrid-rerank.md",
+    "displayName": "es-hybrid-rerank.md",
+    "question": "系统在ES写入失败时的默认行为是什么？如何改为严格模式？",
+    "referenceAnswer": "默认best-effort（写失败不影响上传），设置RAG_ES_FAIL_FAST=true可使写失败导致上传失败。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-028",
+    "source": "docs/对话与检索/es-hybrid-rerank.md",
+    "displayName": "es-hybrid-rerank.md",
+    "question": "ES索引的默认名称和中文分析器分别是什么？",
+    "referenceAnswer": "默认索引名knowledge_segments_text，默认分析器smartcn。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-029",
+    "source": "docs/对话与检索/es-hybrid-rerank.md",
+    "displayName": "es-hybrid-rerank.md",
+    "question": "在灰度阶段，如何先验证ES写入再开启查询，且融合策略保持为weighted_max？",
+    "referenceAnswer": "先设置RAG_ES_INDEX_ENABLED=true、RAG_ES_QUERY_ENABLED=false，此时有效默认融合策略为weighted_max（因为ES未真正参与查询）。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-030",
+    "source": "docs/对话与检索/es-hybrid-rerank.md",
+    "displayName": "es-hybrid-rerank.md",
+    "question": "当RAG_FUSION_STRATEGY留空时，系统如何决定使用哪种融合策略？",
+    "referenceAnswer": "代码自动计算：ES开启时默认rrf，ES关闭时默认weighted_max。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-031",
+    "source": "docs/对话与检索/semantic-cache.md",
+    "displayName": "semantic-cache.md",
+    "question": "语义响应缓存位于对话流程的哪个阶段？",
+    "referenceAnswer": "位于 /chat 的 RAG + LLM 之前，属于 pre-RAG 缓存。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-032",
+    "source": "docs/对话与检索/semantic-cache.md",
+    "displayName": "semantic-cache.md",
+    "question": "当语义缓存命中时，调用方在返回体中能否看到缓存标志？",
+    "referenceAnswer": "不能。命中与未命中返回体结构一致，没有 cached 标志位，命中只体现在延迟降低和 debug 日志。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-033",
+    "source": "docs/对话与检索/semantic-cache.md",
+    "displayName": "semantic-cache.md",
+    "question": "语义缓存如何实现租户隔离？",
+    "referenceAnswer": "按 TenantContext.current().tenantId() 分桶，每个租户独立缓存；内存实现为每租户一个 Map，Redis 实现为每租户一个 Hash key conv:semcache:<tenantId>。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-034",
+    "source": "docs/对话与检索/semantic-cache.md",
+    "displayName": "semantic-cache.md",
+    "question": "默认的 embedding provider 是什么？它能否真正识别同义改写？",
+    "referenceAnswer": "默认是 hash，它是词袋模型，不能真正识别同义改写，配合高阈值 0.95 实际近似近精确去重。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-035",
+    "source": "docs/对话与检索/semantic-cache.md",
+    "displayName": "semantic-cache.md",
+    "question": "如果我想让语义缓存真正识别同义改写（如“怎么退款”和“退款流程是啥”），需要做什么配置？",
+    "referenceAnswer": "需要将 CONVERSATION_SEMANTIC_CACHE_EMBEDDING_PROVIDER 设为 openai，接一个真正的 embedding 模型。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-036",
+    "source": "docs/对话与检索/semantic-cache.md",
+    "displayName": "semantic-cache.md",
+    "question": "缓存命中时，是否还会执行 RAG 检索和 LLM 生成？",
+    "referenceAnswer": "不会。命中即短路 supplier，不再执行 RAG 检索、LLM 生成、grounding 校验、PII 脱敏等步骤。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-037",
+    "source": "docs/对话与检索/semantic-cache.md",
+    "displayName": "semantic-cache.md",
+    "question": "当缓存关闭时，/chat 的行为会有什么变化？",
+    "referenceAnswer": "缓存关闭时 /chat 行为与无缓存完全一致，零回归，getOrCompute 直接执行 supplier。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-038",
+    "source": "docs/对话与检索/semantic-cache.md",
+    "displayName": "semantic-cache.md",
+    "question": "Redis 存储后端和内存存储后端在容量控制上有什么不同？",
+    "referenceAnswer": "内存存储后端有 max-entries-per-tenant 上限（默认 1000），超出丢最旧插入；Redis 存储后端无条数上限，靠 redis.ttl 和知识库联动失效控制体积。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-039",
+    "source": "docs/对话与检索/semantic-cache.md",
+    "displayName": "semantic-cache.md",
+    "question": "如何定向失效某个特定原始问题的缓存？",
+    "referenceAnswer": "使用 DELETE /chat/cache?question=原始问题，按精确原始问题匹配移除。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-040",
+    "source": "docs/对话与检索/semantic-cache.md",
+    "displayName": "semantic-cache.md",
+    "question": "知识库更新后，缓存如何自动失效？",
+    "referenceAnswer": "knowledge-service 在文档 upload/delete 成功后，尽力而为地回调 conversation 的 DELETE /chat/cache 失效当前租户缓存，默认开启（RAG_CACHE_INVALIDATION_ENABLED=true）。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-041",
+    "source": "docs/对话与检索/nl2sql-guide.md",
+    "displayName": "nl2sql-guide.md",
+    "question": "如何通过边缘网关调用 NL2SQL 服务？",
+    "referenceAnswer": "通过边缘网关 http://localhost:8080 访问，使用 POST /chat/sql 或 POST /analytics/sql 端点，请求需携带 X-Api-Key 头。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-042",
+    "source": "docs/对话与检索/nl2sql-guide.md",
+    "displayName": "nl2sql-guide.md",
+    "question": "关闭 NL2SQL 功能后，analytics-service 还能正常启动吗？",
+    "referenceAnswer": "能。设置 NL2SQL_ENABLED=false 后，analytics-service 照常启动，只是不注册 NL2SQL 相关 bean 与端点，访问 /chat/sql 返回 404。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-043",
+    "source": "docs/对话与检索/nl2sql-guide.md",
+    "displayName": "nl2sql-guide.md",
+    "question": "NL2SQL 链路中，SQL 安全护栏的 L4 层具体做什么？",
+    "referenceAnswer": "L4 强制 LIMIT：原 SQL 无 LIMIT 时自动追加 LIMIT <max-rows>（默认 1000），防止全表扫描。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-044",
+    "source": "docs/对话与检索/nl2sql-guide.md",
+    "displayName": "nl2sql-guide.md",
+    "question": "使用 dev-key-acme 调用 NL2SQL 查询退款数据会得到什么结果？",
+    "referenceAnswer": "会返回 0 行，因为 dev-key-acme 对应 acme 租户，而种子数据在 tenantA 下，L6 租户过滤后查询全部返回 0 行。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-045",
+    "source": "docs/对话与检索/nl2sql-guide.md",
+    "displayName": "nl2sql-guide.md",
+    "question": "NL2SQL 的 SQL 安全护栏中，哪一层负责防止跨租户数据泄露？",
+    "referenceAnswer": "L6 租户谓词：引用 tenant-scoped-tables 里的表时，SQL 必须含 tenant_id = '<当前租户>'，否则拒答。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-046",
+    "source": "docs/对话与检索/nl2sql-guide.md",
+    "displayName": "nl2sql-guide.md",
+    "question": "NL2SQL 链路中，数字 grounding 在什么情况下会触发警告？",
+    "referenceAnswer": "当答案中的数字未在查询结果、行数或用户问题中找到时，会在答案末尾追加 ⚠️ 数字核对提示。豁免绝对值 ≤ 10 的整数和 [1900,2099] 的四位整数。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-047",
+    "source": "docs/对话与检索/nl2sql-guide.md",
+    "displayName": "nl2sql-guide.md",
+    "question": "NL2SQL 的自修环机制如何防止无限重试？",
+    "referenceAnswer": "通过 app.nl2sql.max-tool-calls（默认 5）硬上限：本轮 run_sql 调用次数达上限后，工具直接返回终止指令，不再执行。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-048",
+    "source": "docs/对话与检索/nl2sql-guide.md",
+    "displayName": "nl2sql-guide.md",
+    "question": "NL2SQL 的 SchemaProvider 如何获取表结构信息？",
+    "referenceAnswer": "用 JDBC DatabaseMetaData.getColumns 内省白名单表的列名/类型/注释（REMARKS），拼成紧凑 schema 文本喂进 SqlAssistant 的 system prompt。只暴露 allow-tables 中的表，启动时算一次并缓存。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-049",
+    "source": "docs/对话与检索/nl2sql-guide.md",
+    "displayName": "nl2sql-guide.md",
+    "question": "NL2SQL 链路中，SQL 安全护栏的 L2 层如何防止注释绕过？",
+    "referenceAnswer": "L2 层在抹掉字符串字面量的副本上检测，禁注释（-- /* */），关键字用 \\b 词边界匹配，避免误伤列名。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-050",
+    "source": "docs/对话与检索/nl2sql-guide.md",
+    "displayName": "nl2sql-guide.md",
+    "question": "NL2SQL 的 SQL 安全护栏中，L1 和 L5 层分别由什么机制实现？",
+    "referenceAnswer": "L1 只读账号：执行用 nl2sql_ro（GRANT SELECT only），HikariCP 连接再置 readOnly=true。L5 statement 超时：JDBC queryTimeout = <query-timeout-seconds>（默认 5s）。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-051",
+    "source": "docs/对话与检索/知识库文档更新与存储.md",
+    "displayName": "知识库文档更新与存储.md",
+    "question": "知识库文档更新时，系统如何确定文档的唯一身份？",
+    "referenceAnswer": "系统使用“租户分区 + 文件名或 JSON title”确定文档身份，docId = SHA-256(tenantId + \":\" + displayName) 的前 16 个十六进制字符。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-052",
+    "source": "docs/对话与检索/知识库文档更新与存储.md",
+    "displayName": "知识库文档更新与存储.md",
+    "question": "重新上传同名文件时，文档的哪些属性会保持不变？",
+    "referenceAnswer": "docId、tenantId、displayName 以及已有的授权关系（owner、部门和分享关系）保持不变。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-053",
+    "source": "docs/对话与检索/知识库文档更新与存储.md",
+    "displayName": "知识库文档更新与存储.md",
+    "question": "通过 JSON 方式更新文档时，如果 category 参数不传或传空，会有什么影响？",
+    "referenceAnswer": "会清除旧分类。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-054",
+    "source": "docs/对话与检索/知识库文档更新与存储.md",
+    "displayName": "知识库文档更新与存储.md",
+    "question": "文档更新过程中，旧版本数据清理失败会带来什么后果？",
+    "referenceAnswer": "旧数据可能与新数据一起参与召回，导致检索结果不一致。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-055",
+    "source": "docs/对话与检索/知识库文档更新与存储.md",
+    "displayName": "知识库文档更新与存储.md",
+    "question": "同名文档在不同租户上传时，系统会如何处理？",
+    "referenceAnswer": "会新建该租户自己的文档，不会覆盖其他租户的文档。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-056",
+    "source": "docs/对话与检索/知识库文档更新与存储.md",
+    "displayName": "知识库文档更新与存储.md",
+    "question": "文档更新后，哪些存储位置会写入新数据？",
+    "referenceAnswer": "向量库、DocumentMirror、Elasticsearch、GraphStore 和 DocumentRegistry。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-057",
+    "source": "docs/对话与检索/知识库文档更新与存储.md",
+    "displayName": "知识库文档更新与存储.md",
+    "question": "如果上传的正文与旧版本完全相同，系统会执行更新操作吗？",
+    "referenceAnswer": "会，仍执行全量重建，版本仍加一。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-058",
+    "source": "docs/对话与检索/知识库文档更新与存储.md",
+    "displayName": "知识库文档更新与存储.md",
+    "question": "文档更新时，系统如何确保只有授权用户才能覆盖已有文档？",
+    "referenceAnswer": "如果同名文档已存在且启用了文档级授权，覆盖前会检查当前用户是否有该文档的 edit 权限，没有权限时返回 403。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-059",
+    "source": "docs/对话与检索/知识库文档更新与存储.md",
+    "displayName": "知识库文档更新与存储.md",
+    "question": "文档更新过程中，如果新 embedding 调用失败，但旧向量已删除，会导致什么问题？",
+    "referenceAnswer": "Registry 可能仍保留旧 DocumentInfo，但旧向量已不存在，ES 或图谱可能已被清理，导致不同检索分支结果不一致。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-060",
+    "source": "docs/对话与检索/知识库文档更新与存储.md",
+    "displayName": "知识库文档更新与存储.md",
+    "question": "图片文档的更新机制与文本文档有何不同？",
+    "referenceAnswer": "图片不会进入 DocumentService 文本生命周期，同名图片再次上传会新增一条图片向量，而不是替换旧图片。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-061",
+    "source": "docs/对话与检索/memory-guide.md",
+    "displayName": "memory-guide.md",
+    "question": "多轮记忆和长期用户画像在键的构成上有什么不同？",
+    "referenceAnswer": "多轮记忆的键是 `<tenantId>::<chatId>`，长期用户画像的键是 `(tenant, user)`。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-062",
+    "source": "docs/对话与检索/memory-guide.md",
+    "displayName": "memory-guide.md",
+    "question": "如何通过环境变量关闭长期用户画像功能？",
+    "referenceAnswer": "设置环境变量 `CONVERSATION_MEMORY_PROFILE_ENABLED=false`。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-063",
+    "source": "docs/对话与检索/memory-guide.md",
+    "displayName": "memory-guide.md",
+    "question": "在对话中，长期用户画像的信息是如何注入到模型中的？",
+    "referenceAnswer": "在 chat 前召回，每轮新鲜拼进系统提示 `context` 中，不落进历史。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-064",
+    "source": "docs/对话与检索/memory-guide.md",
+    "displayName": "memory-guide.md",
+    "question": "多轮记忆的 `summary` 模式在溢出时如何处理旧消息？",
+    "referenceAnswer": "溢出的旧消息经 LLM 压缩成一条系统摘要，而非直接丢弃。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-065",
+    "source": "docs/对话与检索/memory-guide.md",
+    "displayName": "memory-guide.md",
+    "question": "长期用户画像的抽取过程是同步还是异步的？默认情况下，如果异步，抽取失败会怎样？",
+    "referenceAnswer": "默认异步（`async: true`），抽取失败会被吞掉（不阻塞 chat 响应）。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-066",
+    "source": "docs/对话与检索/memory-guide.md",
+    "displayName": "memory-guide.md",
+    "question": "多轮记忆的 `redis` 存储后端相比 `in-memory` 有什么优势？",
+    "referenceAnswer": "多副本共享同一份会话记忆，重启不丢。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-067",
+    "source": "docs/对话与检索/memory-guide.md",
+    "displayName": "memory-guide.md",
+    "question": "长期用户画像的 `recall-limit` 配置项控制什么？",
+    "referenceAnswer": "控制 chat 前召回注入最近多少条记忆。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-068",
+    "source": "docs/对话与检索/memory-guide.md",
+    "displayName": "memory-guide.md",
+    "question": "如何通过 curl 查看当前用户的长期记忆？",
+    "referenceAnswer": "发送 GET 请求到 `http://localhost:8080/memory/profile`，并携带 `X-Api-Key` 头。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-069",
+    "source": "docs/对话与检索/memory-guide.md",
+    "displayName": "memory-guide.md",
+    "question": "多轮记忆的 `tokens` 模式中，`token-model` 的作用是什么？它和实际调用的模型有关系吗？",
+    "referenceAnswer": "`token-model` 只作为 tokenizer 依据，与实际调用的模型无关。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-070",
+    "source": "docs/对话与检索/memory-guide.md",
+    "displayName": "memory-guide.md",
+    "question": "长期用户画像的 `max-items` 和 `recall-limit` 配置项共同作用，如何影响注入到对话中的记忆？",
+    "referenceAnswer": "`max-items` 是每用户记忆上限，超出淘汰最旧；`recall-limit` 是 chat 前召回注入最近多少条。注入的记忆数量受 `recall-limit` 限制，且不会超过 `max-items`。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-071",
+    "source": "docs/对话与检索/model-cascade.md",
+    "displayName": "model-cascade.md",
+    "question": "Model Cascade 端点默认是否开启？",
+    "referenceAnswer": "默认开启，CHAT_CASCADE_ENABLED=true",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-072",
+    "source": "docs/对话与检索/model-cascade.md",
+    "displayName": "model-cascade.md",
+    "question": "级联功能中，当便宜模型答案被判为低置信时，系统会如何处理？",
+    "referenceAnswer": "升级到强模型重答",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-073",
+    "source": "docs/对话与检索/model-cascade.md",
+    "displayName": "model-cascade.md",
+    "question": "如何通过环境变量关闭级联功能？",
+    "referenceAnswer": "设置 CHAT_CASCADE_ENABLED=false",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-074",
+    "source": "docs/对话与检索/model-cascade.md",
+    "displayName": "model-cascade.md",
+    "question": "便宜模型和强模型的逻辑模型名在 LiteLLM 配置中如何定义？",
+    "referenceAnswer": "在 LiteLLM 的 model_list 中分别定义 chat-cheap 和 chat-strong，指向不同档位的底层模型",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-075",
+    "source": "docs/对话与检索/model-cascade.md",
+    "displayName": "model-cascade.md",
+    "question": "级联功能中，如果便宜模型直接触发了工具调用，系统会升级到强模型吗？",
+    "referenceAnswer": "不会，直接返回便宜结果，不升级",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-076",
+    "source": "docs/对话与检索/model-cascade.md",
+    "displayName": "model-cascade.md",
+    "question": "自评功能默认是开启还是关闭？开启后需要额外配置什么？",
+    "referenceAnswer": "默认关闭；开启需设置 CHAT_CASCADE_SELF_RATING=true，并可调整 CHAT_CASCADE_CONFIDENCE_THRESHOLD",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-077",
+    "source": "docs/对话与检索/model-cascade.md",
+    "displayName": "model-cascade.md",
+    "question": "便宜模型和强模型都留空时，级联功能会如何表现？",
+    "referenceAnswer": "两者都指向同一模型（chat-default），级联退化为便宜=强，不省钱，仅用于演示",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-078",
+    "source": "docs/对话与检索/model-cascade.md",
+    "displayName": "model-cascade.md",
+    "question": "级联功能中，便宜模型答案被判为低置信的两种默认启发式规则是什么？",
+    "referenceAnswer": "1. 答案长度小于 min-answer-chars（默认8）；2. 答案包含 uncertainty-markers（如“我不确定”“无法回答”等）",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-079",
+    "source": "docs/对话与检索/model-cascade.md",
+    "displayName": "model-cascade.md",
+    "question": "级联功能如何保证不绕过租户配额和成本审计？",
+    "referenceAnswer": "两个底层模型都挂了全部 ChatModelListener，token 照常计入审计、成本与当前租户配额",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-080",
+    "source": "docs/对话与检索/model-cascade.md",
+    "displayName": "model-cascade.md",
+    "question": "自评失败（解析不出分数或模型异常）时，系统会如何决策？",
+    "referenceAnswer": "保守判为0.0，触发升级到强模型",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-081",
+    "source": "docs/Agent编排/agent-guide.md",
+    "displayName": "agent-guide.md",
+    "question": "如何通过网关访问 agent-service 的深度 Agent 端点？",
+    "referenceAnswer": "通过网关 http://localhost:8080 加 X-Api-Key 访问，/agent 和 /agent/** 路由到 agent-service，api-key 需绑定 agent scope。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-082",
+    "source": "docs/Agent编排/agent-guide.md",
+    "displayName": "agent-guide.md",
+    "question": "在 ReAct 循环中，模型返回的哪个字段会被写入 scratchpad？",
+    "referenceAnswer": "只有模型返回的 note 会写入 scratchpad。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-083",
+    "source": "docs/Agent编排/agent-guide.md",
+    "displayName": "agent-guide.md",
+    "question": "DAG 多 Agent 模式下，如果显式传入的 DAG 包含循环依赖，会返回什么错误？",
+    "referenceAnswer": "返回 400 错误，提示 task graph contains a cycle。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-084",
+    "source": "docs/Agent编排/agent-guide.md",
+    "displayName": "agent-guide.md",
+    "question": "Reflexion 自省环的评分维度有哪些？",
+    "referenceAnswer": "correctness（正确性）、completeness（完整性）、clarity（清晰度）三维加权聚合。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-085",
+    "source": "docs/Agent编排/agent-guide.md",
+    "displayName": "agent-guide.md",
+    "question": "Voting 投票共识的两种策略分别适用于什么类型的题目？",
+    "referenceAnswer": "majority 适用于离散/分类题（如是否合规、情感极性），synthesis 适用于自由文本题。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-086",
+    "source": "docs/Agent编排/agent-guide.md",
+    "displayName": "agent-guide.md",
+    "question": "业务流程智能体在处理退款时，能否自动完成审批？",
+    "referenceAnswer": "不能。智能体只能发起、查询、汇报，不提供 workflow_complete 动作，审批需由具备 approve scope 的人走 POST /workflow/tasks/{taskId}/complete。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-087",
+    "source": "docs/Agent编排/agent-guide.md",
+    "displayName": "agent-guide.md",
+    "question": "深度 Agent 的 stopReason 取值中，LOOP 和 TIMEOUT 分别代表什么含义？",
+    "referenceAnswer": "LOOP 表示同一动作重复无进展被熔断；TIMEOUT 表示墙钟超时。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-088",
+    "source": "docs/Agent编排/agent-guide.md",
+    "displayName": "agent-guide.md",
+    "question": "数据分析智能体（analyst）与直接使用 DAG plan-run 的主要区别是什么？",
+    "referenceAnswer": "analyst 使用数据分析专用 Planner（DataAnalystPlanner），内置了先探后取、按维度拆解的数据分析规则，省去在 goal 中手写约束。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-089",
+    "source": "docs/Agent编排/agent-guide.md",
+    "displayName": "agent-guide.md",
+    "question": "在 DAG 多 Agent 中，如果 synthesis 评分低于阈值会触发什么机制？",
+    "referenceAnswer": "会触发 AgentDagReplanner 修订 DAG 再跑一轮，直到过阈值或达重规划上限。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-090",
+    "source": "docs/Agent编排/agent-guide.md",
+    "displayName": "agent-guide.md",
+    "question": "Prompt Chaining 端点默认返回 400 的原因是什么？",
+    "referenceAnswer": "因为默认 app.agent.chaining.steps 为空，未配置步骤时端点返回 400（no chain steps configured）。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-091",
+    "source": "docs/Agent编排/意图识别与Agent执行原理.md",
+    "displayName": "意图识别与Agent执行原理.md",
+    "question": "平台中用于处理确定性订单查询的HTTP端点是什么？",
+    "referenceAnswer": "POST /chat/auto 下的 OrderQueryRoute 处理确定性订单查询，不调用 LLM 分类器。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-092",
+    "source": "docs/Agent编排/意图识别与Agent执行原理.md",
+    "displayName": "意图识别与Agent执行原理.md",
+    "question": "当用户询问“现在几点”时，平台的路由系统会将其分类为哪种类型？",
+    "referenceAnswer": "会被 QueryClassifier 分类为 TOOL，但当前非订单 TOOL 仍以空 context 调用普通 Assistant。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-093",
+    "source": "docs/Agent编排/意图识别与Agent执行原理.md",
+    "displayName": "意图识别与Agent执行原理.md",
+    "question": "ReAct 循环中，模型返回的哪个字段会被追加到 scratchpad 中？",
+    "referenceAnswer": "模型返回的 note 字段会追加到 scratchpad 中。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-094",
+    "source": "docs/Agent编排/意图识别与Agent执行原理.md",
+    "displayName": "意图识别与Agent执行原理.md",
+    "question": "飞书渠道的意图识别与主路由的意图分类有何不同？",
+    "referenceAnswer": "飞书渠道使用 FeishuIntent 关键词分类器，零 LLM 调用，输出 WORKFLOW 或 CHAT；主路由使用 LLM 分类器输出 RAG/TOOL/CHAT。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-095",
+    "source": "docs/Agent编排/意图识别与Agent执行原理.md",
+    "displayName": "意图识别与Agent执行原理.md",
+    "question": "在 DAG 编排中，如果综合评分低于阈值，系统会执行什么操作？",
+    "referenceAnswer": "AgentDagReplanner 根据旧计划、旧答案和主要问题修订任务图，然后重新执行。默认阈值 0.75，最多重规划 1 次。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-096",
+    "source": "docs/Agent编排/意图识别与Agent执行原理.md",
+    "displayName": "意图识别与Agent执行原理.md",
+    "question": "AgentAction 的 description 方法在 ReAct 循环中起什么作用？",
+    "referenceAnswer": "description() 是模型选择工具和填写 actionInput 的主要说明，每轮开始前被渲染成动作清单。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-097",
+    "source": "docs/Agent编排/意图识别与Agent执行原理.md",
+    "displayName": "意图识别与Agent执行原理.md",
+    "question": "当 QueryClassifier 抛出异常时，路由系统会如何处理？",
+    "referenceAnswer": "QueryRouterService 降级为 RAG，以一次额外检索换取更保守的回答。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-098",
+    "source": "docs/Agent编排/意图识别与Agent执行原理.md",
+    "displayName": "意图识别与Agent执行原理.md",
+    "question": "ReAct 循环中，Observation 和 note 分别被存储到哪些数据结构中？",
+    "referenceAnswer": "Observation 自动进入 history（Step 对象），note 追加到 scratchpad。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-099",
+    "source": "docs/Agent编排/意图识别与Agent执行原理.md",
+    "displayName": "意图识别与Agent执行原理.md",
+    "question": "平台如何确保 AgentBrain 返回的结构化决策能够被可靠解析？",
+    "referenceAnswer": "AgentConfig 使用 JSON Mode 模型构建 AgentBrain，降低因非法 JSON 解析失败的概率。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-100",
+    "source": "docs/Agent编排/意图识别与Agent执行原理.md",
+    "displayName": "意图识别与Agent执行原理.md",
+    "question": "DAG 编排中，同层任务如何执行？下游 worker 能访问上游的 scratchpad 吗？",
+    "referenceAnswer": "同层任务通过 CompletableFuture 并行执行；下游 worker 只接收 dependsOn 指向的上游 finalAnswer，不共享可变 scratchpad。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-101",
+    "source": "docs/Agent编排/workflow-guide.md",
+    "displayName": "workflow-guide.md",
+    "question": "在平台中，'workflow'一词有哪两种不同的含义？",
+    "referenceAnswer": "一种指Flowable BPMN引擎驱动的业务流程引擎（如退款审批），另一种指Anthropic《Building Effective Agents》中的LLM编排模式（如prompt chaining、routing等）。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-102",
+    "source": "docs/Agent编排/workflow-guide.md",
+    "displayName": "workflow-guide.md",
+    "question": "如何通过curl命令发起一个低风险的退款请求？",
+    "referenceAnswer": "使用POST请求到/workflow/refund/start，携带X-Api-Key: dev-key-acme和JSON body如{\"chatId\":\"u1\",\"message\":\"杯子颜色不太喜欢想退，不急\"}，返回status为COMPLETED。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-103",
+    "source": "docs/Agent编排/workflow-guide.md",
+    "displayName": "workflow-guide.md",
+    "question": "Flowable引擎在平台中默认是开启还是关闭的？需要什么条件？",
+    "referenceAnswer": "默认开启（WORKFLOW_ENABLED=true），但需要可达MySQL数据库。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-104",
+    "source": "docs/Agent编排/workflow-guide.md",
+    "displayName": "workflow-guide.md",
+    "question": "LLM编排模式中的Routing模式对应哪个端点？它默认是开启的吗？",
+    "referenceAnswer": "对应POST /chat/auto端点，默认开启（CONVERSATION_ROUTER_ENABLED=true）。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-105",
+    "source": "docs/Agent编排/workflow-guide.md",
+    "displayName": "workflow-guide.md",
+    "question": "审批超时后系统会如何处理？请结合文档中的两个信息点说明。",
+    "referenceAnswer": "ApprovalTimeoutSweeper定时扫描挂起超24小时（默认approval-timeout）的任务，自动驳回并审计approval.timeout；同时超时驳回后终态会通过outbox可靠回推用户。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-106",
+    "source": "docs/Agent编排/workflow-guide.md",
+    "displayName": "workflow-guide.md",
+    "question": "为什么平台选择Flowable而不是扩展现有的async状态机来处理退款审批？",
+    "referenceAnswer": "因为async状态机没有挂起等人、多步分支编排能力，而退款流程需要挂起等审批（可能跨天），期间服务可能重启，Flowable的UserTask和引擎表能保证持久化和重启不丢。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-107",
+    "source": "docs/Agent编排/workflow-guide.md",
+    "displayName": "workflow-guide.md",
+    "question": "在LLM编排模式中，如何实现一个带步骤间门控的固定顺序链？",
+    "referenceAnswer": "使用POST /agent/chain端点，在配置中定义app.agent.chaining.steps（如outline和draft步骤），每步可设置gate-min-length等门控条件，门控失败则短路终止。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-108",
+    "source": "docs/Agent编排/workflow-guide.md",
+    "displayName": "workflow-guide.md",
+    "question": "如何通过curl命令查询本租户的待审批任务？需要什么scope？",
+    "referenceAnswer": "使用GET /workflow/tasks，需要approve scope（通过X-Api-Key: dev-key-acme携带），返回待审UserTask列表。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-109",
+    "source": "docs/Agent编排/workflow-guide.md",
+    "displayName": "workflow-guide.md",
+    "question": "终态回推的三种模式分别是什么？默认使用哪种？",
+    "referenceAnswer": "三种模式：local（默认，使用WF_OUTBOX表+指数退避重投）、async-task（由共享任务中心负责）、kafka（通过Kafka事件驱动）。默认模式为local。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-110",
+    "source": "docs/Agent编排/workflow-guide.md",
+    "displayName": "workflow-guide.md",
+    "question": "在ServiceTask中，LLM调用失败时系统如何降级？请结合assess和resolve/reject说明。",
+    "referenceAnswer": "assess降级时强制priority=HIGH转人工（不默认LOW），resolve/reject降级时写兜底话术。降级时审计reply.degraded。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-111",
+    "source": "docs/Agent编排/让Agent主动调接口.md",
+    "displayName": "让Agent主动调接口.md",
+    "question": "如何让模型在对话中自主决定调用订单查询接口，而不是靠记忆回答？",
+    "referenceAnswer": "通过 tool calling / function calling 机制，本平台提供两套现成方案：ReAct 动作 AgentAction 和 langchain4j 原生 @Tool，均无需编写编排循环代码，只需写一个类注册即可。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-112",
+    "source": "docs/Agent编排/让Agent主动调接口.md",
+    "displayName": "让Agent主动调接口.md",
+    "question": "在平台中，实现工具调用的两种机制分别是什么？",
+    "referenceAnswer": "两种机制：① ReAct 动作 AgentAction，用于深度 Agent 的多步规划；② langchain4j 原生 @Tool，用于专用助手的简单工具调用。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-113",
+    "source": "docs/Agent编排/让Agent主动调接口.md",
+    "displayName": "让Agent主动调接口.md",
+    "question": "如果我想让一个通用对话 Agent 自主判断是否查订单，应该使用哪种机制？",
+    "referenceAnswer": "应该使用机制①，即 ReAct 动作 AgentAction，写一个 OrderQueryAction 类。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-114",
+    "source": "docs/Agent编排/让Agent主动调接口.md",
+    "displayName": "让Agent主动调接口.md",
+    "question": "新增一个 AgentAction 动作需要修改循环代码吗？",
+    "referenceAnswer": "不需要。只需写一个 @Component 类，循环会自动发现、自动描述、自动调度，不改循环一行代码。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-115",
+    "source": "docs/Agent编排/让Agent主动调接口.md",
+    "displayName": "让Agent主动调接口.md",
+    "question": "在 order_query 动作中，description() 方法的作用是什么？",
+    "referenceAnswer": "description() 是模型唯一能看到的工具说明书，决定模型是否调用以及如何填写参数。需要写清楚干什么、actionInput 填什么格式、什么时候别用它。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-116",
+    "source": "docs/Agent编排/让Agent主动调接口.md",
+    "displayName": "让Agent主动调接口.md",
+    "question": "对于只读无副作用的查询动作，应该使用哪种门控策略？",
+    "referenceAnswer": "使用 matchIfMissing = true 默认挂载，配合一个 feature flag（如 app.agent.order.enabled）和 Http/Noop 互补控制真调还是降级。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-117",
+    "source": "docs/Agent编排/让Agent主动调接口.md",
+    "displayName": "让Agent主动调接口.md",
+    "question": "在 order_query 动作中，如果查询失败或订单不存在，run() 方法应该返回什么？",
+    "referenceAnswer": "返回错误文本，如“查询失败：订单不存在: 999”，让模型在下一轮自己换入参或换动作，而不是抛异常。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-118",
+    "source": "docs/Agent编排/让Agent主动调接口.md",
+    "displayName": "让Agent主动调接口.md",
+    "question": "如何确保 agent-service 调用 order-service 时自动传递租户身份？",
+    "referenceAnswer": "agent-service 的 RestTemplate 挂了 OutboundTenantForwarder 和 OutboundTraceForwarder，当前线程 TenantContext 里的租户身份会被铸成内部 JWT 自动透传到 order-service。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-119",
+    "source": "docs/Agent编排/让Agent主动调接口.md",
+    "displayName": "让Agent主动调接口.md",
+    "question": "对于有副作用的动作（如发起退款），应该使用什么门控策略？",
+    "referenceAnswer": "使用双门控 @ConditionalOnProperty(name = {\"app.agent.enabled\", \"app.agent.workflow.enabled\"}, havingValue = \"true\")，默认开但生产可关，防误触发。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-120",
+    "source": "docs/Agent编排/让Agent主动调接口.md",
+    "displayName": "让Agent主动调接口.md",
+    "question": "在 order_query 动作中，如果订单数据在业务库里，只想自然语言问统计，需要写代码吗？",
+    "referenceAnswer": "不需要。现成的 analytics_sql 动作（NL2SQL）已经能让 Agent 生成只读 SELECT 查 orders 表，零代码即可。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-121",
+    "source": "docs/平台工程/eval-guide.md",
+    "displayName": "eval-guide.md",
+    "question": "检索质量评测端点 `/eval/retrieval` 在计算指标时是否经过大语言模型？",
+    "referenceAnswer": "否，只跑 retriever，不经 LLM，纯函数计算 Recall@k / Precision@k / MRR / Hit@k。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-122",
+    "source": "docs/平台工程/eval-guide.md",
+    "displayName": "eval-guide.md",
+    "question": "通用回归 harness 中，如果某个 case 的 HTTP 响应状态码不是 2xx，会如何判定？",
+    "referenceAnswer": "直接 fail，HTTP 非 2xx 直接导致该 case 失败。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-123",
+    "source": "docs/平台工程/eval-guide.md",
+    "displayName": "eval-guide.md",
+    "question": "在双跑门禁中，如果 candidate 的 passRate 低于 oracle 的 passRate 减去容差，会触发什么结果？",
+    "referenceAnswer": "判定为回归，门禁不通过，返回 HTTP 422（CI 门禁）或 regressions 列表。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-124",
+    "source": "docs/平台工程/eval-guide.md",
+    "displayName": "eval-guide.md",
+    "question": "如何通过命令行运行一个名为 `platform-smoke` 的预定义测试套件？",
+    "referenceAnswer": "使用 POST 请求到 `/eval/suites/platform-smoke/run`，携带 Authorization 和 Content-Type 头，请求体可选包含 targetBaseUrl。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-125",
+    "source": "docs/平台工程/eval-guide.md",
+    "displayName": "eval-guide.md",
+    "question": "通用回归 harness 中，`judgeExpected` 断言需要哪些条件才会真正触发？",
+    "referenceAnswer": "需要 `EVAL_JUDGE_ENABLED=true` 且 case 显式带 `judgeExpected` 字段。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-126",
+    "source": "docs/平台工程/eval-guide.md",
+    "displayName": "eval-guide.md",
+    "question": "检索质量评测的黄金集（relevantDocIds）是存储在服务端文件还是由请求体提供？",
+    "referenceAnswer": "由请求体中的 `cases` 数组提供，服务端没有内置黄金集文件。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-127",
+    "source": "docs/平台工程/eval-guide.md",
+    "displayName": "eval-guide.md",
+    "question": "双跑门禁的 snapshot 模式和 live 模式在 oracle 来源上有什么不同？",
+    "referenceAnswer": "snapshot 模式读预存快照（只实跑 candidate），live 模式现场起冻结单体实打（oracle 和 candidate 都实跑）。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-128",
+    "source": "docs/平台工程/eval-guide.md",
+    "displayName": "eval-guide.md",
+    "question": "通用回归 harness 中，`semanticExpected` 断言使用什么方法计算相似度？默认阈值是多少？",
+    "referenceAnswer": "使用 token 余弦相似度，默认阈值 0.75。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-129",
+    "source": "docs/平台工程/eval-guide.md",
+    "displayName": "eval-guide.md",
+    "question": "检索质量评测中，为什么推荐默认使用文件级 id 匹配而非精确级？",
+    "referenceAnswer": "因为调 chunking 时片段边界会漂，文件级标注让召回变化信号不被片段号噪声淹没，对切分漂移鲁棒。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-130",
+    "source": "docs/平台工程/eval-guide.md",
+    "displayName": "eval-guide.md",
+    "question": "双跑门禁中，`agreement` 指标是如何计算的？",
+    "referenceAnswer": "逐 case 比对 candidate 和 oracle 响应片段的语义相似度，取均值。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-131",
+    "source": "docs/平台工程/observability-guide.md",
+    "displayName": "observability-guide.md",
+    "question": "在平台中，跨服务 traceId 是如何在日志中实现关联的？",
+    "referenceAnswer": "TraceIdFilter 将 traceId 放入 SLF4J MDC，OutboundTraceForwarder 从 MDC 取出并塞入下游请求的 X-Trace-Id 头，各服务日志 pattern 引用 %X{traceId} 即可显示同一 id。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-132",
+    "source": "docs/平台工程/observability-guide.md",
+    "displayName": "observability-guide.md",
+    "question": "如何在不修改服务代码的情况下启用 OpenTelemetry GenAI 追踪？",
+    "referenceAnswer": "设置环境变量 MANAGEMENT_TRACING_ENABLED=true 和 MANAGEMENT_OTLP_TRACING_ENDPOINT 指向 OTLP HTTP collector，平台自动装配 OtelChatModelListener 和 Tracer。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-133",
+    "source": "docs/平台工程/observability-guide.md",
+    "displayName": "observability-guide.md",
+    "question": "平台中哪三个服务暴露了 tokenbudget 和 cost 端点？",
+    "referenceAnswer": "conversation（:8081）、agent（:8085）、vision（:8090）。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-134",
+    "source": "docs/平台工程/observability-guide.md",
+    "displayName": "observability-guide.md",
+    "question": "为什么边缘网关不参与 traceId 的生成？",
+    "referenceAnswer": "边缘网关是 Spring Cloud Gateway / WebFlux，不运行 servlet-only 的 TraceIdFilter，因此不主动打 traceId，由第一个下游 servlet 服务铸造。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-135",
+    "source": "docs/平台工程/observability-guide.md",
+    "displayName": "observability-guide.md",
+    "question": "新平台中 LLM 调用的耗时和 token 用量信息通过什么机制获取？",
+    "referenceAnswer": "耗时和 token 用量由 OpenTelemetry GenAI span 承载（在 span 属性 gen_ai.client.duration_ms 和 gen_ai.usage.input_tokens/output_tokens 中），token 用量另可通过 /actuator/tokenbudget 快照获取。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-136",
+    "source": "docs/平台工程/observability-guide.md",
+    "displayName": "observability-guide.md",
+    "question": "如何验证 traceId 在跨服务调用中正确传播？",
+    "referenceAnswer": "通过 curl 请求经网关，观察响应头 X-Trace-Id；若自带 X-Trace-Id 请求头，会被复用并回写，下游服务日志中应出现同一 id。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-137",
+    "source": "docs/平台工程/observability-guide.md",
+    "displayName": "observability-guide.md",
+    "question": "平台中哪些服务默认暴露了 prometheus 端点？",
+    "referenceAnswer": "conversation、agent、vision、async-task、channel、interop、eval、voice 声明了 prometheus，但需额外添加 micrometer-registry-prometheus 依赖才能正常返回指标。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-138",
+    "source": "docs/平台工程/observability-guide.md",
+    "displayName": "observability-guide.md",
+    "question": "新平台中 LLM 聚合指标与单体相比有什么变化？",
+    "referenceAnswer": "单体有自研 MetricsChatModelListener 发 gen_ai_client_requests_total 等四个指标，新平台不再有这套计数器，每调用信号移到 OTel span，token 用量由 /actuator/tokenbudget 快照，成本由 gen_ai.client.cost.usd counter 承载。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-139",
+    "source": "docs/平台工程/observability-guide.md",
+    "displayName": "observability-guide.md",
+    "question": "如何通过 Actuator 端点获取各租户的当日 token 用量和成本？",
+    "referenceAnswer": "直连服务端口访问 /actuator/tokenbudget 获取 token 用量/配额快照，访问 /actuator/cost 获取成本 USD 快照，两者均按租户返回。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-140",
+    "source": "docs/平台工程/observability-guide.md",
+    "displayName": "observability-guide.md",
+    "question": "平台中健康检查的 gateway 探测有什么设计取舍？",
+    "referenceAnswer": "GatewayHealthIndicator 对 platform.gateway.base-url 做 TCP 连通性探测，只查网络可达，不发 LLM 请求，不烧 token，1s 内出结果，适合 K8s probe；但不反映模型实际推理能力。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-141",
+    "source": "docs/平台工程/litellm-gateway-guide.md",
+    "displayName": "litellm-gateway-guide.md",
+    "question": "LiteLLM 网关在接入 Postgres 后新增了哪些核心能力？",
+    "referenceAnswer": "spend 记账、管理 UI、per-tenant virtual key、美元预算与 TPM/RPM 硬限流、Redis 响应缓存、正式 fallback、OTel span",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-142",
+    "source": "docs/平台工程/litellm-gateway-guide.md",
+    "displayName": "litellm-gateway-guide.md",
+    "question": "如何通过环境变量启用租户归因的 user 模式？",
+    "referenceAnswer": "设置 PLATFORM_GATEWAY_TENANT_ATTRIBUTION=user 并重启 docker compose",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-143",
+    "source": "docs/平台工程/litellm-gateway-guide.md",
+    "displayName": "litellm-gateway-guide.md",
+    "question": "在 virtual-key 模式下，如果某个租户的 key 缺失，系统会如何处理？",
+    "referenceAnswer": "抛出 TenantVirtualKeyMissingException，绝不回退 master key，属于 fail-closed 行为",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-144",
+    "source": "docs/平台工程/litellm-gateway-guide.md",
+    "displayName": "litellm-gateway-guide.md",
+    "question": "LiteLLM 的响应缓存默认 TTL 是多少秒？",
+    "referenceAnswer": "600 秒",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-145",
+    "source": "docs/平台工程/litellm-gateway-guide.md",
+    "displayName": "litellm-gateway-guide.md",
+    "question": "当主模型 deepseek-chat 故障时，LiteLLM 的 fallback 目标是什么？",
+    "referenceAnswer": "本机 Ollama 的 llama3.1 模型",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-146",
+    "source": "docs/平台工程/litellm-gateway-guide.md",
+    "displayName": "litellm-gateway-guide.md",
+    "question": "为什么 virtual key 的 models 白名单必须同时包含 chat-default 和 chat-default-fallback？",
+    "referenceAnswer": "否则主故障时 fallback 会被授权层拦截，导致降级失败",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-147",
+    "source": "docs/平台工程/litellm-gateway-guide.md",
+    "displayName": "litellm-gateway-guide.md",
+    "question": "LiteLLM 的预算拒绝和 key 缺失在日志特征上有何不同？",
+    "referenceAnswer": "预算拒绝是 OpenAI 兼容 4xx，key 缺失是应用配置错误（fail-closed，不触达 provider）",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-148",
+    "source": "docs/平台工程/litellm-gateway-guide.md",
+    "displayName": "litellm-gateway-guide.md",
+    "question": "如何验证 Redis 响应缓存是否正常工作？",
+    "referenceAnswer": "同一 prompt 连打两次，第二次毫秒级返回；或 curl /cache/ping 检查",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-149",
+    "source": "docs/平台工程/litellm-gateway-guide.md",
+    "displayName": "litellm-gateway-guide.md",
+    "question": "在 virtual-key 模式下，租户的 key 应如何安全注入服务？",
+    "referenceAnswer": "通过 Secret/env 注入，不进 git，也不进 @ConfigurationProperties Map 或日志",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-150",
+    "source": "docs/平台工程/litellm-gateway-guide.md",
+    "displayName": "litellm-gateway-guide.md",
+    "question": "LiteLLM 的 OTel span 默认是否开启？如何启用 Java 侧的追踪？",
+    "referenceAnswer": "LiteLLM 侧常开（callbacks: [\"otel\"]），Java 侧默认关，需设置 MANAGEMENT_TRACING_ENABLED=true",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-151",
+    "source": "docs/平台工程/rbac-and-public-kb.md",
+    "displayName": "rbac-and-public-kb.md",
+    "question": "RBAC 权限体系中，用户的最终有效 scopes 由哪些部分组成？",
+    "referenceAnswer": "有效 scopes = 个人角色展开 ∪ 直配 scopes ∪ 租户基础角色展开 ∪ 用户组角色展开（后两层受 AUTH_RBAC_INHERITANCE_ENABLED 控制）。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-152",
+    "source": "docs/平台工程/rbac-and-public-kb.md",
+    "displayName": "rbac-and-public-kb.md",
+    "question": "在公共知识库中，如何写入一篇对所有租户可见的文档？",
+    "referenceAnswer": "调用 POST /rag/documents 并设置 visibility=public，同时需要拥有 public-ingest scope。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-153",
+    "source": "docs/平台工程/rbac-and-public-kb.md",
+    "displayName": "rbac-and-public-kb.md",
+    "question": "如果管理员修改了某个角色的 scope 列表，已登录用户的权限会立即更新吗？",
+    "referenceAnswer": "不会。已签发的 JWT 中的 scopes 不回溯，用户需要重新登录或刷新令牌才能获得新的 scopes。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-154",
+    "source": "docs/平台工程/rbac-and-public-kb.md",
+    "displayName": "rbac-and-public-kb.md",
+    "question": "当 AUTH_RBAC_ENABLED 为 false 时，用户登录后的权限如何确定？",
+    "referenceAnswer": "登录时只使用直配 scopes，不展开任何角色。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-155",
+    "source": "docs/平台工程/rbac-and-public-kb.md",
+    "displayName": "rbac-and-public-kb.md",
+    "question": "公共知识库的文档存储在哪个分区？普通租户查询时如何看到公共库内容？",
+    "referenceAnswer": "存储在保留租户分区 __public__。查询时，系统在隔离查询自己分区的基础上，并入 __public__ 分区的命中结果。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-156",
+    "source": "docs/平台工程/rbac-and-public-kb.md",
+    "displayName": "rbac-and-public-kb.md",
+    "question": "在 RBAC 继承模式下，给租户绑定基础角色后，该租户下的用户如何获得这些角色对应的权限？",
+    "referenceAnswer": "租户基础角色会通过继承机制，使该租户全体成员自动获得这些角色对应的 scopes（需 AUTH_RBAC_INHERITANCE_ENABLED=true）。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-157",
+    "source": "docs/平台工程/rbac-and-public-kb.md",
+    "displayName": "rbac-and-public-kb.md",
+    "question": "API-key 能否用于执行角色管理操作（如创建用户或修改角色）？",
+    "referenceAnswer": "不能。API-key 不参与角色管理，管理面必须使用登录会话 Bearer 令牌，且需要拥有 role-admin scope。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-158",
+    "source": "docs/平台工程/rbac-and-public-kb.md",
+    "displayName": "rbac-and-public-kb.md",
+    "question": "如果某个用户仅通过租户基础角色获得了 role-admin scope，当管理员修改该租户绑定的角色时，系统如何防止最后一个 role-admin 被移除？",
+    "referenceAnswer": "系统通过 EffectivePermissionResolver 前瞻评估，检查所有来源（包括租户/组）的 role-admin 持有者，若移除后无其他 role-admin 则返回 409。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-159",
+    "source": "docs/平台工程/rbac-and-public-kb.md",
+    "displayName": "rbac-and-public-kb.md",
+    "question": "自助注册时，新用户默认获得什么角色？需要同时开启哪两个开关才能避免创建出无有效 scopes 的账号？",
+    "referenceAnswer": "默认角色为 viewer。需要同时开启 AUTH_RBAC_ENABLED 和 AUTH_REGISTRATION_ENABLED。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-160",
+    "source": "docs/平台工程/rbac-and-public-kb.md",
+    "displayName": "rbac-and-public-kb.md",
+    "question": "当 AUTH_RBAC_ADMIN_WRITES_ENABLED 为 false 时，管理员尝试通过 PUT /auth/admin/users/dave/roles 修改用户角色会得到什么响应？",
+    "referenceAnswer": "会返回 503 状态码，因为写端点在该开关关闭时被禁用。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-161",
+    "source": "docs/平台工程/eventbus-guide.md",
+    "displayName": "eventbus-guide.md",
+    "question": "平台事件总线如何实现跨系统链路的终态可靠投递？",
+    "referenceAnswer": "通过三段机制：写侧事务性outbox（事件行与业务终态同DB事务）、投侧至少一次（relay扫PENDING行同步等broker ack后标DELIVERED）、收侧幂等去重（按eventId先查isProcessed再处理成功后markProcessed），叠加得到effective exactly-once。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-162",
+    "source": "docs/平台工程/eventbus-guide.md",
+    "displayName": "eventbus-guide.md",
+    "question": "为什么平台不直接使用Kafka原生事务来保证事件投递的原子性？",
+    "referenceAnswer": "因为Kafka原生事务只能保证Kafka分区之间及消费-处理-提交offset在Kafka内部的原子性，无法将MySQL业务终态提交和事件进Kafka这两个异构系统的写操作纳入一个原子单元，且Kafka到HTTP的跳转在事务之外，HTTP侧仍可能重复收到。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-163",
+    "source": "docs/平台工程/eventbus-guide.md",
+    "displayName": "eventbus-guide.md",
+    "question": "在消费侧去重中，先标记再处理会导致什么问题？",
+    "referenceAnswer": "先标记再处理在瞬时失败时会丢事件，因为处理失败前已标记为已处理，重投时会被跳过。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-164",
+    "source": "docs/平台工程/eventbus-guide.md",
+    "displayName": "eventbus-guide.md",
+    "question": "KafkaEventPublisher的同步等待ack设计目的是什么？",
+    "referenceAnswer": "供outbox relay确认事件已落broker后再标记DELIVERED，避免异步fire-and-forget把未确认的发送误标为已投递。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-165",
+    "source": "docs/平台工程/eventbus-guide.md",
+    "displayName": "eventbus-guide.md",
+    "question": "平台事件总线默认状态下是否依赖Kafka？",
+    "referenceAnswer": "默认全关、零外部依赖：platform.eventbus.enabled=false时只有NoopEventPublisher和内存去重存储，全链无任何Kafka依赖。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-166",
+    "source": "docs/平台工程/eventbus-guide.md",
+    "displayName": "eventbus-guide.md",
+    "question": "workflow-service中kafka档如何避免与async-task通知双投？",
+    "referenceAnswer": "WorkflowService.onTerminal里useKafkaNotification()为真时不调enqueuePush（不写本地WF_OUTBOX、不走async-task通知），避免与Kafka事件双投。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-167",
+    "source": "docs/平台工程/eventbus-guide.md",
+    "displayName": "eventbus-guide.md",
+    "question": "async-task-service生产Kafka档必须满足哪些条件？",
+    "referenceAnswer": "必须ASYNC_TASK_STORE=jdbc且transport=kafka，因为store=memory时没有事务性outbox无法保证原子性。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-168",
+    "source": "docs/平台工程/eventbus-guide.md",
+    "displayName": "eventbus-guide.md",
+    "question": "channel-service消费侧跨重启去重如何配置？",
+    "referenceAnswer": "设CHANNEL_DEDUP_STORE=jdbc，使platform.eventbus.processed-event-store=jdbc，JdbcProcessedEventStore使用PROCESSED_EVENT表跨重启去重。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-169",
+    "source": "docs/平台工程/eventbus-guide.md",
+    "displayName": "eventbus-guide.md",
+    "question": "端到端启用Kafka档时，如果只设置WORKFLOW_TERMINAL_NOTIFICATION_MODE=kafka而不开platform.eventbus.enabled会怎样？",
+    "referenceAnswer": "relay的EventPublisher仍是NoopEventPublisher，事件会被静默丢弃。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-170",
+    "source": "docs/平台工程/eventbus-guide.md",
+    "displayName": "eventbus-guide.md",
+    "question": "集成测试中如何验证outbox与引擎终态的事务原子性？",
+    "referenceAnswer": "通过WorkflowTerminalOutboxAtomicityTest（@Tag(\"flowable-it\")），使用嵌入式Flowable(H2, setDatabaseType(\"mysql\"))，验证正常结束行存在，后置监听器抛异常时outbox行随历史实例一起回滚。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-171",
+    "source": "docs/互操作渠道/a2a-guide.md",
+    "displayName": "a2a-guide.md",
+    "question": "外部客户端如何通过 A2A 协议调用 langchain4j-platform？",
+    "referenceAnswer": "通过 interop-service（:8088）暴露的发现 + JSON-RPC 互操作面，业务调用一律走 edge-gateway（:8080），用 X-Api-Key 鉴权，网关换发内部 JWT 转发给 interop-service。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-172",
+    "source": "docs/互操作渠道/a2a-guide.md",
+    "displayName": "a2a-guide.md",
+    "question": "A2A Agent Card 的免鉴权端点是什么？",
+    "referenceAnswer": "GET /.well-known/agent-card.json 免鉴权，返回真 A2A Agent Card。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-173",
+    "source": "docs/互操作渠道/a2a-guide.md",
+    "displayName": "a2a-guide.md",
+    "question": "如何获取平台自有的互操作能力清单？",
+    "referenceAnswer": "GET /interop/agent-card 需鉴权（默认 Casdoor Bearer），返回 protocol.interop.AgentCard，包含 MCP surface。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-174",
+    "source": "docs/互操作渠道/a2a-guide.md",
+    "displayName": "a2a-guide.md",
+    "question": "A2A JSON-RPC 单端点支持哪些方法？",
+    "referenceAnswer": "支持 message/send、message/stream、tasks/get、tasks/cancel、tasks/pushNotificationConfig/set、tasks/pushNotificationConfig/get。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-175",
+    "source": "docs/互操作渠道/a2a-guide.md",
+    "displayName": "a2a-guide.md",
+    "question": "message/send 方法中如何指定使用 deep-research 技能？",
+    "referenceAnswer": "在 message.metadata.skill 中设置为 \"deep-research\"，否则默认按 chat 同步处理。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-176",
+    "source": "docs/互操作渠道/a2a-guide.md",
+    "displayName": "a2a-guide.md",
+    "question": "message/stream 方法返回的 SSE 帧中，artifact-update 事件在 chat 和 deep-research 技能下有何不同？",
+    "referenceAnswer": "chat 技能代理 conversation /chat/stream，产生 token 级 artifact 流（逐 token artifact-update）；deep-research 技能代理 agent /agent/tasks/{id}/stream，产生任务级状态流（终态 artifact-update）。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-177",
+    "source": "docs/互操作渠道/a2a-guide.md",
+    "displayName": "a2a-guide.md",
+    "question": "tasks/cancel 方法在任务已终态时返回什么错误？",
+    "referenceAnswer": "返回 -32002 Task is already in a terminal state。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-178",
+    "source": "docs/互操作渠道/a2a-guide.md",
+    "displayName": "a2a-guide.md",
+    "question": "push 通知中，interop 如何保证回调的真实性？",
+    "referenceAnswer": "请求头带 X-A2A-Notification-Token（回传客户端配置的 token），若配置了 INTEROP_A2A_PUSH_HMAC_SECRET 则额外带 X-Webhook-Signature（HMAC-SHA256 hex）。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-179",
+    "source": "docs/互操作渠道/a2a-guide.md",
+    "displayName": "a2a-guide.md",
+    "question": "A2A 任务状态与 agent-service 内部状态如何映射？",
+    "referenceAnswer": "PENDING→submitted，RUNNING→working，SUCCEEDED→completed，FAILED→failed，CANCELLED→canceled，其他→unknown。终态为 SUCCEEDED、FAILED、CANCELLED。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-180",
+    "source": "docs/互操作渠道/a2a-guide.md",
+    "displayName": "a2a-guide.md",
+    "question": "live discovery 影响哪些端点？",
+    "referenceAnswer": "影响 MCP 工具目录（/interop/mcp/tools）和平台自有 agent-card 的 capabilities 列表，不影响 /.well-known/agent-card.json 的硬编码 skills。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-181",
+    "source": "docs/互操作渠道/mcp-guide.md",
+    "displayName": "mcp-guide.md",
+    "question": "平台 agent 作为 MCP client 时，默认是否开启？",
+    "referenceAnswer": "默认关闭，AGENT_MCP_ENABLED 默认值为 false。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-182",
+    "source": "docs/互操作渠道/mcp-guide.md",
+    "displayName": "mcp-guide.md",
+    "question": "如何让 agent 通过子进程方式启动一个本地 MCP server？",
+    "referenceAnswer": "设置 AGENT_MCP_ENABLED=true，AGENT_MCP_TRANSPORT=stdio，AGENT_MCP_STDIO_COMMAND 为启动命令（如 npx,-y,@modelcontextprotocol/server-everything）。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-183",
+    "source": "docs/互操作渠道/mcp-guide.md",
+    "displayName": "mcp-guide.md",
+    "question": "interop-service 暴露的 MCP 风格工具端点中，用于获取单个工具 schema 的路径是什么？",
+    "referenceAnswer": "GET /interop/mcp/tools/{toolName}。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-184",
+    "source": "docs/互操作渠道/mcp-guide.md",
+    "displayName": "mcp-guide.md",
+    "question": "平台 agent 作为 MCP client 时，mcp_call 动作在什么条件下不会出现在 agent 工具清单中？",
+    "referenceAnswer": "当 AGENT_MCP_ENABLED 为 false，或 McpClient bean 未装配时（如 MCP 未开启），mcp_call 动作不会出现。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-185",
+    "source": "docs/互操作渠道/mcp-guide.md",
+    "displayName": "mcp-guide.md",
+    "question": "调用 interop-service 的 /interop/mcp/call 时，如果 tool 字段缺失，会返回什么错误？",
+    "referenceAnswer": "HTTP 400，error 值为 tool is required。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-186",
+    "source": "docs/互操作渠道/mcp-guide.md",
+    "displayName": "mcp-guide.md",
+    "question": "平台 agent 作为 MCP client 时，http 传输方式使用哪个类？",
+    "referenceAnswer": "使用 langchain4j 的 StreamableHttpMcpTransport。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-187",
+    "source": "docs/互操作渠道/mcp-guide.md",
+    "displayName": "mcp-guide.md",
+    "question": "interop-service 暴露的 MCP 工具中，platform.ping 工具的作用是什么？",
+    "referenceAnswer": "返回确定性 pong 响应，用于联通性自检。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-188",
+    "source": "docs/互操作渠道/mcp-guide.md",
+    "displayName": "mcp-guide.md",
+    "question": "如何同时启用 agent 作为 MCP client 并配置 http 传输方式？",
+    "referenceAnswer": "设置 AGENT_MCP_ENABLED=true，AGENT_MCP_TRANSPORT=http，AGENT_MCP_HTTP_URL 为外部 MCP server 的 URL。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-189",
+    "source": "docs/互操作渠道/mcp-guide.md",
+    "displayName": "mcp-guide.md",
+    "question": "interop-service 的工具目录默认如何获取？如果下游 agent-service 不可达会怎样？",
+    "referenceAnswer": "默认通过 live discovery（INTEROP_DISCOVERY_ENABLED=true）从 agent-service 动态发现；下游不可达时确定性回退到静态默认工具目录，不会抛错或阻塞。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-190",
+    "source": "docs/互操作渠道/mcp-guide.md",
+    "displayName": "mcp-guide.md",
+    "question": "调用 platform.agent.run 工具时，必须提供哪个参数？",
+    "referenceAnswer": "必须提供 goal 参数。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-191",
+    "source": "docs/参考/架构文档.md",
+    "displayName": "架构文档.md",
+    "question": "平台对外暴露业务API的唯一入口是什么？",
+    "referenceAnswer": "edge-gateway（:8080）是唯一对外入口，所有业务API统一从edge-gateway进入。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-192",
+    "source": "docs/参考/架构文档.md",
+    "displayName": "架构文档.md",
+    "question": "下游服务信任哪种令牌进行身份验证？",
+    "referenceAnswer": "下游服务只信任内部JWT（X-Internal-Token），不直接信任外部API key。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-193",
+    "source": "docs/参考/架构文档.md",
+    "displayName": "架构文档.md",
+    "question": "所有LLM调用在Java侧通过什么统一网关进行？",
+    "referenceAnswer": "所有LLM调用统一走LiteLLM/OpenAI-compatible网关，Java侧只有唯一一个ChatModel。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-194",
+    "source": "docs/参考/架构文档.md",
+    "displayName": "架构文档.md",
+    "question": "跨服务DTO放在哪个共享库中？",
+    "referenceAnswer": "跨服务DTO放在platform-protocol中。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-195",
+    "source": "docs/参考/架构文档.md",
+    "displayName": "架构文档.md",
+    "question": "edge-gateway中三个签发内部JWT的GlobalFilter按什么顺序执行？",
+    "referenceAnswer": "按order值：CasdoorTokenExchangeFilter（order -120）最早，SessionBearerAuthFilter（order -110）次之，ApiKeyToInternalTokenFilter（order -100）最后。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-196",
+    "source": "docs/参考/架构文档.md",
+    "displayName": "架构文档.md",
+    "question": "平台如何实现跨服务调用时租户身份的传播？",
+    "referenceAnswer": "跨服务调用使用装了拦截器的RestTemplate，OutboundTenantForwarder把当前X-Internal-Token透传到下一跳，下游各自还原进TenantContext。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-197",
+    "source": "docs/参考/架构文档.md",
+    "displayName": "架构文档.md",
+    "question": "auth-service签发哪种令牌？内部JWT由谁签发？",
+    "referenceAnswer": "auth-service只签发会话令牌（accessToken），不签发内部JWT；内部JWT由edge-gateway统一签发。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-198",
+    "source": "docs/参考/架构文档.md",
+    "displayName": "架构文档.md",
+    "question": "平台如何实现审计和计量对业务代码透明？",
+    "referenceAnswer": "所有横切关注点挂在ChatModelListener SPI上，由工厂把Spring上下文里发现的所有ChatModelListener灌进模型，如AuditChatModelListener和CostChatModelListener，业务代码无需改动。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-199",
+    "source": "docs/参考/架构文档.md",
+    "displayName": "架构文档.md",
+    "question": "平台采用什么机制达到effective exactly-once的事件投递？",
+    "referenceAnswer": "采用事务性outbox（业务终态与outbox行在同一DB事务内写入）+ 幂等relay（定时扫描PENDING行投递）+ 消费侧eventId去重（先查isProcessed再处理），达到effective exactly-once。",
+    "generation": "deepseek-generated-source-validated"
+  },
+  {
+    "id": "rag-200",
+    "source": "docs/参考/架构文档.md",
+    "displayName": "架构文档.md",
+    "question": "config-server集中下发什么类型的配置？密钥如何管理？",
+    "referenceAnswer": "config-server集中下发非密文配置；密钥不走config-server，由各服务环境变量、Vault或K8s Secret承载。",
+    "generation": "deepseek-generated-source-validated"
+  }
+]

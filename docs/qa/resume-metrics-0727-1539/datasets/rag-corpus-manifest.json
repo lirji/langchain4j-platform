@@ -1,0 +1,122 @@
+[
+  {
+    "source": "docs/对话与检索/rag-guide.md",
+    "displayName": "rag-guide.md",
+    "bytes": 27869,
+    "sha256": "d69eac9f260858133c057b248099ad85c2e9918a4db68383e07e1fecd409a6ab"
+  },
+  {
+    "source": "docs/对话与检索/向量检索-ann与rrf.md",
+    "displayName": "向量检索-ann与rrf.md",
+    "bytes": 13486,
+    "sha256": "6723af9cb73d6902dbab9f64dcbcd86c684c1a2fc7ce16a8b1db19566e6204d1"
+  },
+  {
+    "source": "docs/对话与检索/es-hybrid-rerank.md",
+    "displayName": "es-hybrid-rerank.md",
+    "bytes": 5926,
+    "sha256": "8be93b9dba2705c232c99f4fc6b4cb0439559c8139c1019fbe54b0f595cf643c"
+  },
+  {
+    "source": "docs/对话与检索/semantic-cache.md",
+    "displayName": "semantic-cache.md",
+    "bytes": 16023,
+    "sha256": "a98ff0e925416b505f98e49d6d60e507b11e668b39b6427163aaaf02653aa34f"
+  },
+  {
+    "source": "docs/对话与检索/nl2sql-guide.md",
+    "displayName": "nl2sql-guide.md",
+    "bytes": 22555,
+    "sha256": "a5e0967ec60f219599375f77ecc66f15c4a401d701842dfd94ae83416e62fc91"
+  },
+  {
+    "source": "docs/对话与检索/知识库文档更新与存储.md",
+    "displayName": "知识库文档更新与存储.md",
+    "bytes": 15559,
+    "sha256": "8a7404e9b9cb13a35a8025ce82a320cf19dca56e409d6d3762a9497048190443"
+  },
+  {
+    "source": "docs/对话与检索/memory-guide.md",
+    "displayName": "memory-guide.md",
+    "bytes": 15909,
+    "sha256": "9fcda1c40322d4a8df3386dda595e1629fe0ab4c9c685122ec391f167fa49d27"
+  },
+  {
+    "source": "docs/对话与检索/model-cascade.md",
+    "displayName": "model-cascade.md",
+    "bytes": 13300,
+    "sha256": "d10564473763fbc706eef75ca1166959b76c3172bdcc5f3bf3b5347218104179"
+  },
+  {
+    "source": "docs/Agent编排/agent-guide.md",
+    "displayName": "agent-guide.md",
+    "bytes": 40385,
+    "sha256": "77f345204a5b184c1dcb9fe728341a1d8daede78bb18e717b5a0eb361bf27a1a"
+  },
+  {
+    "source": "docs/Agent编排/意图识别与Agent执行原理.md",
+    "displayName": "意图识别与Agent执行原理.md",
+    "bytes": 13348,
+    "sha256": "0e002807b4d8f1fcba0cb262fb7c6e7af3b4a714fe6b93c185054f9e1f56ee07"
+  },
+  {
+    "source": "docs/Agent编排/workflow-guide.md",
+    "displayName": "workflow-guide.md",
+    "bytes": 35745,
+    "sha256": "13ae1a3389b8c7e5d25b258556eed5070c03e08c6d2261bd483676c354ffc6cc"
+  },
+  {
+    "source": "docs/Agent编排/让Agent主动调接口.md",
+    "displayName": "让Agent主动调接口.md",
+    "bytes": 19016,
+    "sha256": "002945899a93765654e20866ed62828cc0a68a92bbf11c31a2238fb0516bba7f"
+  },
+  {
+    "source": "docs/平台工程/eval-guide.md",
+    "displayName": "eval-guide.md",
+    "bytes": 26911,
+    "sha256": "2ac31f748cee479d3ea8d083706608ea16f4a78f06574572931022fe566c0094"
+  },
+  {
+    "source": "docs/平台工程/observability-guide.md",
+    "displayName": "observability-guide.md",
+    "bytes": 24826,
+    "sha256": "0006cf6cfbcc6f2a861c5c568f45693b7d86caf0d19a0a3a70807db3afcedea8"
+  },
+  {
+    "source": "docs/平台工程/litellm-gateway-guide.md",
+    "displayName": "litellm-gateway-guide.md",
+    "bytes": 9930,
+    "sha256": "b0de673b0cb47675ce319b40ec02c4b9bf8bf309ed5e6bc6c9ca6ff4aafd3410"
+  },
+  {
+    "source": "docs/平台工程/rbac-and-public-kb.md",
+    "displayName": "rbac-and-public-kb.md",
+    "bytes": 17882,
+    "sha256": "10a1f4ac1666702a9bba1b2dbc098951cc610dfce0f7f56b0839f527d0fd3105"
+  },
+  {
+    "source": "docs/平台工程/eventbus-guide.md",
+    "displayName": "eventbus-guide.md",
+    "bytes": 19129,
+    "sha256": "0fd78f1f5547dbb82f4898a2d79d5fad648f200cfccf3afe54d9346ce673d929"
+  },
+  {
+    "source": "docs/互操作渠道/a2a-guide.md",
+    "displayName": "a2a-guide.md",
+    "bytes": 23928,
+    "sha256": "25cc3c0fa0a58830789f3dd6c27d801d7a59a6d192870e5775a2011d86c29a96"
+  },
+  {
+    "source": "docs/互操作渠道/mcp-guide.md",
+    "displayName": "mcp-guide.md",
+    "bytes": 11512,
+    "sha256": "3bd5c79bdac0af480bcffd9299ed93c572fa89081b1dc8faa4e081f53f6860d5"
+  },
+  {
+    "source": "docs/参考/架构文档.md",
+    "displayName": "架构文档.md",
+    "bytes": 34147,
+    "sha256": "0e01e86f574880a310e1d4423c19682639bc1cbaf3895edb41d04d052224b94b"
+  }
+]

@@ -1,0 +1,4895 @@
+{
+  "benchmark": "rag-rrf-full",
+  "requestedCases": 200,
+  "wallDurationMs": 81957,
+  "cases": 200,
+  "avgRecall": 0.985,
+  "avgPrecision": 0.45800000000000024,
+  "meanMrr": 0.8802281746031746,
+  "hitRate": 0.985,
+  "totalDurationMs": 28686,
+  "results": [
+    {
+      "id": "rag-001",
+      "question": "上传文档时，如果图片多模态功能未开启，系统会如何处理？",
+      "retrievedIds": [
+        "rag-guide.md#28",
+        "rag-guide.md#14",
+        "知识库文档更新与存储.md#0",
+        "es-hybrid-rerank.md#18",
+        "rag-guide.md#90",
+        "rag-guide.md#26",
+        "rag-guide.md#3",
+        "知识库文档更新与存储.md#9",
+        "统一登录平台接入手册.md#83",
+        "退款与退货政策.md#0"
+      ],
+      "relevantIds": [
+        "rag-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 548
+    },
+    {
+      "id": "rag-002",
+      "question": "在混合检索中，当ES参与查询时，默认的融合策略是什么？",
+      "retrievedIds": [
+        "向量检索-ann与rrf.md#29",
+        "rag-guide.md#7",
+        "rag-guide.md#55",
+        "es-hybrid-rerank.md#15",
+        "es-hybrid-rerank.md#0",
+        "架构文档.md#9",
+        "es-hybrid-rerank.md#4",
+        "平台公共公告-统一维护窗口#0",
+        "统一登录平台接入手册.md#7",
+        "es-hybrid-rerank.md#2"
+      ],
+      "relevantIds": [
+        "rag-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 322
+    },
+    {
+      "id": "rag-003",
+      "question": "如何配置才能使图片多模态嵌入功能生效？",
+      "retrievedIds": [
+        "rag-guide.md#14",
+        "rag-guide.md#25",
+        "架构文档.md#125",
+        "rag-guide.md#90",
+        "rag-guide.md#26",
+        "知识库文档更新与存储.md#0",
+        "eventbus-guide.md#50",
+        "observability-guide.md#11",
+        "memory-guide.md#21",
+        "架构文档.md#102"
+      ],
+      "relevantIds": [
+        "rag-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 193
+    },
+    {
+      "id": "rag-004",
+      "question": "文档上传时，如果标题相同，系统会如何处理？",
+      "retrievedIds": [
+        "rag-guide.md#15",
+        "知识库文档更新与存储.md#1",
+        "rag-guide.md#16",
+        "知识库文档更新与存储.md#9",
+        "rag-guide.md#28",
+        "知识库文档更新与存储.md#8",
+        "统一登录平台接入手册.md#83",
+        "数据库与中间件清单.md#51",
+        "退款与退货政策.md#0",
+        "统一登录平台接入手册.md#68"
+      ],
+      "relevantIds": [
+        "rag-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 158
+    },
+    {
+      "id": "rag-005",
+      "question": "在enforce授权模式下，上传文档时如果无法确定归属部门，会发生什么？",
+      "retrievedIds": [
+        "rag-guide.md#16",
+        "rbac-and-public-kb.md#26",
+        "知识库文档更新与存储.md#9",
+        "rag-guide.md#10",
+        "知识库文档更新与存储.md#31",
+        "架构文档.md#103",
+        "rag-guide.md#12",
+        "rag-guide.md#6",
+        "rag-guide.md#17",
+        "退款与退货政策.md#0"
+      ],
+      "relevantIds": [
+        "rag-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 189
+    },
+    {
+      "id": "rag-006",
+      "question": "GraphRAG的图存储默认使用什么后端？如何切换为进程内模式？",
+      "retrievedIds": [
+        "知识库文档更新与存储.md#26",
+        "rag-guide.md#71",
+        "rag-guide.md#70",
+        "rag-guide.md#99",
+        "rag-guide.md#92",
+        "知识库文档更新与存储.md#27",
+        "知识库文档更新与存储.md#24",
+        "知识库文档更新与存储.md#28",
+        "统一登录平台接入手册.md#9",
+        "es-hybrid-rerank.md#16"
+      ],
+      "relevantIds": [
+        "rag-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 157
+    },
+    {
+      "id": "rag-007",
+      "question": "L1语义缓存在什么位置？它如何影响请求处理流程？",
+      "retrievedIds": [
+        "rag-guide.md#82",
+        "架构文档.md#73",
+        "semantic-cache.md#2",
+        "semantic-cache.md#33",
+        "rag-guide.md#87",
+        "知识库文档更新与存储.md#17",
+        "数据库与中间件清单.md#32",
+        "统一登录平台接入手册.md#4",
+        "统一登录平台接入手册.md#39",
+        "eventbus-guide.md#28"
+      ],
+      "relevantIds": [
+        "rag-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 158
+    },
+    {
+      "id": "rag-008",
+      "question": "切换embedding provider后，为什么需要重建向量库collection？",
+      "retrievedIds": [
+        "rag-guide.md#41",
+        "知识库文档更新与存储.md#22",
+        "rag-guide.md#48",
+        "向量检索-ann与rrf.md#38",
+        "知识库文档更新与存储.md#26",
+        "向量检索-ann与rrf.md#23",
+        "eval-guide.md#86",
+        "数据库与中间件清单.md#35",
+        "数据库与中间件清单.md#37",
+        "数据库与中间件清单.md#29"
+      ],
+      "relevantIds": [
+        "rag-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 169
+    },
+    {
+      "id": "rag-009",
+      "question": "在enforce授权模式下，文档级授权过滤如何处理无docId命中的候选（如GraphRAG三元组）？",
+      "retrievedIds": [
+        "rag-guide.md#6",
+        "rag-guide.md#56",
+        "架构文档.md#107",
+        "架构文档.md#103",
+        "rag-guide.md#93",
+        "rag-guide.md#16",
+        "rag-guide.md#67",
+        "rag-guide.md#8",
+        "架构文档.md#11",
+        "知识库文档更新与存储.md#24"
+      ],
+      "relevantIds": [
+        "rag-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 150
+    },
+    {
+      "id": "rag-010",
+      "question": "rerank和query expansion两个增强功能分别作用于检索流程的哪个阶段？",
+      "retrievedIds": [
+        "rag-guide.md#66",
+        "rag-guide.md#65",
+        "eval-guide.md#40",
+        "eval-guide.md#7",
+        "eval-guide.md#13",
+        "向量检索-ann与rrf.md#33",
+        "rag-guide.md#62",
+        "eval-guide.md#75",
+        "向量检索-ann与rrf.md#38",
+        "es-hybrid-rerank.md#0"
+      ],
+      "relevantIds": [
+        "rag-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 201
+    },
+    {
+      "id": "rag-011",
+      "question": "平台支持的6个向量库中，哪个库默认使用精确暴力搜索而非近似最近邻？",
+      "retrievedIds": [
+        "向量检索-ann与rrf.md#0",
+        "向量检索-ann与rrf.md#8",
+        "向量检索-ann与rrf.md#4",
+        "向量检索-ann与rrf.md#20",
+        "向量检索-ann与rrf.md#29",
+        "向量检索-ann与rrf.md#5",
+        "向量检索-ann与rrf.md#10",
+        "rag-guide.md#34",
+        "向量检索-ann与rrf.md#14",
+        "统一登录平台接入手册.md#7"
+      ],
+      "relevantIds": [
+        "向量检索-ann与rrf.md"
+      ],
+      "recall": 1,
+      "precision": 0.8,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 190
+    },
+    {
+      "id": "rag-012",
+      "question": "RRF融合策略中，平滑常数k的默认值是多少？增大k值对排名结果有什么影响？",
+      "retrievedIds": [
+        "向量检索-ann与rrf.md#29",
+        "向量检索-ann与rrf.md#25",
+        "es-hybrid-rerank.md#4",
+        "rag-guide.md#55",
+        "向量检索-ann与rrf.md#0",
+        "向量检索-ann与rrf.md#35",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#7",
+        "统一登录平台接入手册.md#59",
+        "统一登录平台接入手册.md#4"
+      ],
+      "relevantIds": [
+        "向量检索-ann与rrf.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 145
+    },
+    {
+      "id": "rag-013",
+      "question": "在pgvector向量库中，如果希望使用库内向量与全文检索的混合排序，需要设置什么参数？",
+      "retrievedIds": [
+        "向量检索-ann与rrf.md#19",
+        "向量检索-ann与rrf.md#30",
+        "rag-guide.md#52",
+        "向量检索-ann与rrf.md#0",
+        "rag-guide.md#34",
+        "向量检索-ann与rrf.md#31",
+        "es-hybrid-rerank.md#0",
+        "workflow-guide.md#98",
+        "统一登录平台接入手册.md#4",
+        "rag-guide.md#37"
+      ],
+      "relevantIds": [
+        "向量检索-ann与rrf.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 173
+    },
+    {
+      "id": "rag-014",
+      "question": "平台中哪两个向量库默认使用HNSW索引？",
+      "retrievedIds": [
+        "向量检索-ann与rrf.md#29",
+        "向量检索-ann与rrf.md#0",
+        "rag-guide.md#34",
+        "向量检索-ann与rrf.md#36",
+        "向量检索-ann与rrf.md#18",
+        "向量检索-ann与rrf.md#11",
+        "向量检索-ann与rrf.md#8",
+        "向量检索-ann与rrf.md#15",
+        "平台公共公告-统一维护窗口#0",
+        "统一登录平台接入手册.md#1"
+      ],
+      "relevantIds": [
+        "向量检索-ann与rrf.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 141
+    },
+    {
+      "id": "rag-015",
+      "question": "为什么RRF分数不能作为相关度阈值使用？",
+      "retrievedIds": [
+        "向量检索-ann与rrf.md#27",
+        "向量检索-ann与rrf.md#33",
+        "rag-guide.md#52",
+        "向量检索-ann与rrf.md#28",
+        "向量检索-ann与rrf.md#29",
+        "model-cascade.md#11",
+        "rag-guide.md#34",
+        "es-hybrid-rerank.md#5",
+        "eval-guide.md#43",
+        "统一登录平台接入手册.md#67"
+      ],
+      "relevantIds": [
+        "向量检索-ann与rrf.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 143
+    },
+    {
+      "id": "rag-016",
+      "question": "切换向量库provider时，需要重新执行什么操作才能使用数据？",
+      "retrievedIds": [
+        "向量检索-ann与rrf.md#38",
+        "数据库与中间件清单.md#35",
+        "向量检索-ann与rrf.md#19",
+        "semantic-cache.md#20",
+        "知识库文档更新与存储.md#26",
+        "向量检索-ann与rrf.md#9",
+        "架构文档.md#12",
+        "向量检索-ann与rrf.md#1",
+        "向量检索-ann与rrf.md#22",
+        "litellm-gateway-guide.md#1"
+      ],
+      "relevantIds": [
+        "向量检索-ann与rrf.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 165
+    },
+    {
+      "id": "rag-017",
+      "question": "在跨源RRF融合中，如果ES不参与查询，默认使用什么融合策略？",
+      "retrievedIds": [
+        "向量检索-ann与rrf.md#29",
+        "rag-guide.md#55",
+        "es-hybrid-rerank.md#4",
+        "rag-guide.md#7",
+        "es-hybrid-rerank.md#15",
+        "架构文档.md#9",
+        "向量检索-ann与rrf.md#31",
+        "向量检索-ann与rrf.md#32",
+        "es-hybrid-rerank.md#0",
+        "数据库与中间件清单.md#32"
+      ],
+      "relevantIds": [
+        "向量检索-ann与rrf.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 167
+    },
+    {
+      "id": "rag-018",
+      "question": "HNSW索引中，哪个参数是唯一可以在查询时调整召回率与延迟的旋钮？",
+      "retrievedIds": [
+        "向量检索-ann与rrf.md#3",
+        "向量检索-ann与rrf.md#6",
+        "向量检索-ann与rrf.md#21",
+        "eval-guide.md#15",
+        "统一登录平台接入手册.md#1",
+        "退款与退货政策.md#0",
+        "统一登录平台接入手册.md#59",
+        "数据库与中间件清单.md#8",
+        "统一登录平台接入手册.md#4",
+        "向量检索-ann与rrf.md#27"
+      ],
+      "relevantIds": [
+        "向量检索-ann与rrf.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 202
+    },
+    {
+      "id": "rag-019",
+      "question": "平台中哪两个向量库支持shared隔离模式？",
+      "retrievedIds": [
+        "向量检索-ann与rrf.md#8",
+        "向量检索-ann与rrf.md#0",
+        "向量检索-ann与rrf.md#23",
+        "向量检索-ann与rrf.md#19",
+        "平台公共公告-统一维护窗口#0",
+        "数据库与中间件清单.md#48",
+        "向量检索-ann与rrf.md#9",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#7",
+        "向量检索-ann与rrf.md#30"
+      ],
+      "relevantIds": [
+        "向量检索-ann与rrf.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 141
+    },
+    {
+      "id": "rag-020",
+      "question": "如果希望看到原始相关分而非RRF名次分，可以采取哪两种方法？",
+      "retrievedIds": [
+        "向量检索-ann与rrf.md#27",
+        "向量检索-ann与rrf.md#34",
+        "向量检索-ann与rrf.md#25",
+        "rag-guide.md#52",
+        "向量检索-ann与rrf.md#33",
+        "向量检索-ann与rrf.md#24",
+        "统一登录平台接入手册.md#68",
+        "memory-guide.md#40",
+        "统一登录平台接入手册.md#66",
+        "eventbus-guide.md#4"
+      ],
+      "relevantIds": [
+        "向量检索-ann与rrf.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 131
+    },
+    {
+      "id": "rag-021",
+      "question": "当Elasticsearch服务不可达时，系统会如何处理查询请求？",
+      "retrievedIds": [
+        "es-hybrid-rerank.md#16",
+        "eventbus-guide.md#8",
+        "es-hybrid-rerank.md#0",
+        "架构文档.md#9",
+        "数据库与中间件清单.md#32",
+        "架构文档.md#71",
+        "semantic-cache.md#14",
+        "退款与退货政策.md#0",
+        "统一登录平台接入手册.md#68",
+        "统一登录平台接入手册.md#55"
+      ],
+      "relevantIds": [
+        "es-hybrid-rerank.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 162
+    },
+    {
+      "id": "rag-022",
+      "question": "在ES开启的情况下，系统默认使用哪种融合策略？为什么？",
+      "retrievedIds": [
+        "es-hybrid-rerank.md#2",
+        "es-hybrid-rerank.md#4",
+        "向量检索-ann与rrf.md#29",
+        "rag-guide.md#91",
+        "rag-guide.md#55",
+        "es-hybrid-rerank.md#0",
+        "架构文档.md#9",
+        "退款与退货政策.md#1",
+        "退款与退货政策.md#0",
+        "agent-guide.md#26"
+      ],
+      "relevantIds": [
+        "es-hybrid-rerank.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 145
+    },
+    {
+      "id": "rag-023",
+      "question": "如何配置使得系统只写入ES但不进行ES查询？",
+      "retrievedIds": [
+        "es-hybrid-rerank.md#15",
+        "es-hybrid-rerank.md#5",
+        "rag-guide.md#61",
+        "rag-guide.md#62",
+        "数据库与中间件清单.md#32",
+        "退款与退货政策.md#0",
+        "统一登录平台接入手册.md#83",
+        "让Agent主动调接口.md#7",
+        "向量检索-ann与rrf.md#38",
+        "eventbus-guide.md#5"
+      ],
+      "relevantIds": [
+        "es-hybrid-rerank.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 129
+    },
+    {
+      "id": "rag-024",
+      "question": "如果我想关闭ES混排功能，应该设置哪个环境变量？",
+      "retrievedIds": [
+        "es-hybrid-rerank.md#0",
+        "rag-guide.md#61",
+        "rag-guide.md#91",
+        "rag-guide.md#2",
+        "es-hybrid-rerank.md#9",
+        "向量检索-ann与rrf.md#38",
+        "向量检索-ann与rrf.md#35",
+        "memory-guide.md#18",
+        "数据库与中间件清单.md#30",
+        "memory-guide.md#35"
+      ],
+      "relevantIds": [
+        "es-hybrid-rerank.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 173
+    },
+    {
+      "id": "rag-025",
+      "question": "在weighted_max策略下，BM25分数是如何与向量分数对齐的？",
+      "retrievedIds": [
+        "es-hybrid-rerank.md#5",
+        "rag-guide.md#59",
+        "向量检索-ann与rrf.md#31",
+        "rag-guide.md#55",
+        "向量检索-ann与rrf.md#24",
+        "rag-guide.md#53",
+        "向量检索-ann与rrf.md#32",
+        "rag-guide.md#54",
+        "es-hybrid-rerank.md#4",
+        "es-hybrid-rerank.md#7"
+      ],
+      "relevantIds": [
+        "es-hybrid-rerank.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 139
+    },
+    {
+      "id": "rag-026",
+      "question": "开启ES后，历史数据需要如何处理才能被ES检索到？",
+      "retrievedIds": [
+        "es-hybrid-rerank.md#18",
+        "知识库文档更新与存储.md#28",
+        "es-hybrid-rerank.md#0",
+        "rag-guide.md#61",
+        "知识库文档更新与存储.md#35",
+        "架构文档.md#9",
+        "workflow-guide.md#44",
+        "workflow-guide.md#126",
+        "es-hybrid-rerank.md#11",
+        "意图识别与Agent执行原理.md#20"
+      ],
+      "relevantIds": [
+        "es-hybrid-rerank.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 155
+    },
+    {
+      "id": "rag-027",
+      "question": "系统在ES写入失败时的默认行为是什么？如何改为严格模式？",
+      "retrievedIds": [
+        "知识库文档更新与存储.md#36",
+        "知识库文档更新与存储.md#37",
+        "统一登录平台接入手册.md#4",
+        "统一登录平台接入手册.md#15",
+        "让Agent主动调接口.md#7",
+        "agent-guide.md#44",
+        "rag-guide.md#16",
+        "意图识别与Agent执行原理.md#17",
+        "知识库文档更新与存储.md#35",
+        "向量检索-ann与rrf.md#9"
+      ],
+      "relevantIds": [
+        "es-hybrid-rerank.md"
+      ],
+      "recall": 0,
+      "precision": 0,
+      "mrr": 0,
+      "hit": false,
+      "durationMs": 144
+    },
+    {
+      "id": "rag-028",
+      "question": "ES索引的默认名称和中文分析器分别是什么？",
+      "retrievedIds": [
+        "rag-guide.md#54",
+        "知识库文档更新与存储.md#29",
+        "rag-guide.md#61",
+        "es-hybrid-rerank.md#9",
+        "es-hybrid-rerank.md#7",
+        "架构文档.md#9",
+        "rag-guide.md#91",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#4",
+        "知识库文档更新与存储.md#28"
+      ],
+      "relevantIds": [
+        "es-hybrid-rerank.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 0.25,
+      "hit": true,
+      "durationMs": 148
+    },
+    {
+      "id": "rag-029",
+      "question": "在灰度阶段，如何先验证ES写入再开启查询，且融合策略保持为weighted_max？",
+      "retrievedIds": [
+        "es-hybrid-rerank.md#15",
+        "es-hybrid-rerank.md#4",
+        "es-hybrid-rerank.md#5",
+        "向量检索-ann与rrf.md#31",
+        "rag-guide.md#55",
+        "es-hybrid-rerank.md#17",
+        "rag-guide.md#59",
+        "rbac-and-public-kb.md#15",
+        "es-hybrid-rerank.md#0",
+        "向量检索-ann与rrf.md#34"
+      ],
+      "relevantIds": [
+        "es-hybrid-rerank.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 152
+    },
+    {
+      "id": "rag-030",
+      "question": "当RAG_FUSION_STRATEGY留空时，系统如何决定使用哪种融合策略？",
+      "retrievedIds": [
+        "rag-guide.md#55",
+        "rag-guide.md#69",
+        "向量检索-ann与rrf.md#29",
+        "rag-guide.md#91",
+        "rag-guide.md#59",
+        "向量检索-ann与rrf.md#35",
+        "es-hybrid-rerank.md#5",
+        "数据库与中间件清单.md#20",
+        "memory-guide.md#42",
+        "es-hybrid-rerank.md#16"
+      ],
+      "relevantIds": [
+        "es-hybrid-rerank.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 0.14285714285714285,
+      "hit": true,
+      "durationMs": 163
+    },
+    {
+      "id": "rag-031",
+      "question": "语义响应缓存位于对话流程的哪个阶段？",
+      "retrievedIds": [
+        "rag-guide.md#82",
+        "semantic-cache.md#0",
+        "架构文档.md#73",
+        "semantic-cache.md#2",
+        "semantic-cache.md#3",
+        "rag-guide.md#87",
+        "rag-guide.md#95",
+        "统一登录平台接入手册.md#59",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#67"
+      ],
+      "relevantIds": [
+        "semantic-cache.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 159
+    },
+    {
+      "id": "rag-032",
+      "question": "当语义缓存命中时，调用方在返回体中能否看到缓存标志？",
+      "retrievedIds": [
+        "semantic-cache.md#4",
+        "semantic-cache.md#27",
+        "rag-guide.md#82",
+        "semantic-cache.md#0",
+        "semantic-cache.md#9",
+        "semantic-cache.md#24",
+        "semantic-cache.md#3",
+        "semantic-cache.md#6",
+        "semantic-cache.md#34",
+        "统一登录平台接入手册.md#7"
+      ],
+      "relevantIds": [
+        "semantic-cache.md"
+      ],
+      "recall": 1,
+      "precision": 0.8,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 189
+    },
+    {
+      "id": "rag-033",
+      "question": "语义缓存如何实现租户隔离？",
+      "retrievedIds": [
+        "rag-guide.md#86",
+        "semantic-cache.md#10",
+        "rag-guide.md#82",
+        "rag-guide.md#34",
+        "semantic-cache.md#0",
+        "semantic-cache.md#38",
+        "统一登录平台接入手册.md#45",
+        "数据库与中间件清单.md#32",
+        "eventbus-guide.md#28",
+        "workflow-guide.md#10"
+      ],
+      "relevantIds": [
+        "semantic-cache.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 150
+    },
+    {
+      "id": "rag-034",
+      "question": "默认的 embedding provider 是什么？它能否真正识别同义改写？",
+      "retrievedIds": [
+        "semantic-cache.md#34",
+        "semantic-cache.md#19",
+        "eval-guide.md#3",
+        "向量检索-ann与rrf.md#9",
+        "semantic-cache.md#16",
+        "rag-guide.md#45",
+        "架构文档.md#125",
+        "rag-guide.md#2",
+        "rag-guide.md#0",
+        "数据库与中间件清单.md#8"
+      ],
+      "relevantIds": [
+        "semantic-cache.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 144
+    },
+    {
+      "id": "rag-035",
+      "question": "如果我想让语义缓存真正识别同义改写（如“怎么退款”和“退款流程是啥”），需要做什么配置？",
+      "retrievedIds": [
+        "semantic-cache.md#19",
+        "semantic-cache.md#3",
+        "workflow-guide.md#1",
+        "semantic-cache.md#33",
+        "semantic-cache.md#34",
+        "数据库与中间件清单.md#8",
+        "数据库与中间件清单.md#51",
+        "退款与退货政策.md#0",
+        "nl2sql-guide.md#8",
+        "rag-guide.md#15"
+      ],
+      "relevantIds": [
+        "semantic-cache.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 198
+    },
+    {
+      "id": "rag-036",
+      "question": "缓存命中时，是否还会执行 RAG 检索和 LLM 生成？",
+      "retrievedIds": [
+        "semantic-cache.md#5",
+        "rag-guide.md#82",
+        "semantic-cache.md#0",
+        "rag-guide.md#86",
+        "semantic-cache.md#8",
+        "semantic-cache.md#24",
+        "数据库与中间件清单.md#51",
+        "平台公共公告-统一维护窗口#0",
+        "agent-guide.md#44",
+        "eventbus-guide.md#8"
+      ],
+      "relevantIds": [
+        "semantic-cache.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 148
+    },
+    {
+      "id": "rag-037",
+      "question": "当缓存关闭时，/chat 的行为会有什么变化？",
+      "retrievedIds": [
+        "semantic-cache.md#24",
+        "rag-guide.md#82",
+        "semantic-cache.md#1",
+        "semantic-cache.md#14",
+        "memory-guide.md#20",
+        "rag-guide.md#16",
+        "统一登录平台接入手册.md#83",
+        "统一登录平台接入手册.md#4",
+        "意图识别与Agent执行原理.md#0",
+        "memory-guide.md#7"
+      ],
+      "relevantIds": [
+        "semantic-cache.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 137
+    },
+    {
+      "id": "rag-038",
+      "question": "Redis 存储后端和内存存储后端在容量控制上有什么不同？",
+      "retrievedIds": [
+        "semantic-cache.md#10",
+        "知识库文档更新与存储.md#23",
+        "知识库文档更新与存储.md#28",
+        "semantic-cache.md#23",
+        "rag-guide.md#15",
+        "架构文档.md#127",
+        "知识库文档更新与存储.md#11",
+        "memory-guide.md#15",
+        "workflow-guide.md#43",
+        "semantic-cache.md#2"
+      ],
+      "relevantIds": [
+        "semantic-cache.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 135
+    },
+    {
+      "id": "rag-039",
+      "question": "如何定向失效某个特定原始问题的缓存？",
+      "retrievedIds": [
+        "rag-guide.md#86",
+        "semantic-cache.md#36",
+        "semantic-cache.md#7",
+        "rag-guide.md#82",
+        "semantic-cache.md#2",
+        "semantic-cache.md#9",
+        "semantic-cache.md#43",
+        "rag-guide.md#15",
+        "退款与退货政策.md#1",
+        "统一登录平台接入手册.md#39"
+      ],
+      "relevantIds": [
+        "semantic-cache.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 150
+    },
+    {
+      "id": "rag-040",
+      "question": "知识库更新后，缓存如何自动失效？",
+      "retrievedIds": [
+        "rag-guide.md#86",
+        "semantic-cache.md#34",
+        "semantic-cache.md#37",
+        "rag-guide.md#15",
+        "semantic-cache.md#36",
+        "知识库文档更新与存储.md#0",
+        "semantic-cache.md#48",
+        "semantic-cache.md#22",
+        "数据库与中间件清单.md#51",
+        "统一登录平台接入手册.md#39"
+      ],
+      "relevantIds": [
+        "semantic-cache.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 131
+    },
+    {
+      "id": "rag-041",
+      "question": "如何通过边缘网关调用 NL2SQL 服务？",
+      "retrievedIds": [
+        "nl2sql-guide.md#1",
+        "nl2sql-guide.md#19",
+        "统一登录平台接入手册.md#9",
+        "数据库与中间件清单.md#32",
+        "eventbus-guide.md#28",
+        "rag-guide.md#4",
+        "workflow-guide.md#10",
+        "nl2sql-guide.md#17",
+        "让Agent主动调接口.md#48",
+        "nl2sql-guide.md#55"
+      ],
+      "relevantIds": [
+        "nl2sql-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 141
+    },
+    {
+      "id": "rag-042",
+      "question": "关闭 NL2SQL 功能后，analytics-service 还能正常启动吗？",
+      "retrievedIds": [
+        "nl2sql-guide.md#1",
+        "nl2sql-guide.md#18",
+        "agent-guide.md#100",
+        "nl2sql-guide.md#55",
+        "agent-guide.md#16",
+        "数据库与中间件清单.md#17",
+        "让Agent主动调接口.md#44",
+        "eventbus-guide.md#29",
+        "数据库与中间件清单.md#13",
+        "数据库与中间件清单.md#26"
+      ],
+      "relevantIds": [
+        "nl2sql-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 132
+    },
+    {
+      "id": "rag-043",
+      "question": "NL2SQL 链路中，SQL 安全护栏的 L4 层具体做什么？",
+      "retrievedIds": [
+        "nl2sql-guide.md#8",
+        "nl2sql-guide.md#27",
+        "nl2sql-guide.md#3",
+        "nl2sql-guide.md#9",
+        "nl2sql-guide.md#53",
+        "统一登录平台接入手册.md#4",
+        "统一登录平台接入手册.md#7",
+        "统一登录平台接入手册.md#1",
+        "向量检索-ann与rrf.md#27",
+        "nl2sql-guide.md#67"
+      ],
+      "relevantIds": [
+        "nl2sql-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 146
+    },
+    {
+      "id": "rag-044",
+      "question": "使用 dev-key-acme 调用 NL2SQL 查询退款数据会得到什么结果？",
+      "retrievedIds": [
+        "nl2sql-guide.md#19",
+        "nl2sql-guide.md#46",
+        "nl2sql-guide.md#3",
+        "数据库与中间件清单.md#44",
+        "数据库与中间件清单.md#43",
+        "数据库与中间件清单.md#47",
+        "workflow-guide.md#4",
+        "让Agent主动调接口.md#8",
+        "workflow-guide.md#35",
+        "observability-guide.md#4"
+      ],
+      "relevantIds": [
+        "nl2sql-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 132
+    },
+    {
+      "id": "rag-045",
+      "question": "NL2SQL 的 SQL 安全护栏中，哪一层负责防止跨租户数据泄露？",
+      "retrievedIds": [
+        "nl2sql-guide.md#8",
+        "nl2sql-guide.md#31",
+        "nl2sql-guide.md#27",
+        "rbac-and-public-kb.md#6",
+        "nl2sql-guide.md#19",
+        "意图识别与Agent执行原理.md#21",
+        "workflow-guide.md#43",
+        "nl2sql-guide.md#9",
+        "数据库与中间件清单.md#13",
+        "a2a-guide.md#57"
+      ],
+      "relevantIds": [
+        "nl2sql-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 143
+    },
+    {
+      "id": "rag-046",
+      "question": "NL2SQL 链路中，数字 grounding 在什么情况下会触发警告？",
+      "retrievedIds": [
+        "nl2sql-guide.md#37",
+        "nl2sql-guide.md#36",
+        "nl2sql-guide.md#3",
+        "nl2sql-guide.md#69",
+        "nl2sql-guide.md#6",
+        "nl2sql-guide.md#15",
+        "退款与退货政策.md#0",
+        "eval-guide.md#12",
+        "eval-guide.md#9",
+        "semantic-cache.md#5"
+      ],
+      "relevantIds": [
+        "nl2sql-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 132
+    },
+    {
+      "id": "rag-047",
+      "question": "NL2SQL 的自修环机制如何防止无限重试？",
+      "retrievedIds": [
+        "nl2sql-guide.md#7",
+        "nl2sql-guide.md#69",
+        "nl2sql-guide.md#35",
+        "nl2sql-guide.md#13",
+        "让Agent主动调接口.md#62",
+        "意图识别与Agent执行原理.md#21",
+        "a2a-guide.md#57",
+        "让Agent主动调接口.md#1",
+        "agent-guide.md#44",
+        "数据库与中间件清单.md#17"
+      ],
+      "relevantIds": [
+        "nl2sql-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 131
+    },
+    {
+      "id": "rag-048",
+      "question": "NL2SQL 的 SchemaProvider 如何获取表结构信息？",
+      "retrievedIds": [
+        "nl2sql-guide.md#8",
+        "nl2sql-guide.md#67",
+        "nl2sql-guide.md#51",
+        "nl2sql-guide.md#68",
+        "nl2sql-guide.md#41",
+        "统一登录平台接入手册.md#4",
+        "统一登录平台接入手册.md#11",
+        "数据库与中间件清单.md#10",
+        "架构文档.md#127",
+        "向量检索-ann与rrf.md#27"
+      ],
+      "relevantIds": [
+        "nl2sql-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 145
+    },
+    {
+      "id": "rag-049",
+      "question": "NL2SQL 链路中，SQL 安全护栏的 L2 层如何防止注释绕过？",
+      "retrievedIds": [
+        "nl2sql-guide.md#8",
+        "nl2sql-guide.md#27",
+        "nl2sql-guide.md#48",
+        "nl2sql-guide.md#53",
+        "统一登录平台接入手册.md#65",
+        "意图识别与Agent执行原理.md#21",
+        "nl2sql-guide.md#28",
+        "a2a-guide.md#57",
+        "nl2sql-guide.md#9",
+        "nl2sql-guide.md#67"
+      ],
+      "relevantIds": [
+        "nl2sql-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 139
+    },
+    {
+      "id": "rag-050",
+      "question": "NL2SQL 的 SQL 安全护栏中，L1 和 L5 层分别由什么机制实现？",
+      "retrievedIds": [
+        "nl2sql-guide.md#28",
+        "nl2sql-guide.md#27",
+        "nl2sql-guide.md#8",
+        "nl2sql-guide.md#53",
+        "nl2sql-guide.md#34",
+        "统一登录平台接入手册.md#7",
+        "统一登录平台接入手册.md#4",
+        "统一登录平台接入手册.md#65",
+        "向量检索-ann与rrf.md#27",
+        "nl2sql-guide.md#9"
+      ],
+      "relevantIds": [
+        "nl2sql-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 132
+    },
+    {
+      "id": "rag-051",
+      "question": "知识库文档更新时，系统如何确定文档的唯一身份？",
+      "retrievedIds": [
+        "rag-guide.md#15",
+        "知识库文档更新与存储.md#0",
+        "知识库文档更新与存储.md#1",
+        "rag-guide.md#16",
+        "知识库文档更新与存储.md#2",
+        "知识库文档更新与存储.md#35",
+        "知识库文档更新与存储.md#8",
+        "数据库与中间件清单.md#51",
+        "统一登录平台接入手册.md#98",
+        "全租户公告#0"
+      ],
+      "relevantIds": [
+        "知识库文档更新与存储.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 142
+    },
+    {
+      "id": "rag-052",
+      "question": "重新上传同名文件时，文档的哪些属性会保持不变？",
+      "retrievedIds": [
+        "rag-guide.md#15",
+        "知识库文档更新与存储.md#9",
+        "知识库文档更新与存储.md#31",
+        "rag-guide.md#16",
+        "知识库文档更新与存储.md#11",
+        "知识库文档更新与存储.md#28",
+        "知识库文档更新与存储.md#12",
+        "知识库文档更新与存储.md#8",
+        "知识库文档更新与存储.md#6",
+        "退款与退货政策.md#1"
+      ],
+      "relevantIds": [
+        "知识库文档更新与存储.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 144
+    },
+    {
+      "id": "rag-053",
+      "question": "通过 JSON 方式更新文档时，如果 category 参数不传或传空，会有什么影响？",
+      "retrievedIds": [
+        "知识库文档更新与存储.md#12",
+        "知识库文档更新与存储.md#6",
+        "rag-guide.md#16",
+        "知识库文档更新与存储.md#9",
+        "知识库文档更新与存储.md#8",
+        "知识库文档更新与存储.md#1",
+        "知识库文档更新与存储.md#31",
+        "统一登录平台接入手册.md#68",
+        "退款与退货政策.md#1",
+        "memory-guide.md#42"
+      ],
+      "relevantIds": [
+        "知识库文档更新与存储.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 172
+    },
+    {
+      "id": "rag-054",
+      "question": "文档更新过程中，旧版本数据清理失败会带来什么后果？",
+      "retrievedIds": [
+        "知识库文档更新与存储.md#35",
+        "知识库文档更新与存储.md#36",
+        "知识库文档更新与存储.md#19",
+        "知识库文档更新与存储.md#0",
+        "知识库文档更新与存储.md#2",
+        "知识库文档更新与存储.md#12",
+        "知识库文档更新与存储.md#34",
+        "知识库文档更新与存储.md#17",
+        "rag-guide.md#15",
+        "知识库文档更新与存储.md#8"
+      ],
+      "relevantIds": [
+        "知识库文档更新与存储.md"
+      ],
+      "recall": 1,
+      "precision": 0.9,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 140
+    },
+    {
+      "id": "rag-055",
+      "question": "同名文档在不同租户上传时，系统会如何处理？",
+      "retrievedIds": [
+        "rag-guide.md#15",
+        "知识库文档更新与存储.md#8",
+        "知识库文档更新与存储.md#9",
+        "rag-guide.md#16",
+        "知识库文档更新与存储.md#31",
+        "知识库文档更新与存储.md#1",
+        "eventbus-guide.md#8",
+        "知识库文档更新与存储.md#36",
+        "统一登录平台接入手册.md#83",
+        "退款与退货政策.md#0"
+      ],
+      "relevantIds": [
+        "知识库文档更新与存储.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 138
+    },
+    {
+      "id": "rag-056",
+      "question": "文档更新后，哪些存储位置会写入新数据？",
+      "retrievedIds": [
+        "知识库文档更新与存储.md#0",
+        "rag-guide.md#15",
+        "知识库文档更新与存储.md#19",
+        "知识库文档更新与存储.md#35",
+        "知识库文档更新与存储.md#28",
+        "知识库文档更新与存储.md#36",
+        "知识库文档更新与存储.md#2",
+        "数据库与中间件清单.md#51",
+        "统一登录平台接入手册.md#83",
+        "知识库文档更新与存储.md#22"
+      ],
+      "relevantIds": [
+        "知识库文档更新与存储.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 141
+    },
+    {
+      "id": "rag-057",
+      "question": "如果上传的正文与旧版本完全相同，系统会执行更新操作吗？",
+      "retrievedIds": [
+        "知识库文档更新与存储.md#8",
+        "知识库文档更新与存储.md#36",
+        "知识库文档更新与存储.md#12",
+        "rag-guide.md#15",
+        "知识库文档更新与存储.md#1",
+        "知识库文档更新与存储.md#34",
+        "知识库文档更新与存储.md#6",
+        "统一登录平台接入手册.md#83",
+        "数据库与中间件清单.md#51",
+        "退款与退货政策.md#0"
+      ],
+      "relevantIds": [
+        "知识库文档更新与存储.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 147
+    },
+    {
+      "id": "rag-058",
+      "question": "文档更新时，系统如何确保只有授权用户才能覆盖已有文档？",
+      "retrievedIds": [
+        "rag-guide.md#15",
+        "知识库文档更新与存储.md#11",
+        "知识库文档更新与存储.md#9",
+        "rag-guide.md#16",
+        "知识库文档更新与存储.md#35",
+        "知识库文档更新与存储.md#31",
+        "知识库文档更新与存储.md#36",
+        "知识库文档更新与存储.md#0",
+        "统一登录平台接入手册.md#98",
+        "数据库与中间件清单.md#51"
+      ],
+      "relevantIds": [
+        "知识库文档更新与存储.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 157
+    },
+    {
+      "id": "rag-059",
+      "question": "文档更新过程中，如果新 embedding 调用失败，但旧向量已删除，会导致什么问题？",
+      "retrievedIds": [
+        "知识库文档更新与存储.md#35",
+        "知识库文档更新与存储.md#19",
+        "知识库文档更新与存储.md#34",
+        "知识库文档更新与存储.md#36",
+        "rag-guide.md#15",
+        "知识库文档更新与存储.md#9",
+        "知识库文档更新与存储.md#13",
+        "rag-guide.md#41",
+        "知识库文档更新与存储.md#8",
+        "统一登录平台接入手册.md#83"
+      ],
+      "relevantIds": [
+        "知识库文档更新与存储.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 136
+    },
+    {
+      "id": "rag-060",
+      "question": "图片文档的更新机制与文本文档有何不同？",
+      "retrievedIds": [
+        "知识库文档更新与存储.md#0",
+        "rag-guide.md#15",
+        "知识库文档更新与存储.md#35",
+        "知识库文档更新与存储.md#33",
+        "知识库文档更新与存储.md#2",
+        "rag-guide.md#16",
+        "数据库与中间件清单.md#51",
+        "统一登录平台接入手册.md#98",
+        "全租户公告#0",
+        "数据库与中间件清单.md#8"
+      ],
+      "relevantIds": [
+        "知识库文档更新与存储.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 150
+    },
+    {
+      "id": "rag-061",
+      "question": "多轮记忆和长期用户画像在键的构成上有什么不同？",
+      "retrievedIds": [
+        "memory-guide.md#7",
+        "memory-guide.md#9",
+        "memory-guide.md#5",
+        "memory-guide.md#0",
+        "memory-guide.md#1",
+        "memory-guide.md#4",
+        "memory-guide.md#43",
+        "memory-guide.md#30",
+        "memory-guide.md#40",
+        "eventbus-guide.md#8"
+      ],
+      "relevantIds": [
+        "memory-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.9,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 141
+    },
+    {
+      "id": "rag-062",
+      "question": "如何通过环境变量关闭长期用户画像功能？",
+      "retrievedIds": [
+        "memory-guide.md#52",
+        "memory-guide.md#51",
+        "memory-guide.md#1",
+        "memory-guide.md#0",
+        "memory-guide.md#7",
+        "memory-guide.md#4",
+        "memory-guide.md#5",
+        "统一登录平台接入手册.md#45",
+        "统一登录平台接入手册.md#65",
+        "统一登录平台接入手册.md#9"
+      ],
+      "relevantIds": [
+        "memory-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 127
+    },
+    {
+      "id": "rag-063",
+      "question": "在对话中，长期用户画像的信息是如何注入到模型中的？",
+      "retrievedIds": [
+        "memory-guide.md#7",
+        "memory-guide.md#30",
+        "memory-guide.md#0",
+        "memory-guide.md#1",
+        "memory-guide.md#5",
+        "memory-guide.md#4",
+        "memory-guide.md#21",
+        "架构文档.md#127",
+        "model-cascade.md#11",
+        "向量检索-ann与rrf.md#27"
+      ],
+      "relevantIds": [
+        "memory-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 140
+    },
+    {
+      "id": "rag-064",
+      "question": "多轮记忆的 `summary` 模式在溢出时如何处理旧消息？",
+      "retrievedIds": [
+        "memory-guide.md#11",
+        "memory-guide.md#4",
+        "memory-guide.md#12",
+        "memory-guide.md#48",
+        "memory-guide.md#9",
+        "eventbus-guide.md#8",
+        "memory-guide.md#16",
+        "memory-guide.md#13",
+        "知识库文档更新与存储.md#6",
+        "model-cascade.md#12"
+      ],
+      "relevantIds": [
+        "memory-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 134
+    },
+    {
+      "id": "rag-065",
+      "question": "长期用户画像的抽取过程是同步还是异步的？默认情况下，如果异步，抽取失败会怎样？",
+      "retrievedIds": [
+        "memory-guide.md#7",
+        "知识库文档更新与存储.md#36",
+        "memory-guide.md#30",
+        "memory-guide.md#1",
+        "memory-guide.md#25",
+        "memory-guide.md#38",
+        "memory-guide.md#22",
+        "统一登录平台接入手册.md#68",
+        "数据库与中间件清单.md#8",
+        "rag-guide.md#15"
+      ],
+      "relevantIds": [
+        "memory-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 150
+    },
+    {
+      "id": "rag-066",
+      "question": "多轮记忆的 `redis` 存储后端相比 `in-memory` 有什么优势？",
+      "retrievedIds": [
+        "memory-guide.md#16",
+        "semantic-cache.md#47",
+        "memory-guide.md#48",
+        "observability-guide.md#81",
+        "memory-guide.md#43",
+        "memory-guide.md#7",
+        "semantic-cache.md#28",
+        "统一登录平台接入手册.md#13",
+        "数据库与中间件清单.md#4",
+        "semantic-cache.md#12"
+      ],
+      "relevantIds": [
+        "memory-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 164
+    },
+    {
+      "id": "rag-067",
+      "question": "长期用户画像的 `recall-limit` 配置项控制什么？",
+      "retrievedIds": [
+        "memory-guide.md#45",
+        "memory-guide.md#7",
+        "memory-guide.md#19",
+        "memory-guide.md#0",
+        "memory-guide.md#1",
+        "memory-guide.md#30",
+        "memory-guide.md#4",
+        "memory-guide.md#5",
+        "统一登录平台接入手册.md#18",
+        "架构文档.md#20"
+      ],
+      "relevantIds": [
+        "memory-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.8,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 150
+    },
+    {
+      "id": "rag-068",
+      "question": "如何通过 curl 查看当前用户的长期记忆？",
+      "retrievedIds": [
+        "memory-guide.md#36",
+        "memory-guide.md#30",
+        "memory-guide.md#19",
+        "memory-guide.md#0",
+        "memory-guide.md#1",
+        "memory-guide.md#4",
+        "memory-guide.md#5",
+        "memory-guide.md#7",
+        "统一登录平台接入手册.md#67",
+        "agent-guide.md#38"
+      ],
+      "relevantIds": [
+        "memory-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.8,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 133
+    },
+    {
+      "id": "rag-069",
+      "question": "多轮记忆的 `tokens` 模式中，`token-model` 的作用是什么？它和实际调用的模型有关系吗？",
+      "retrievedIds": [
+        "memory-guide.md#12",
+        "memory-guide.md#7",
+        "semantic-cache.md#5",
+        "memory-guide.md#4",
+        "agent-guide.md#134",
+        "nl2sql-guide.md#35",
+        "统一登录平台接入手册.md#12",
+        "model-cascade.md#23",
+        "agent-guide.md#91",
+        "agent-guide.md#0"
+      ],
+      "relevantIds": [
+        "memory-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 142
+    },
+    {
+      "id": "rag-070",
+      "question": "长期用户画像的 `max-items` 和 `recall-limit` 配置项共同作用，如何影响注入到对话中的记忆？",
+      "retrievedIds": [
+        "memory-guide.md#7",
+        "memory-guide.md#30",
+        "memory-guide.md#0",
+        "memory-guide.md#1",
+        "memory-guide.md#5",
+        "memory-guide.md#28",
+        "memory-guide.md#22",
+        "统一登录平台接入手册.md#35",
+        "统一登录平台接入手册.md#58",
+        "架构文档.md#20"
+      ],
+      "relevantIds": [
+        "memory-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 159
+    },
+    {
+      "id": "rag-071",
+      "question": "Model Cascade 端点默认是否开启？",
+      "retrievedIds": [
+        "model-cascade.md#0",
+        "agent-guide.md#7",
+        "eventbus-guide.md#28",
+        "agent-guide.md#91",
+        "rag-guide.md#85",
+        "rag-guide.md#14",
+        "model-cascade.md#40",
+        "让Agent主动调接口.md#48",
+        "rag-guide.md#28",
+        "model-cascade.md#32"
+      ],
+      "relevantIds": [
+        "model-cascade.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 132
+    },
+    {
+      "id": "rag-072",
+      "question": "级联功能中，当便宜模型答案被判为低置信时，系统会如何处理？",
+      "retrievedIds": [
+        "model-cascade.md#11",
+        "model-cascade.md#0",
+        "agent-guide.md#87",
+        "model-cascade.md#7",
+        "model-cascade.md#41",
+        "agent-guide.md#90",
+        "model-cascade.md#10",
+        "model-cascade.md#47",
+        "统一登录平台接入手册.md#58",
+        "架构文档.md#127"
+      ],
+      "relevantIds": [
+        "model-cascade.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 155
+    },
+    {
+      "id": "rag-073",
+      "question": "如何通过环境变量关闭级联功能？",
+      "retrievedIds": [
+        "model-cascade.md#32",
+        "rag-guide.md#3",
+        "model-cascade.md#23",
+        "memory-guide.md#52",
+        "统一登录平台接入手册.md#9",
+        "数据库与中间件清单.md#32",
+        "eventbus-guide.md#28",
+        "model-cascade.md#13",
+        "workflow-guide.md#10",
+        "semantic-cache.md#24"
+      ],
+      "relevantIds": [
+        "model-cascade.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 137
+    },
+    {
+      "id": "rag-074",
+      "question": "便宜模型和强模型的逻辑模型名在 LiteLLM 配置中如何定义？",
+      "retrievedIds": [
+        "agent-guide.md#87",
+        "model-cascade.md#41",
+        "model-cascade.md#18",
+        "model-cascade.md#40",
+        "model-cascade.md#15",
+        "model-cascade.md#13",
+        "semantic-cache.md#29",
+        "model-cascade.md#11",
+        "数据库与中间件清单.md#8",
+        "统一登录平台接入手册.md#66"
+      ],
+      "relevantIds": [
+        "model-cascade.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 148
+    },
+    {
+      "id": "rag-075",
+      "question": "级联功能中，如果便宜模型直接触发了工具调用，系统会升级到强模型吗？",
+      "retrievedIds": [
+        "model-cascade.md#13",
+        "model-cascade.md#23",
+        "agent-guide.md#87",
+        "model-cascade.md#11",
+        "model-cascade.md#47",
+        "model-cascade.md#3",
+        "model-cascade.md#28",
+        "model-cascade.md#2",
+        "observability-guide.md#47",
+        "退款与退货政策.md#0"
+      ],
+      "relevantIds": [
+        "model-cascade.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 139
+    },
+    {
+      "id": "rag-076",
+      "question": "自评功能默认是开启还是关闭？开启后需要额外配置什么？",
+      "retrievedIds": [
+        "mcp-guide.md#4",
+        "rag-guide.md#3",
+        "rag-guide.md#14",
+        "semantic-cache.md#14",
+        "es-hybrid-rerank.md#16",
+        "observability-guide.md#7",
+        "rbac-and-public-kb.md#27",
+        "model-cascade.md#10",
+        "rbac-and-public-kb.md#21",
+        "model-cascade.md#11"
+      ],
+      "relevantIds": [
+        "model-cascade.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 0.125,
+      "hit": true,
+      "durationMs": 148
+    },
+    {
+      "id": "rag-077",
+      "question": "便宜模型和强模型都留空时，级联功能会如何表现？",
+      "retrievedIds": [
+        "model-cascade.md#23",
+        "model-cascade.md#41",
+        "model-cascade.md#3",
+        "agent-guide.md#87",
+        "model-cascade.md#47",
+        "model-cascade.md#28",
+        "model-cascade.md#40",
+        "observability-guide.md#47",
+        "数据库与中间件清单.md#21",
+        "平台公共公告-统一维护窗口#0"
+      ],
+      "relevantIds": [
+        "model-cascade.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 136
+    },
+    {
+      "id": "rag-078",
+      "question": "级联功能中，便宜模型答案被判为低置信的两种默认启发式规则是什么？",
+      "retrievedIds": [
+        "model-cascade.md#11",
+        "agent-guide.md#90",
+        "model-cascade.md#10",
+        "model-cascade.md#8",
+        "model-cascade.md#0",
+        "model-cascade.md#28",
+        "model-cascade.md#47",
+        "agent-guide.md#87",
+        "model-cascade.md#7",
+        "统一登录平台接入手册.md#7"
+      ],
+      "relevantIds": [
+        "model-cascade.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 155
+    },
+    {
+      "id": "rag-079",
+      "question": "级联功能如何保证不绕过租户配额和成本审计？",
+      "retrievedIds": [
+        "model-cascade.md#5",
+        "model-cascade.md#28",
+        "agent-guide.md#88",
+        "agent-guide.md#10",
+        "model-cascade.md#31",
+        "memory-guide.md#27",
+        "model-cascade.md#23",
+        "统一登录平台接入手册.md#78",
+        "统一登录平台接入手册.md#48",
+        "model-cascade.md#11"
+      ],
+      "relevantIds": [
+        "model-cascade.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 137
+    },
+    {
+      "id": "rag-080",
+      "question": "自评失败（解析不出分数或模型异常）时，系统会如何决策？",
+      "retrievedIds": [
+        "model-cascade.md#11",
+        "知识库文档更新与存储.md#36",
+        "eventbus-guide.md#8",
+        "让Agent主动调接口.md#46",
+        "意图识别与Agent执行原理.md#12",
+        "退款与退货政策.md#0",
+        "统一登录平台接入手册.md#55",
+        "统一登录平台接入手册.md#83",
+        "数据库与中间件清单.md#32",
+        "nl2sql-guide.md#35"
+      ],
+      "relevantIds": [
+        "model-cascade.md"
+      ],
+      "recall": 1,
+      "precision": 0.1,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 176
+    },
+    {
+      "id": "rag-081",
+      "question": "如何通过网关访问 agent-service 的深度 Agent 端点？",
+      "retrievedIds": [
+        "mcp-guide.md#2",
+        "mcp-guide.md#15",
+        "observability-guide.md#5",
+        "agent-guide.md#1",
+        "nl2sql-guide.md#54",
+        "数据库与中间件清单.md#50",
+        "agent-guide.md#97",
+        "mcp-guide.md#30",
+        "agent-guide.md#98",
+        "agent-guide.md#0"
+      ],
+      "relevantIds": [
+        "agent-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 0.25,
+      "hit": true,
+      "durationMs": 131
+    },
+    {
+      "id": "rag-082",
+      "question": "在 ReAct 循环中，模型返回的哪个字段会被写入 scratchpad？",
+      "retrievedIds": [
+        "意图识别与Agent执行原理.md#20",
+        "agent-guide.md#11",
+        "让Agent主动调接口.md#5",
+        "意图识别与Agent执行原理.md#15",
+        "nl2sql-guide.md#35",
+        "知识库文档更新与存储.md#0",
+        "统一登录平台接入手册.md#56",
+        "意图识别与Agent执行原理.md#25",
+        "agent-guide.md#21",
+        "memory-guide.md#5"
+      ],
+      "relevantIds": [
+        "agent-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 126
+    },
+    {
+      "id": "rag-083",
+      "question": "DAG 多 Agent 模式下，如果显式传入的 DAG 包含循环依赖，会返回什么错误？",
+      "retrievedIds": [
+        "意图识别与Agent执行原理.md#23",
+        "agent-guide.md#26",
+        "agent-guide.md#27",
+        "agent-guide.md#134",
+        "意图识别与Agent执行原理.md#17",
+        "退款与退货政策.md#0",
+        "统一登录平台接入手册.md#66",
+        "rbac-and-public-kb.md#19",
+        "semantic-cache.md#5",
+        "es-hybrid-rerank.md#16"
+      ],
+      "relevantIds": [
+        "agent-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 125
+    },
+    {
+      "id": "rag-084",
+      "question": "Reflexion 自省环的评分维度有哪些？",
+      "retrievedIds": [
+        "agent-guide.md#68",
+        "agent-guide.md#70",
+        "agent-guide.md#134",
+        "agent-guide.md#6",
+        "rag-guide.md#41",
+        "rag-guide.md#27",
+        "退款与退货政策.md#1",
+        "让Agent主动调接口.md#8",
+        "workflow-guide.md#103",
+        "workflow-guide.md#108"
+      ],
+      "relevantIds": [
+        "agent-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 127
+    },
+    {
+      "id": "rag-085",
+      "question": "Voting 投票共识的两种策略分别适用于什么类型的题目？",
+      "retrievedIds": [
+        "workflow-guide.md#100",
+        "agent-guide.md#75",
+        "agent-guide.md#77",
+        "agent-guide.md#6",
+        "es-hybrid-rerank.md#2",
+        "eval-guide.md#55",
+        "agent-guide.md#134",
+        "统一登录平台接入手册.md#4",
+        "统一登录平台接入手册.md#1",
+        "agent-guide.md#26"
+      ],
+      "relevantIds": [
+        "agent-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 118
+    },
+    {
+      "id": "rag-086",
+      "question": "业务流程智能体在处理退款时，能否自动完成审批？",
+      "retrievedIds": [
+        "agent-guide.md#64",
+        "agent-guide.md#63",
+        "agent-guide.md#117",
+        "agent-guide.md#65",
+        "workflow-guide.md#8",
+        "agent-guide.md#5",
+        "agent-guide.md#119",
+        "退款与退货政策.md#0",
+        "rbac-and-public-kb.md#3",
+        "agent-guide.md#56"
+      ],
+      "relevantIds": [
+        "agent-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 128
+    },
+    {
+      "id": "rag-087",
+      "question": "深度 Agent 的 stopReason 取值中，LOOP 和 TIMEOUT 分别代表什么含义？",
+      "retrievedIds": [
+        "意图识别与Agent执行原理.md#29",
+        "agent-guide.md#134",
+        "agent-guide.md#15",
+        "让Agent主动调接口.md#59",
+        "统一登录平台接入手册.md#7",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#11",
+        "统一登录平台接入手册.md#4",
+        "向量检索-ann与rrf.md#27",
+        "意图识别与Agent执行原理.md#36"
+      ],
+      "relevantIds": [
+        "agent-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 130
+    },
+    {
+      "id": "rag-088",
+      "question": "数据分析智能体（analyst）与直接使用 DAG plan-run 的主要区别是什么？",
+      "retrievedIds": [
+        "agent-guide.md#56",
+        "agent-guide.md#59",
+        "agent-guide.md#54",
+        "agent-guide.md#55",
+        "agent-guide.md#5",
+        "agent-guide.md#58",
+        "agent-guide.md#114",
+        "统一登录平台接入手册.md#11",
+        "统一登录平台接入手册.md#4",
+        "workflow-guide.md#94"
+      ],
+      "relevantIds": [
+        "agent-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 133
+    },
+    {
+      "id": "rag-089",
+      "question": "在 DAG 多 Agent 中，如果 synthesis 评分低于阈值会触发什么机制？",
+      "retrievedIds": [
+        "agent-guide.md#30",
+        "意图识别与Agent执行原理.md#25",
+        "让Agent主动调接口.md#7",
+        "agent-guide.md#53",
+        "agent-guide.md#56",
+        "意图识别与Agent执行原理.md#26",
+        "agent-guide.md#69",
+        "统一登录平台接入手册.md#4",
+        "agent-guide.md#26",
+        "意图识别与Agent执行原理.md#27"
+      ],
+      "relevantIds": [
+        "agent-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 134
+    },
+    {
+      "id": "rag-090",
+      "question": "Prompt Chaining 端点默认返回 400 的原因是什么？",
+      "retrievedIds": [
+        "workflow-guide.md#128",
+        "workflow-guide.md#113",
+        "agent-guide.md#83",
+        "workflow-guide.md#84",
+        "workflow-guide.md#78",
+        "agent-guide.md#6",
+        "rag-guide.md#14",
+        "统一登录平台接入手册.md#58",
+        "workflow-guide.md#2",
+        "统一登录平台接入手册.md#86"
+      ],
+      "relevantIds": [
+        "agent-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 0.3333333333333333,
+      "hit": true,
+      "durationMs": 128
+    },
+    {
+      "id": "rag-091",
+      "question": "平台中用于处理确定性订单查询的HTTP端点是什么？",
+      "retrievedIds": [
+        "让Agent主动调接口.md#8",
+        "nl2sql-guide.md#3",
+        "意图识别与Agent执行原理.md#5",
+        "意图识别与Agent执行原理.md#4",
+        "统一登录平台接入手册.md#7",
+        "统一登录平台接入手册.md#1",
+        "workflow-guide.md#91",
+        "平台公共公告-统一维护窗口#0",
+        "统一登录平台接入手册.md#59",
+        "统一登录平台接入手册.md#4"
+      ],
+      "relevantIds": [
+        "意图识别与Agent执行原理.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 0.3333333333333333,
+      "hit": true,
+      "durationMs": 141
+    },
+    {
+      "id": "rag-092",
+      "question": "当用户询问“现在几点”时，平台的路由系统会将其分类为哪种类型？",
+      "retrievedIds": [
+        "意图识别与Agent执行原理.md#9",
+        "向量检索-ann与rrf.md#24",
+        "意图识别与Agent执行原理.md#30",
+        "向量检索-ann与rrf.md#0",
+        "统一登录平台接入手册.md#7",
+        "统一登录平台接入手册.md#59",
+        "统一登录平台接入手册.md#0",
+        "统一登录平台接入手册.md#4",
+        "退款与退货政策.md#0",
+        "workflow-guide.md#22"
+      ],
+      "relevantIds": [
+        "意图识别与Agent执行原理.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 140
+    },
+    {
+      "id": "rag-093",
+      "question": "ReAct 循环中，模型返回的哪个字段会被追加到 scratchpad 中？",
+      "retrievedIds": [
+        "agent-guide.md#11",
+        "意图识别与Agent执行原理.md#20",
+        "让Agent主动调接口.md#5",
+        "意图识别与Agent执行原理.md#15",
+        "意图识别与Agent执行原理.md#25",
+        "agent-guide.md#21",
+        "nl2sql-guide.md#25",
+        "知识库文档更新与存储.md#33",
+        "让Agent主动调接口.md#46",
+        "eval-guide.md#17"
+      ],
+      "relevantIds": [
+        "意图识别与Agent执行原理.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 175
+    },
+    {
+      "id": "rag-094",
+      "question": "飞书渠道的意图识别与主路由的意图分类有何不同？",
+      "retrievedIds": [
+        "意图识别与Agent执行原理.md#9",
+        "workflow-guide.md#117",
+        "workflow-guide.md#3",
+        "意图识别与Agent执行原理.md#0",
+        "workflow-guide.md#118",
+        "agent-guide.md#0",
+        "model-cascade.md#47",
+        "退款与退货政策.md#1",
+        "数据库与中间件清单.md#8",
+        "知识库文档更新与存储.md#11"
+      ],
+      "relevantIds": [
+        "意图识别与Agent执行原理.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 141
+    },
+    {
+      "id": "rag-095",
+      "question": "在 DAG 编排中，如果综合评分低于阈值，系统会执行什么操作？",
+      "retrievedIds": [
+        "意图识别与Agent执行原理.md#25",
+        "agent-guide.md#30",
+        "workflow-guide.md#105",
+        "agent-guide.md#26",
+        "agent-guide.md#53",
+        "知识库文档更新与存储.md#36",
+        "agent-guide.md#69",
+        "意图识别与Agent执行原理.md#1",
+        "退款与退货政策.md#0",
+        "统一登录平台接入手册.md#83"
+      ],
+      "relevantIds": [
+        "意图识别与Agent执行原理.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 138
+    },
+    {
+      "id": "rag-096",
+      "question": "AgentAction 的 description 方法在 ReAct 循环中起什么作用？",
+      "retrievedIds": [
+        "意图识别与Agent执行原理.md#31",
+        "让Agent主动调接口.md#10",
+        "agent-guide.md#11",
+        "意图识别与Agent执行原理.md#17",
+        "意图识别与Agent执行原理.md#11",
+        "统一登录平台接入手册.md#66",
+        "统一登录平台接入手册.md#4",
+        "agent-guide.md#36",
+        "让Agent主动调接口.md#9",
+        "memory-guide.md#30"
+      ],
+      "relevantIds": [
+        "意图识别与Agent执行原理.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 127
+    },
+    {
+      "id": "rag-097",
+      "question": "当 QueryClassifier 抛出异常时，路由系统会如何处理？",
+      "retrievedIds": [
+        "知识库文档更新与存储.md#36",
+        "eventbus-guide.md#8",
+        "eventbus-guide.md#61",
+        "rag-guide.md#15",
+        "rag-guide.md#28",
+        "统一登录平台接入手册.md#55",
+        "退款与退货政策.md#0",
+        "退款与退货政策.md#1",
+        "observability-guide.md#10",
+        "架构文档.md#60"
+      ],
+      "relevantIds": [
+        "意图识别与Agent执行原理.md"
+      ],
+      "recall": 0,
+      "precision": 0,
+      "mrr": 0,
+      "hit": false,
+      "durationMs": 132
+    },
+    {
+      "id": "rag-098",
+      "question": "ReAct 循环中，Observation 和 note 分别被存储到哪些数据结构中？",
+      "retrievedIds": [
+        "agent-guide.md#11",
+        "意图识别与Agent执行原理.md#0",
+        "意图识别与Agent执行原理.md#11",
+        "意图识别与Agent执行原理.md#31",
+        "知识库文档更新与存储.md#0",
+        "知识库文档更新与存储.md#18",
+        "统一登录平台接入手册.md#58",
+        "nl2sql-guide.md#40",
+        "意图识别与Agent执行原理.md#20",
+        "向量检索-ann与rrf.md#27"
+      ],
+      "relevantIds": [
+        "意图识别与Agent执行原理.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 136
+    },
+    {
+      "id": "rag-099",
+      "question": "平台如何确保 AgentBrain 返回的结构化决策能够被可靠解析？",
+      "retrievedIds": [
+        "意图识别与Agent执行原理.md#12",
+        "意图识别与Agent执行原理.md#19",
+        "意图识别与Agent执行原理.md#31",
+        "意图识别与Agent执行原理.md#11",
+        "意图识别与Agent执行原理.md#5",
+        "平台公共公告-统一维护窗口#0",
+        "退款与退货政策.md#1",
+        "rbac-and-public-kb.md#51",
+        "eventbus-guide.md#4",
+        "rag-guide.md#69"
+      ],
+      "relevantIds": [
+        "意图识别与Agent执行原理.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 160
+    },
+    {
+      "id": "rag-100",
+      "question": "DAG 编排中，同层任务如何执行？下游 worker 能访问上游的 scratchpad 吗？",
+      "retrievedIds": [
+        "意图识别与Agent执行原理.md#25",
+        "agent-guide.md#26",
+        "意图识别与Agent执行原理.md#24",
+        "agent-guide.md#56",
+        "workflow-guide.md#105",
+        "agent-guide.md#0",
+        "agent-guide.md#27",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#78",
+        "agent-guide.md#69"
+      ],
+      "relevantIds": [
+        "意图识别与Agent执行原理.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 129
+    },
+    {
+      "id": "rag-101",
+      "question": "在平台中，'workflow'一词有哪两种不同的含义？",
+      "retrievedIds": [
+        "workflow-guide.md#0",
+        "架构文档.md#61",
+        "a2a-guide.md#4",
+        "workflow-guide.md#100",
+        "semantic-cache.md#34",
+        "workflow-guide.md#3",
+        "workflow-guide.md#76",
+        "平台公共公告-统一维护窗口#0",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#7"
+      ],
+      "relevantIds": [
+        "workflow-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 152
+    },
+    {
+      "id": "rag-102",
+      "question": "如何通过curl命令发起一个低风险的退款请求？",
+      "retrievedIds": [
+        "workflow-guide.md#28",
+        "workflow-guide.md#29",
+        "让Agent主动调接口.md#42",
+        "observability-guide.md#15",
+        "workflow-guide.md#5",
+        "统一登录平台接入手册.md#67",
+        "统一登录平台接入手册.md#73",
+        "agent-guide.md#38",
+        "memory-guide.md#17",
+        "退款政策-公共.md#0"
+      ],
+      "relevantIds": [
+        "workflow-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 124
+    },
+    {
+      "id": "rag-103",
+      "question": "Flowable引擎在平台中默认是开启还是关闭的？需要什么条件？",
+      "retrievedIds": [
+        "workflow-guide.md#11",
+        "workflow-guide.md#1",
+        "semantic-cache.md#14",
+        "向量检索-ann与rrf.md#9",
+        "统一登录平台接入手册.md#59",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#7",
+        "平台公共公告-统一维护窗口#0",
+        "统一登录平台接入手册.md#4",
+        "向量检索-ann与rrf.md#8"
+      ],
+      "relevantIds": [
+        "workflow-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 136
+    },
+    {
+      "id": "rag-104",
+      "question": "LLM编排模式中的Routing模式对应哪个端点？它默认是开启的吗？",
+      "retrievedIds": [
+        "workflow-guide.md#2",
+        "workflow-guide.md#76",
+        "workflow-guide.md#77",
+        "workflow-guide.md#0",
+        "workflow-guide.md#6",
+        "workflow-guide.md#113",
+        "统一登录平台接入手册.md#1",
+        "向量检索-ann与rrf.md#27",
+        "架构文档.md#90",
+        "semantic-cache.md#6"
+      ],
+      "relevantIds": [
+        "workflow-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 134
+    },
+    {
+      "id": "rag-105",
+      "question": "审批超时后系统会如何处理？请结合文档中的两个信息点说明。",
+      "retrievedIds": [
+        "知识库文档更新与存储.md#0",
+        "rag-guide.md#15",
+        "rbac-and-public-kb.md#0",
+        "知识库文档更新与存储.md#32",
+        "退款与退货政策.md#0",
+        "知识库文档更新与存储.md#36",
+        "知识库文档更新与存储.md#27",
+        "semantic-cache.md#19",
+        "semantic-cache.md#34",
+        "知识库文档更新与存储.md#28"
+      ],
+      "relevantIds": [
+        "workflow-guide.md"
+      ],
+      "recall": 0,
+      "precision": 0,
+      "mrr": 0,
+      "hit": false,
+      "durationMs": 141
+    },
+    {
+      "id": "rag-106",
+      "question": "为什么平台选择Flowable而不是扩展现有的async状态机来处理退款审批？",
+      "retrievedIds": [
+        "workflow-guide.md#8",
+        "workflow-guide.md#9",
+        "workflow-guide.md#10",
+        "workflow-guide.md#1",
+        "workflow-guide.md#3",
+        "架构文档.md#73",
+        "workflow-guide.md#13",
+        "nl2sql-guide.md#5",
+        "统一登录平台接入手册.md#39",
+        "agent-guide.md#126"
+      ],
+      "relevantIds": [
+        "workflow-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 142
+    },
+    {
+      "id": "rag-107",
+      "question": "在LLM编排模式中，如何实现一个带步骤间门控的固定顺序链？",
+      "retrievedIds": [
+        "agent-guide.md#81",
+        "workflow-guide.md#78",
+        "agent-guide.md#0",
+        "平台公共公告-统一维护窗口#0",
+        "rbac-and-public-kb.md#23",
+        "workflow-guide.md#83",
+        "rbac-and-public-kb.md#8",
+        "rbac-and-public-kb.md#9",
+        "workflow-guide.md#43",
+        "agent-guide.md#10"
+      ],
+      "relevantIds": [
+        "workflow-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 140
+    },
+    {
+      "id": "rag-108",
+      "question": "如何通过curl命令查询本租户的待审批任务？需要什么scope？",
+      "retrievedIds": [
+        "workflow-guide.md#5",
+        "agent-guide.md#118",
+        "rag-guide.md#4",
+        "nl2sql-guide.md#4",
+        "workflow-guide.md#34",
+        "es-hybrid-rerank.md#15",
+        "nl2sql-guide.md#41",
+        "统一登录平台接入手册.md#61",
+        "rag-guide.md#22",
+        "rbac-and-public-kb.md#0"
+      ],
+      "relevantIds": [
+        "workflow-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 132
+    },
+    {
+      "id": "rag-109",
+      "question": "终态回推的三种模式分别是什么？默认使用哪种？",
+      "retrievedIds": [
+        "workflow-guide.md#57",
+        "workflow-guide.md#52",
+        "架构文档.md#61",
+        "架构文档.md#62",
+        "eventbus-guide.md#44",
+        "eventbus-guide.md#3",
+        "workflow-guide.md#119",
+        "统一登录平台接入手册.md#4",
+        "workflow-guide.md#28",
+        "observability-guide.md#7"
+      ],
+      "relevantIds": [
+        "workflow-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 146
+    },
+    {
+      "id": "rag-110",
+      "question": "在ServiceTask中，LLM调用失败时系统如何降级？请结合assess和resolve/reject说明。",
+      "retrievedIds": [
+        "workflow-guide.md#19",
+        "agent-guide.md#66",
+        "agent-guide.md#65",
+        "workflow-guide.md#20",
+        "workflow-guide.md#52",
+        "知识库文档更新与存储.md#35",
+        "workflow-guide.md#26",
+        "es-hybrid-rerank.md#16",
+        "workflow-guide.md#21",
+        "rbac-and-public-kb.md#25"
+      ],
+      "relevantIds": [
+        "workflow-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 138
+    },
+    {
+      "id": "rag-111",
+      "question": "如何让模型在对话中自主决定调用订单查询接口，而不是靠记忆回答？",
+      "retrievedIds": [
+        "让Agent主动调接口.md#1",
+        "model-cascade.md#3",
+        "意图识别与Agent执行原理.md#0",
+        "意图识别与Agent执行原理.md#4",
+        "memory-guide.md#40",
+        "平台公共公告-统一维护窗口#0",
+        "退款与退货政策.md#0",
+        "统一登录平台接入手册.md#67",
+        "让Agent主动调接口.md#0",
+        "意图识别与Agent执行原理.md#5"
+      ],
+      "relevantIds": [
+        "让Agent主动调接口.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 134
+    },
+    {
+      "id": "rag-112",
+      "question": "在平台中，实现工具调用的两种机制分别是什么？",
+      "retrievedIds": [
+        "mcp-guide.md#0",
+        "让Agent主动调接口.md#1",
+        "eval-guide.md#55",
+        "向量检索-ann与rrf.md#0",
+        "a2a-guide.md#71",
+        "mcp-guide.md#14",
+        "nl2sql-guide.md#28",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#7",
+        "向量检索-ann与rrf.md#9"
+      ],
+      "relevantIds": [
+        "让Agent主动调接口.md"
+      ],
+      "recall": 1,
+      "precision": 0.1,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 147
+    },
+    {
+      "id": "rag-113",
+      "question": "如果我想让一个通用对话 Agent 自主判断是否查订单，应该使用哪种机制？",
+      "retrievedIds": [
+        "让Agent主动调接口.md#7",
+        "让Agent主动调接口.md#1",
+        "让Agent主动调接口.md#62",
+        "让Agent主动调接口.md#47",
+        "意图识别与Agent执行原理.md#2",
+        "agent-guide.md#98",
+        "让Agent主动调接口.md#8",
+        "统一登录平台接入手册.md#65",
+        "统一登录平台接入手册.md#60",
+        "workflow-guide.md#12"
+      ],
+      "relevantIds": [
+        "让Agent主动调接口.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 163
+    },
+    {
+      "id": "rag-114",
+      "question": "新增一个 AgentAction 动作需要修改循环代码吗？",
+      "retrievedIds": [
+        "让Agent主动调接口.md#13",
+        "意图识别与Agent执行原理.md#14",
+        "agent-guide.md#98",
+        "意图识别与Agent执行原理.md#11",
+        "agent-guide.md#11",
+        "数据库与中间件清单.md#51",
+        "数据库与中间件清单.md#8",
+        "nl2sql-guide.md#8",
+        "es-hybrid-rerank.md#18",
+        "让Agent主动调接口.md#9"
+      ],
+      "relevantIds": [
+        "让Agent主动调接口.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 142
+    },
+    {
+      "id": "rag-115",
+      "question": "在 order_query 动作中，description() 方法的作用是什么？",
+      "retrievedIds": [
+        "让Agent主动调接口.md#27",
+        "让Agent主动调接口.md#10",
+        "让Agent主动调接口.md#2",
+        "让Agent主动调接口.md#41",
+        "统一登录平台接入手册.md#66",
+        "统一登录平台接入手册.md#4",
+        "让Agent主动调接口.md#8",
+        "意图识别与Agent执行原理.md#13",
+        "意图识别与Agent执行原理.md#14",
+        "让Agent主动调接口.md#35"
+      ],
+      "relevantIds": [
+        "让Agent主动调接口.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 149
+    },
+    {
+      "id": "rag-116",
+      "question": "对于只读无副作用的查询动作，应该使用哪种门控策略？",
+      "retrievedIds": [
+        "agent-guide.md#98",
+        "让Agent主动调接口.md#42",
+        "agent-guide.md#116",
+        "agent-guide.md#117",
+        "agent-guide.md#8",
+        "agent-guide.md#122",
+        "让Agent主动调接口.md#25",
+        "数据库与中间件清单.md#32",
+        "统一登录平台接入手册.md#59",
+        "退款与退货政策.md#0"
+      ],
+      "relevantIds": [
+        "让Agent主动调接口.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 129
+    },
+    {
+      "id": "rag-117",
+      "question": "在 order_query 动作中，如果查询失败或订单不存在，run() 方法应该返回什么？",
+      "retrievedIds": [
+        "让Agent主动调接口.md#54",
+        "意图识别与Agent执行原理.md#17",
+        "让Agent主动调接口.md#28",
+        "让Agent主动调接口.md#8",
+        "让Agent主动调接口.md#27",
+        "agent-guide.md#16",
+        "让Agent主动调接口.md#48",
+        "让Agent主动调接口.md#41",
+        "让Agent主动调接口.md#46",
+        "统一登录平台接入手册.md#66"
+      ],
+      "relevantIds": [
+        "让Agent主动调接口.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 127
+    },
+    {
+      "id": "rag-118",
+      "question": "如何确保 agent-service 调用 order-service 时自动传递租户身份？",
+      "retrievedIds": [
+        "让Agent主动调接口.md#44",
+        "a2a-guide.md#78",
+        "意图识别与Agent执行原理.md#6",
+        "agent-guide.md#98",
+        "workflow-guide.md#90",
+        "eval-guide.md#5",
+        "数据库与中间件清单.md#50",
+        "数据库与中间件清单.md#26",
+        "让Agent主动调接口.md#15",
+        "让Agent主动调接口.md#24"
+      ],
+      "relevantIds": [
+        "让Agent主动调接口.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 127
+    },
+    {
+      "id": "rag-119",
+      "question": "对于有副作用的动作（如发起退款），应该使用什么门控策略？",
+      "retrievedIds": [
+        "让Agent主动调接口.md#42",
+        "agent-guide.md#117",
+        "agent-guide.md#63",
+        "agent-guide.md#122",
+        "退款与退货政策.md#1",
+        "semantic-cache.md#15",
+        "workflow-guide.md#10",
+        "a2a-guide.md#22",
+        "让Agent主动调接口.md#52",
+        "向量检索-ann与rrf.md#27"
+      ],
+      "relevantIds": [
+        "让Agent主动调接口.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 132
+    },
+    {
+      "id": "rag-120",
+      "question": "在 order_query 动作中，如果订单数据在业务库里，只想自然语言问统计，需要写代码吗？",
+      "retrievedIds": [
+        "让Agent主动调接口.md#62",
+        "让Agent主动调接口.md#27",
+        "让Agent主动调接口.md#8",
+        "让Agent主动调接口.md#13",
+        "agent-guide.md#16",
+        "让Agent主动调接口.md#41",
+        "统一登录平台接入手册.md#15",
+        "统一登录平台接入手册.md#42",
+        "让Agent主动调接口.md#35",
+        "让Agent主动调接口.md#2"
+      ],
+      "relevantIds": [
+        "让Agent主动调接口.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 131
+    },
+    {
+      "id": "rag-121",
+      "question": "检索质量评测端点 `/eval/retrieval` 在计算指标时是否经过大语言模型？",
+      "retrievedIds": [
+        "eval-guide.md#1",
+        "eval-guide.md#40",
+        "eval-guide.md#84",
+        "eval-guide.md#8",
+        "eval-guide.md#11",
+        "model-cascade.md#3",
+        "eval-guide.md#3",
+        "observability-guide.md#88",
+        "eval-guide.md#20",
+        "eval-guide.md#72"
+      ],
+      "relevantIds": [
+        "eval-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.8,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 166
+    },
+    {
+      "id": "rag-122",
+      "question": "通用回归 harness 中，如果某个 case 的 HTTP 响应状态码不是 2xx，会如何判定？",
+      "retrievedIds": [
+        "eval-guide.md#2",
+        "eval-guide.md#41",
+        "eval-guide.md#69",
+        "eval-guide.md#3",
+        "eval-guide.md#42",
+        "eval-guide.md#45",
+        "eval-guide.md#60",
+        "eval-guide.md#63",
+        "nl2sql-guide.md#56",
+        "统一登录平台接入手册.md#21"
+      ],
+      "relevantIds": [
+        "eval-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.8,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 156
+    },
+    {
+      "id": "rag-123",
+      "question": "在双跑门禁中，如果 candidate 的 passRate 低于 oracle 的 passRate 减去容差，会触发什么结果？",
+      "retrievedIds": [
+        "eval-guide.md#56",
+        "eval-guide.md#55",
+        "eval-guide.md#59",
+        "eval-guide.md#81",
+        "eval-guide.md#65",
+        "eval-guide.md#58",
+        "eval-guide.md#57",
+        "eval-guide.md#54",
+        "eval-guide.md#2",
+        "eval-guide.md#60"
+      ],
+      "relevantIds": [
+        "eval-guide.md"
+      ],
+      "recall": 1,
+      "precision": 1,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 171
+    },
+    {
+      "id": "rag-124",
+      "question": "如何通过命令行运行一个名为 `platform-smoke` 的预定义测试套件？",
+      "retrievedIds": [
+        "eventbus-guide.md#59",
+        "observability-guide.md#13",
+        "eventbus-guide.md#61",
+        "统一登录平台接入手册.md#76",
+        "向量检索-ann与rrf.md#0",
+        "统一登录平台接入手册.md#77",
+        "统一登录平台接入手册.md#97",
+        "数据库与中间件清单.md#9",
+        "eval-guide.md#67",
+        "agent-guide.md#83"
+      ],
+      "relevantIds": [
+        "eval-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.1,
+      "mrr": 0.1111111111111111,
+      "hit": true,
+      "durationMs": 133
+    },
+    {
+      "id": "rag-125",
+      "question": "通用回归 harness 中，`judgeExpected` 断言需要哪些条件才会真正触发？",
+      "retrievedIds": [
+        "eval-guide.md#3",
+        "eval-guide.md#69",
+        "eval-guide.md#41",
+        "eval-guide.md#2",
+        "semantic-cache.md#19",
+        "nl2sql-guide.md#56",
+        "数据库与中间件清单.md#8",
+        "nl2sql-guide.md#8",
+        "向量检索-ann与rrf.md#32",
+        "observability-guide.md#31"
+      ],
+      "relevantIds": [
+        "eval-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 121
+    },
+    {
+      "id": "rag-126",
+      "question": "检索质量评测的黄金集（relevantDocIds）是存储在服务端文件还是由请求体提供？",
+      "retrievedIds": [
+        "eval-guide.md#24",
+        "eval-guide.md#20",
+        "eval-guide.md#19",
+        "eval-guide.md#27",
+        "eval-guide.md#84",
+        "rag-guide.md#66",
+        "nl2sql-guide.md#56",
+        "eval-guide.md#8",
+        "退款与退货政策.md#1",
+        "eval-guide.md#75"
+      ],
+      "relevantIds": [
+        "eval-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 122
+    },
+    {
+      "id": "rag-127",
+      "question": "双跑门禁的 snapshot 模式和 live 模式在 oracle 来源上有什么不同？",
+      "retrievedIds": [
+        "eval-guide.md#56",
+        "eval-guide.md#55",
+        "eval-guide.md#67",
+        "eval-guide.md#81",
+        "eval-guide.md#54",
+        "eval-guide.md#2",
+        "eval-guide.md#60",
+        "数据库与中间件清单.md#50",
+        "eval-guide.md#64",
+        "eval-guide.md#82"
+      ],
+      "relevantIds": [
+        "eval-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.9,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 133
+    },
+    {
+      "id": "rag-128",
+      "question": "通用回归 harness 中，`semanticExpected` 断言使用什么方法计算相似度？默认阈值是多少？",
+      "retrievedIds": [
+        "eval-guide.md#3",
+        "eval-guide.md#41",
+        "eval-guide.md#43",
+        "eval-guide.md#69",
+        "eval-guide.md#80",
+        "eval-guide.md#2",
+        "semantic-cache.md#3",
+        "eval-guide.md#44",
+        "统一登录平台接入手册.md#66",
+        "意图识别与Agent执行原理.md#21"
+      ],
+      "relevantIds": [
+        "eval-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 132
+    },
+    {
+      "id": "rag-129",
+      "question": "检索质量评测中，为什么推荐默认使用文件级 id 匹配而非精确级？",
+      "retrievedIds": [
+        "eval-guide.md#18",
+        "rag-guide.md#34",
+        "eval-guide.md#19",
+        "eval-guide.md#17",
+        "agent-guide.md#51",
+        "统一登录平台接入手册.md#80",
+        "统一登录平台接入手册.md#17",
+        "semantic-cache.md#3",
+        "agent-guide.md#102",
+        "统一登录平台接入手册.md#66"
+      ],
+      "relevantIds": [
+        "eval-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 145
+    },
+    {
+      "id": "rag-130",
+      "question": "双跑门禁中，`agreement` 指标是如何计算的？",
+      "retrievedIds": [
+        "eval-guide.md#54",
+        "eval-guide.md#60",
+        "eval-guide.md#81",
+        "eval-guide.md#2",
+        "eval-guide.md#40",
+        "eval-guide.md#55",
+        "eval-guide.md#67",
+        "eval-guide.md#85",
+        "向量检索-ann与rrf.md#27",
+        "架构文档.md#90"
+      ],
+      "relevantIds": [
+        "eval-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.8,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 120
+    },
+    {
+      "id": "rag-131",
+      "question": "在平台中，跨服务 traceId 是如何在日志中实现关联的？",
+      "retrievedIds": [
+        "observability-guide.md#8",
+        "observability-guide.md#0",
+        "observability-guide.md#12",
+        "nl2sql-guide.md#39",
+        "observability-guide.md#1",
+        "observability-guide.md#86",
+        "observability-guide.md#71",
+        "统一登录平台接入手册.md#1",
+        "平台公共公告-统一维护窗口#0",
+        "observability-guide.md#13"
+      ],
+      "relevantIds": [
+        "observability-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 134
+    },
+    {
+      "id": "rag-132",
+      "question": "如何在不修改服务代码的情况下启用 OpenTelemetry GenAI 追踪？",
+      "retrievedIds": [
+        "observability-guide.md#0",
+        "observability-guide.md#17",
+        "observability-guide.md#38",
+        "agent-guide.md#0",
+        "退款与退货政策.md#1",
+        "observability-guide.md#2",
+        "意图识别与Agent执行原理.md#14",
+        "退款与退货政策.md#0",
+        "向量检索-ann与rrf.md#9",
+        "意图识别与Agent执行原理.md#29"
+      ],
+      "relevantIds": [
+        "observability-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 122
+    },
+    {
+      "id": "rag-133",
+      "question": "平台中哪三个服务暴露了 tokenbudget 和 cost 端点？",
+      "retrievedIds": [
+        "observability-guide.md#3",
+        "observability-guide.md#61",
+        "observability-guide.md#51",
+        "mcp-guide.md#0",
+        "observability-guide.md#43",
+        "observability-guide.md#0",
+        "observability-guide.md#5",
+        "统一登录平台接入手册.md#7",
+        "nl2sql-guide.md#1",
+        "litellm-gateway-guide.md#8"
+      ],
+      "relevantIds": [
+        "observability-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 128
+    },
+    {
+      "id": "rag-134",
+      "question": "为什么边缘网关不参与 traceId 的生成？",
+      "retrievedIds": [
+        "observability-guide.md#13",
+        "observability-guide.md#83",
+        "semantic-cache.md#5",
+        "rag-guide.md#12",
+        "workflow-guide.md#4",
+        "memory-guide.md#3",
+        "统一登录平台接入手册.md#67",
+        "eventbus-guide.md#8",
+        "nl2sql-guide.md#9",
+        "rbac-and-public-kb.md#23"
+      ],
+      "relevantIds": [
+        "observability-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 127
+    },
+    {
+      "id": "rag-135",
+      "question": "新平台中 LLM 调用的耗时和 token 用量信息通过什么机制获取？",
+      "retrievedIds": [
+        "observability-guide.md#2",
+        "observability-guide.md#50",
+        "统一登录平台接入手册.md#7",
+        "observability-guide.md#18",
+        "意图识别与Agent执行原理.md#4",
+        "统一登录平台接入手册.md#4",
+        "让Agent主动调接口.md#1",
+        "统一登录平台接入手册.md#73",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#19"
+      ],
+      "relevantIds": [
+        "observability-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 131
+    },
+    {
+      "id": "rag-136",
+      "question": "如何验证 traceId 在跨服务调用中正确传播？",
+      "retrievedIds": [
+        "架构文档.md#39",
+        "observability-guide.md#1",
+        "observability-guide.md#71",
+        "rag-guide.md#78",
+        "observability-guide.md#13",
+        "observability-guide.md#8",
+        "a2a-guide.md#79",
+        "observability-guide.md#15",
+        "统一登录平台接入手册.md#68",
+        "semantic-cache.md#6"
+      ],
+      "relevantIds": [
+        "observability-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 134
+    },
+    {
+      "id": "rag-137",
+      "question": "平台中哪些服务默认暴露了 prometheus 端点？",
+      "retrievedIds": [
+        "observability-guide.md#58",
+        "observability-guide.md#54",
+        "observability-guide.md#42",
+        "向量检索-ann与rrf.md#20",
+        "observability-guide.md#56",
+        "observability-guide.md#59",
+        "observability-guide.md#43",
+        "平台公共公告-统一维护窗口#0",
+        "退款与退货政策.md#1",
+        "nl2sql-guide.md#1"
+      ],
+      "relevantIds": [
+        "observability-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 177
+    },
+    {
+      "id": "rag-138",
+      "question": "新平台中 LLM 聚合指标与单体相比有什么变化？",
+      "retrievedIds": [
+        "eval-guide.md#55",
+        "observability-guide.md#0",
+        "observability-guide.md#40",
+        "observability-guide.md#50",
+        "observability-guide.md#72",
+        "observability-guide.md#18",
+        "退款与退货政策.md#1",
+        "平台公共公告-统一维护窗口#0",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#7"
+      ],
+      "relevantIds": [
+        "observability-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 135
+    },
+    {
+      "id": "rag-139",
+      "question": "如何通过 Actuator 端点获取各租户的当日 token 用量和成本？",
+      "retrievedIds": [
+        "observability-guide.md#0",
+        "observability-guide.md#64",
+        "observability-guide.md#85",
+        "observability-guide.md#62",
+        "observability-guide.md#3",
+        "observability-guide.md#61",
+        "observability-guide.md#81",
+        "统一登录平台接入手册.md#86",
+        "observability-guide.md#86",
+        "统一登录平台接入手册.md#10"
+      ],
+      "relevantIds": [
+        "observability-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.8,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 128
+    },
+    {
+      "id": "rag-140",
+      "question": "平台中健康检查的 gateway 探测有什么设计取舍？",
+      "retrievedIds": [
+        "observability-guide.md#65",
+        "observability-guide.md#0",
+        "observability-guide.md#81",
+        "eval-guide.md#55",
+        "向量检索-ann与rrf.md#9",
+        "observability-guide.md#66",
+        "model-cascade.md#1",
+        "统一登录平台接入手册.md#7",
+        "平台公共公告-统一维护窗口#0",
+        "统一登录平台接入手册.md#4"
+      ],
+      "relevantIds": [
+        "observability-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 120
+    },
+    {
+      "id": "rag-141",
+      "question": "LiteLLM 网关在接入 Postgres 后新增了哪些核心能力？",
+      "retrievedIds": [
+        "知识库文档更新与存储.md#0",
+        "litellm-gateway-guide.md#1",
+        "litellm-gateway-guide.md#0",
+        "架构文档.md#1",
+        "统一登录平台接入手册.md#4",
+        "nl2sql-guide.md#42",
+        "统一登录平台接入手册.md#11",
+        "数据库与中间件清单.md#8",
+        "nl2sql-guide.md#8",
+        "知识库文档更新与存储.md#35"
+      ],
+      "relevantIds": [
+        "litellm-gateway-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 123
+    },
+    {
+      "id": "rag-142",
+      "question": "如何通过环境变量启用租户归因的 user 模式？",
+      "retrievedIds": [
+        "nl2sql-guide.md#51",
+        "rbac-and-public-kb.md#24",
+        "workflow-guide.md#113",
+        "litellm-gateway-guide.md#15",
+        "litellm-gateway-guide.md#7",
+        "rag-guide.md#89",
+        "rbac-and-public-kb.md#44",
+        "统一登录平台接入手册.md#45",
+        "semantic-cache.md#38",
+        "memory-guide.md#5"
+      ],
+      "relevantIds": [
+        "litellm-gateway-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 0.25,
+      "hit": true,
+      "durationMs": 123
+    },
+    {
+      "id": "rag-143",
+      "question": "在 virtual-key 模式下，如果某个租户的 key 缺失，系统会如何处理？",
+      "retrievedIds": [
+        "litellm-gateway-guide.md#14",
+        "litellm-gateway-guide.md#15",
+        "memory-guide.md#9",
+        "eventbus-guide.md#8",
+        "litellm-gateway-guide.md#12",
+        "nl2sql-guide.md#4",
+        "workflow-guide.md#119",
+        "统一登录平台接入手册.md#55",
+        "统一登录平台接入手册.md#39",
+        "数据库与中间件清单.md#47"
+      ],
+      "relevantIds": [
+        "litellm-gateway-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 137
+    },
+    {
+      "id": "rag-144",
+      "question": "LiteLLM 的响应缓存默认 TTL 是多少秒？",
+      "retrievedIds": [
+        "litellm-gateway-guide.md#24",
+        "litellm-gateway-guide.md#5",
+        "semantic-cache.md#26",
+        "a2a-guide.md#74",
+        "litellm-gateway-guide.md#25",
+        "litellm-gateway-guide.md#35",
+        "统一登录平台接入手册.md#67",
+        "es-hybrid-rerank.md#16",
+        "litellm-gateway-guide.md#1",
+        "向量检索-ann与rrf.md#27"
+      ],
+      "relevantIds": [
+        "litellm-gateway-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 163
+    },
+    {
+      "id": "rag-145",
+      "question": "当主模型 deepseek-chat 故障时，LiteLLM 的 fallback 目标是什么？",
+      "retrievedIds": [
+        "litellm-gateway-guide.md#22",
+        "litellm-gateway-guide.md#27",
+        "litellm-gateway-guide.md#1",
+        "litellm-gateway-guide.md#35",
+        "semantic-cache.md#24",
+        "litellm-gateway-guide.md#26",
+        "litellm-gateway-guide.md#9",
+        "架构文档.md#25",
+        "nl2sql-guide.md#58",
+        "统一登录平台接入手册.md#4"
+      ],
+      "relevantIds": [
+        "litellm-gateway-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 126
+    },
+    {
+      "id": "rag-146",
+      "question": "为什么 virtual key 的 models 白名单必须同时包含 chat-default 和 chat-default-fallback？",
+      "retrievedIds": [
+        "litellm-gateway-guide.md#22",
+        "litellm-gateway-guide.md#26",
+        "litellm-gateway-guide.md#12",
+        "litellm-gateway-guide.md#27",
+        "数据库与中间件清单.md#39",
+        "数据库与中间件清单.md#43",
+        "litellm-gateway-guide.md#15",
+        "a2a-guide.md#90",
+        "model-cascade.md#19",
+        "semantic-cache.md#18"
+      ],
+      "relevantIds": [
+        "litellm-gateway-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 130
+    },
+    {
+      "id": "rag-147",
+      "question": "LiteLLM 的预算拒绝和 key 缺失在日志特征上有何不同？",
+      "retrievedIds": [
+        "litellm-gateway-guide.md#24",
+        "litellm-gateway-guide.md#22",
+        "litellm-gateway-guide.md#7",
+        "litellm-gateway-guide.md#16",
+        "litellm-gateway-guide.md#23",
+        "litellm-gateway-guide.md#0",
+        "litellm-gateway-guide.md#32",
+        "litellm-gateway-guide.md#5",
+        "统一登录平台接入手册.md#55",
+        "数据库与中间件清单.md#8"
+      ],
+      "relevantIds": [
+        "litellm-gateway-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.8,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 129
+    },
+    {
+      "id": "rag-148",
+      "question": "如何验证 Redis 响应缓存是否正常工作？",
+      "retrievedIds": [
+        "workflow-guide.md#122",
+        "litellm-gateway-guide.md#5",
+        "litellm-gateway-guide.md#24",
+        "litellm-gateway-guide.md#25",
+        "rag-guide.md#82",
+        "semantic-cache.md#14",
+        "统一登录平台接入手册.md#68",
+        "semantic-cache.md#6",
+        "rbac-and-public-kb.md#19",
+        "litellm-gateway-guide.md#1"
+      ],
+      "relevantIds": [
+        "litellm-gateway-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 120
+    },
+    {
+      "id": "rag-149",
+      "question": "在 virtual-key 模式下，租户的 key 应如何安全注入服务？",
+      "retrievedIds": [
+        "litellm-gateway-guide.md#14",
+        "litellm-gateway-guide.md#15",
+        "memory-guide.md#9",
+        "litellm-gateway-guide.md#12",
+        "nl2sql-guide.md#4",
+        "litellm-gateway-guide.md#0",
+        "litellm-gateway-guide.md#19",
+        "memory-guide.md#3",
+        "litellm-gateway-guide.md#17",
+        "数据库与中间件清单.md#39"
+      ],
+      "relevantIds": [
+        "litellm-gateway-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 132
+    },
+    {
+      "id": "rag-150",
+      "question": "LiteLLM 的 OTel span 默认是否开启？如何启用 Java 侧的追踪？",
+      "retrievedIds": [
+        "litellm-gateway-guide.md#30",
+        "litellm-gateway-guide.md#1",
+        "observability-guide.md#2",
+        "observability-guide.md#24",
+        "observability-guide.md#73",
+        "observability-guide.md#79",
+        "统一登录平台接入手册.md#65",
+        "统一登录平台接入手册.md#31",
+        "observability-guide.md#18",
+        "observability-guide.md#39"
+      ],
+      "relevantIds": [
+        "litellm-gateway-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 118
+    },
+    {
+      "id": "rag-151",
+      "question": "RBAC 权限体系中，用户的最终有效 scopes 由哪些部分组成？",
+      "retrievedIds": [
+        "rbac-and-public-kb.md#11",
+        "rbac-and-public-kb.md#49",
+        "rbac-and-public-kb.md#0",
+        "rbac-and-public-kb.md#7",
+        "rbac-and-public-kb.md#15",
+        "rbac-and-public-kb.md#32",
+        "rbac-and-public-kb.md#13",
+        "架构文档.md#46",
+        "rbac-and-public-kb.md#9",
+        "rbac-and-public-kb.md#39"
+      ],
+      "relevantIds": [
+        "rbac-and-public-kb.md"
+      ],
+      "recall": 1,
+      "precision": 0.9,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 134
+    },
+    {
+      "id": "rag-152",
+      "question": "在公共知识库中，如何写入一篇对所有租户可见的文档？",
+      "retrievedIds": [
+        "rbac-and-public-kb.md#0",
+        "知识库文档更新与存储.md#0",
+        "rag-guide.md#15",
+        "知识库文档更新与存储.md#8",
+        "平台公共公告-统一维护窗口#0",
+        "rbac-and-public-kb.md#6",
+        "rbac-and-public-kb.md#51",
+        "共享库测试文档#0",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#10"
+      ],
+      "relevantIds": [
+        "rbac-and-public-kb.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 121
+    },
+    {
+      "id": "rag-153",
+      "question": "如果管理员修改了某个角色的 scope 列表，已登录用户的权限会立即更新吗？",
+      "retrievedIds": [
+        "rbac-and-public-kb.md#13",
+        "rbac-and-public-kb.md#7",
+        "知识库文档更新与存储.md#9",
+        "rbac-and-public-kb.md#49",
+        "知识库文档更新与存储.md#8",
+        "架构文档.md#79",
+        "rbac-and-public-kb.md#25",
+        "rbac-and-public-kb.md#39",
+        "统一登录平台接入手册.md#61",
+        "架构文档.md#46"
+      ],
+      "relevantIds": [
+        "rbac-and-public-kb.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 150
+    },
+    {
+      "id": "rag-154",
+      "question": "当 AUTH_RBAC_ENABLED 为 false 时，用户登录后的权限如何确定？",
+      "retrievedIds": [
+        "rbac-and-public-kb.md#15",
+        "rbac-and-public-kb.md#57",
+        "rbac-and-public-kb.md#56",
+        "rbac-and-public-kb.md#49",
+        "架构文档.md#79",
+        "统一登录平台接入手册.md#89",
+        "架构文档.md#50",
+        "rbac-and-public-kb.md#7",
+        "知识库文档更新与存储.md#9",
+        "litellm-gateway-guide.md#25"
+      ],
+      "relevantIds": [
+        "rbac-and-public-kb.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 120
+    },
+    {
+      "id": "rag-155",
+      "question": "公共知识库的文档存储在哪个分区？普通租户查询时如何看到公共库内容？",
+      "retrievedIds": [
+        "知识库文档更新与存储.md#8",
+        "rbac-and-public-kb.md#0",
+        "rbac-and-public-kb.md#51",
+        "知识库文档更新与存储.md#4",
+        "rbac-and-public-kb.md#52",
+        "平台公共公告-统一维护窗口#0",
+        "rag-guide.md#15",
+        "共享库测试文档#0",
+        "退款政策-公共.md#0",
+        "统一登录平台接入手册.md#1"
+      ],
+      "relevantIds": [
+        "rbac-and-public-kb.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 136
+    },
+    {
+      "id": "rag-156",
+      "question": "在 RBAC 继承模式下，给租户绑定基础角色后，该租户下的用户如何获得这些角色对应的权限？",
+      "retrievedIds": [
+        "rbac-and-public-kb.md#23",
+        "rbac-and-public-kb.md#7",
+        "rbac-and-public-kb.md#22",
+        "rbac-and-public-kb.md#9",
+        "rbac-and-public-kb.md#28",
+        "rbac-and-public-kb.md#25",
+        "rbac-and-public-kb.md#11",
+        "rbac-and-public-kb.md#57",
+        "rbac-and-public-kb.md#30",
+        "统一登录平台接入手册.md#7"
+      ],
+      "relevantIds": [
+        "rbac-and-public-kb.md"
+      ],
+      "recall": 1,
+      "precision": 0.9,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 137
+    },
+    {
+      "id": "rag-157",
+      "question": "API-key 能否用于执行角色管理操作（如创建用户或修改角色）？",
+      "retrievedIds": [
+        "rbac-and-public-kb.md#33",
+        "memory-guide.md#27",
+        "rbac-and-public-kb.md#7",
+        "rbac-and-public-kb.md#23",
+        "rbac-and-public-kb.md#48",
+        "统一登录平台接入手册.md#56",
+        "知识库文档更新与存储.md#8",
+        "litellm-gateway-guide.md#16",
+        "架构文档.md#47",
+        "semantic-cache.md#10"
+      ],
+      "relevantIds": [
+        "rbac-and-public-kb.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 125
+    },
+    {
+      "id": "rag-158",
+      "question": "如果某个用户仅通过租户基础角色获得了 role-admin scope，当管理员修改该租户绑定的角色时，系统如何防止最后一个 role-admin 被移除？",
+      "retrievedIds": [
+        "rbac-and-public-kb.md#25",
+        "架构文档.md#48",
+        "rbac-and-public-kb.md#39",
+        "rbac-and-public-kb.md#7",
+        "rbac-and-public-kb.md#30",
+        "rbac-and-public-kb.md#23",
+        "rbac-and-public-kb.md#11",
+        "rbac-and-public-kb.md#47",
+        "统一登录平台接入手册.md#62",
+        "统一登录平台接入手册.md#61"
+      ],
+      "relevantIds": [
+        "rbac-and-public-kb.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 147
+    },
+    {
+      "id": "rag-159",
+      "question": "自助注册时，新用户默认获得什么角色？需要同时开启哪两个开关才能避免创建出无有效 scopes 的账号？",
+      "retrievedIds": [
+        "rbac-and-public-kb.md#13",
+        "架构文档.md#46",
+        "rbac-and-public-kb.md#11",
+        "rbac-and-public-kb.md#39",
+        "rbac-and-public-kb.md#15",
+        "rbac-and-public-kb.md#57",
+        "rbac-and-public-kb.md#7",
+        "rbac-and-public-kb.md#25",
+        "rbac-and-public-kb.md#49",
+        "统一登录平台接入手册.md#61"
+      ],
+      "relevantIds": [
+        "rbac-and-public-kb.md"
+      ],
+      "recall": 1,
+      "precision": 0.8,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 170
+    },
+    {
+      "id": "rag-160",
+      "question": "当 AUTH_RBAC_ADMIN_WRITES_ENABLED 为 false 时，管理员尝试通过 PUT /auth/admin/users/dave/roles 修改用户角色会得到什么响应？",
+      "retrievedIds": [
+        "rbac-and-public-kb.md#44",
+        "rbac-and-public-kb.md#36",
+        "rbac-and-public-kb.md#38",
+        "rbac-and-public-kb.md#37",
+        "架构文档.md#48",
+        "rbac-and-public-kb.md#56",
+        "rbac-and-public-kb.md#57",
+        "rbac-and-public-kb.md#39",
+        "统一登录平台接入手册.md#30",
+        "统一登录平台接入手册.md#60"
+      ],
+      "relevantIds": [
+        "rbac-and-public-kb.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 140
+    },
+    {
+      "id": "rag-161",
+      "question": "平台事件总线如何实现跨系统链路的终态可靠投递？",
+      "retrievedIds": [
+        "eventbus-guide.md#4",
+        "eventbus-guide.md#0",
+        "架构文档.md#62",
+        "架构文档.md#54",
+        "eventbus-guide.md#3",
+        "eventbus-guide.md#29",
+        "eventbus-guide.md#40",
+        "eventbus-guide.md#30",
+        "统一登录平台接入手册.md#1",
+        "平台公共公告-统一维护窗口#0"
+      ],
+      "relevantIds": [
+        "eventbus-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 148
+    },
+    {
+      "id": "rag-162",
+      "question": "为什么平台不直接使用Kafka原生事务来保证事件投递的原子性？",
+      "retrievedIds": [
+        "eventbus-guide.md#4",
+        "eventbus-guide.md#5",
+        "eventbus-guide.md#43",
+        "eventbus-guide.md#3",
+        "架构文档.md#58",
+        "eventbus-guide.md#57",
+        "架构文档.md#124",
+        "eventbus-guide.md#31",
+        "架构文档.md#63",
+        "统一登录平台接入手册.md#1"
+      ],
+      "relevantIds": [
+        "eventbus-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 128
+    },
+    {
+      "id": "rag-163",
+      "question": "在消费侧去重中，先标记再处理会导致什么问题？",
+      "retrievedIds": [
+        "eventbus-guide.md#8",
+        "架构文档.md#60",
+        "eventbus-guide.md#6",
+        "eventbus-guide.md#7",
+        "eval-guide.md#39",
+        "eventbus-guide.md#50",
+        "架构文档.md#124",
+        "知识库文档更新与存储.md#19",
+        "统一登录平台接入手册.md#4",
+        "平台公共公告-统一维护窗口#0"
+      ],
+      "relevantIds": [
+        "eventbus-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 129
+    },
+    {
+      "id": "rag-164",
+      "question": "KafkaEventPublisher的同步等待ack设计目的是什么？",
+      "retrievedIds": [
+        "eventbus-guide.md#13",
+        "eventbus-guide.md#5",
+        "架构文档.md#59",
+        "memory-guide.md#38",
+        "eventbus-guide.md#12",
+        "workflow-guide.md#119",
+        "统一登录平台接入手册.md#4",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#7",
+        "数据库与中间件清单.md#51"
+      ],
+      "relevantIds": [
+        "eventbus-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 121
+    },
+    {
+      "id": "rag-165",
+      "question": "平台事件总线默认状态下是否依赖Kafka？",
+      "retrievedIds": [
+        "向量检索-ann与rrf.md#10",
+        "架构文档.md#124",
+        "workflow-guide.md#6",
+        "eventbus-guide.md#4",
+        "eventbus-guide.md#1",
+        "平台公共公告-统一维护窗口#0",
+        "向量检索-ann与rrf.md#9",
+        "数据库与中间件清单.md#5",
+        "统一登录平台接入手册.md#1",
+        "退款与退货政策.md#1"
+      ],
+      "relevantIds": [
+        "eventbus-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 0.25,
+      "hit": true,
+      "durationMs": 128
+    },
+    {
+      "id": "rag-166",
+      "question": "workflow-service中kafka档如何避免与async-task通知双投？",
+      "retrievedIds": [
+        "eventbus-guide.md#34",
+        "eventbus-guide.md#42",
+        "eventbus-guide.md#54",
+        "eventbus-guide.md#33",
+        "架构文档.md#73",
+        "eventbus-guide.md#38",
+        "架构文档.md#61",
+        "eventbus-guide.md#31",
+        "架构文档.md#62",
+        "数据库与中间件清单.md#15"
+      ],
+      "relevantIds": [
+        "eventbus-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 126
+    },
+    {
+      "id": "rag-167",
+      "question": "async-task-service生产Kafka档必须满足哪些条件？",
+      "retrievedIds": [
+        "eventbus-guide.md#68",
+        "eventbus-guide.md#43",
+        "eventbus-guide.md#38",
+        "eventbus-guide.md#53",
+        "eventbus-guide.md#54",
+        "架构文档.md#99",
+        "架构文档.md#67",
+        "数据库与中间件清单.md#15",
+        "数据库与中间件清单.md#50",
+        "数据库与中间件清单.md#26"
+      ],
+      "relevantIds": [
+        "eventbus-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 121
+    },
+    {
+      "id": "rag-168",
+      "question": "channel-service消费侧跨重启去重如何配置？",
+      "retrievedIds": [
+        "eventbus-guide.md#58",
+        "eventbus-guide.md#50",
+        "eventbus-guide.md#19",
+        "架构文档.md#56",
+        "架构文档.md#58",
+        "eventbus-guide.md#0",
+        "数据库与中间件清单.md#49",
+        "数据库与中间件清单.md#26",
+        "eventbus-guide.md#47",
+        "eventbus-guide.md#69"
+      ],
+      "relevantIds": [
+        "eventbus-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 119
+    },
+    {
+      "id": "rag-169",
+      "question": "端到端启用Kafka档时，如果只设置WORKFLOW_TERMINAL_NOTIFICATION_MODE=kafka而不开platform.eventbus.enabled会怎样？",
+      "retrievedIds": [
+        "eventbus-guide.md#1",
+        "eventbus-guide.md#54",
+        "eventbus-guide.md#56",
+        "eventbus-guide.md#32",
+        "架构文档.md#12",
+        "数据库与中间件清单.md#26",
+        "eventbus-guide.md#53",
+        "eventbus-guide.md#60",
+        "数据库与中间件清单.md#35",
+        "统一登录平台接入手册.md#82"
+      ],
+      "relevantIds": [
+        "eventbus-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 130
+    },
+    {
+      "id": "rag-170",
+      "question": "集成测试中如何验证outbox与引擎终态的事务原子性？",
+      "retrievedIds": [
+        "eventbus-guide.md#40",
+        "eventbus-guide.md#30",
+        "eventbus-guide.md#5",
+        "架构文档.md#59",
+        "eventbus-guide.md#3",
+        "eventbus-guide.md#61",
+        "架构文档.md#63",
+        "eventbus-guide.md#4",
+        "workflow-guide.md#55",
+        "数据库与中间件清单.md#47"
+      ],
+      "relevantIds": [
+        "eventbus-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 124
+    },
+    {
+      "id": "rag-171",
+      "question": "外部客户端如何通过 A2A 协议调用 langchain4j-platform？",
+      "retrievedIds": [
+        "a2a-guide.md#0",
+        "a2a-guide.md#9",
+        "数据库与中间件清单.md#1",
+        "mcp-guide.md#8",
+        "统一登录平台接入手册.md#96",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#21",
+        "a2a-guide.md#79",
+        "a2a-guide.md#18",
+        "memory-guide.md#8"
+      ],
+      "relevantIds": [
+        "a2a-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 129
+    },
+    {
+      "id": "rag-172",
+      "question": "A2A Agent Card 的免鉴权端点是什么？",
+      "retrievedIds": [
+        "a2a-guide.md#5",
+        "a2a-guide.md#84",
+        "a2a-guide.md#7",
+        "a2a-guide.md#81",
+        "a2a-guide.md#90",
+        "a2a-guide.md#85",
+        "统一登录平台接入手册.md#4",
+        "统一登录平台接入手册.md#59",
+        "统一登录平台接入手册.md#67",
+        "es-hybrid-rerank.md#16"
+      ],
+      "relevantIds": [
+        "a2a-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 139
+    },
+    {
+      "id": "rag-173",
+      "question": "如何获取平台自有的互操作能力清单？",
+      "retrievedIds": [
+        "a2a-guide.md#3",
+        "a2a-guide.md#5",
+        "a2a-guide.md#20",
+        "a2a-guide.md#84",
+        "workflow-guide.md#6",
+        "统一登录平台接入手册.md#7",
+        "agent-guide.md#43",
+        "rag-guide.md#1",
+        "架构文档.md#77",
+        "统一登录平台接入手册.md#1"
+      ],
+      "relevantIds": [
+        "a2a-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 132
+    },
+    {
+      "id": "rag-174",
+      "question": "A2A JSON-RPC 单端点支持哪些方法？",
+      "retrievedIds": [
+        "a2a-guide.md#22",
+        "a2a-guide.md#15",
+        "a2a-guide.md#85",
+        "a2a-guide.md#21",
+        "a2a-guide.md#2",
+        "a2a-guide.md#84",
+        "统一登录平台接入手册.md#66",
+        "统一登录平台接入手册.md#4",
+        "统一登录平台接入手册.md#68",
+        "mcp-guide.md#16"
+      ],
+      "relevantIds": [
+        "a2a-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 130
+    },
+    {
+      "id": "rag-175",
+      "question": "message/send 方法中如何指定使用 deep-research 技能？",
+      "retrievedIds": [
+        "a2a-guide.md#32",
+        "a2a-guide.md#43",
+        "a2a-guide.md#26",
+        "a2a-guide.md#35",
+        "a2a-guide.md#40",
+        "统一登录平台接入手册.md#66",
+        "memory-guide.md#30",
+        "a2a-guide.md#23",
+        "知识库文档更新与存储.md#6",
+        "a2a-guide.md#91"
+      ],
+      "relevantIds": [
+        "a2a-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 127
+    },
+    {
+      "id": "rag-176",
+      "question": "message/stream 方法返回的 SSE 帧中，artifact-update 事件在 chat 和 deep-research 技能下有何不同？",
+      "retrievedIds": [
+        "a2a-guide.md#26",
+        "架构文档.md#126",
+        "a2a-guide.md#32",
+        "a2a-guide.md#50",
+        "a2a-guide.md#24",
+        "agent-guide.md#70",
+        "统一登录平台接入手册.md#66",
+        "统一登录平台接入手册.md#62",
+        "memory-guide.md#30",
+        "memory-guide.md#7"
+      ],
+      "relevantIds": [
+        "a2a-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 137
+    },
+    {
+      "id": "rag-177",
+      "question": "tasks/cancel 方法在任务已终态时返回什么错误？",
+      "retrievedIds": [
+        "a2a-guide.md#25",
+        "agent-guide.md#12",
+        "a2a-guide.md#64",
+        "workflow-guide.md#54",
+        "数据库与中间件清单.md#15",
+        "数据库与中间件清单.md#21",
+        "统一登录平台接入手册.md#42",
+        "workflow-guide.md#39",
+        "workflow-guide.md#24",
+        "a2a-guide.md#30"
+      ],
+      "relevantIds": [
+        "a2a-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 122
+    },
+    {
+      "id": "rag-178",
+      "question": "push 通知中，interop 如何保证回调的真实性？",
+      "retrievedIds": [
+        "a2a-guide.md#36",
+        "a2a-guide.md#77",
+        "架构文档.md#126",
+        "a2a-guide.md#85",
+        "a2a-guide.md#65",
+        "a2a-guide.md#25",
+        "统一登录平台接入手册.md#78",
+        "eventbus-guide.md#5",
+        "nl2sql-guide.md#8",
+        "数据库与中间件清单.md#8"
+      ],
+      "relevantIds": [
+        "a2a-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 116
+    },
+    {
+      "id": "rag-179",
+      "question": "A2A 任务状态与 agent-service 内部状态如何映射？",
+      "retrievedIds": [
+        "a2a-guide.md#57",
+        "a2a-guide.md#82",
+        "agent-guide.md#10",
+        "数据库与中间件清单.md#50",
+        "agent-guide.md#97",
+        "agent-guide.md#126",
+        "mcp-guide.md#30",
+        "a2a-guide.md#68",
+        "workflow-guide.md#82",
+        "架构文档.md#77"
+      ],
+      "relevantIds": [
+        "a2a-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 122
+    },
+    {
+      "id": "rag-180",
+      "question": "live discovery 影响哪些端点？",
+      "retrievedIds": [
+        "a2a-guide.md#71",
+        "a2a-guide.md#86",
+        "mcp-guide.md#1",
+        "a2a-guide.md#16",
+        "a2a-guide.md#74",
+        "mcp-guide.md#37",
+        "mcp-guide.md#20",
+        "agent-guide.md#13",
+        "统一登录平台接入手册.md#92",
+        "统一登录平台接入手册.md#98"
+      ],
+      "relevantIds": [
+        "a2a-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 123
+    },
+    {
+      "id": "rag-181",
+      "question": "平台 agent 作为 MCP client 时，默认是否开启？",
+      "retrievedIds": [
+        "mcp-guide.md#0",
+        "mcp-guide.md#1",
+        "mcp-guide.md#4",
+        "agent-guide.md#106",
+        "a2a-guide.md#5",
+        "统一登录平台接入手册.md#0",
+        "统一登录平台接入手册.md#4",
+        "统一登录平台接入手册.md#7",
+        "统一登录平台接入手册.md#33",
+        "mcp-guide.md#2"
+      ],
+      "relevantIds": [
+        "mcp-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 148
+    },
+    {
+      "id": "rag-182",
+      "question": "如何让 agent 通过子进程方式启动一个本地 MCP server？",
+      "retrievedIds": [
+        "mcp-guide.md#9",
+        "mcp-guide.md#8",
+        "agent-guide.md#98",
+        "mcp-guide.md#4",
+        "mcp-guide.md#3",
+        "agent-guide.md#101",
+        "统一登录平台接入手册.md#5",
+        "数据库与中间件清单.md#50",
+        "统一登录平台接入手册.md#82",
+        "mcp-guide.md#1"
+      ],
+      "relevantIds": [
+        "mcp-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 119
+    },
+    {
+      "id": "rag-183",
+      "question": "interop-service 暴露的 MCP 风格工具端点中，用于获取单个工具 schema 的路径是什么？",
+      "retrievedIds": [
+        "mcp-guide.md#14",
+        "mcp-guide.md#0",
+        "mcp-guide.md#17",
+        "mcp-guide.md#16",
+        "a2a-guide.md#21",
+        "mcp-guide.md#24",
+        "mcp-guide.md#40",
+        "mcp-guide.md#15",
+        "a2a-guide.md#78",
+        "a2a-guide.md#82"
+      ],
+      "relevantIds": [
+        "mcp-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 134
+    },
+    {
+      "id": "rag-184",
+      "question": "平台 agent 作为 MCP client 时，mcp_call 动作在什么条件下不会出现在 agent 工具清单中？",
+      "retrievedIds": [
+        "mcp-guide.md#0",
+        "mcp-guide.md#1",
+        "mcp-guide.md#3",
+        "mcp-guide.md#4",
+        "agent-guide.md#106",
+        "mcp-guide.md#12",
+        "让Agent主动调接口.md#1",
+        "mcp-guide.md#2",
+        "agent-guide.md#8",
+        "agent-guide.md#98"
+      ],
+      "relevantIds": [
+        "mcp-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 131
+    },
+    {
+      "id": "rag-185",
+      "question": "调用 interop-service 的 /interop/mcp/call 时，如果 tool 字段缺失，会返回什么错误？",
+      "retrievedIds": [
+        "mcp-guide.md#0",
+        "mcp-guide.md#32",
+        "mcp-guide.md#12",
+        "mcp-guide.md#16",
+        "a2a-guide.md#86",
+        "mcp-guide.md#25",
+        "mcp-guide.md#40",
+        "mcp-guide.md#24",
+        "agent-guide.md#106",
+        "mcp-guide.md#17"
+      ],
+      "relevantIds": [
+        "mcp-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.8,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 137
+    },
+    {
+      "id": "rag-186",
+      "question": "平台 agent 作为 MCP client 时，http 传输方式使用哪个类？",
+      "retrievedIds": [
+        "mcp-guide.md#0",
+        "mcp-guide.md#2",
+        "mcp-guide.md#1",
+        "a2a-guide.md#3",
+        "mcp-guide.md#6",
+        "mcp-guide.md#8",
+        "mcp-guide.md#9",
+        "mcp-guide.md#39",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#4"
+      ],
+      "relevantIds": [
+        "mcp-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 124
+    },
+    {
+      "id": "rag-187",
+      "question": "interop-service 暴露的 MCP 工具中，platform.ping 工具的作用是什么？",
+      "retrievedIds": [
+        "mcp-guide.md#40",
+        "mcp-guide.md#0",
+        "mcp-guide.md#20",
+        "mcp-guide.md#24",
+        "统一登录平台接入手册.md#7",
+        "数据库与中间件清单.md#49",
+        "agent-guide.md#106",
+        "mcp-guide.md#15",
+        "mcp-guide.md#13",
+        "mcp-guide.md#14"
+      ],
+      "relevantIds": [
+        "mcp-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 123
+    },
+    {
+      "id": "rag-188",
+      "question": "如何同时启用 agent 作为 MCP client 并配置 http 传输方式？",
+      "retrievedIds": [
+        "mcp-guide.md#6",
+        "mcp-guide.md#0",
+        "mcp-guide.md#1",
+        "mcp-guide.md#9",
+        "mcp-guide.md#4",
+        "mcp-guide.md#39",
+        "统一登录平台接入手册.md#17",
+        "统一登录平台接入手册.md#80",
+        "workflow-guide.md#100",
+        "agent-guide.md#10"
+      ],
+      "relevantIds": [
+        "mcp-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.6,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 127
+    },
+    {
+      "id": "rag-189",
+      "question": "interop-service 的工具目录默认如何获取？如果下游 agent-service 不可达会怎样？",
+      "retrievedIds": [
+        "mcp-guide.md#1",
+        "mcp-guide.md#20",
+        "mcp-guide.md#40",
+        "a2a-guide.md#72",
+        "mcp-guide.md#14",
+        "数据库与中间件清单.md#49",
+        "数据库与中间件清单.md#50",
+        "数据库与中间件清单.md#35",
+        "统一登录平台接入手册.md#33",
+        "a2a-guide.md#78"
+      ],
+      "relevantIds": [
+        "mcp-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 140
+    },
+    {
+      "id": "rag-190",
+      "question": "调用 platform.agent.run 工具时，必须提供哪个参数？",
+      "retrievedIds": [
+        "mcp-guide.md#11",
+        "意图识别与Agent执行原理.md#2",
+        "mcp-guide.md#24",
+        "意图识别与Agent执行原理.md#9",
+        "统一登录平台接入手册.md#82",
+        "mcp-guide.md#23",
+        "mcp-guide.md#29",
+        "mcp-guide.md#18",
+        "意图识别与Agent执行原理.md#1",
+        "agent-guide.md#98"
+      ],
+      "relevantIds": [
+        "mcp-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 118
+    },
+    {
+      "id": "rag-191",
+      "question": "平台对外暴露业务API的唯一入口是什么？",
+      "retrievedIds": [
+        "向量检索-ann与rrf.md#9",
+        "架构文档.md#13",
+        "架构文档.md#14",
+        "litellm-gateway-guide.md#8",
+        "向量检索-ann与rrf.md#0",
+        "向量检索-ann与rrf.md#10",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#7",
+        "统一登录平台接入手册.md#59",
+        "统一登录平台接入手册.md#4"
+      ],
+      "relevantIds": [
+        "架构文档.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 141
+    },
+    {
+      "id": "rag-192",
+      "question": "下游服务信任哪种令牌进行身份验证？",
+      "retrievedIds": [
+        "eval-guide.md#5",
+        "架构文档.md#1",
+        "rbac-and-public-kb.md#12",
+        "a2a-guide.md#82",
+        "架构文档.md#40",
+        "架构文档.md#39",
+        "nl2sql-guide.md#35",
+        "agent-guide.md#44",
+        "memory-guide.md#3",
+        "意图识别与Agent执行原理.md#34"
+      ],
+      "relevantIds": [
+        "架构文档.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 124
+    },
+    {
+      "id": "rag-193",
+      "question": "所有LLM调用在Java侧通过什么统一网关进行？",
+      "retrievedIds": [
+        "架构文档.md#1",
+        "rag-guide.md#78",
+        "litellm-gateway-guide.md#31",
+        "架构文档.md#59",
+        "eval-guide.md#83",
+        "平台公共公告-统一维护窗口#0",
+        "统一登录平台接入手册.md#10",
+        "a2a-guide.md#22",
+        "agent-guide.md#44",
+        "rag-guide.md#4"
+      ],
+      "relevantIds": [
+        "架构文档.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 130
+    },
+    {
+      "id": "rag-194",
+      "question": "跨服务DTO放在哪个共享库中？",
+      "retrievedIds": [
+        "架构文档.md#1",
+        "让Agent主动调接口.md#24",
+        "让Agent主动调接口.md#14",
+        "nl2sql-guide.md#16",
+        "架构文档.md#54",
+        "架构文档.md#83",
+        "observability-guide.md#0",
+        "架构文档.md#84",
+        "向量检索-ann与rrf.md#27",
+        "架构文档.md#90"
+      ],
+      "relevantIds": [
+        "架构文档.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 136
+    },
+    {
+      "id": "rag-195",
+      "question": "edge-gateway中三个签发内部JWT的GlobalFilter按什么顺序执行？",
+      "retrievedIds": [
+        "架构文档.md#40",
+        "架构文档.md#14",
+        "a2a-guide.md#1",
+        "架构文档.md#32",
+        "a2a-guide.md#79",
+        "workflow-guide.md#4",
+        "数据库与中间件清单.md#49",
+        "数据库与中间件清单.md#46",
+        "数据库与中间件清单.md#42",
+        "统一登录平台接入手册.md#4"
+      ],
+      "relevantIds": [
+        "架构文档.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 130
+    },
+    {
+      "id": "rag-196",
+      "question": "平台如何实现跨服务调用时租户身份的传播？",
+      "retrievedIds": [
+        "架构文档.md#39",
+        "semantic-cache.md#10",
+        "意图识别与Agent执行原理.md#6",
+        "eval-guide.md#5",
+        "统一登录平台接入手册.md#7",
+        "nl2sql-guide.md#24",
+        "observability-guide.md#71",
+        "统一登录平台接入手册.md#1",
+        "平台公共公告-统一维护窗口#0",
+        "统一登录平台接入手册.md#59"
+      ],
+      "relevantIds": [
+        "架构文档.md"
+      ],
+      "recall": 1,
+      "precision": 0.1,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 136
+    },
+    {
+      "id": "rag-197",
+      "question": "auth-service签发哪种令牌？内部JWT由谁签发？",
+      "retrievedIds": [
+        "架构文档.md#40",
+        "架构文档.md#14",
+        "rbac-and-public-kb.md#4",
+        "架构文档.md#52",
+        "架构文档.md#17",
+        "agent-guide.md#1",
+        "workflow-guide.md#4",
+        "数据库与中间件清单.md#16",
+        "统一登录平台接入手册.md#64",
+        "数据库与中间件清单.md#50"
+      ],
+      "relevantIds": [
+        "架构文档.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 130
+    },
+    {
+      "id": "rag-198",
+      "question": "平台如何实现审计和计量对业务代码透明？",
+      "retrievedIds": [
+        "向量检索-ann与rrf.md#9",
+        "架构文档.md#29",
+        "架构文档.md#0",
+        "统一登录平台接入手册.md#1",
+        "向量检索-ann与rrf.md#0",
+        "统一登录平台接入手册.md#7",
+        "向量检索-ann与rrf.md#10",
+        "向量检索-ann与rrf.md#8",
+        "semantic-cache.md#11",
+        "nl2sql-guide.md#5"
+      ],
+      "relevantIds": [
+        "架构文档.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 126
+    },
+    {
+      "id": "rag-199",
+      "question": "平台采用什么机制达到effective exactly-once的事件投递？",
+      "retrievedIds": [
+        "架构文档.md#58",
+        "架构文档.md#124",
+        "eventbus-guide.md#7",
+        "eventbus-guide.md#17",
+        "eventbus-guide.md#1",
+        "eventbus-guide.md#5",
+        "统一登录平台接入手册.md#7",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#4",
+        "统一登录平台接入手册.md#59"
+      ],
+      "relevantIds": [
+        "架构文档.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 132
+    },
+    {
+      "id": "rag-200",
+      "question": "config-server集中下发什么类型的配置？密钥如何管理？",
+      "retrievedIds": [
+        "架构文档.md#71",
+        "架构文档.md#25",
+        "架构文档.md#69",
+        "架构文档.md#81",
+        "model-cascade.md#17",
+        "架构文档.md#124",
+        "model-cascade.md#18",
+        "架构文档.md#70",
+        "架构文档.md#36",
+        "数据库与中间件清单.md#40"
+      ],
+      "relevantIds": [
+        "架构文档.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 131
+    }
+  ],
+  "batches": [
+    {
+      "cases": 20,
+      "avgRecall": 1,
+      "avgPrecision": 0.43000000000000005,
+      "meanMrr": 0.95,
+      "hitRate": 1,
+      "totalDurationMs": 3843
+    },
+    {
+      "cases": 20,
+      "avgRecall": 0.95,
+      "avgPrecision": 0.325,
+      "meanMrr": 0.7696428571428571,
+      "hitRate": 0.95,
+      "totalDurationMs": 3051
+    },
+    {
+      "cases": 20,
+      "avgRecall": 1,
+      "avgPrecision": 0.5549999999999999,
+      "meanMrr": 0.9,
+      "hitRate": 1,
+      "totalDurationMs": 2840
+    },
+    {
+      "cases": 20,
+      "avgRecall": 1,
+      "avgPrecision": 0.5599999999999998,
+      "meanMrr": 0.93125,
+      "hitRate": 1,
+      "totalDurationMs": 2903
+    },
+    {
+      "cases": 20,
+      "avgRecall": 0.95,
+      "avgPrecision": 0.33000000000000007,
+      "meanMrr": 0.6958333333333333,
+      "hitRate": 0.95,
+      "totalDurationMs": 2699
+    },
+    {
+      "cases": 20,
+      "avgRecall": 0.95,
+      "avgPrecision": 0.36000000000000004,
+      "meanMrr": 0.875,
+      "hitRate": 0.95,
+      "totalDurationMs": 2766
+    },
+    {
+      "cases": 20,
+      "avgRecall": 1,
+      "avgPrecision": 0.5750000000000001,
+      "meanMrr": 0.9055555555555556,
+      "hitRate": 1,
+      "totalDurationMs": 2735
+    },
+    {
+      "cases": 20,
+      "avgRecall": 1,
+      "avgPrecision": 0.5149999999999999,
+      "meanMrr": 0.8875,
+      "hitRate": 1,
+      "totalDurationMs": 2681
+    },
+    {
+      "cases": 20,
+      "avgRecall": 1,
+      "avgPrecision": 0.4800000000000001,
+      "meanMrr": 0.9625,
+      "hitRate": 1,
+      "totalDurationMs": 2551
+    },
+    {
+      "cases": 20,
+      "avgRecall": 1,
+      "avgPrecision": 0.4499999999999999,
+      "meanMrr": 0.925,
+      "hitRate": 1,
+      "totalDurationMs": 2617
+    }
+  ]
+}

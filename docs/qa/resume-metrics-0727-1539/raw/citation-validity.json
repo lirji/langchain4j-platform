@@ -1,0 +1,1152 @@
+{
+  "summary": {
+    "benchmark": "citation-id-validity",
+    "cases": 50,
+    "totalCitations": 39,
+    "validCitations": 35,
+    "invalidCitations": 4,
+    "citationValidity": 0.8974358974358975,
+    "answersWithCitation": 30,
+    "citationCoverage": 0.6
+  },
+  "results": [
+    {
+      "id": "rag-001",
+      "question": "上传文档时，如果图片多模态功能未开启，系统会如何处理？",
+      "answer": "会返回明确的 **400** 错误，提示需开启此开关，不会静默处理。",
+      "citations": [],
+      "valid": [],
+      "invalid": [],
+      "validSourceIds": [
+        "rag-guide.md#28",
+        "rag-guide.md#14",
+        "知识库文档更新与存储.md#0",
+        "es-hybrid-rerank.md#18",
+        "rag-guide.md#90",
+        "rag-guide.md#26",
+        "rag-guide.md#3",
+        "统一登录平台接入手册.md#83",
+        "退款与退货政策.md#0",
+        "知识库文档更新与存储.md#36"
+      ]
+    },
+    {
+      "id": "rag-002",
+      "question": "在混合检索中，当ES参与查询时，默认的融合策略是什么？",
+      "answer": "默认是 RRF（Reciprocal Rank Fusion），`k=60`，只看排名来融合向量/关键词/ES/图谱四路结果，不受分数量纲影响。",
+      "citations": [],
+      "valid": [],
+      "invalid": [],
+      "validSourceIds": [
+        "向量检索-ann与rrf.md#29",
+        "rag-guide.md#7",
+        "rag-guide.md#55",
+        "es-hybrid-rerank.md#15",
+        "es-hybrid-rerank.md#0",
+        "架构文档.md#9",
+        "es-hybrid-rerank.md#4",
+        "平台公共公告-统一维护窗口#0",
+        "统一登录平台接入手册.md#7",
+        "es-hybrid-rerank.md#2"
+      ]
+    },
+    {
+      "id": "rag-003",
+      "question": "如何配置才能使图片多模态嵌入功能生效？",
+      "answer": "需要两步：1) 设置环境变量 `RAG_MULTIMODAL_ENABLED=true`（默认关）；2) 确保端点可达（开启时若端点不可达，上传图片会返回 400）。详见 [doc=rag-guide.md#14]。",
+      "citations": [
+        "rag-guide.md#14"
+      ],
+      "valid": [
+        "rag-guide.md#14"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "rag-guide.md#14",
+        "rag-guide.md#25",
+        "架构文档.md#125",
+        "rag-guide.md#90",
+        "rag-guide.md#26",
+        "知识库文档更新与存储.md#0",
+        "eventbus-guide.md#50",
+        "observability-guide.md#11",
+        "memory-guide.md#21",
+        "架构文档.md#102"
+      ]
+    },
+    {
+      "id": "rag-004",
+      "question": "文档上传时，如果标题相同，系统会如何处理？",
+      "answer": "同一租户下 `title`（displayName）相同的文档会**覆盖并递增版本号**（`docId` 由 `tenantId:displayName` 哈希得到，删除旧向量后重建）。[doc=rag-guide.md#15]",
+      "citations": [
+        "rag-guide.md#15"
+      ],
+      "valid": [
+        "rag-guide.md#15"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "rag-guide.md#15",
+        "知识库文档更新与存储.md#1",
+        "rag-guide.md#16",
+        "知识库文档更新与存储.md#9",
+        "rag-guide.md#28",
+        "知识库文档更新与存储.md#8",
+        "统一登录平台接入手册.md#83",
+        "数据库与中间件清单.md#51",
+        "退款与退货政策.md#0",
+        "统一登录平台接入手册.md#68"
+      ]
+    },
+    {
+      "id": "rag-005",
+      "question": "在enforce授权模式下，上传文档时如果无法确定归属部门，会发生什么？",
+      "answer": "直接返回 403，拒绝创建该文档。",
+      "citations": [],
+      "valid": [],
+      "invalid": [],
+      "validSourceIds": [
+        "rag-guide.md#16",
+        "rbac-and-public-kb.md#26",
+        "知识库文档更新与存储.md#9",
+        "rag-guide.md#10",
+        "知识库文档更新与存储.md#31",
+        "架构文档.md#103",
+        "rag-guide.md#12",
+        "rag-guide.md#6",
+        "rag-guide.md#17",
+        "退款与退货政策.md#0"
+      ]
+    },
+    {
+      "id": "rag-006",
+      "question": "GraphRAG的图存储默认使用什么后端？如何切换为进程内模式？",
+      "answer": "默认使用 `jdbc`（持久化到 MySQL）。  \n切换为进程内模式：设置环境变量 `RAG_GRAPH_STORE=in-memory`。",
+      "citations": [],
+      "valid": [],
+      "invalid": [],
+      "validSourceIds": [
+        "知识库文档更新与存储.md#26",
+        "rag-guide.md#71",
+        "rag-guide.md#70",
+        "rag-guide.md#99",
+        "rag-guide.md#92",
+        "知识库文档更新与存储.md#27",
+        "知识库文档更新与存储.md#24",
+        "知识库文档更新与存储.md#28",
+        "统一登录平台接入手册.md#9",
+        "es-hybrid-rerank.md#16"
+      ]
+    },
+    {
+      "id": "rag-007",
+      "question": "L1语义缓存在什么位置？它如何影响请求处理流程？",
+      "answer": "L1 语义缓存位于 `conversation-service` 的 `/chat` 接口中，在 **RAG + LLM 之前**（pre-RAG）[doc=rag-guide.md#82]。它将用户原始问题向量化后在当前租户桶内做相似度检索，命中则直接返回缓存回复，短路后续 embedding/检索/LLM；未命中则走正常流程并回填缓存[doc=rag-guide.md#82]。",
+      "citations": [
+        "rag-guide.md#82",
+        "rag-guide.md#82"
+      ],
+      "valid": [
+        "rag-guide.md#82",
+        "rag-guide.md#82"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "rag-guide.md#82",
+        "架构文档.md#73",
+        "semantic-cache.md#2",
+        "semantic-cache.md#33",
+        "rag-guide.md#87",
+        "知识库文档更新与存储.md#17",
+        "数据库与中间件清单.md#32",
+        "统一登录平台接入手册.md#4",
+        "统一登录平台接入手册.md#39",
+        "eventbus-guide.md#28"
+      ]
+    },
+    {
+      "id": "rag-008",
+      "question": "切换embedding provider后，为什么需要重建向量库collection？",
+      "answer": "因为不同 provider（如 OpenAI、Ollama）通常输出不同维度的向量，而 Qdrant 等向量库的 collection 在建好后维度固定。切换后写入的向量维度不匹配会抛出 `DimensionMismatchException`，导致静默坏数据。因此必须为每个租户重建/清空对应 collection。",
+      "citations": [],
+      "valid": [],
+      "invalid": [],
+      "validSourceIds": [
+        "rag-guide.md#41",
+        "知识库文档更新与存储.md#22",
+        "rag-guide.md#48",
+        "向量检索-ann与rrf.md#38",
+        "知识库文档更新与存储.md#26",
+        "向量检索-ann与rrf.md#23",
+        "eval-guide.md#86",
+        "数据库与中间件清单.md#35",
+        "数据库与中间件清单.md#37",
+        "数据库与中间件清单.md#29"
+      ]
+    },
+    {
+      "id": "rag-009",
+      "question": "在enforce授权模式下，文档级授权过滤如何处理无docId命中的候选（如GraphRAG三元组）？",
+      "answer": "fail-closed 丢弃。",
+      "citations": [],
+      "valid": [],
+      "invalid": [],
+      "validSourceIds": [
+        "rag-guide.md#6",
+        "rag-guide.md#56",
+        "架构文档.md#107",
+        "架构文档.md#103",
+        "rag-guide.md#93",
+        "rag-guide.md#16",
+        "rag-guide.md#67",
+        "rag-guide.md#8",
+        "架构文档.md#11",
+        "知识库文档更新与存储.md#24"
+      ]
+    },
+    {
+      "id": "rag-010",
+      "question": "rerank和query expansion两个增强功能分别作用于检索流程的哪个阶段？",
+      "answer": "- **Rerank** 作用于召回后、排序前，对 `topK × multiplier` 个候选进行精排并取回 `topK`。\n- **Query expansion** 作用于召回前，将原始 query 改写为多个变体分别检索后再合并去重。 [doc=rag-guide.md#66]",
+      "citations": [
+        "rag-guide.md#66"
+      ],
+      "valid": [
+        "rag-guide.md#66"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "rag-guide.md#66",
+        "rag-guide.md#65",
+        "eval-guide.md#40",
+        "eval-guide.md#7",
+        "eval-guide.md#13",
+        "向量检索-ann与rrf.md#33",
+        "rag-guide.md#62",
+        "eval-guide.md#75",
+        "向量检索-ann与rrf.md#38",
+        "es-hybrid-rerank.md#0"
+      ]
+    },
+    {
+      "id": "rag-011",
+      "question": "平台支持的6个向量库中，哪个库默认使用精确暴力搜索而非近似最近邻？",
+      "answer": "Milvus。默认 `FLAT` 是精确暴力搜索，不是 ANN；要开启 ANN 必须显式将 `RAG_MILVUS_INDEX_TYPE` 设为 `HNSW` 或 `IVF_*`。[doc=向量检索-ann与rrf.md#20]",
+      "citations": [
+        "向量检索-ann与rrf.md#20"
+      ],
+      "valid": [
+        "向量检索-ann与rrf.md#20"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "向量检索-ann与rrf.md#0",
+        "向量检索-ann与rrf.md#8",
+        "向量检索-ann与rrf.md#4",
+        "向量检索-ann与rrf.md#20",
+        "向量检索-ann与rrf.md#29",
+        "向量检索-ann与rrf.md#5",
+        "向量检索-ann与rrf.md#10",
+        "rag-guide.md#34",
+        "向量检索-ann与rrf.md#14",
+        "统一登录平台接入手册.md#7"
+      ]
+    },
+    {
+      "id": "rag-012",
+      "question": "RRF融合策略中，平滑常数k的默认值是多少？增大k值对排名结果有什么影响？",
+      "answer": "默认 k = 60。增大 k 会压低头部名次的过度主导——第 1 名和第 2 名的贡献差变小，结果更「民主」；反之 k 越小越「赢家通吃」。[doc=向量检索-ann与rrf.md#25]",
+      "citations": [
+        "向量检索-ann与rrf.md#25"
+      ],
+      "valid": [
+        "向量检索-ann与rrf.md#25"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "向量检索-ann与rrf.md#29",
+        "向量检索-ann与rrf.md#25",
+        "es-hybrid-rerank.md#4",
+        "rag-guide.md#55",
+        "向量检索-ann与rrf.md#0",
+        "向量检索-ann与rrf.md#35",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#7",
+        "统一登录平台接入手册.md#59",
+        "统一登录平台接入手册.md#4"
+      ]
+    },
+    {
+      "id": "rag-013",
+      "question": "在pgvector向量库中，如果希望使用库内向量与全文检索的混合排序，需要设置什么参数？",
+      "answer": "设置 `RAG_PGVECTOR_SEARCH_MODE=HYBRID`，同时平台会使用 `rrf-k` 参数进行库内 RRF 融合。",
+      "citations": [],
+      "valid": [],
+      "invalid": [],
+      "validSourceIds": [
+        "向量检索-ann与rrf.md#19",
+        "向量检索-ann与rrf.md#30",
+        "rag-guide.md#52",
+        "向量检索-ann与rrf.md#0",
+        "rag-guide.md#34",
+        "向量检索-ann与rrf.md#31",
+        "es-hybrid-rerank.md#0",
+        "workflow-guide.md#98",
+        "统一登录平台接入手册.md#4",
+        "rag-guide.md#37"
+      ]
+    },
+    {
+      "id": "rag-014",
+      "question": "平台中哪两个向量库默认使用HNSW索引？",
+      "answer": "平台默认的 `qdrant` 和超大规模场景推荐的 `milvus`（需从默认 FLAT 手动切换）默认使用 HNSW 索引。[doc=向量检索-ann与rrf.md#11][doc=向量检索-ann与rrf.md#36]\n\n⚠️ 可信度提示：支撑度 0.50 < 0.70，可能含未被资料支撑的内容。请以原始资料为准。",
+      "citations": [
+        "向量检索-ann与rrf.md#11",
+        "向量检索-ann与rrf.md#36"
+      ],
+      "valid": [
+        "向量检索-ann与rrf.md#11",
+        "向量检索-ann与rrf.md#36"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "向量检索-ann与rrf.md#29",
+        "向量检索-ann与rrf.md#0",
+        "rag-guide.md#34",
+        "向量检索-ann与rrf.md#36",
+        "向量检索-ann与rrf.md#18",
+        "向量检索-ann与rrf.md#11",
+        "向量检索-ann与rrf.md#8",
+        "向量检索-ann与rrf.md#15",
+        "平台公共公告-统一维护窗口#0",
+        "统一登录平台接入手册.md#1"
+      ]
+    },
+    {
+      "id": "rag-015",
+      "question": "为什么RRF分数不能作为相关度阈值使用？",
+      "answer": "因为 RRF 分数是名次分（`1/(k+rank)`），范围恒在 `~0.01~0.05`，不携带“有多相关”的信息，不能拿它卡相关度下限。想设相关度地板请用 `RAG_RERANK_MIN_SCORE`（rerank 层判官打的 0..1 相关分）。[doc=向量检索-ann与rrf.md#27][doc=向量检索-ann与rrf.md#33]",
+      "citations": [
+        "向量检索-ann与rrf.md#27",
+        "向量检索-ann与rrf.md#33"
+      ],
+      "valid": [
+        "向量检索-ann与rrf.md#27",
+        "向量检索-ann与rrf.md#33"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "向量检索-ann与rrf.md#27",
+        "向量检索-ann与rrf.md#33",
+        "rag-guide.md#52",
+        "向量检索-ann与rrf.md#28",
+        "向量检索-ann与rrf.md#29",
+        "model-cascade.md#11",
+        "rag-guide.md#34",
+        "es-hybrid-rerank.md#5",
+        "eval-guide.md#43",
+        "统一登录平台接入手册.md#67"
+      ]
+    },
+    {
+      "id": "rag-016",
+      "question": "切换向量库provider时，需要重新执行什么操作才能使用数据？",
+      "answer": "切换 provider 时，**不需要迁移数据**——每个 provider 使用独立的集合（索引），切换后需**重新写入/同步知识**到新后端才能使用。具体操作：\n1. 修改环境变量 `RAG_VECTOR_STORE_PROVIDER` 为目标值。\n2. 对知识库执行**重新入库**（触发向量化 + 写入新 provider 的集合）。\n3. （可选）确认旧 provider 的集合可清理。\n\n⚠️ 可信度提示：支撑度 0.50 < 0.70，可能含未被资料支撑的内容。请以原始资料为准。",
+      "citations": [],
+      "valid": [],
+      "invalid": [],
+      "validSourceIds": [
+        "向量检索-ann与rrf.md#38",
+        "数据库与中间件清单.md#35",
+        "向量检索-ann与rrf.md#19",
+        "semantic-cache.md#20",
+        "知识库文档更新与存储.md#26",
+        "向量检索-ann与rrf.md#9",
+        "架构文档.md#12",
+        "向量检索-ann与rrf.md#1",
+        "向量检索-ann与rrf.md#22",
+        "litellm-gateway-guide.md#1"
+      ]
+    },
+    {
+      "id": "rag-017",
+      "question": "在跨源RRF融合中，如果ES不参与查询，默认使用什么融合策略？",
+      "answer": "`weighted_max`（同一分块跨源取加权分最大值并标记 `hybrid`）。\n\n⚠️ 可信度提示：支撑度 0.50 < 0.70，可能含未被资料支撑的内容。请以原始资料为准。",
+      "citations": [],
+      "valid": [],
+      "invalid": [],
+      "validSourceIds": [
+        "向量检索-ann与rrf.md#29",
+        "rag-guide.md#55",
+        "es-hybrid-rerank.md#4",
+        "rag-guide.md#7",
+        "es-hybrid-rerank.md#15",
+        "架构文档.md#9",
+        "向量检索-ann与rrf.md#31",
+        "向量检索-ann与rrf.md#32",
+        "es-hybrid-rerank.md#0",
+        "数据库与中间件清单.md#32"
+      ]
+    },
+    {
+      "id": "rag-018",
+      "question": "HNSW索引中，哪个参数是唯一可以在查询时调整召回率与延迟的旋钮？",
+      "answer": "`ef_search`。\n\n⚠️ 可信度提示：支撑度 0.50 < 0.70，可能含未被资料支撑的内容。请以原始资料为准。",
+      "citations": [],
+      "valid": [],
+      "invalid": [],
+      "validSourceIds": [
+        "向量检索-ann与rrf.md#3",
+        "向量检索-ann与rrf.md#6",
+        "向量检索-ann与rrf.md#21",
+        "eval-guide.md#15",
+        "统一登录平台接入手册.md#1",
+        "退款与退货政策.md#0",
+        "统一登录平台接入手册.md#59",
+        "数据库与中间件清单.md#8",
+        "统一登录平台接入手册.md#4",
+        "向量检索-ann与rrf.md#27"
+      ]
+    },
+    {
+      "id": "rag-019",
+      "question": "平台中哪两个向量库支持shared隔离模式？",
+      "answer": "`in-memory` 和 `qdrant` 支持 `shared` 隔离模式。[doc=向量检索-ann与rrf.md#23]",
+      "citations": [
+        "向量检索-ann与rrf.md#23"
+      ],
+      "valid": [
+        "向量检索-ann与rrf.md#23"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "向量检索-ann与rrf.md#8",
+        "向量检索-ann与rrf.md#0",
+        "向量检索-ann与rrf.md#23",
+        "向量检索-ann与rrf.md#19",
+        "平台公共公告-统一维护窗口#0",
+        "数据库与中间件清单.md#48",
+        "向量检索-ann与rrf.md#9",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#7",
+        "向量检索-ann与rrf.md#30"
+      ]
+    },
+    {
+      "id": "rag-020",
+      "question": "如果希望看到原始相关分而非RRF名次分，可以采取哪两种方法？",
+      "answer": "1. 关闭 ES 源，退回 `weighted_max` 融合模式。  \n2. 开启 Rerank 流程，直接查看判官分。\n\n⚠️ 可信度提示：支撑度 0.50 < 0.70，可能含未被资料支撑的内容。请以原始资料为准。",
+      "citations": [],
+      "valid": [],
+      "invalid": [],
+      "validSourceIds": [
+        "向量检索-ann与rrf.md#27",
+        "向量检索-ann与rrf.md#34",
+        "向量检索-ann与rrf.md#25",
+        "rag-guide.md#52",
+        "向量检索-ann与rrf.md#33",
+        "向量检索-ann与rrf.md#24",
+        "统一登录平台接入手册.md#68",
+        "memory-guide.md#40",
+        "统一登录平台接入手册.md#66",
+        "eventbus-guide.md#4"
+      ]
+    },
+    {
+      "id": "rag-021",
+      "question": "当Elasticsearch服务不可达时，系统会如何处理查询请求？",
+      "answer": "当 ES 不可达时，`EsKeywordRetrievalSource` 自动降级返回空结果，其余检索源（向量、内存关键词、图谱）照常工作，不影响系统启动与查询 [doc=es-hybrid-rerank.md#0]。",
+      "citations": [
+        "es-hybrid-rerank.md#0"
+      ],
+      "valid": [
+        "es-hybrid-rerank.md#0"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "es-hybrid-rerank.md#16",
+        "eventbus-guide.md#8",
+        "es-hybrid-rerank.md#0",
+        "架构文档.md#9",
+        "数据库与中间件清单.md#32",
+        "架构文档.md#71",
+        "semantic-cache.md#14",
+        "退款与退货政策.md#0",
+        "统一登录平台接入手册.md#68",
+        "统一登录平台接入手册.md#55"
+      ]
+    },
+    {
+      "id": "rag-022",
+      "question": "在ES开启的情况下，系统默认使用哪种融合策略？为什么？",
+      "answer": "系统默认使用 `rrf`（倒数排名融合）策略。因为 ES 开启时 `FusionStrategy.effectiveDefault` 会将其作为有效默认值，RRF 只看排名、不受 BM25 与余弦量纲差异影响，适合多路异构检索的稳定融合。[doc=es-hybrid-rerank.md#4][doc=rag-guide.md#91]",
+      "citations": [
+        "es-hybrid-rerank.md#4",
+        "rag-guide.md#91"
+      ],
+      "valid": [
+        "es-hybrid-rerank.md#4",
+        "rag-guide.md#91"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "es-hybrid-rerank.md#2",
+        "es-hybrid-rerank.md#4",
+        "向量检索-ann与rrf.md#29",
+        "rag-guide.md#91",
+        "rag-guide.md#55",
+        "es-hybrid-rerank.md#0",
+        "架构文档.md#9",
+        "退款与退货政策.md#1",
+        "退款与退货政策.md#0",
+        "agent-guide.md#26"
+      ]
+    },
+    {
+      "id": "rag-023",
+      "question": "如何配置使得系统只写入ES但不进行ES查询？",
+      "answer": "设置 `RAG_ES_INDEX_ENABLED=true` 且 `RAG_ES_QUERY_ENABLED=false`，此时系统只向 ES 写入索引，查询时仍然使用原有的融合策略（weighted_max），不会发起 ES 查询。",
+      "citations": [],
+      "valid": [],
+      "invalid": [],
+      "validSourceIds": [
+        "es-hybrid-rerank.md#15",
+        "es-hybrid-rerank.md#5",
+        "rag-guide.md#61",
+        "rag-guide.md#62",
+        "数据库与中间件清单.md#32",
+        "退款与退货政策.md#0",
+        "统一登录平台接入手册.md#83",
+        "让Agent主动调接口.md#7",
+        "向量检索-ann与rrf.md#38",
+        "eventbus-guide.md#5"
+      ]
+    },
+    {
+      "id": "rag-024",
+      "question": "如果我想关闭ES混排功能，应该设置哪个环境变量？",
+      "answer": "L1 语义缓存位于 `conversation-service` 的 `/chat` 接口中，在 **RAG + LLM 之前**（pre-RAG）[doc=rag-guide.md#82]。它将用户原始问题向量化后在当前租户桶内做相似度检索，命中则直接返回缓存回复，短路后续 embedding/检索/LLM；未命中则走正常流程并回填缓存[doc=rag-guide.md#82]。",
+      "citations": [
+        "rag-guide.md#82",
+        "rag-guide.md#82"
+      ],
+      "valid": [],
+      "invalid": [
+        "rag-guide.md#82",
+        "rag-guide.md#82"
+      ],
+      "validSourceIds": [
+        "es-hybrid-rerank.md#0",
+        "rag-guide.md#61",
+        "rag-guide.md#91",
+        "rag-guide.md#2",
+        "es-hybrid-rerank.md#9",
+        "向量检索-ann与rrf.md#38",
+        "向量检索-ann与rrf.md#35",
+        "memory-guide.md#18",
+        "数据库与中间件清单.md#30",
+        "memory-guide.md#35"
+      ]
+    },
+    {
+      "id": "rag-025",
+      "question": "在weighted_max策略下，BM25分数是如何与向量分数对齐的？",
+      "answer": "在 `weighted_max` 策略下，`EsKeywordRetrievalSource` 会按本次查询的最高分把 BM25 归一化到 [0,1] 区间，再与向量余弦分数（已在 [0,1]）做跨源取最大。[doc=es-hybrid-rerank.md#5]",
+      "citations": [
+        "es-hybrid-rerank.md#5"
+      ],
+      "valid": [
+        "es-hybrid-rerank.md#5"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "es-hybrid-rerank.md#5",
+        "rag-guide.md#59",
+        "向量检索-ann与rrf.md#31",
+        "rag-guide.md#55",
+        "向量检索-ann与rrf.md#24",
+        "rag-guide.md#53",
+        "向量检索-ann与rrf.md#32",
+        "rag-guide.md#54",
+        "es-hybrid-rerank.md#4",
+        "es-hybrid-rerank.md#7"
+      ]
+    },
+    {
+      "id": "rag-026",
+      "question": "开启ES后，历史数据需要如何处理才能被ES检索到？",
+      "answer": "默认 k = 60。增大 k 会压低头部名次的过度主导——第 1 名和第 2 名的贡献差变小，结果更「民主」；反之 k 越小越「赢家通吃」。[doc=向量检索-ann与rrf.md#25]",
+      "citations": [
+        "向量检索-ann与rrf.md#25"
+      ],
+      "valid": [],
+      "invalid": [
+        "向量检索-ann与rrf.md#25"
+      ],
+      "validSourceIds": [
+        "es-hybrid-rerank.md#18",
+        "知识库文档更新与存储.md#28",
+        "es-hybrid-rerank.md#0",
+        "rag-guide.md#61",
+        "知识库文档更新与存储.md#35",
+        "架构文档.md#9",
+        "workflow-guide.md#44",
+        "workflow-guide.md#126",
+        "es-hybrid-rerank.md#11",
+        "意图识别与Agent执行原理.md#20"
+      ]
+    },
+    {
+      "id": "rag-027",
+      "question": "系统在ES写入失败时的默认行为是什么？如何改为严格模式？",
+      "answer": "ES 默认 `RAG_ES_FAIL_FAST=false`，写入失败只记警告不中断；设为 `true` 即进入严格模式，失败时会向上抛出异常。 [doc=知识库文档更新与存储.md#36]",
+      "citations": [
+        "知识库文档更新与存储.md#36"
+      ],
+      "valid": [
+        "知识库文档更新与存储.md#36"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "知识库文档更新与存储.md#36",
+        "知识库文档更新与存储.md#37",
+        "统一登录平台接入手册.md#4",
+        "统一登录平台接入手册.md#15",
+        "让Agent主动调接口.md#7",
+        "agent-guide.md#44",
+        "rag-guide.md#16",
+        "意图识别与Agent执行原理.md#17",
+        "知识库文档更新与存储.md#35",
+        "向量检索-ann与rrf.md#9"
+      ]
+    },
+    {
+      "id": "rag-028",
+      "question": "ES索引的默认名称和中文分析器分别是什么？",
+      "answer": "默认索引名 `knowledge_segments_text`，默认中文分析器 `smartcn`。[doc=es-hybrid-rerank.md#7]",
+      "citations": [
+        "es-hybrid-rerank.md#7"
+      ],
+      "valid": [
+        "es-hybrid-rerank.md#7"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "rag-guide.md#54",
+        "知识库文档更新与存储.md#29",
+        "rag-guide.md#61",
+        "es-hybrid-rerank.md#9",
+        "es-hybrid-rerank.md#7",
+        "架构文档.md#9",
+        "rag-guide.md#91",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#4",
+        "知识库文档更新与存储.md#28"
+      ]
+    },
+    {
+      "id": "rag-029",
+      "question": "在灰度阶段，如何先验证ES写入再开启查询，且融合策略保持为weighted_max？",
+      "answer": "在灰度阶段，先设 `RAG_ES_INDEX_ENABLED=true, RAG_ES_QUERY_ENABLED=false` 只验证写入，同时 `RAG_ES_ENABLED=false`（或 `RAG_FUSION_STRATEGY=weighted_max` 显式指定），此时融合策略有效默认仍为 `weighted_max`、不会翻到 RRF。",
+      "citations": [],
+      "valid": [],
+      "invalid": [],
+      "validSourceIds": [
+        "es-hybrid-rerank.md#15",
+        "es-hybrid-rerank.md#4",
+        "es-hybrid-rerank.md#5",
+        "向量检索-ann与rrf.md#31",
+        "rag-guide.md#55",
+        "es-hybrid-rerank.md#17",
+        "rag-guide.md#59",
+        "rbac-and-public-kb.md#15",
+        "es-hybrid-rerank.md#0",
+        "向量检索-ann与rrf.md#34"
+      ]
+    },
+    {
+      "id": "rag-030",
+      "question": "当RAG_FUSION_STRATEGY留空时，系统如何决定使用哪种融合策略？",
+      "answer": "留空时，系统根据 ES 是否参与查询自动决定：若 ES 参与则有效默认 `rrf`，否则使用 `weighted_max`。[doc=rag-guide.md#55]",
+      "citations": [
+        "rag-guide.md#55"
+      ],
+      "valid": [
+        "rag-guide.md#55"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "rag-guide.md#55",
+        "rag-guide.md#69",
+        "向量检索-ann与rrf.md#29",
+        "rag-guide.md#91",
+        "rag-guide.md#59",
+        "向量检索-ann与rrf.md#35",
+        "es-hybrid-rerank.md#5",
+        "数据库与中间件清单.md#20",
+        "memory-guide.md#42",
+        "es-hybrid-rerank.md#16"
+      ]
+    },
+    {
+      "id": "rag-031",
+      "question": "语义响应缓存位于对话流程的哪个阶段？",
+      "answer": "语义响应缓存位于 `/chat` 请求的 **RAG + LLM 之前（pre-RAG）**，即先判断缓存是否命中，命中则直接返回，不执行后续的 embedding、检索和 LLM 生成。",
+      "citations": [],
+      "valid": [],
+      "invalid": [],
+      "validSourceIds": [
+        "rag-guide.md#82",
+        "semantic-cache.md#0",
+        "架构文档.md#73",
+        "semantic-cache.md#2",
+        "semantic-cache.md#3",
+        "rag-guide.md#87",
+        "rag-guide.md#95",
+        "统一登录平台接入手册.md#59",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#67"
+      ]
+    },
+    {
+      "id": "rag-032",
+      "question": "当语义缓存命中时，调用方在返回体中能否看到缓存标志？",
+      "answer": "不能。语义缓存命中与否的返回体结构完全一致（`{\"reply\",\"chatId\",\"tenantId\",\"userId\"}`），没有 `cached` 标志位。命中只体现在延迟骤降和 `debug` 日志中。 [doc=semantic-cache.md#4]",
+      "citations": [
+        "semantic-cache.md#4"
+      ],
+      "valid": [
+        "semantic-cache.md#4"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "semantic-cache.md#4",
+        "semantic-cache.md#27",
+        "rag-guide.md#82",
+        "semantic-cache.md#0",
+        "semantic-cache.md#9",
+        "semantic-cache.md#24",
+        "semantic-cache.md#3",
+        "semantic-cache.md#6",
+        "semantic-cache.md#34",
+        "统一登录平台接入手册.md#7"
+      ]
+    },
+    {
+      "id": "rag-033",
+      "question": "语义缓存如何实现租户隔离？",
+      "answer": "语义缓存按 `TenantContext` 的 `tenantId` 分桶：内存实现是每租户一个独立 `Map`，Redis 实现则用 `conv:semcache:<tenantId>` 作为 Hash key，天然隔离不同租户数据。[doc=semantic-cache.md#10]",
+      "citations": [
+        "semantic-cache.md#10"
+      ],
+      "valid": [
+        "semantic-cache.md#10"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "rag-guide.md#86",
+        "semantic-cache.md#10",
+        "rag-guide.md#82",
+        "rag-guide.md#34",
+        "semantic-cache.md#0",
+        "semantic-cache.md#38",
+        "统一登录平台接入手册.md#45",
+        "数据库与中间件清单.md#32",
+        "eventbus-guide.md#28",
+        "workflow-guide.md#10"
+      ]
+    },
+    {
+      "id": "rag-034",
+      "question": "默认的 embedding provider 是什么？它能否真正识别同义改写？",
+      "answer": "默认的 embedding provider 是 `hash`（64 维词袋），它不能真正识别同义改写——只捕捉词面重合，近似近精确去重。想识别同义改写，需要切换为 `openai` 接真实 embedding 模型 [doc=semantic-cache.md#19] [doc=semantic-cache.md#34]。",
+      "citations": [
+        "semantic-cache.md#19",
+        "semantic-cache.md#34"
+      ],
+      "valid": [
+        "semantic-cache.md#19",
+        "semantic-cache.md#34"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "semantic-cache.md#34",
+        "semantic-cache.md#19",
+        "eval-guide.md#3",
+        "向量检索-ann与rrf.md#9",
+        "semantic-cache.md#16",
+        "rag-guide.md#45",
+        "架构文档.md#125",
+        "rag-guide.md#2",
+        "rag-guide.md#0",
+        "数据库与中间件清单.md#8"
+      ]
+    },
+    {
+      "id": "rag-035",
+      "question": "如果我想让语义缓存真正识别同义改写（如“怎么退款”和“退款流程是啥”），需要做什么配置？",
+      "answer": "需要将 `CONVERSATION_SEMANTIC_CACHE_EMBEDDING_PROVIDER` 设为 `openai`，使用真正的 embedding 模型替代默认的 64 维 hash。[doc=semantic-cache.md#19]",
+      "citations": [
+        "semantic-cache.md#19"
+      ],
+      "valid": [
+        "semantic-cache.md#19"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "semantic-cache.md#19",
+        "semantic-cache.md#3",
+        "workflow-guide.md#1",
+        "semantic-cache.md#33",
+        "semantic-cache.md#34",
+        "数据库与中间件清单.md#8",
+        "数据库与中间件清单.md#51",
+        "退款与退货政策.md#0",
+        "nl2sql-guide.md#8",
+        "rag-guide.md#15"
+      ]
+    },
+    {
+      "id": "rag-036",
+      "question": "缓存命中时，是否还会执行 RAG 检索和 LLM 生成？",
+      "answer": "不会。语义缓存在 RAG 检索之前短路，命中后直接返回缓存回复，不再执行 embedding、RAG 检索和 LLM 生成。[doc=semantic-cache.md#0]",
+      "citations": [
+        "semantic-cache.md#0"
+      ],
+      "valid": [
+        "semantic-cache.md#0"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "semantic-cache.md#5",
+        "rag-guide.md#82",
+        "semantic-cache.md#0",
+        "rag-guide.md#86",
+        "semantic-cache.md#8",
+        "semantic-cache.md#24",
+        "数据库与中间件清单.md#51",
+        "平台公共公告-统一维护窗口#0",
+        "agent-guide.md#44",
+        "eventbus-guide.md#8"
+      ]
+    },
+    {
+      "id": "rag-037",
+      "question": "当缓存关闭时，/chat 的行为会有什么变化？",
+      "answer": "缓存关闭时，`/chat` 行为与无缓存完全一致，整条链短路，绝不因缓存层拖垮主链 [doc=semantic-cache.md#1] [doc=semantic-cache.md#24]。",
+      "citations": [
+        "semantic-cache.md#1",
+        "semantic-cache.md#24"
+      ],
+      "valid": [
+        "semantic-cache.md#1",
+        "semantic-cache.md#24"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "semantic-cache.md#24",
+        "rag-guide.md#82",
+        "semantic-cache.md#1",
+        "semantic-cache.md#14",
+        "memory-guide.md#20",
+        "rag-guide.md#16",
+        "统一登录平台接入手册.md#83",
+        "统一登录平台接入手册.md#4",
+        "意图识别与Agent执行原理.md#0",
+        "memory-guide.md#7"
+      ]
+    },
+    {
+      "id": "rag-038",
+      "question": "Redis 存储后端和内存存储后端在容量控制上有什么不同？",
+      "answer": "Redis 存储后端依赖 Redis 自身的淘汰策略（如 `maxmemory-policy`）和 TTL 控制容量；内存存储后端则依赖 JVM 堆内 `Map`，容量受限于进程可用堆，通常需要应用层面主动设置最大条目或 LRU 淘汰。\n\n⚠️ 可信度提示：支撑度 0.50 < 0.70，可能含未被资料支撑的内容。请以原始资料为准。",
+      "citations": [],
+      "valid": [],
+      "invalid": [],
+      "validSourceIds": [
+        "semantic-cache.md#10",
+        "知识库文档更新与存储.md#23",
+        "知识库文档更新与存储.md#28",
+        "semantic-cache.md#23",
+        "rag-guide.md#15",
+        "架构文档.md#127",
+        "知识库文档更新与存储.md#11",
+        "memory-guide.md#15",
+        "workflow-guide.md#43",
+        "semantic-cache.md#2"
+      ]
+    },
+    {
+      "id": "rag-039",
+      "question": "如何定向失效某个特定原始问题的缓存？",
+      "answer": "用 `DELETE /chat/cache?question=原始问题` 并带上租户标识头即可定向失效单个问题，例如：\n\n```bash\ncurl -s -X DELETE 'http://localhost:8080/chat/cache?question=怎么申请退款' -H 'X-Api-Key: dev-key-acme'\n```\n\n该端点在缓存关闭时是 no-op，返回 `removed:false`。",
+      "citations": [],
+      "valid": [],
+      "invalid": [],
+      "validSourceIds": [
+        "rag-guide.md#86",
+        "semantic-cache.md#36",
+        "semantic-cache.md#7",
+        "rag-guide.md#82",
+        "semantic-cache.md#2",
+        "semantic-cache.md#9",
+        "semantic-cache.md#43",
+        "rag-guide.md#15",
+        "退款与退货政策.md#1",
+        "统一登录平台接入手册.md#39"
+      ]
+    },
+    {
+      "id": "rag-040",
+      "question": "知识库更新后，缓存如何自动失效？",
+      "answer": "知识库更新后，`knowledge-service` 会尽力回调 `conversation-service` 的 `DELETE /chat/cache` 接口，失效当前租户的整桶缓存，从而实现“知识库更新即答案新鲜”。[doc=semantic-cache.md#37]\n\n⚠️ 可信度提示：支撑度 0.50 < 0.70，可能含未被资料支撑的内容。请以原始资料为准。",
+      "citations": [
+        "semantic-cache.md#37"
+      ],
+      "valid": [
+        "semantic-cache.md#37"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "rag-guide.md#86",
+        "semantic-cache.md#34",
+        "semantic-cache.md#37",
+        "rag-guide.md#15",
+        "semantic-cache.md#36",
+        "知识库文档更新与存储.md#0",
+        "semantic-cache.md#48",
+        "semantic-cache.md#22",
+        "数据库与中间件清单.md#51",
+        "统一登录平台接入手册.md#39"
+      ]
+    },
+    {
+      "id": "rag-041",
+      "question": "如何通过边缘网关调用 NL2SQL 服务？",
+      "answer": "不能。语义缓存命中与否的返回体结构完全一致（`{\"reply\",\"chatId\",\"tenantId\",\"userId\"}`），没有 `cached` 标志位。命中只体现在延迟骤降和 `debug` 日志中。 [doc=semantic-cache.md#4]",
+      "citations": [
+        "semantic-cache.md#4"
+      ],
+      "valid": [],
+      "invalid": [
+        "semantic-cache.md#4"
+      ],
+      "validSourceIds": [
+        "nl2sql-guide.md#1",
+        "nl2sql-guide.md#19",
+        "统一登录平台接入手册.md#9",
+        "数据库与中间件清单.md#32",
+        "eventbus-guide.md#28",
+        "rag-guide.md#4",
+        "workflow-guide.md#10",
+        "nl2sql-guide.md#17",
+        "让Agent主动调接口.md#48",
+        "nl2sql-guide.md#55"
+      ]
+    },
+    {
+      "id": "rag-042",
+      "question": "关闭 NL2SQL 功能后，analytics-service 还能正常启动吗？",
+      "answer": "可以。`NL2SQL_ENABLED=false` 时 `analytics-service` 照常启动，只是不注册 NL2SQL 端点。[doc=nl2sql-guide.md#1]",
+      "citations": [
+        "nl2sql-guide.md#1"
+      ],
+      "valid": [
+        "nl2sql-guide.md#1"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "nl2sql-guide.md#1",
+        "nl2sql-guide.md#18",
+        "agent-guide.md#100",
+        "nl2sql-guide.md#55",
+        "agent-guide.md#16",
+        "数据库与中间件清单.md#17",
+        "让Agent主动调接口.md#44",
+        "eventbus-guide.md#29",
+        "数据库与中间件清单.md#13",
+        "数据库与中间件清单.md#26"
+      ]
+    },
+    {
+      "id": "rag-043",
+      "question": "NL2SQL 链路中，SQL 安全护栏的 L4 层具体做什么？",
+      "answer": "L4 层是 **语句白名单（Statement Whitelist）**，用正则或解析器校验 SQL 只包含 `SELECT` 及允许的从句（如 `WHERE`、`JOIN`、`LIMIT`），拦截 `INSERT`、`UPDATE`、`DELETE`、`DROP` 等写操作语句。\n\n⚠️ 可信度提示：支撑度 0.00 < 0.70，可能含未被资料支撑的内容。请以原始资料为准。",
+      "citations": [],
+      "valid": [],
+      "invalid": [],
+      "validSourceIds": [
+        "nl2sql-guide.md#8",
+        "nl2sql-guide.md#27",
+        "nl2sql-guide.md#3",
+        "nl2sql-guide.md#9",
+        "nl2sql-guide.md#53",
+        "统一登录平台接入手册.md#4",
+        "统一登录平台接入手册.md#7",
+        "统一登录平台接入手册.md#1",
+        "向量检索-ann与rrf.md#27",
+        "nl2sql-guide.md#67"
+      ]
+    },
+    {
+      "id": "rag-044",
+      "question": "使用 dev-key-acme 调用 NL2SQL 查询退款数据会得到什么结果？",
+      "answer": "根据文档，`dev-key-acme` 的 scopes 为 `chat, ingest`，**不包含 `analytics` scope**，而 NL2SQL 端点 `/chat/sql` 需要 `analytics` scope 才能访问。因此使用 `dev-key-acme` 调用 NL2SQL 查询退款数据会返回 **403 Forbidden**（权限不足）。\n\n[doc=数据库与中间件清单.md#43]\n\n⚠️ 可信度提示：支撑度 0.50 < 0.70，可能含未被资料支撑的内容。请以原始资料为准。",
+      "citations": [
+        "数据库与中间件清单.md#43"
+      ],
+      "valid": [
+        "数据库与中间件清单.md#43"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "nl2sql-guide.md#19",
+        "nl2sql-guide.md#46",
+        "nl2sql-guide.md#3",
+        "数据库与中间件清单.md#44",
+        "数据库与中间件清单.md#43",
+        "数据库与中间件清单.md#47",
+        "workflow-guide.md#4",
+        "让Agent主动调接口.md#8",
+        "workflow-guide.md#35",
+        "observability-guide.md#4"
+      ]
+    },
+    {
+      "id": "rag-045",
+      "question": "NL2SQL 的 SQL 安全护栏中，哪一层负责防止跨租户数据泄露？",
+      "answer": "`SqlGuard` 中的 **L6 租户谓词**层负责：引用 `tenant-scoped-tables` 里的表时，SQL **必须**含 `tenant_id = '<当前租户>'`，否则拒绝执行 [doc=nl2sql-guide.md#31]。",
+      "citations": [
+        "nl2sql-guide.md#31"
+      ],
+      "valid": [
+        "nl2sql-guide.md#31"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "nl2sql-guide.md#8",
+        "nl2sql-guide.md#31",
+        "nl2sql-guide.md#27",
+        "rbac-and-public-kb.md#6",
+        "nl2sql-guide.md#19",
+        "意图识别与Agent执行原理.md#21",
+        "workflow-guide.md#43",
+        "nl2sql-guide.md#9",
+        "数据库与中间件清单.md#13",
+        "a2a-guide.md#57"
+      ]
+    },
+    {
+      "id": "rag-046",
+      "question": "NL2SQL 链路中，数字 grounding 在什么情况下会触发警告？",
+      "answer": "当本轮有成功查询结果且结果非空，但答案中的数字不在查询结果中时触发警告。",
+      "citations": [],
+      "valid": [],
+      "invalid": [],
+      "validSourceIds": [
+        "nl2sql-guide.md#37",
+        "nl2sql-guide.md#36",
+        "nl2sql-guide.md#3",
+        "nl2sql-guide.md#69",
+        "nl2sql-guide.md#6",
+        "nl2sql-guide.md#15",
+        "退款与退货政策.md#0",
+        "eval-guide.md#12",
+        "eval-guide.md#9",
+        "semantic-cache.md#5"
+      ]
+    },
+    {
+      "id": "rag-047",
+      "question": "NL2SQL 的自修环机制如何防止无限重试？",
+      "answer": "自修环通过硬上限 `app.nl2sql.max-tool-calls`（默认 5）控制单轮 `run_sql` 的最大调用次数，超过后直接终止本轮 SQL 生成 [doc=nl2sql-guide.md#69][doc=nl2sql-guide.md#13]。",
+      "citations": [
+        "nl2sql-guide.md#69",
+        "nl2sql-guide.md#13"
+      ],
+      "valid": [
+        "nl2sql-guide.md#69",
+        "nl2sql-guide.md#13"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "nl2sql-guide.md#7",
+        "nl2sql-guide.md#69",
+        "nl2sql-guide.md#35",
+        "nl2sql-guide.md#13",
+        "让Agent主动调接口.md#62",
+        "意图识别与Agent执行原理.md#21",
+        "a2a-guide.md#57",
+        "让Agent主动调接口.md#1",
+        "agent-guide.md#44",
+        "数据库与中间件清单.md#17"
+      ]
+    },
+    {
+      "id": "rag-048",
+      "question": "NL2SQL 的 SchemaProvider 如何获取表结构信息？",
+      "answer": "SchemaProvider 通过读取 `app.nl2sql.allow-tables` 配置的白名单（默认 `[orders, customers, refunds]`）和 `tenant-scoped-tables` 圈定的租户表范围，结合只读数据库连接（`NL2SQL_DB_READONLY_USER`）从数据库元数据中获取表结构信息。",
+      "citations": [],
+      "valid": [],
+      "invalid": [],
+      "validSourceIds": [
+        "nl2sql-guide.md#8",
+        "nl2sql-guide.md#67",
+        "nl2sql-guide.md#51",
+        "nl2sql-guide.md#68",
+        "nl2sql-guide.md#41",
+        "统一登录平台接入手册.md#4",
+        "统一登录平台接入手册.md#11",
+        "数据库与中间件清单.md#10",
+        "架构文档.md#127",
+        "向量检索-ann与rrf.md#27"
+      ]
+    },
+    {
+      "id": "rag-049",
+      "question": "NL2SQL 链路中，SQL 安全护栏的 L2 层如何防止注释绕过？",
+      "answer": "L2 层通过词法分析（如使用 JSqlParser 或正则）在生成 SQL 被合入前剥离所有单行/多行注释，并拒绝仅由注释构成的语句，从而防止恶意输入通过 `/*!...*/` 或 `--` 绕过后续校验。\n\n⚠️ 可信度提示：支撑度 0.00 < 0.70，可能含未被资料支撑的内容。请以原始资料为准。",
+      "citations": [],
+      "valid": [],
+      "invalid": [],
+      "validSourceIds": [
+        "nl2sql-guide.md#8",
+        "nl2sql-guide.md#27",
+        "nl2sql-guide.md#48",
+        "nl2sql-guide.md#53",
+        "统一登录平台接入手册.md#65",
+        "意图识别与Agent执行原理.md#21",
+        "nl2sql-guide.md#28",
+        "a2a-guide.md#57",
+        "nl2sql-guide.md#9",
+        "nl2sql-guide.md#67"
+      ]
+    },
+    {
+      "id": "rag-050",
+      "question": "NL2SQL 的 SQL 安全护栏中，L1 和 L5 层分别由什么机制实现？",
+      "answer": "L1 由执行用只读账号 `nl2sql_ro`（`GRANT SELECT` only）配合 HikariCP 连接池的 `readOnly=true` 实现 [doc=nl2sql-guide.md#28]。L5 由纯逻辑类 `SqlGuard` 实现，位于执行层 [doc=nl2sql-guide.md#27]。\n\n⚠️ 可信度提示：支撑度 0.50 < 0.70，可能含未被资料支撑的内容。请以原始资料为准。",
+      "citations": [
+        "nl2sql-guide.md#28",
+        "nl2sql-guide.md#27"
+      ],
+      "valid": [
+        "nl2sql-guide.md#28",
+        "nl2sql-guide.md#27"
+      ],
+      "invalid": [],
+      "validSourceIds": [
+        "nl2sql-guide.md#28",
+        "nl2sql-guide.md#27",
+        "nl2sql-guide.md#8",
+        "nl2sql-guide.md#53",
+        "nl2sql-guide.md#34",
+        "统一登录平台接入手册.md#7",
+        "统一登录平台接入手册.md#4",
+        "统一登录平台接入手册.md#65",
+        "向量检索-ann与rrf.md#27",
+        "nl2sql-guide.md#9"
+      ]
+    }
+  ]
+}

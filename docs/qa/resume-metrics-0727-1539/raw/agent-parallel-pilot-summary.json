@@ -1,0 +1,14 @@
+{
+  "benchmark": "agent-parallel-pilot",
+  "topology": "parallel",
+  "cases": 1,
+  "httpSuccesses": 1,
+  "rubricPassed": 1,
+  "rubricCompletionRate": 1,
+  "criticAccepted": 1,
+  "criticAcceptanceRate": 1,
+  "replanned": 0,
+  "averageDurationMs": 29877,
+  "p50DurationMs": 29877,
+  "p95DurationMs": 29877
+}

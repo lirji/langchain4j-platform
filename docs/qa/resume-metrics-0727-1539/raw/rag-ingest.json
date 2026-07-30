@@ -1,0 +1,342 @@
+[
+  {
+    "source": "docs/对话与检索/rag-guide.md",
+    "displayName": "rag-guide.md",
+    "status": 200,
+    "durationMs": 2754,
+    "document": {
+      "docId": "98dd5364663859e1",
+      "tenantId": "resume-bench",
+      "displayName": "rag-guide.md",
+      "contentType": "text/markdown",
+      "sizeBytes": 27869,
+      "segmentCount": 100,
+      "version": 3,
+      "uploadedAt": "2026-07-27T07:57:27.927829596Z",
+      "category": "resume-benchmark"
+    }
+  },
+  {
+    "source": "docs/对话与检索/向量检索-ann与rrf.md",
+    "displayName": "向量检索-ann与rrf.md",
+    "status": 200,
+    "durationMs": 967,
+    "document": {
+      "docId": "1a2e82517023459b",
+      "tenantId": "resume-bench",
+      "displayName": "向量检索-ann与rrf.md",
+      "contentType": "text/markdown",
+      "sizeBytes": 13486,
+      "segmentCount": 39,
+      "version": 3,
+      "uploadedAt": "2026-07-27T07:57:28.969315388Z",
+      "category": "resume-benchmark"
+    }
+  },
+  {
+    "source": "docs/对话与检索/es-hybrid-rerank.md",
+    "displayName": "es-hybrid-rerank.md",
+    "status": 200,
+    "durationMs": 576,
+    "document": {
+      "docId": "38ae2b349b43d2df",
+      "tenantId": "resume-bench",
+      "displayName": "es-hybrid-rerank.md",
+      "contentType": "text/markdown",
+      "sizeBytes": 5926,
+      "segmentCount": 19,
+      "version": 3,
+      "uploadedAt": "2026-07-27T07:57:29.545644847Z",
+      "category": "resume-benchmark"
+    }
+  },
+  {
+    "source": "docs/对话与检索/semantic-cache.md",
+    "displayName": "semantic-cache.md",
+    "status": 200,
+    "durationMs": 943,
+    "document": {
+      "docId": "a1c36dfa02a38c09",
+      "tenantId": "resume-bench",
+      "displayName": "semantic-cache.md",
+      "contentType": "text/markdown",
+      "sizeBytes": 16023,
+      "segmentCount": 50,
+      "version": 3,
+      "uploadedAt": "2026-07-27T07:57:30.487228097Z",
+      "category": "resume-benchmark"
+    }
+  },
+  {
+    "source": "docs/对话与检索/nl2sql-guide.md",
+    "displayName": "nl2sql-guide.md",
+    "status": 200,
+    "durationMs": 1355,
+    "document": {
+      "docId": "36d855a40e393769",
+      "tenantId": "resume-bench",
+      "displayName": "nl2sql-guide.md",
+      "contentType": "text/markdown",
+      "sizeBytes": 22555,
+      "segmentCount": 71,
+      "version": 3,
+      "uploadedAt": "2026-07-27T07:57:31.844679Z",
+      "category": "resume-benchmark"
+    }
+  },
+  {
+    "source": "docs/对话与检索/知识库文档更新与存储.md",
+    "displayName": "知识库文档更新与存储.md",
+    "status": 200,
+    "durationMs": 950,
+    "document": {
+      "docId": "ee92188565c5935e",
+      "tenantId": "resume-bench",
+      "displayName": "知识库文档更新与存储.md",
+      "contentType": "text/markdown",
+      "sizeBytes": 15559,
+      "segmentCount": 44,
+      "version": 3,
+      "uploadedAt": "2026-07-27T07:57:32.794899834Z",
+      "category": "resume-benchmark"
+    }
+  },
+  {
+    "source": "docs/对话与检索/memory-guide.md",
+    "displayName": "memory-guide.md",
+    "status": 200,
+    "durationMs": 1036,
+    "document": {
+      "docId": "3b610dfa111cf400",
+      "tenantId": "resume-bench",
+      "displayName": "memory-guide.md",
+      "contentType": "text/markdown",
+      "sizeBytes": 15909,
+      "segmentCount": 55,
+      "version": 3,
+      "uploadedAt": "2026-07-27T07:57:33.832417543Z",
+      "category": "resume-benchmark"
+    }
+  },
+  {
+    "source": "docs/对话与检索/model-cascade.md",
+    "displayName": "model-cascade.md",
+    "status": 200,
+    "durationMs": 1147,
+    "document": {
+      "docId": "f294bf23f52bfc86",
+      "tenantId": "resume-bench",
+      "displayName": "model-cascade.md",
+      "contentType": "text/markdown",
+      "sizeBytes": 13300,
+      "segmentCount": 48,
+      "version": 3,
+      "uploadedAt": "2026-07-27T07:57:34.979634335Z",
+      "category": "resume-benchmark"
+    }
+  },
+  {
+    "source": "docs/Agent编排/agent-guide.md",
+    "displayName": "agent-guide.md",
+    "status": 200,
+    "durationMs": 2928,
+    "document": {
+      "docId": "e6007a150cae4466",
+      "tenantId": "resume-bench",
+      "displayName": "agent-guide.md",
+      "contentType": "text/markdown",
+      "sizeBytes": 40385,
+      "segmentCount": 136,
+      "version": 3,
+      "uploadedAt": "2026-07-27T07:57:37.908086295Z",
+      "category": "resume-benchmark"
+    }
+  },
+  {
+    "source": "docs/Agent编排/意图识别与Agent执行原理.md",
+    "displayName": "意图识别与Agent执行原理.md",
+    "status": 200,
+    "durationMs": 761,
+    "document": {
+      "docId": "731cf52193f6e7fe",
+      "tenantId": "resume-bench",
+      "displayName": "意图识别与Agent执行原理.md",
+      "contentType": "text/markdown",
+      "sizeBytes": 13348,
+      "segmentCount": 37,
+      "version": 3,
+      "uploadedAt": "2026-07-27T07:57:38.670562170Z",
+      "category": "resume-benchmark"
+    }
+  },
+  {
+    "source": "docs/Agent编排/workflow-guide.md",
+    "displayName": "workflow-guide.md",
+    "status": 200,
+    "durationMs": 2141,
+    "document": {
+      "docId": "579ed38a320e0c08",
+      "tenantId": "resume-bench",
+      "displayName": "workflow-guide.md",
+      "contentType": "text/markdown",
+      "sizeBytes": 35745,
+      "segmentCount": 134,
+      "version": 3,
+      "uploadedAt": "2026-07-27T07:57:40.811942296Z",
+      "category": "resume-benchmark"
+    }
+  },
+  {
+    "source": "docs/Agent编排/让Agent主动调接口.md",
+    "displayName": "让Agent主动调接口.md",
+    "status": 200,
+    "durationMs": 1101,
+    "document": {
+      "docId": "71689949a786a9a1",
+      "tenantId": "resume-bench",
+      "displayName": "让Agent主动调接口.md",
+      "contentType": "text/markdown",
+      "sizeBytes": 19016,
+      "segmentCount": 63,
+      "version": 3,
+      "uploadedAt": "2026-07-27T07:57:41.914064380Z",
+      "category": "resume-benchmark"
+    }
+  },
+  {
+    "source": "docs/平台工程/eval-guide.md",
+    "displayName": "eval-guide.md",
+    "status": 200,
+    "durationMs": 1622,
+    "document": {
+      "docId": "ecfa38a3cfb391f3",
+      "tenantId": "resume-bench",
+      "displayName": "eval-guide.md",
+      "contentType": "text/markdown",
+      "sizeBytes": 26911,
+      "segmentCount": 87,
+      "version": 3,
+      "uploadedAt": "2026-07-27T07:57:43.536189297Z",
+      "category": "resume-benchmark"
+    }
+  },
+  {
+    "source": "docs/平台工程/observability-guide.md",
+    "displayName": "observability-guide.md",
+    "status": 200,
+    "durationMs": 1833,
+    "document": {
+      "docId": "9b9d49fce64a83ae",
+      "tenantId": "resume-bench",
+      "displayName": "observability-guide.md",
+      "contentType": "text/markdown",
+      "sizeBytes": 24826,
+      "segmentCount": 90,
+      "version": 3,
+      "uploadedAt": "2026-07-27T07:57:45.369497923Z",
+      "category": "resume-benchmark"
+    }
+  },
+  {
+    "source": "docs/平台工程/litellm-gateway-guide.md",
+    "displayName": "litellm-gateway-guide.md",
+    "status": 200,
+    "durationMs": 809,
+    "document": {
+      "docId": "4baf5e6356bbc269",
+      "tenantId": "resume-bench",
+      "displayName": "litellm-gateway-guide.md",
+      "contentType": "text/markdown",
+      "sizeBytes": 9930,
+      "segmentCount": 38,
+      "version": 3,
+      "uploadedAt": "2026-07-27T07:57:46.180031965Z",
+      "category": "resume-benchmark"
+    }
+  },
+  {
+    "source": "docs/平台工程/rbac-and-public-kb.md",
+    "displayName": "rbac-and-public-kb.md",
+    "status": 200,
+    "durationMs": 1316,
+    "document": {
+      "docId": "7969c527bdaa8755",
+      "tenantId": "resume-bench",
+      "displayName": "rbac-and-public-kb.md",
+      "contentType": "text/markdown",
+      "sizeBytes": 17882,
+      "segmentCount": 60,
+      "version": 3,
+      "uploadedAt": "2026-07-27T07:57:47.497152049Z",
+      "category": "resume-benchmark"
+    }
+  },
+  {
+    "source": "docs/平台工程/eventbus-guide.md",
+    "displayName": "eventbus-guide.md",
+    "status": 200,
+    "durationMs": 1264,
+    "document": {
+      "docId": "b873031833d9ef79",
+      "tenantId": "resume-bench",
+      "displayName": "eventbus-guide.md",
+      "contentType": "text/markdown",
+      "sizeBytes": 19129,
+      "segmentCount": 70,
+      "version": 3,
+      "uploadedAt": "2026-07-27T07:57:48.762314550Z",
+      "category": "resume-benchmark"
+    }
+  },
+  {
+    "source": "docs/互操作渠道/a2a-guide.md",
+    "displayName": "a2a-guide.md",
+    "status": 200,
+    "durationMs": 1650,
+    "document": {
+      "docId": "9e871915117188f4",
+      "tenantId": "resume-bench",
+      "displayName": "a2a-guide.md",
+      "contentType": "text/markdown",
+      "sizeBytes": 23928,
+      "segmentCount": 92,
+      "version": 3,
+      "uploadedAt": "2026-07-27T07:57:50.412472425Z",
+      "category": "resume-benchmark"
+    }
+  },
+  {
+    "source": "docs/互操作渠道/mcp-guide.md",
+    "displayName": "mcp-guide.md",
+    "status": 200,
+    "durationMs": 733,
+    "document": {
+      "docId": "b1ca5315b4d07a3d",
+      "tenantId": "resume-bench",
+      "displayName": "mcp-guide.md",
+      "contentType": "text/markdown",
+      "sizeBytes": 11512,
+      "segmentCount": 41,
+      "version": 3,
+      "uploadedAt": "2026-07-27T07:57:51.145373676Z",
+      "category": "resume-benchmark"
+    }
+  },
+  {
+    "source": "docs/参考/架构文档.md",
+    "displayName": "架构文档.md",
+    "status": 200,
+    "durationMs": 2395,
+    "document": {
+      "docId": "7e6076ac8f1044a6",
+      "tenantId": "resume-bench",
+      "displayName": "架构文档.md",
+      "contentType": "text/markdown",
+      "sizeBytes": 34147,
+      "segmentCount": 128,
+      "version": 3,
+      "uploadedAt": "2026-07-27T07:57:53.540105427Z",
+      "category": "resume-benchmark"
+    }
+  }
+]

@@ -1,0 +1,493 @@
+{
+  "benchmark": "rag-vector-pilot",
+  "requestedCases": 20,
+  "wallDurationMs": 2443,
+  "cases": 20,
+  "avgRecall": 0.85,
+  "avgPrecision": 0.24,
+  "meanMrr": 0.6391666666666665,
+  "hitRate": 0.85,
+  "totalDurationMs": 2363,
+  "results": [
+    {
+      "id": "rag-001",
+      "question": "上传文档时，如果图片多模态功能未开启，系统会如何处理？",
+      "retrievedIds": [
+        "知识库文档更新与存储.md#36",
+        "rag-guide.md#65",
+        "agent-guide.md#53",
+        "rag-guide.md#15",
+        "rag-guide.md#18",
+        "nl2sql-guide.md#35",
+        "知识库文档更新与存储.md#8",
+        "model-cascade.md#13",
+        "架构文档.md#0",
+        "退款与退货政策.md#1"
+      ],
+      "relevantIds": [
+        "rag-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 151
+    },
+    {
+      "id": "rag-002",
+      "question": "在混合检索中，当ES参与查询时，默认的融合策略是什么？",
+      "retrievedIds": [
+        "es-hybrid-rerank.md#2",
+        "workflow-guide.md#82",
+        "agent-guide.md#26",
+        "nl2sql-guide.md#47",
+        "向量检索-ann与rrf.md#29",
+        "observability-guide.md#18",
+        "rbac-and-public-kb.md#0",
+        "意图识别与Agent执行原理.md#29",
+        "eval-guide.md#17",
+        "eval-guide.md#76"
+      ],
+      "relevantIds": [
+        "rag-guide.md"
+      ],
+      "recall": 0,
+      "precision": 0,
+      "mrr": 0,
+      "hit": false,
+      "durationMs": 169
+    },
+    {
+      "id": "rag-003",
+      "question": "如何配置才能使图片多模态嵌入功能生效？",
+      "retrievedIds": [
+        "eventbus-guide.md#50",
+        "observability-guide.md#11",
+        "memory-guide.md#21",
+        "架构文档.md#50",
+        "eventbus-guide.md#29",
+        "rbac-and-public-kb.md#12",
+        "数据库与中间件清单.md#45",
+        "nl2sql-guide.md#9",
+        "agent-guide.md#98",
+        "semantic-cache.md#5"
+      ],
+      "relevantIds": [
+        "rag-guide.md"
+      ],
+      "recall": 0,
+      "precision": 0,
+      "mrr": 0,
+      "hit": false,
+      "durationMs": 157
+    },
+    {
+      "id": "rag-004",
+      "question": "文档上传时，如果标题相同，系统会如何处理？",
+      "retrievedIds": [
+        "rag-guide.md#15",
+        "eventbus-guide.md#8",
+        "memory-guide.md#7",
+        "知识库文档更新与存储.md#36",
+        "semantic-cache.md#5",
+        "知识库文档更新与存储.md#11",
+        "agent-guide.md#44",
+        "rag-guide.md#18",
+        "semantic-cache.md#24",
+        "意图识别与Agent执行原理.md#29"
+      ],
+      "relevantIds": [
+        "rag-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 144
+    },
+    {
+      "id": "rag-005",
+      "question": "在enforce授权模式下，上传文档时如果无法确定归属部门，会发生什么？",
+      "retrievedIds": [
+        "rag-guide.md#11",
+        "rag-guide.md#16",
+        "rag-guide.md#12",
+        "rag-guide.md#6",
+        "memory-guide.md#21",
+        "rbac-and-public-kb.md#26",
+        "rag-guide.md#8",
+        "知识库文档更新与存储.md#36",
+        "rag-guide.md#15",
+        "rag-guide.md#17"
+      ],
+      "relevantIds": [
+        "rag-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.7,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 113
+    },
+    {
+      "id": "rag-006",
+      "question": "GraphRAG的图存储默认使用什么后端？如何切换为进程内模式？",
+      "retrievedIds": [
+        "es-hybrid-rerank.md#16",
+        "observability-guide.md#7",
+        "架构文档.md#90",
+        "向量检索-ann与rrf.md#8",
+        "架构文档.md#89",
+        "rag-guide.md#9",
+        "workflow-guide.md#10",
+        "eval-guide.md#17",
+        "退款与退货政策.md#0",
+        "向量检索-ann与rrf.md#7"
+      ],
+      "relevantIds": [
+        "rag-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.1,
+      "mrr": 0.16666666666666666,
+      "hit": true,
+      "durationMs": 119
+    },
+    {
+      "id": "rag-007",
+      "question": "L1语义缓存在什么位置？它如何影响请求处理流程？",
+      "retrievedIds": [
+        "数据库与中间件清单.md#32",
+        "eventbus-guide.md#28",
+        "memory-guide.md#21",
+        "memory-guide.md#15",
+        "架构文档.md#90",
+        "rag-guide.md#86",
+        "rbac-and-public-kb.md#8",
+        "workflow-guide.md#10",
+        "agent-guide.md#98",
+        "nl2sql-guide.md#29"
+      ],
+      "relevantIds": [
+        "rag-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.1,
+      "mrr": 0.16666666666666666,
+      "hit": true,
+      "durationMs": 90
+    },
+    {
+      "id": "rag-008",
+      "question": "切换embedding provider后，为什么需要重建向量库collection？",
+      "retrievedIds": [
+        "rag-guide.md#41",
+        "semantic-cache.md#16",
+        "rag-guide.md#87",
+        "eval-guide.md#86",
+        "知识库文档更新与存储.md#22",
+        "向量检索-ann与rrf.md#23",
+        "semantic-cache.md#34",
+        "架构文档.md#125",
+        "rag-guide.md#45",
+        "semantic-cache.md#26"
+      ],
+      "relevantIds": [
+        "rag-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 178
+    },
+    {
+      "id": "rag-009",
+      "question": "在enforce授权模式下，文档级授权过滤如何处理无docId命中的候选（如GraphRAG三元组）？",
+      "retrievedIds": [
+        "rag-guide.md#11",
+        "rag-guide.md#12",
+        "rag-guide.md#16",
+        "rag-guide.md#67",
+        "rag-guide.md#6",
+        "memory-guide.md#21",
+        "eventbus-guide.md#7",
+        "rbac-and-public-kb.md#26",
+        "知识库文档更新与存储.md#36",
+        "向量检索-ann与rrf.md#2"
+      ],
+      "relevantIds": [
+        "rag-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 104
+    },
+    {
+      "id": "rag-010",
+      "question": "rerank和query expansion两个增强功能分别作用于检索流程的哪个阶段？",
+      "retrievedIds": [
+        "rag-guide.md#66",
+        "向量检索-ann与rrf.md#38",
+        "es-hybrid-rerank.md#0",
+        "eval-guide.md#40",
+        "向量检索-ann与rrf.md#33",
+        "rag-guide.md#65",
+        "eval-guide.md#75",
+        "es-hybrid-rerank.md#17",
+        "eval-guide.md#7",
+        "向量检索-ann与rrf.md#34"
+      ],
+      "relevantIds": [
+        "rag-guide.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 122
+    },
+    {
+      "id": "rag-011",
+      "question": "平台支持的6个向量库中，哪个库默认使用精确暴力搜索而非近似最近邻？",
+      "retrievedIds": [
+        "向量检索-ann与rrf.md#29",
+        "统一登录平台接入手册.md#7",
+        "向量检索-ann与rrf.md#0",
+        "平台公共公告-统一维护窗口#0",
+        "nl2sql-guide.md#5",
+        "统一登录平台接入手册.md#1",
+        "向量检索-ann与rrf.md#9",
+        "统一登录平台接入手册.md#59",
+        "mcp-guide.md#0",
+        "向量检索-ann与rrf.md#8"
+      ],
+      "relevantIds": [
+        "向量检索-ann与rrf.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 167
+    },
+    {
+      "id": "rag-012",
+      "question": "RRF融合策略中，平滑常数k的默认值是多少？增大k值对排名结果有什么影响？",
+      "retrievedIds": [
+        "平台公共公告-统一维护窗口#0",
+        "向量检索-ann与rrf.md#29",
+        "向量检索-ann与rrf.md#8",
+        "向量检索-ann与rrf.md#0",
+        "退款与退货政策.md#1",
+        "统一登录平台接入手册.md#1",
+        "eventbus-guide.md#4",
+        "eval-guide.md#75",
+        "model-cascade.md#2",
+        "nl2sql-guide.md#5"
+      ],
+      "relevantIds": [
+        "向量检索-ann与rrf.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 0.5,
+      "hit": true,
+      "durationMs": 99
+    },
+    {
+      "id": "rag-013",
+      "question": "在pgvector向量库中，如果希望使用库内向量与全文检索的混合排序，需要设置什么参数？",
+      "retrievedIds": [
+        "向量检索-ann与rrf.md#30",
+        "向量检索-ann与rrf.md#19",
+        "rag-guide.md#37",
+        "rag-guide.md#52",
+        "向量检索-ann与rrf.md#31",
+        "向量检索-ann与rrf.md#35",
+        "知识库文档更新与存储.md#8",
+        "rag-guide.md#40",
+        "workflow-guide.md#98",
+        "向量检索-ann与rrf.md#36"
+      ],
+      "relevantIds": [
+        "向量检索-ann与rrf.md"
+      ],
+      "recall": 1,
+      "precision": 0.5,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 140
+    },
+    {
+      "id": "rag-014",
+      "question": "平台中哪两个向量库默认使用HNSW索引？",
+      "retrievedIds": [
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#7",
+        "mcp-guide.md#0",
+        "向量检索-ann与rrf.md#29",
+        "向量检索-ann与rrf.md#8",
+        "向量检索-ann与rrf.md#9",
+        "统一登录平台接入手册.md#59",
+        "统一登录平台接入手册.md#0",
+        "平台公共公告-统一维护窗口#0",
+        "nl2sql-guide.md#5"
+      ],
+      "relevantIds": [
+        "向量检索-ann与rrf.md"
+      ],
+      "recall": 1,
+      "precision": 0.3,
+      "mrr": 0.25,
+      "hit": true,
+      "durationMs": 133
+    },
+    {
+      "id": "rag-015",
+      "question": "为什么RRF分数不能作为相关度阈值使用？",
+      "retrievedIds": [
+        "向量检索-ann与rrf.md#27",
+        "统一登录平台接入手册.md#68",
+        "workflow-guide.md#22",
+        "model-cascade.md#11",
+        "eventbus-guide.md#8",
+        "eval-guide.md#17",
+        "退款与退货政策.md#1",
+        "rag-guide.md#15",
+        "eval-guide.md#43",
+        "意图识别与Agent执行原理.md#29"
+      ],
+      "relevantIds": [
+        "向量检索-ann与rrf.md"
+      ],
+      "recall": 1,
+      "precision": 0.1,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 134
+    },
+    {
+      "id": "rag-016",
+      "question": "切换向量库provider时，需要重新执行什么操作才能使用数据？",
+      "retrievedIds": [
+        "向量检索-ann与rrf.md#9",
+        "架构文档.md#12",
+        "litellm-gateway-guide.md#1",
+        "litellm-gateway-guide.md#23",
+        "eval-guide.md#36",
+        "eval-guide.md#39",
+        "架构文档.md#26",
+        "rag-guide.md#47",
+        "litellm-gateway-guide.md#31",
+        "rag-guide.md#41"
+      ],
+      "relevantIds": [
+        "向量检索-ann与rrf.md"
+      ],
+      "recall": 1,
+      "precision": 0.1,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 92
+    },
+    {
+      "id": "rag-017",
+      "question": "在跨源RRF融合中，如果ES不参与查询，默认使用什么融合策略？",
+      "retrievedIds": [
+        "workflow-guide.md#82",
+        "agent-guide.md#26",
+        "es-hybrid-rerank.md#2",
+        "意图识别与Agent执行原理.md#29",
+        "向量检索-ann与rrf.md#29",
+        "意图识别与Agent执行原理.md#28",
+        "eval-guide.md#17",
+        "workflow-guide.md#105",
+        "observability-guide.md#18",
+        "nl2sql-guide.md#47"
+      ],
+      "relevantIds": [
+        "向量检索-ann与rrf.md"
+      ],
+      "recall": 1,
+      "precision": 0.1,
+      "mrr": 0.2,
+      "hit": true,
+      "durationMs": 57
+    },
+    {
+      "id": "rag-018",
+      "question": "HNSW索引中，哪个参数是唯一可以在查询时调整召回率与延迟的旋钮？",
+      "retrievedIds": [
+        "向量检索-ann与rrf.md#27",
+        "架构文档.md#90",
+        "向量检索-ann与rrf.md#8",
+        "workflow-guide.md#10",
+        "nl2sql-guide.md#5",
+        "model-cascade.md#11",
+        "rbac-and-public-kb.md#23",
+        "observability-guide.md#18",
+        "nl2sql-guide.md#39",
+        "memory-guide.md#5"
+      ],
+      "relevantIds": [
+        "向量检索-ann与rrf.md"
+      ],
+      "recall": 1,
+      "precision": 0.2,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 69
+    },
+    {
+      "id": "rag-019",
+      "question": "平台中哪两个向量库支持shared隔离模式？",
+      "retrievedIds": [
+        "向量检索-ann与rrf.md#9",
+        "统一登录平台接入手册.md#1",
+        "统一登录平台接入手册.md#7",
+        "向量检索-ann与rrf.md#29",
+        "知识库文档更新与存储.md#8",
+        "退款与退货政策.md#1",
+        "向量检索-ann与rrf.md#10",
+        "mcp-guide.md#0",
+        "向量检索-ann与rrf.md#8",
+        "a2a-guide.md#3"
+      ],
+      "relevantIds": [
+        "向量检索-ann与rrf.md"
+      ],
+      "recall": 1,
+      "precision": 0.4,
+      "mrr": 1,
+      "hit": true,
+      "durationMs": 55
+    },
+    {
+      "id": "rag-020",
+      "question": "如果希望看到原始相关分而非RRF名次分，可以采取哪两种方法？",
+      "retrievedIds": [
+        "eventbus-guide.md#4",
+        "统一登录平台接入手册.md#68",
+        "知识库文档更新与存储.md#11",
+        "model-cascade.md#11",
+        "rag-guide.md#69",
+        "eval-guide.md#6",
+        "rag-guide.md#15",
+        "退款与退货政策.md#1",
+        "memory-guide.md#30",
+        "a2a-guide.md#84"
+      ],
+      "relevantIds": [
+        "向量检索-ann与rrf.md"
+      ],
+      "recall": 0,
+      "precision": 0,
+      "mrr": 0,
+      "hit": false,
+      "durationMs": 70
+    }
+  ]
+}

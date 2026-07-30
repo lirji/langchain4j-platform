@@ -1,0 +1,14 @@
+{
+  "benchmark": "agent-quality-replan",
+  "topology": "parallel",
+  "cases": 20,
+  "httpSuccesses": 19,
+  "rubricPassed": 15,
+  "rubricCompletionRate": 0.75,
+  "criticAccepted": 17,
+  "criticAcceptanceRate": 0.85,
+  "replanned": 5,
+  "averageDurationMs": 63289.57894736842,
+  "p50DurationMs": 54808,
+  "p95DurationMs": 140327
+}

@@ -1,0 +1,14 @@
+{
+  "benchmark": "agent-linear-timing",
+  "topology": "linear",
+  "cases": 5,
+  "httpSuccesses": 5,
+  "rubricPassed": 0,
+  "rubricCompletionRate": 0,
+  "criticAccepted": 5,
+  "criticAcceptanceRate": 1,
+  "replanned": 0,
+  "averageDurationMs": 14852.6,
+  "p50DurationMs": 2125,
+  "p95DurationMs": 65870
+}
