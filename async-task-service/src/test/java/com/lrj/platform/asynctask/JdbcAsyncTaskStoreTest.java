@@ -13,6 +13,7 @@ import javax.sql.DataSource;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -90,6 +91,38 @@ class JdbcAsyncTaskStoreTest {
         assertThat(task.leaseOwnerId()).isNull();
     }
 
+    @Test
+    void orphanSweepFailsLegacyRunningTaskWithoutLeaseAfterGrace() {
+        JdbcAsyncTaskStore store = store("async_task_orphan_null_lease");
+        Instant old = Instant.now().minusSeconds(120);
+        store.put(new AsyncTask(
+                "legacy-task",
+                "acme",
+                "alice",
+                "agent.task",
+                AsyncTaskStatus.RUNNING,
+                Map.of(),
+                null,
+                null,
+                null,
+                old,
+                old,
+                null,
+                null,
+                null));
+
+        var failed = store.failOrphans(
+                Set.of("agent.task"),
+                Instant.now().minusSeconds(60),
+                Instant.now().minusSeconds(30),
+                10,
+                AsyncTaskOrphanReaper.ORPHAN_ERROR);
+
+        assertThat(failed).extracting(AsyncTask::taskId).containsExactly("legacy-task");
+        assertThat(store.get("legacy-task").orElseThrow().status())
+                .isEqualTo(AsyncTaskStatus.FAILED);
+    }
+
     private static JdbcAsyncTaskStore store(String dbName) {
         DataSource dataSource = h2(dbName);
         return new JdbcAsyncTaskStore(dataSource, new ObjectMapper(), Duration.ofHours(1),
@@ -102,7 +135,7 @@ class JdbcAsyncTaskStoreTest {
     }
 
     /** 极简 ObjectProvider：只需 getIfAvailable()（JdbcAsyncTaskStore 唯一用到），其余委托它。 */
-    private static <T> ObjectProvider<T> provider(T value) {
+    static <T> ObjectProvider<T> provider(T value) {
         return new ObjectProvider<>() {
             @Override public T getObject() { return value; }
             @Override public T getObject(Object... args) { return value; }

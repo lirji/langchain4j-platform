@@ -30,6 +30,12 @@ public class AsyncTaskWebConfig {
     }
 
     @Bean
+    @ConfigurationProperties(prefix = "app.async-task.orphan")
+    AsyncTaskOrphanProperties asyncTaskOrphanProperties() {
+        return new AsyncTaskOrphanProperties();
+    }
+
+    @Bean
     RestTemplate asyncTaskWebhookRestTemplate(RestTemplateBuilder builder, AsyncTaskWebhookProperties properties) {
         return builder
                 .setConnectTimeout(properties.getConnectTimeout())

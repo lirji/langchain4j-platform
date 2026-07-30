@@ -7,5 +7,8 @@ import com.lrj.platform.protocol.asynctask.AsyncTask;
  * 创建/状态更新/租约/取消时发布，供 SSE 推送（{@link AsyncTaskSseService}）、webhook 通知等
  * {@code @EventListener} 消费。
  */
-public record AsyncTaskEvent(AsyncTask task) {
+public record AsyncTaskEvent(AsyncTask task, AsyncTaskStreamEvent streamEvent) {
+    public AsyncTaskEvent(AsyncTask task) {
+        this(task, null);
+    }
 }

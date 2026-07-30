@@ -94,10 +94,7 @@ public class AsyncTaskWebhookOutbox {
                 INSERT INTO ASYNC_TASK_WEBHOOK_OUTBOX
                 (OUTBOX_ID, TASK_ID, TENANT_ID, TARGET_URL, TASK_STATUS, PAYLOAD_JSON, STATUS, ATTEMPTS, NEXT_ATTEMPT_AT, LAST_ERROR, CREATED_AT, UPDATED_AT)
                 VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, NULL, ?, ?)
-                ON DUPLICATE KEY UPDATE TARGET_URL=VALUES(TARGET_URL), TASK_STATUS=VALUES(TASK_STATUS),
-                  PAYLOAD_JSON=VALUES(PAYLOAD_JSON), STATUS='PENDING', ATTEMPTS=0,
-                  NEXT_ATTEMPT_AT=VALUES(NEXT_ATTEMPT_AT), LAST_ERROR=NULL, CLAIMED_BY=NULL,
-                  CLAIMED_UNTIL=NULL, UPDATED_AT=VALUES(UPDATED_AT)""",
+                ON DUPLICATE KEY UPDATE OUTBOX_ID=OUTBOX_ID""",
                 task.taskId(),
                 task.taskId(),
                 task.tenantId(),
@@ -237,7 +234,7 @@ public class AsyncTaskWebhookOutbox {
 
     private String payload(AsyncTask task) {
         try {
-            return mapper.writeValueAsString(task);
+            return mapper.writeValueAsString(AsyncTaskWebhookPayloadFactory.payload(task));
         } catch (Exception ex) {
             return "{\"taskId\":\"" + task.taskId() + "\",\"status\":\"" + task.status().name() + "\"}";
         }

@@ -239,6 +239,42 @@ class AsyncTaskControllerTest {
         verify(outbox).listDead("acme", 200);
     }
 
+    @Test
+    void progressAppendRequiresAgentKindTenantAndLiveWorkerLease() {
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("agent")));
+        AsyncTaskStore store = new AsyncTaskStore(Duration.ofHours(1));
+        InMemoryAsyncTaskEventJournal journal = new InMemoryAsyncTaskEventJournal();
+        AsyncTaskController controller = new AsyncTaskController(
+                store,
+                new AsyncTaskSseService(store, journal),
+                mock(AuditLogger.class),
+                mock(ApplicationEventPublisher.class),
+                null,
+                journal);
+        AsyncTask task = (AsyncTask) controller.create(
+                new AsyncTaskCreateRequest("agent.dag", Map.of(), null)).getBody();
+        controller.lease(task.taskId(), new AsyncTaskLeaseRequest("worker-1", 30L));
+        AsyncTaskEventAppendRequest event = new AsyncTaskEventAppendRequest(
+                "worker-1:step-1",
+                "dag-worker-start",
+                Map.of("taskId", "t1"),
+                "worker-1");
+
+        var first = controller.appendEvent(task.taskId(), event);
+        var duplicate = controller.appendEvent(task.taskId(), event);
+        var wrongWorker = controller.appendEvent(task.taskId(), new AsyncTaskEventAppendRequest(
+                "worker-2:step-1", "dag-worker-start", Map.of(), "worker-2"));
+
+        assertThat(first.getStatusCode().value()).isEqualTo(200);
+        assertThat(duplicate.getBody()).isEqualTo(first.getBody());
+        assertThat(wrongWorker.getStatusCode().value()).isEqualTo(409);
+        assertThat(journal.eventsAfter(task.taskId(), 0)).extracting(AsyncTaskStreamEvent::event)
+                .containsExactly("PENDING", "RUNNING", "dag-worker-start");
+
+        TenantContext.set(new TenantContext.Tenant("globex", "bob", Set.of("agent")));
+        assertThat(controller.appendEvent(task.taskId(), event).getStatusCode().value()).isEqualTo(404);
+    }
+
     private static AsyncTaskController controller() {
         AsyncTaskStore store = new AsyncTaskStore(Duration.ofHours(1));
         return new AsyncTaskController(

@@ -60,7 +60,10 @@ public class AsyncTaskWebhookNotifier {
         int attempts = Math.max(1, properties.getMaxAttempts());
         for (int attempt = 1; attempt <= attempts; attempt++) {
             try {
-                restTemplate.postForEntity(target, new HttpEntity<>(task, headers(task)), Void.class);
+                restTemplate.postForEntity(
+                        target,
+                        new HttpEntity<>(AsyncTaskWebhookPayloadFactory.payload(task), headers(task)),
+                        Void.class);
                 audit.record(AuditEventType.WEBHOOK_DELIVERED,
                         Map.of("taskId", task.taskId(), "status", task.status().name(), "target", target.toString()));
                 return;
@@ -80,11 +83,7 @@ public class AsyncTaskWebhookNotifier {
     }
 
     static HttpHeaders headers(AsyncTask task) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("X-Async-Task-Id", task.taskId());
-        headers.set("X-Async-Task-Status", task.status().name());
-        headers.set("X-Tenant-Id", task.tenantId());
-        return headers;
+        return AsyncTaskWebhookPayloadFactory.headers(task);
     }
 
     private void sleepBackoff() {
@@ -102,7 +101,9 @@ public class AsyncTaskWebhookNotifier {
         try {
             URI uri = URI.create(value.trim());
             String scheme = uri.getScheme();
-            if (uri.getHost() == null || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))) {
+            if (uri.getHost() == null
+                    || uri.getUserInfo() != null
+                    || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))) {
                 return Optional.empty();
             }
             return Optional.of(uri);

@@ -10,6 +10,7 @@ import com.lrj.platform.protocol.asynctask.AsyncTaskStatusUpdateRequest;
 import com.lrj.platform.security.TenantContext;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -47,12 +48,16 @@ public class AsyncTaskController {
     private final AuditLogger audit;
     private final ApplicationEventPublisher events;
     private final AsyncTaskWebhookOutbox webhookOutbox;
+    private final AsyncTaskEventJournal eventJournal;
+    private int eventMaxBytes = 262_144;
 
     public AsyncTaskController(AsyncTaskStore store,
                                AsyncTaskSseService sse,
                                AuditLogger audit,
                                ApplicationEventPublisher events) {
-        this(store, sse, audit, events, (AsyncTaskWebhookOutbox) null);
+        this(store, sse, audit, events,
+                (AsyncTaskWebhookOutbox) null,
+                (AsyncTaskEventJournal) null);
     }
 
     @Autowired
@@ -60,8 +65,11 @@ public class AsyncTaskController {
                                AsyncTaskSseService sse,
                                AuditLogger audit,
                                ApplicationEventPublisher events,
-                               ObjectProvider<AsyncTaskWebhookOutbox> webhookOutbox) {
-        this(store, sse, audit, events, webhookOutbox == null ? null : webhookOutbox.getIfAvailable());
+                               ObjectProvider<AsyncTaskWebhookOutbox> webhookOutbox,
+                               ObjectProvider<AsyncTaskEventJournal> eventJournal) {
+        this(store, sse, audit, events,
+                webhookOutbox == null ? null : webhookOutbox.getIfAvailable(),
+                eventJournal == null ? null : eventJournal.getIfAvailable());
     }
 
     AsyncTaskController(AsyncTaskStore store,
@@ -69,11 +77,21 @@ public class AsyncTaskController {
                         AuditLogger audit,
                         ApplicationEventPublisher events,
                         AsyncTaskWebhookOutbox webhookOutbox) {
+        this(store, sse, audit, events, webhookOutbox, null);
+    }
+
+    AsyncTaskController(AsyncTaskStore store,
+                        AsyncTaskSseService sse,
+                        AuditLogger audit,
+                        ApplicationEventPublisher events,
+                        AsyncTaskWebhookOutbox webhookOutbox,
+                        AsyncTaskEventJournal eventJournal) {
         this.store = store;
         this.sse = sse;
         this.audit = audit;
         this.events = events;
         this.webhookOutbox = webhookOutbox;
+        this.eventJournal = eventJournal;
     }
 
     @PostMapping("/async/tasks")
@@ -103,7 +121,7 @@ public class AsyncTaskController {
                 now,
                 null);
         store.put(task);
-        events.publishEvent(new AsyncTaskEvent(task));
+        publishLifecycle(task);
         audit.record(AuditEventType.ASYNC_TASK_SUBMITTED,
                 Map.of("taskId", task.taskId(), "kind", task.kind(), "service", "async-task-service"));
         return ResponseEntity.accepted().body(task);
@@ -135,15 +153,22 @@ public class AsyncTaskController {
         if (!leaseOwnedBy(existing.get(), request.workerId())) {
             return ResponseEntity.status(409).body(Map.of("error", "task lease is owned by another worker", "taskId", taskId));
         }
-        Optional<AsyncTask> updated = store.update(taskId, task -> {
-            if (!TenantContext.current().tenantId().equals(task.tenantId()) || task.status().isTerminal()) {
-                return task;
-            }
-            return AsyncTaskStore.withStatus(task, request.status(), request.result(), request.error());
-        });
-        AsyncTask task = updated.orElse(existing.get());
-        events.publishEvent(new AsyncTaskEvent(task));
-        if (task.status().isTerminal()) {
+        AsyncTaskStore.MutationResult mutation = store.transition(
+                taskId,
+                TenantContext.current().tenantId(),
+                request.workerId(),
+                request.status(),
+                request.result(),
+                request.error());
+        AsyncTask task = mutation.task() == null ? existing.get() : mutation.task();
+        if (!mutation.changed() && !task.status().isTerminal()) {
+            return ResponseEntity.status(409).body(
+                    Map.of("error", "task state changed before update", "taskId", taskId));
+        }
+        if (mutation.changed()) {
+            publishLifecycle(task);
+        }
+        if (mutation.changed() && task.status().isTerminal()) {
             audit.record(AuditEventType.ASYNC_TASK_FINISHED, Map.of(
                     "taskId", task.taskId(),
                     "kind", task.kind(),
@@ -180,7 +205,9 @@ public class AsyncTaskController {
         if (!workerId.equals(leased.leaseOwnerId())) {
             return ResponseEntity.status(409).body(leaseConflict(taskId, leased));
         }
-        events.publishEvent(new AsyncTaskEvent(leased));
+        if (current.status() != leased.status()) {
+            publishLifecycle(leased);
+        }
         return ResponseEntity.ok(leased);
     }
 
@@ -190,14 +217,76 @@ public class AsyncTaskController {
         if (existing.isEmpty() || existing.get().status().isTerminal()) {
             return ResponseEntity.notFound().build();
         }
-        Optional<AsyncTask> updated = store.update(taskId,
-                task -> AsyncTaskStore.withStatus(task, AsyncTaskStatus.CANCELLED, null, "cancelled by user"));
-        updated.ifPresent(task -> {
-            events.publishEvent(new AsyncTaskEvent(task));
+        AsyncTaskStore.MutationResult mutation = store.transition(
+                taskId,
+                TenantContext.current().tenantId(),
+                null,
+                AsyncTaskStatus.CANCELLED,
+                null,
+                "cancelled by user");
+        if (mutation.changed()) {
+            AsyncTask task = mutation.task();
+            publishLifecycle(task);
             audit.record(AuditEventType.ASYNC_TASK_CANCELLED,
                     Map.of("taskId", task.taskId(), "kind", task.kind(), "service", "async-task-service"));
-        });
+        }
+        if (!mutation.changed()) {
+            return ResponseEntity.notFound().build();
+        }
         return ResponseEntity.ok(Map.of("taskId", taskId, "cancelled", true));
+    }
+
+    @PostMapping("/async/tasks/{taskId}/events")
+    public ResponseEntity<?> appendEvent(@PathVariable String taskId,
+                                         @RequestBody AsyncTaskEventAppendRequest request) {
+        if (eventJournal == null) {
+            return ResponseEntity.status(503).body(Map.of("error", "task event journal is unavailable"));
+        }
+        Optional<AsyncTask> scoped = scoped(taskId);
+        if (scoped.isEmpty() || !AGENT_KINDS.contains(scoped.get().kind())) {
+            return ResponseEntity.notFound().build();
+        }
+        AsyncTask task = scoped.get();
+        if (request != null && blankToNull(request.eventKey()) != null) {
+            Optional<AsyncTaskStreamEvent> duplicate = eventJournal.eventsAfter(taskId, 0).stream()
+                    .filter(item -> request.eventKey().trim().equals(item.eventKey()))
+                    .findFirst();
+            if (duplicate.isPresent()) {
+                return ResponseEntity.ok(duplicate.get());
+            }
+        }
+        if (task.status().isTerminal()
+                || request == null
+                || blankToNull(request.eventKey()) == null
+                || blankToNull(request.event()) == null
+                || blankToNull(request.workerId()) == null) {
+            return ResponseEntity.status(task.status().isTerminal() ? 409 : 400)
+                    .body(Map.of("error", task.status().isTerminal()
+                            ? "terminal task rejects progress events"
+                            : "eventKey, event and workerId are required"));
+        }
+        if (!PROGRESS_EVENTS.contains(request.event().trim())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "unsupported progress event"));
+        }
+        if (String.valueOf(request.data()).getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+                > eventMaxBytes) {
+            return ResponseEntity.status(413).body(Map.of("error", "progress event is too large"));
+        }
+        if (!request.workerId().equals(task.leaseOwnerId())
+                || task.leaseExpiresAt() == null
+                || task.leaseExpiresAt().isBefore(Instant.now())) {
+            return ResponseEntity.status(409)
+                    .body(Map.of("error", "task lease is not owned by worker"));
+        }
+        AsyncTaskStreamEvent appended = eventJournal.append(
+                taskId,
+                request.eventKey().trim(),
+                request.event().trim(),
+                request.data(),
+                request.workerId().trim(),
+                Instant.now());
+        events.publishEvent(new AsyncTaskEvent(task, appended));
+        return ResponseEntity.ok(appended);
     }
 
     @GetMapping(value = "/async/tasks/{taskId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -263,5 +352,39 @@ public class AsyncTaskController {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private void publishLifecycle(AsyncTask task) {
+        AsyncTaskStreamEvent streamEvent = null;
+        if (eventJournal != null) {
+            streamEvent = eventJournal.append(
+                    task.taskId(),
+                    "status:" + task.status().name(),
+                    task.status().name(),
+                    task,
+                    null,
+                    task.updatedAt());
+        }
+        events.publishEvent(new AsyncTaskEvent(task, streamEvent));
+    }
+
+    private static final java.util.Set<String> AGENT_KINDS = java.util.Set.of(
+            "agent.run", "agent.dag", "agent.dag-plan", "agent.analyst", "agent.process");
+    private static final java.util.Set<String> PROGRESS_EVENTS = java.util.Set.of(
+            "dag-planned",
+            "dag-levels",
+            "dag-level-start",
+            "dag-worker-start",
+            "dag-worker-result",
+            "dag-level-complete",
+            "dag-synthesis-start",
+            "dag-synthesis-result",
+            "dag-critique",
+            "dag-replan",
+            "dag-replanned");
+
+    @Value("${app.async-task.event.max-bytes:262144}")
+    void setEventMaxBytes(int eventMaxBytes) {
+        this.eventMaxBytes = Math.max(1_024, eventMaxBytes);
     }
 }

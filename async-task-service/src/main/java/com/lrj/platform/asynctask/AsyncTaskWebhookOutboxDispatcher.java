@@ -135,6 +135,8 @@ public class AsyncTaskWebhookOutboxDispatcher {
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("X-Async-Task-Id", row.taskId());
         headers.set("X-Async-Task-Status", row.taskStatus());
+        headers.set("X-Agent-Task-Id", row.taskId());
+        headers.set("X-Agent-Task-Status", row.taskStatus());
         headers.set("X-Tenant-Id", row.tenantId());
         return headers;
     }

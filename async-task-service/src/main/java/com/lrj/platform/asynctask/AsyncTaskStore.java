@@ -15,6 +15,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.UnaryOperator;
@@ -50,6 +51,27 @@ public class AsyncTaskStore {
         return Optional.ofNullable(tasks.computeIfPresent(taskId, (ignored, task) -> updater.apply(task)));
     }
 
+    public MutationResult transition(String taskId,
+                                     String tenantId,
+                                     String workerId,
+                                     AsyncTaskStatus target,
+                                     Object result,
+                                     String error) {
+        MutationResult[] outcome = new MutationResult[1];
+        tasks.computeIfPresent(taskId, (ignored, task) -> {
+            if (!tenantId.equals(task.tenantId())
+                    || task.status().isTerminal()
+                    || (target != AsyncTaskStatus.CANCELLED && !leaseOwnedBy(task, workerId))) {
+                outcome[0] = new MutationResult(task, false);
+                return task;
+            }
+            AsyncTask updated = withStatus(task, target, result, error);
+            outcome[0] = new MutationResult(updated, true);
+            return updated;
+        });
+        return outcome[0] == null ? new MutationResult(null, false) : outcome[0];
+    }
+
     public Optional<AsyncTask> lease(String taskId, String workerId, Instant leaseExpiresAt) {
         Instant now = Instant.now();
         return Optional.ofNullable(tasks.computeIfPresent(taskId, (ignored, task) -> {
@@ -64,6 +86,22 @@ public class AsyncTaskStore {
         return tasks.values().stream()
                 .filter(task -> tenantId.equals(task.tenantId()))
                 .sorted(Comparator.comparing(AsyncTask::createdAt).reversed())
+                .toList();
+    }
+
+    public List<AsyncTask> failOrphans(Set<String> kinds,
+                                       Instant pendingCutoff,
+                                       Instant runningCutoff,
+                                       int limit,
+                                       String error) {
+        return tasks.values().stream()
+                .filter(task -> kinds.contains(task.kind()))
+                .filter(task -> isOrphan(task, pendingCutoff, runningCutoff))
+                .sorted(Comparator.comparing(AsyncTask::createdAt))
+                .limit(Math.max(1, limit))
+                .map(task -> transitionOrphan(task.taskId(), pendingCutoff, runningCutoff, error))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
                 .toList();
     }
 
@@ -130,5 +168,38 @@ public class AsyncTaskStore {
             return true;
         }
         return task.leaseExpiresAt() != null && task.leaseExpiresAt().isBefore(now);
+    }
+
+    private Optional<AsyncTask> transitionOrphan(String taskId,
+                                                 Instant pendingCutoff,
+                                                 Instant runningCutoff,
+                                                 String error) {
+        AsyncTask[] changed = new AsyncTask[1];
+        tasks.computeIfPresent(taskId, (ignored, task) -> {
+            if (!isOrphan(task, pendingCutoff, runningCutoff)) {
+                return task;
+            }
+            changed[0] = withStatus(task, AsyncTaskStatus.FAILED, null, error);
+            return changed[0];
+        });
+        return Optional.ofNullable(changed[0]);
+    }
+
+    static boolean isOrphan(AsyncTask task, Instant pendingCutoff, Instant runningCutoff) {
+        return (task.status() == AsyncTaskStatus.PENDING && task.createdAt().isBefore(pendingCutoff))
+                || (task.status() == AsyncTaskStatus.RUNNING
+                    && (task.leaseExpiresAt() == null
+                        ? task.updatedAt().isBefore(runningCutoff)
+                        : task.leaseExpiresAt().isBefore(runningCutoff)));
+    }
+
+    static boolean leaseOwnedBy(AsyncTask task, String workerId) {
+        if (task.leaseOwnerId() == null || task.leaseOwnerId().isBlank()) {
+            return true;
+        }
+        return workerId != null && task.leaseOwnerId().equals(workerId);
+    }
+
+    public record MutationResult(AsyncTask task, boolean changed) {
     }
 }

@@ -25,6 +25,17 @@ app:
     task-ttl: ${ASYNC_TASK_TTL:PT24H}
     cleanup-delay-ms: ${ASYNC_TASK_CLEANUP_DELAY_MS:60000}
     cleanup-initial-delay-ms: ${ASYNC_TASK_CLEANUP_INITIAL_DELAY_MS:60000}
+    event:
+      retention: ${ASYNC_TASK_EVENT_RETENTION:PT24H}
+      max-bytes: ${ASYNC_TASK_EVENT_MAX_BYTES:262144}
+    orphan:
+      enabled: ${ASYNC_TASK_ORPHAN_ENABLED:false}
+      scan-delay-ms: ${ASYNC_TASK_ORPHAN_SCAN_DELAY_MS:30000}
+      initial-delay-ms: ${ASYNC_TASK_ORPHAN_INITIAL_DELAY_MS:30000}
+      pending-timeout: ${ASYNC_TASK_ORPHAN_PENDING_TIMEOUT:PT2M}
+      lease-grace: ${ASYNC_TASK_ORPHAN_LEASE_GRACE:PT30S}
+      batch-size: ${ASYNC_TASK_ORPHAN_BATCH_SIZE:100}
+      kinds: ${ASYNC_TASK_ORPHAN_KINDS:agent.task,agent.run,agent.dag,agent.dag-plan,agent.analyst,agent.process}
     datasource:
       url: ${ASYNC_TASK_DB_URL:jdbc:mysql://localhost:3306/async_task?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}
       username: ${ASYNC_TASK_DB_USER:root}
@@ -43,6 +54,10 @@ app:
       delivered-retention: ${ASYNC_TASK_WEBHOOK_DELIVERED_RETENTION:P7D}
 
 management:
+  prometheus:
+    metrics:
+      export:
+        enabled: true
   endpoints:
     web:
       exposure:

@@ -9,6 +9,7 @@ import com.lrj.platform.protocol.asynctask.AsyncTaskStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -26,6 +27,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.UnaryOperator;
 
 /**
@@ -48,18 +50,36 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
     private final TransactionTemplate txTemplate;
     /** 可空：仅 transport=kafka 时由 {@link AsyncTaskJdbcConfig} 提供 → 终态更新同事务内写生命周期事件 outbox（A1）。 */
     private final AsyncTaskLifecycleOutbox lifecycleOutbox;
+    private final AsyncTaskWebhookOutbox webhookOutbox;
+    private final AsyncTaskWebhookProperties webhookProperties;
+    private final AsyncTaskEventJournal eventJournal;
 
     public JdbcAsyncTaskStore(DataSource asyncTaskDataSource,
                               ObjectMapper mapper,
                               @Value("${app.async-task.task-ttl:PT24H}") Duration ttl,
                               @Qualifier("asyncTaskTransactionManager") PlatformTransactionManager txManager,
                               ObjectProvider<AsyncTaskLifecycleOutbox> lifecycleOutbox) {
+        this(asyncTaskDataSource, mapper, ttl, txManager, lifecycleOutbox, null, null, null);
+    }
+
+    @Autowired
+    public JdbcAsyncTaskStore(DataSource asyncTaskDataSource,
+                              ObjectMapper mapper,
+                              @Value("${app.async-task.task-ttl:PT24H}") Duration ttl,
+                              @Qualifier("asyncTaskTransactionManager") PlatformTransactionManager txManager,
+                              ObjectProvider<AsyncTaskLifecycleOutbox> lifecycleOutbox,
+                              ObjectProvider<AsyncTaskWebhookOutbox> webhookOutbox,
+                              AsyncTaskWebhookProperties webhookProperties,
+                              ObjectProvider<AsyncTaskEventJournal> eventJournal) {
         super(ttl);
         this.jdbc = new JdbcTemplate(asyncTaskDataSource);
         this.mapper = mapper;
         this.ttl = ttl;
         this.txTemplate = new TransactionTemplate(txManager);
         this.lifecycleOutbox = lifecycleOutbox.getIfAvailable();
+        this.webhookOutbox = webhookOutbox == null ? null : webhookOutbox.getIfAvailable();
+        this.webhookProperties = webhookProperties;
+        this.eventJournal = eventJournal == null ? null : eventJournal.getIfAvailable();
         init();
     }
 
@@ -86,6 +106,7 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
                 )""");
         addColumnIfMissing("LEASE_OWNER_ID VARCHAR(128)");
         addColumnIfMissing("LEASE_EXPIRES_AT BIGINT");
+        addIndexIfMissing("IDX_ASYNC_TASK_STATUS_CREATED", "STATUS, CREATED_AT");
         log.info("ASYNC_TASK table ready");
     }
 
@@ -97,26 +118,37 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
         }
     }
 
+    private void addIndexIfMissing(String name, String columns) {
+        try {
+            jdbc.execute("CREATE INDEX " + name + " ON ASYNC_TASK (" + columns + ")");
+        } catch (Exception ignored) {
+            // Existing-index errors are harmless across supported MySQL/H2 versions.
+        }
+    }
+
     @Override
     public void put(AsyncTask task) {
-        jdbc.update("""
-                INSERT INTO ASYNC_TASK
-                (TASK_ID, TENANT_ID, USER_ID, KIND, STATUS, INPUT_JSON, RESULT_JSON, ERROR_TEXT, WEBHOOK_URL, CREATED_AT, UPDATED_AT, FINISHED_AT, LEASE_OWNER_ID, LEASE_EXPIRES_AT)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                task.taskId(),
-                task.tenantId(),
-                task.userId(),
-                task.kind(),
-                task.status().name(),
-                json(task.input()),
-                json(task.result()),
-                task.error(),
-                task.webhookUrl(),
-                millis(task.createdAt()),
-                millis(task.updatedAt()),
-                millis(task.finishedAt()),
-                task.leaseOwnerId(),
-                millis(task.leaseExpiresAt()));
+        txTemplate.executeWithoutResult(status -> {
+            jdbc.update("""
+                    INSERT INTO ASYNC_TASK
+                    (TASK_ID, TENANT_ID, USER_ID, KIND, STATUS, INPUT_JSON, RESULT_JSON, ERROR_TEXT, WEBHOOK_URL, CREATED_AT, UPDATED_AT, FINISHED_AT, LEASE_OWNER_ID, LEASE_EXPIRES_AT)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    task.taskId(),
+                    task.tenantId(),
+                    task.userId(),
+                    task.kind(),
+                    task.status().name(),
+                    json(task.input()),
+                    json(task.result()),
+                    task.error(),
+                    task.webhookUrl(),
+                    millis(task.createdAt()),
+                    millis(task.updatedAt()),
+                    millis(task.finishedAt()),
+                    task.leaseOwnerId(),
+                    millis(task.leaseExpiresAt()));
+            appendLifecycle(task);
+        });
     }
 
     @Override
@@ -130,7 +162,7 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
     public Optional<AsyncTask> update(String taskId, UnaryOperator<AsyncTask> updater) {
         // A1：读-改-写 + 生命周期事件 outbox 写在同一事务，使「非终态→终态」的状态提交与事件行写入原子。
         return txTemplate.execute(status -> {
-            Optional<AsyncTask> current = get(taskId);
+            Optional<AsyncTask> current = getForUpdate(taskId);
             if (current.isEmpty()) {
                 return Optional.empty();
             }
@@ -152,8 +184,46 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
             if (lifecycleOutbox != null && !before.status().isTerminal() && updated.status().isTerminal()) {
                 enqueueLifecycle(updated);
             }
+            if (!before.status().isTerminal() && updated.status().isTerminal()) {
+                enqueueWebhook(updated);
+            }
+            if (before.status() != updated.status()) {
+                appendLifecycle(updated);
+            }
             return Optional.of(updated);
         });
+    }
+
+    @Override
+    public MutationResult transition(String taskId,
+                                     String tenantId,
+                                     String workerId,
+                                     AsyncTaskStatus target,
+                                     Object result,
+                                     String error) {
+        MutationResult outcome = txTemplate.execute(status -> {
+            Optional<AsyncTask> current = getForUpdate(taskId);
+            if (current.isEmpty()) {
+                return new MutationResult(null, false);
+            }
+            AsyncTask before = current.get();
+            if (!tenantId.equals(before.tenantId())
+                    || before.status().isTerminal()
+                    || (target != AsyncTaskStatus.CANCELLED && !leaseOwnedBy(before, workerId))) {
+                return new MutationResult(before, false);
+            }
+            AsyncTask updated = withStatus(before, target, result, error);
+            persistMutable(updated);
+            if (lifecycleOutbox != null && updated.status().isTerminal()) {
+                enqueueLifecycle(updated);
+            }
+            if (updated.status().isTerminal()) {
+                enqueueWebhook(updated);
+            }
+            appendLifecycle(updated);
+            return new MutationResult(updated, true);
+        });
+        return outcome == null ? new MutationResult(null, false) : outcome;
     }
 
     /** 在 update 事务内写一条生命周期事件 outbox（快照 JSON），供 AsyncTaskLifecycleRelay relay 到 Kafka。 */
@@ -169,24 +239,23 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
 
     @Override
     public Optional<AsyncTask> lease(String taskId, String workerId, Instant leaseExpiresAt) {
-        long now = Instant.now().toEpochMilli();
-        jdbc.update("""
-                UPDATE ASYNC_TASK
-                SET STATUS=?, UPDATED_AT=?, FINISHED_AT=NULL, LEASE_OWNER_ID=?, LEASE_EXPIRES_AT=?
-                WHERE TASK_ID=?
-                  AND STATUS NOT IN (?, ?, ?)
-                  AND (LEASE_OWNER_ID IS NULL OR LEASE_OWNER_ID='' OR LEASE_OWNER_ID=? OR LEASE_EXPIRES_AT < ?)""",
-                AsyncTaskStatus.RUNNING.name(),
-                now,
-                workerId,
-                millis(leaseExpiresAt),
-                taskId,
-                AsyncTaskStatus.SUCCEEDED.name(),
-                AsyncTaskStatus.FAILED.name(),
-                AsyncTaskStatus.CANCELLED.name(),
-                workerId,
-                now);
-        return get(taskId);
+        return txTemplate.execute(status -> {
+            Optional<AsyncTask> current = getForUpdate(taskId);
+            if (current.isEmpty()) {
+                return Optional.empty();
+            }
+            AsyncTask before = current.get();
+            if (before.status().isTerminal()
+                    || !leaseAvailableFor(before, workerId, Instant.now())) {
+                return current;
+            }
+            AsyncTask leased = withLease(before, workerId, leaseExpiresAt);
+            persistMutable(leased);
+            if (before.status() != AsyncTaskStatus.RUNNING) {
+                appendLifecycle(leased);
+            }
+            return Optional.of(leased);
+        });
     }
 
     @Override
@@ -196,6 +265,38 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
                 WHERE TENANT_ID=?
                 ORDER BY CREATED_AT DESC""",
                 this::mapTask, tenantId);
+    }
+
+    @Override
+    public List<AsyncTask> failOrphans(Set<String> kinds,
+                                       Instant pendingCutoff,
+                                       Instant runningCutoff,
+                                       int limit,
+                                       String error) {
+        if (kinds.isEmpty()) {
+            return List.of();
+        }
+        String placeholders = String.join(",", java.util.Collections.nCopies(kinds.size(), "?"));
+        List<Object> args = new java.util.ArrayList<>(kinds);
+        args.add(AsyncTaskStatus.PENDING.name());
+        args.add(pendingCutoff.toEpochMilli());
+        args.add(AsyncTaskStatus.RUNNING.name());
+        args.add(runningCutoff.toEpochMilli());
+        args.add(runningCutoff.toEpochMilli());
+        args.add(Math.max(1, limit));
+        List<String> ids = jdbc.queryForList("""
+                SELECT TASK_ID FROM ASYNC_TASK
+                WHERE KIND IN (%s)
+                  AND ((STATUS=? AND CREATED_AT < ?)
+                    OR (STATUS=? AND
+                      ((LEASE_EXPIRES_AT IS NOT NULL AND LEASE_EXPIRES_AT < ?)
+                       OR (LEASE_EXPIRES_AT IS NULL AND UPDATED_AT < ?))))
+                ORDER BY CREATED_AT
+                LIMIT ?""".formatted(placeholders), String.class, args.toArray());
+        return ids.stream()
+                .map(id -> failOrphan(id, pendingCutoff, runningCutoff, error))
+                .flatMap(Optional::stream)
+                .toList();
     }
 
     @Override
@@ -225,6 +326,73 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
                 instantNullable(rs, "FINISHED_AT"),
                 nullableString(rs, "LEASE_OWNER_ID"),
                 instantNullable(rs, "LEASE_EXPIRES_AT"));
+    }
+
+    private Optional<AsyncTask> getForUpdate(String taskId) {
+        return jdbc.query("SELECT * FROM ASYNC_TASK WHERE TASK_ID=? FOR UPDATE",
+                this::mapTask, taskId).stream().findFirst();
+    }
+
+    private void persistMutable(AsyncTask updated) {
+        jdbc.update("""
+                UPDATE ASYNC_TASK
+                SET STATUS=?, RESULT_JSON=?, ERROR_TEXT=?, UPDATED_AT=?, FINISHED_AT=?,
+                    LEASE_OWNER_ID=?, LEASE_EXPIRES_AT=?
+                WHERE TASK_ID=?""",
+                updated.status().name(),
+                json(updated.result()),
+                updated.error(),
+                millis(updated.updatedAt()),
+                millis(updated.finishedAt()),
+                updated.leaseOwnerId(),
+                millis(updated.leaseExpiresAt()),
+                updated.taskId());
+    }
+
+    private Optional<AsyncTask> failOrphan(String taskId,
+                                           Instant pendingCutoff,
+                                           Instant runningCutoff,
+                                           String error) {
+        return txTemplate.execute(status -> {
+            Optional<AsyncTask> current = getForUpdate(taskId);
+            if (current.isEmpty() || !isOrphan(current.get(), pendingCutoff, runningCutoff)) {
+                return Optional.empty();
+            }
+            AsyncTask updated = withStatus(
+                    current.get(), AsyncTaskStatus.FAILED, null, error);
+            persistMutable(updated);
+            if (lifecycleOutbox != null) {
+                enqueueLifecycle(updated);
+            }
+            enqueueWebhook(updated);
+            appendLifecycle(updated);
+            return Optional.of(updated);
+        });
+    }
+
+    private void enqueueWebhook(AsyncTask task) {
+        if (webhookOutbox == null
+                || webhookProperties == null
+                || !webhookProperties.isEnabled()
+                || webhookProperties.isKafkaTransport()) {
+            return;
+        }
+        AsyncTaskWebhookNotifier.webhookUri(task.webhookUrl())
+                .ifPresent(uri -> webhookOutbox.enqueue(
+                        task, uri.toString(), Instant.now().toEpochMilli()));
+    }
+
+    private void appendLifecycle(AsyncTask task) {
+        if (eventJournal == null) {
+            return;
+        }
+        eventJournal.append(
+                task.taskId(),
+                "status:" + task.status().name(),
+                task.status().name(),
+                task,
+                null,
+                task.updatedAt());
     }
 
     private String json(Object value) {
