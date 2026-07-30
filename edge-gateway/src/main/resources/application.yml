@@ -27,12 +27,12 @@ spring:
       globalcors:
         cors-configurations:
           '[/**]':
-            allowedOrigins: "${GATEWAY_CORS_ORIGINS:http://localhost:5173,http://localhost:4173,http://localhost:8093}"
+            allowedOrigins: "${GATEWAY_CORS_ORIGINS:http://localhost:8093,http://127.0.0.1:8093,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5273,http://127.0.0.1:5273,http://localhost:4173,http://127.0.0.1:4173}"
             allowedMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
             # If-Match：RBAC 管理写（PATCH/PUT）的乐观锁版本头，跨域预检必须放行。
             allowedHeaders: [Content-Type, Authorization, X-Api-Key, Accept, X-Trace-Id, If-Match]
             # X-Total-Count/ETag：管理端分页总数与资源版本，须暴露给浏览器读取。
-            exposedHeaders: [X-Trace-Id, X-Total-Count, ETag]
+            exposedHeaders: [X-Trace-Id, X-Total-Count, ETag, X-Agent-Backend]
             allowCredentials: true
             maxAge: 3600
       routes:
@@ -57,7 +57,7 @@ spring:
           predicates:
             - Path=/rag,/rag/**,/knowledge,/knowledge/**
         - id: agent
-          uri: ${AGENT_URI:http://localhost:8085}
+          uri: ${AGENT_URI:http://localhost:18085}
           predicates:
             - Path=/agent,/agent/**
         - id: async-task
@@ -74,10 +74,6 @@ spring:
             # /.well-known/agent-card.json 是 A2A 发现惯例别名：已在 ApiKeyToInternalTokenFilter.isOpen 免鉴权放行，
             # 其余 /interop/** 仍需鉴权。
             - Path=/interop,/interop/**,/.well-known/agent-card.json
-        - id: eval
-          uri: ${EVAL_URI:http://localhost:8089}
-          predicates:
-            - Path=/eval,/eval/**
         - id: vision
           uri: ${VISION_URI:http://localhost:8090}
           predicates:
@@ -126,6 +122,13 @@ edge:
   http-client:
     dns-cache-ttl: ${EDGE_DNS_CACHE_TTL:5s}
     dns-query-timeout: ${EDGE_DNS_QUERY_TIMEOUT:3s}
+  # AgentScope 候选版本灰度：默认关闭且 allowlist 为空；只改写批准租户的 POST /agent/run。
+  # 全量切换后上方 AGENT_URI 默认指向 AgentScope；Java 回滚时需同步把 baseline-backend 改成 legacy-java。
+  agent-canary:
+    enabled: ${EDGE_AGENT_CANARY_ENABLED:false}
+    uri: ${EDGE_AGENT_CANARY_URI:http://localhost:18085}
+    tenants: ${EDGE_AGENT_CANARY_TENANTS:}
+    baseline-backend: ${EDGE_AGENT_BASELINE_BACKEND:agentscope}
   casdoor:
     enabled: ${EDGE_CASDOOR_ENABLED:true}
     # dual（灰度，验不过透传 legacy）| only（严格 Casdoor-only，非 open path 无有效 token → 401；tenant 恒取 owner）。

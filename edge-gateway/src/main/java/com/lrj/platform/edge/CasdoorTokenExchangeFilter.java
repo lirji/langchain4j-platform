@@ -124,7 +124,8 @@ public class CasdoorTokenExchangeFilter implements GlobalFilter, Ordered {
         }
         Set<String> scopes = extractScopes(jwt);
         String department = extractDepartment(jwt, tenant, uid);
-        String jwtOut = internalTokens.mint(new TenantContext.Tenant(tenant, uid, scopes, department));
+        TenantContext.Tenant authenticatedTenant = new TenantContext.Tenant(tenant, uid, scopes, department);
+        String jwtOut = internalTokens.mint(authenticatedTenant);
         // 注：本 filter 在 decoder.decode(...) 的【异步】回调里改头，此时 exchange.getRequest().mutate() 的 Builder 头是
         // 只读的（ReadOnlyHttpHeaders）——.header()/.headers(set) 都抛 UnsupportedOperationException（仅真实 Netty 请求才有，
         // mock 单测发现不了；同步的 SessionBearer/ApiKey filter 无此问题）。故绕开 Builder：用可写副本 + Decorator 覆写 getHeaders。
@@ -141,7 +142,9 @@ public class CasdoorTokenExchangeFilter implements GlobalFilter, Ordered {
                 return forwardHeaders;
             }
         };
-        return chain.filter(exchange.mutate().request(mutated).build());
+        ServerWebExchange authenticated = exchange.mutate().request(mutated).build();
+        EdgeAuthenticatedTenant.set(authenticated, authenticatedTenant);
+        return chain.filter(authenticated);
     }
 
     /**

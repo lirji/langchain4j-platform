@@ -1,15 +1,26 @@
 # 评测（Eval）指南
 
-本指南面向要给平台做**回归评测**的开发者，覆盖 `eval-service`（`:8089`，路由前缀 `/eval/**`）的两条主线：
+本指南面向要给平台做**回归评测**的开发者，覆盖按需启动的 `eval-service`
+（内部端口 `:8089`）的两条主线：
 
 1. **检索质量评测**（`/eval/retrieval`）—— 纯 IR 指标 **Recall@k / Precision@k / MRR / Hit@k**，不经 LLM，只量向量检索器把相关文档捞回来了没。
 2. **通用回归 harness**（`/eval/run`、`/eval/suites/{name}/run`、`/eval/dual-run`、`/eval/gate`）—— 一个**外部回归测试客户端**：按 case 发真实 HTTP 请求打平台端点，做 contains / JSON-path / 语义 / oracle / 可选 LLM-Judge 与 embedding 断言，输出 JSON 报告；并支持**对照冻结单体（oracle）的双跑门禁**。
 
-> **这是哪个服务、默认什么状态**：`eval-service`，所有 `/eval/**` 端点**常开**（无需 enable 开关）。可选的 **LLM-Judge 断言**（`EVAL_JUDGE_ENABLED`）与 **embedding 相似度断言**（`EVAL_EMBEDDING_ENABLED`）**默认开**（仅在 case 显式带 `judgeExpected` / `embeddingExpected` 时才真正触发）。检索评测与通用 harness 本身开箱可用。
+> **默认状态**：`eval-service` 是离线回归客户端，不是常驻业务服务。Compose 需使用
+> `evaluation` profile 显式启动，Helm 默认 `enabled=false`，且 `edge-gateway` 不暴露
+> `/eval/**`。可选的 **LLM-Judge 断言**（`EVAL_JUDGE_ENABLED`）与 **embedding 相似度断言**
+> （`EVAL_EMBEDDING_ENABLED`）只在 case 显式声明对应预期时触发。
 
-> **端点约定**：所有 curl 走 `edge-gateway`（`http://localhost:8080`，默认 Casdoor-only，带 `Authorization: Bearer $ACCESS_TOKEN`）。令牌需含 `eval` scope；`eval-service` 自身监听 `:8089`，除探针外直连也必须有有效内部 JWT。
+> **端点约定**：评测由受信任的 CI/运维调用方直连 `eval-service:8089`，除探针外必须携带
+> 有效内部身份。文中历史 curl 若使用 `http://localhost:8080/eval/...`，本地运行时应改为
+> `http://localhost:8089/eval/...`；不要恢复 edge route。
 >
-> **一个关键区别（必读）**：`/eval/**` 由调用方 Bearer 授权（要 `eval` scope + 走 eval 限流桶）。eval-service 回打可信 edge 时，会基于本次调用方的租户身份签发带专用用途声明的短时服务回调令牌；edge 验签后再转为下游内部身份，因此兼容 Casdoor-only，且检索租户与调用方一致。服务令牌只发送给 `INTERNAL_SERVICE_TOKEN_ALLOWED_ORIGINS`（默认仅 `http://edge-gateway:8080`）。目标 401/网络失败会显式报错，不再吞掉并生成伪 0 分。
+> **一个关键区别（必读）**：eval-service 回打可信 edge 时，会基于本次内部调用身份签发带
+> 专用用途声明的短时服务回调令牌；检索租户与调用方一致。服务令牌只发送给
+> `INTERNAL_SERVICE_TOKEN_ALLOWED_ORIGINS`。目标 401/网络失败会显式报错，不生成伪 0 分。
+
+Agent 推理/编排 shadow 由 AgentScope Python runner 和统一 JSON Schema 负责，不由本服务
+执行。完整责任与回滚说明见[评测控制面边界](../架构边界/evaluation-control-plane.md)。
 
 相关文档：[RAG 接入指南](../对话与检索/rag-guide.md)（入库 / 切分 / 检索）、[接口速查](../参考/api-reference.md)、[运维配置](../参考/operations.md)、[能力总览](../参考/capabilities.md)、[架构文档](../参考/架构文档.md)。
 
@@ -87,7 +98,9 @@ Recall@k = ─────────────────      Precision@k 
 
 ### 2.4 怎么跑
 
-**前提**：目标文档必须已入库，且入库和发起评测的 Bearer 属于同一租户；服务回调会保留该租户。以下 `$ACCESS_TOKEN` 需同时包含 `ingest` 与 `eval` scope，也可分别使用同租户的两个令牌。
+**前提**：目标文档必须已入库，且入库身份与发起评测的内部身份属于同一租户；服务回调会
+保留该租户。以下 `$ACCESS_TOKEN` 用于经 edge 入库，`$INTERNAL_TOKEN` 用于受控调用方直连
+eval-service。
 
 ```bash
 # 1) 先把文档入库到 knowledge-service（需 ingest scope 的 key，租户 = acme）
@@ -96,9 +109,9 @@ curl -s -X POST 'http://localhost:8080/rag/documents' \
   -H 'Content-Type: application/json' \
   -d '{"displayName":"project-faq.md","text":"## 支持的 LLM Provider\nollama / openai / anthropic / gemini / deepseek ...","category":"faq"}'
 
-# 2) 跑检索评测（黄金集在请求体里；调用方 key 需 eval scope）
-curl -s -X POST 'http://localhost:8080/eval/retrieval' \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
+# 2) 跑检索评测（先用 evaluation profile 启动 eval-service）
+curl -s -X POST 'http://localhost:8089/eval/retrieval' \
+  -H "Authorization: Bearer $INTERNAL_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
         "topK": 5,
@@ -187,8 +200,8 @@ APP_RAG_CHUNKING_STRATEGY=markdown-header APP_RAG_CHUNKING_MAX_SIZE=600 mvn -pl 
 ### 3.2 即席跑一组 case `/eval/run`
 
 ```bash
-curl -s -X POST 'http://localhost:8080/eval/run' \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
+curl -s -X POST 'http://localhost:8089/eval/run' \
+  -H "Authorization: Bearer $INTERNAL_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
         "targetBaseUrl": "http://edge-gateway:8080",
@@ -233,8 +246,8 @@ curl -s -X POST 'http://localhost:8080/eval/run' \
 - **外部**：设 `EVAL_BASELINE_DIRECTORY` 指向目录，`{name}.json` 优先于 classpath（suite 名限 `[A-Za-z0-9._-]`，防路径穿越）。
 
 ```bash
-curl -s -X POST 'http://localhost:8080/eval/suites/platform-smoke/run' \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
+curl -s -X POST 'http://localhost:8089/eval/suites/platform-smoke/run' \
+  -H "Authorization: Bearer $INTERNAL_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{ "targetBaseUrl": "http://edge-gateway:8080" }' | jq
 ```
@@ -275,8 +288,8 @@ candidate 触发**任一**条即判回归（全带 `1e-6` 浮点容差，避免 
 
 ```bash
 # PR 快照模式：只实跑 candidate（走网关），oracle 读 platform-smoke 快照
-curl -s -o /tmp/gate.json -w '%{http_code}\n' -X POST 'http://localhost:8080/eval/gate' \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
+curl -s -o /tmp/gate.json -w '%{http_code}\n' -X POST 'http://localhost:8089/eval/gate' \
+  -H "Authorization: Bearer $INTERNAL_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
         "suiteName": "platform-smoke",
@@ -314,7 +327,8 @@ jq . /tmp/gate.json
 `GET /eval/capabilities` 返回服务自述（断言类型、双跑模式与门禁状态码约定），常用于连通性 smoke（也是 `platform-smoke` suite 打的靶点）。
 
 ```bash
-curl -s 'http://localhost:8080/eval/capabilities' -H "Authorization: Bearer $ACCESS_TOKEN" | jq
+curl -s 'http://localhost:8089/eval/capabilities' \
+  -H "Authorization: Bearer $INTERNAL_TOKEN" | jq
 ```
 
 ---

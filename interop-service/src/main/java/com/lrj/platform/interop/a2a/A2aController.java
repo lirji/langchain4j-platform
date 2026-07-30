@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 真 A2A Server 入口：
  * <ul>
  *   <li>{@code GET /.well-known/agent-card.json} —— A2A 发现惯例别名（经 edge-gateway 白名单免鉴权对外）</li>
- *   <li>{@code POST /interop/a2a} —— JSON-RPC 2.0 单端点（需鉴权），代理到 agent-service。
+ *   <li>{@code POST /interop/a2a} —— JSON-RPC 2.0 单端点（需鉴权），代理到 AgentScope。
  *       {@code message/stream} 返回 {@code SseEmitter}（真流式），其余方法返回 {@code JsonRpcResponse}</li>
  * </ul>
  *

@@ -10,14 +10,14 @@ spring:
 
 app:
   interop:
-    agent-base-url: ${AGENT_BASE_URL:http://localhost:8085}
+    agent-base-url: ${AGENT_BASE_URL:http://localhost:18085}
     conversation-base-url: ${CONVERSATION_BASE_URL:http://localhost:8081}
     connect-timeout: ${INTEROP_CONNECT_TIMEOUT:1s}
     read-timeout: ${INTEROP_READ_TIMEOUT:30s}
     # A2A message/stream 代理 conversation /chat/stream 的读超时；须 > 流式 emitter 超时(130s 内)。
     stream-read-timeout: ${INTEROP_STREAM_READ_TIMEOUT:120s}
-    # live capability discovery：默认开（懒加载 + TTL 从下游拉取）。置 false 退回静态 registry（零下游依赖），
-    # 下游不可达确定性回退静态默认。
+    # live capability discovery：Agent capability 的唯一事实源。置 false 时只暴露 interop 本地 ping；
+    # 下游暂时不可达时使用 last-known-good，冷启动不可达则不宣称不存在的 Agent 工具。
     discovery-enabled: ${INTEROP_DISCOVERY_ENABLED:true}
     capability-ttl: ${INTEROP_CAPABILITY_TTL:60s}
     a2a:

@@ -46,7 +46,9 @@ public class ApiKeyToInternalTokenFilter implements GlobalFilter, Ordered {
                     .header(props.getInternalHeader(), jwt)
                     .headers(headers -> headers.remove(props.getApiKeyHeader()))
                     .build();
-            return chain.filter(exchange.mutate().request(request).build());
+            ServerWebExchange authenticated = exchange.mutate().request(request).build();
+            EdgeAuthenticatedTenant.set(authenticated, EDGE_SERVICE_IDENTITY);
+            return chain.filter(authenticated);
         }
 
         // 已被 SessionBearerAuthFilter 用会话令牌换发内部 JWT（双模）：直接放行，不再要求 X-Api-Key。
@@ -64,13 +66,16 @@ public class ApiKeyToInternalTokenFilter implements GlobalFilter, Ordered {
 
         Set<String> scopes = binding.getScopes() == null
                 ? Set.of() : new LinkedHashSet<>(binding.getScopes());
-        String jwt = tokens.mint(new TenantContext.Tenant(binding.getTenant(), binding.getUser(), scopes));
+        TenantContext.Tenant tenant = new TenantContext.Tenant(binding.getTenant(), binding.getUser(), scopes);
+        String jwt = tokens.mint(tenant);
 
         ServerHttpRequest mutated = exchange.getRequest().mutate()
                 .header(props.getInternalHeader(), jwt)
                 .headers(h -> h.remove(props.getApiKeyHeader())) // 不把外部 api key 泄到内网
                 .build();
-        return chain.filter(exchange.mutate().request(mutated).build());
+        ServerWebExchange authenticated = exchange.mutate().request(mutated).build();
+        EdgeAuthenticatedTenant.set(authenticated, tenant);
+        return chain.filter(authenticated);
     }
 
     @Override

@@ -1,0 +1,36 @@
+name: Edge Gateway CI
+
+on:
+  pull_request:
+    paths:
+      - 'pom.xml'
+      - 'platform-security/**'
+      - 'edge-gateway/**'
+      - '.github/workflows/edge-gateway-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'pom.xml'
+      - 'platform-security/**'
+      - 'edge-gateway/**'
+      - '.github/workflows/edge-gateway-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: edge-gateway-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - run: mvn -B -pl edge-gateway -am test

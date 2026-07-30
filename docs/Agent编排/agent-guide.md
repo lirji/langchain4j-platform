@@ -1,9 +1,16 @@
 # Agent 能力与编排指南
 
-本指南覆盖 `agent-service`（`:8085`）暴露的全部 Agent 编排模式与可插拔动作，外加落在 `conversation-service`（`:8081`）的模型级联（cascade）。所有端点均可经 `edge-gateway`（`:8080`）访问，也可服务直连本地调试。
+平台全部 `/agent/**` 现由同级独立仓库 `agentscope-platform`（部署名
+`agentscope-orchestrator`，`:8085`）权威提供；edge 与 interop 默认都指向它。Java
+`agent-service` 只作为显式整服务回滚目标。本指南下方的 Java 动作注册表与高风险工具章节
+保留为回滚/历史参考，当前 AgentScope 工具面只读。部署与回滚见
+[AgentScope 全量切换与回滚](agentscope-full-cutover.md)。
+
+如果需要从代码调用链理解意图识别、动作注册表，以及 Reasoning → Action → Observation
+如何进入下一轮，见 [意图识别与 Agent 执行原理](意图识别与Agent执行原理.md)。
 
 > 阅读约定：
-> - **经网关**：`http://localhost:8080` + `X-Api-Key`（网关校验 key → 签发内部 JWT → 路由到下游）。`/agent`、`/agent/**` 路由到 agent-service；`/chat`、`/chat/**` 路由到 conversation-service。调用 Agent 需 api-key 绑定 `agent` scope（cascade 走 `/chat` 需 `chat` scope）。
+> - **经网关**：`http://localhost:8080` + 有效 Bearer（或允许模式下的 API key）。`/agent`、`/agent/**` 路由到 AgentScope；`/chat`、`/chat/**` 路由到 conversation-service。
 > - **直连**：`http://localhost:8085`（agent）、`http://localhost:8081`（conversation），仅本地调试/服务间调用。
 > - **默认开关**：编排端点与多数增强/动作能力默认已开，仅高风险动作（`code_exec` / `mcp_call` / `browser_*`）与需外部配置的能力默认关闭。下文每项标注默认状态与开启用的环境变量。核心编排（ReAct / DAG / reflexion / voting / chaining）在 `AGENT_ENABLED=true`（默认 true）时端点即挂载。
 
@@ -35,7 +42,7 @@
 
 ## 1. 深度 Agent（ReAct）—— `/agent/run`
 
-`DeepAgentService` 是一个 ReAct（Reason + Act）循环：每一步让 `AgentBrain`（`@AiService`）产出一个决策（thought / action / actionInput / note / finalAnswer），执行选中的动作、把观测写回 scratchpad + history，直到模型 `finish` 或触发某个停止条件。
+`DeepAgentService` 是一个 ReAct（Reason + Act）循环：每一步让 `AgentBrain`（`@AiService`）产出一个决策（thought / action / actionInput / note / finalAnswer），执行选中的动作，把观测记录到步骤并通过 `history` 喂给下一轮；只有模型返回的 `note` 会写入 `scratchpad`。循环持续到模型 `finish` 或触发某个停止条件。
 
 ### 端点
 

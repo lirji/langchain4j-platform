@@ -51,6 +51,7 @@ class SessionBearerAuthFilterTest {
         assertThat(t).isNotNull();
         assertThat(t.tenantId()).isEqualTo("acme");
         assertThat(t.userId()).isEqualTo("alice");
+        assertThat(EdgeAuthenticatedTenant.get(result)).isEqualTo(t);
     }
 
     @Test
@@ -61,6 +62,7 @@ class SessionBearerAuthFilterTest {
         ServerWebExchange result = runThrough(exchange);
 
         assertThat(result.getRequest().getHeaders().getFirst(props.getInternalHeader())).isNull();
+        assertThat(EdgeAuthenticatedTenant.get(result)).isNull();
         // 未换发，交给 api-key filter 处理（Authorization 原样透传）
         assertThat(result.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION)).isEqualTo("Bearer garbage");
     }

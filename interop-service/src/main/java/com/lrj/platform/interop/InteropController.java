@@ -19,7 +19,7 @@ import java.util.Map;
  * interop-service 的 MCP 互操作入口：对外暴露 Agent Card（{@code /interop/agent-card}、
  * {@code /interop/a2a/agent-card}）与 MCP 工具面（{@code /interop/mcp/tools}、
  * {@code /interop/mcp/tools/{toolName}}、{@code /interop/mcp/call}）。工具目录来自
- * {@link InteropToolRegistry}，工具调用经 {@link InteropToolDispatcher} 转发到 agent-service。
+ * {@link InteropToolRegistry}，工具调用经 {@link InteropToolDispatcher} 转发到 AgentScope。
  */
 @RestController
 public class InteropController {
@@ -73,6 +73,13 @@ public class InteropController {
 
     @PostMapping("/interop/mcp/call")
     public ResponseEntity<?> call(@RequestBody McpToolCallRequest request) {
+        if (request != null
+                && request.tool() != null
+                && !request.tool().isBlank()
+                && registry.find(request.tool()).isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new McpToolCallReply(request.tool(), false, null, "unknown tool"));
+        }
         McpToolCallReply reply = dispatcher.dispatch(request);
         if (reply.success()) {
             return ResponseEntity.ok(reply);

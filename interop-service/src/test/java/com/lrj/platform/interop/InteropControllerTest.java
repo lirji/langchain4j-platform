@@ -5,6 +5,7 @@ import com.lrj.platform.protocol.interop.McpToolCallReply;
 import com.lrj.platform.protocol.interop.McpToolCallRequest;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -143,8 +144,19 @@ class InteropControllerTest {
 
     private InteropController controller(AgentInteropClient agentClient) {
         return new InteropController(
-                new InteropToolRegistry(),
+                new InteropToolRegistry(
+                        () -> List.of(
+                                tool(InteropToolRegistry.AGENT_RUN_TOOL),
+                                tool(InteropToolRegistry.AGENT_RUN_ASYNC_TOOL),
+                                tool(InteropToolRegistry.AGENT_DAG_PLAN_RUN_TOOL),
+                                tool(InteropToolRegistry.AGENT_DAG_PLAN_RUN_ASYNC_TOOL)),
+                        Duration.ofMinutes(1)),
                 new InteropToolDispatcher(agentClient));
+    }
+
+    private static com.lrj.platform.protocol.interop.McpToolDescriptor tool(String name) {
+        return new com.lrj.platform.protocol.interop.McpToolDescriptor(
+                name, name, Map.of("type", "object"));
     }
 
     private static class FakeAgentClient implements AgentInteropClient {

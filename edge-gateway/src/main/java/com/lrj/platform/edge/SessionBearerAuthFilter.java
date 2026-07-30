@@ -66,7 +66,9 @@ public class SessionBearerAuthFilter implements GlobalFilter, Ordered {
                 .header(props.getInternalHeader(), jwt)
                 .headers(h -> h.remove(HttpHeaders.AUTHORIZATION)) // 会话令牌不进内网
                 .build();
-        return chain.filter(exchange.mutate().request(mutated).build());
+        ServerWebExchange authenticated = exchange.mutate().request(mutated).build();
+        EdgeAuthenticatedTenant.set(authenticated, tenant);
+        return chain.filter(authenticated);
     }
 
     @Override

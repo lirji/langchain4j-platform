@@ -14,9 +14,9 @@ import java.util.Optional;
 /**
  * interop 暴露的 MCP 工具目录。
  *
- * <p>ping 是 interop 本地内建工具（恒在）；agent 工具来自 live capability discovery：开启时懒加载 +
- * TTL 从 agent-service 拉取，下游不可达时确定性回退到 {@link #STATIC_AGENT_TOOLS 静态默认}
- * （即无 discovery client 时的历史行为），永不因下游故障抛错或阻塞。
+ * <p>ping 是 interop 本地内建工具（恒在）；agent 工具只来自 AgentScope live capability discovery。
+ * TTL 内使用缓存，刷新失败使用 last-known-good；冷启动且 AgentScope 不可达时只暴露 ping，不再在
+ * Java 侧复制 AgentScope 的工具描述符。
  */
 public class InteropToolRegistry {
 
@@ -28,32 +28,6 @@ public class InteropToolRegistry {
     public static final String AGENT_DAG_PLAN_RUN_TOOL = "platform.agent.dag.plan_run";
     public static final String AGENT_DAG_PLAN_RUN_ASYNC_TOOL = "platform.agent.dag.plan_run_async";
 
-    /** 下游不可达/未开启 discovery 时的静态回退 agent 工具集。 */
-    public static final List<McpToolDescriptor> STATIC_AGENT_TOOLS = List.of(
-            new McpToolDescriptor(AGENT_RUN_TOOL, "Runs the platform agent through agent-service.", Map.of(
-                    "type", "object",
-                    "required", List.of("goal"),
-                    "properties", Map.of(
-                            "goal", Map.of("type", "string"),
-                            "webhookUrl", Map.of("type", "string")))),
-            new McpToolDescriptor(AGENT_RUN_ASYNC_TOOL, "Starts an async platform agent run through agent-service.", Map.of(
-                    "type", "object",
-                    "required", List.of("goal"),
-                    "properties", Map.of(
-                            "goal", Map.of("type", "string"),
-                            "webhookUrl", Map.of("type", "string")))),
-            new McpToolDescriptor(AGENT_DAG_PLAN_RUN_TOOL, "Plans and runs a DAG agent workflow through agent-service.", Map.of(
-                    "type", "object",
-                    "required", List.of("goal"),
-                    "properties", Map.of(
-                            "goal", Map.of("type", "string")))),
-            new McpToolDescriptor(AGENT_DAG_PLAN_RUN_ASYNC_TOOL, "Starts an async planned DAG agent workflow through agent-service.", Map.of(
-                    "type", "object",
-                    "required", List.of("goal"),
-                    "properties", Map.of(
-                            "goal", Map.of("type", "string"),
-                            "webhookUrl", Map.of("type", "string")))));
-
     private static final McpToolDescriptor PING = new McpToolDescriptor(
             PING_TOOL, "Returns a deterministic pong response.", Map.of(
             "type", "object",
@@ -64,7 +38,7 @@ public class InteropToolRegistry {
     private final Duration ttl;
     private volatile Cached cache;
 
-    /** 静态目录（无 discovery）—— 保持历史行为，供单测直接 new。 */
+    /** 无 discovery client 时只暴露 interop 本地工具。 */
     public InteropToolRegistry() {
         this(null, Duration.ofSeconds(60));
     }
@@ -96,10 +70,10 @@ public class InteropToolRegistry {
                 .toList();
     }
 
-    /** live-or-fallback 的 agent 工具。懒加载 + TTL；失败回退 last-known-good 或静态默认，不抛不阻塞。 */
+    /** live discovery 的 agent 工具。懒加载 + TTL；失败只回退 last-known-good，不复制静态目录。 */
     private List<McpToolDescriptor> agentTools() {
         if (discoveryClient == null) {
-            return STATIC_AGENT_TOOLS;
+            return List.of();
         }
         Cached current = cache;
         if (current != null && !current.isStale(ttl)) {
@@ -116,7 +90,7 @@ public class InteropToolRegistry {
         } catch (RuntimeException ex) {
             log.debug("agent capability discovery failed ({}); using fallback", ex.toString());
         }
-        return current != null ? current.tools() : STATIC_AGENT_TOOLS;
+        return current != null ? current.tools() : List.of();
     }
 
     private record Cached(Instant fetchedAt, List<McpToolDescriptor> tools) {

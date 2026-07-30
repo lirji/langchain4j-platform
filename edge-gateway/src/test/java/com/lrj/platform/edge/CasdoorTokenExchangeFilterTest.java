@@ -84,6 +84,7 @@ class CasdoorTokenExchangeFilterTest {
         assertThat(t.tenantId()).isEqualTo("built-in");
         assertThat(t.userId()).isEqualTo("uuid-123");
         assertThat(t.scopes()).as("unknown-scope 被 allowlist 过滤").containsExactlyInAnyOrder("chat", "ingest");
+        assertThat(EdgeAuthenticatedTenant.get(out)).isEqualTo(t);
         assertThat(out.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION))
                 .as("Casdoor token 不进内网").isNull();
     }

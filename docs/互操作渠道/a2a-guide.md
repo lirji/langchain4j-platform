@@ -1,10 +1,13 @@
 # A2A 接入指南
 
 本指南面向想把 **langchain4j-platform 当作一个 A2A（Agent-to-Agent）Agent** 来调用的外部客户端 / 其它 Agent。
-它由 `interop-service`（:8088）实现，对外只暴露一个「发现 + JSON-RPC」互操作面，内部经内部 JWT + typed-HTTP 代理到 `agent-service`（:8085）。
+它由 `interop-service`（:8088）实现，对外只暴露一个「发现 + JSON-RPC」互操作面，内部经
+内部 JWT + typed-HTTP 代理到 AgentScope（本地映射端口 :18085）。Java `agent-service`
+仅作为显式整服务回滚目标。
 
-> 端口约定：**业务调用一律走 `edge-gateway`（:8080）**，用 `X-Api-Key` 鉴权；网关校验后换发短时内部 JWT 转发给 `interop-service`。
-> 下文示例都以 `http://localhost:8080` 为基址。`interop-service` 自身端口 :8088 仅用于服务直连 / 排障，直连时需自带内部 JWT。
+> 端口约定：**本地业务调用走 `edge-gateway`（:18080）**，使用有效外部身份；网关校验后
+> 换发短时内部 JWT 转发给 `interop-service`。下文旧示例中的 :8080 可按部署映射调整。
+> `interop-service` 自身端口 :8088 仅用于服务直连 / 排障，直连时需自带内部 JWT。
 
 ---
 
@@ -16,7 +19,9 @@ A2A 是一套「Agent 之间互相调用」的开放协议，核心是三件事�
 2. **JSON-RPC 2.0 单端点**——所有交互（发消息、查任务、取消任务）都打同一个 URL，靠 `method` 字段区分。
 3. **Task（任务）生命周期**——长跑协作被建模成一个有状态的 Task，客户端轮询它的状态直到终态。
 
-平台的落地方式：A2A 只是**对外互操作面**，收到 JSON-RPC 后翻译成 `agent-service` 既有的 typed-HTTP 端点（`/agent/run`、`/agent/run/async`、`/agent/tasks/**`）代理调用。内部服务之间**不走 A2A**，仍用内部 JWT + typed-HTTP。
+平台的落地方式：A2A 只是**对外互操作面**，收到 JSON-RPC 后翻译成 AgentScope 保持兼容的
+typed-HTTP 端点（`/agent/run`、`/agent/run/async`、`/agent/tasks/**`）代理调用。内部服务
+之间**不走 A2A**，仍用内部 JWT + typed-HTTP。
 
 相关源码：`interop-service/src/main/java/com/lrj/platform/interop/a2a/`（`A2aController`、`A2aService`、`A2aAgentGateway`/`HttpA2aAgentGateway`、`A2aTaskMapper` 等）。
 
@@ -403,7 +408,9 @@ live discovery 影响的是 **MCP 工具目录**（`/interop/mcp/tools`、平台
 
 机制（`InteropToolRegistry` + `AgentCapabilityClient`）：
 
-- 默认**开启**（`app.interop.discovery-enabled=true`）：懒加载 + TTL 缓存，从 `agent-service GET /agent/capabilities` 拉取当前能力（返回 `List<McpToolDescriptor>`）；下游不可达 / 返回空时**确定性回退**到 last-known-good 或静态默认，永不因下游故障抛错或阻塞。
+- 默认**开启**（`app.interop.discovery-enabled=true`）：懒加载 + TTL 缓存，从 AgentScope
+  `GET /agent/capabilities` 拉取当前能力（返回 `List<McpToolDescriptor>`）；下游不可达 /
+  返回空时**确定性回退**到 last-known-good 或静态默认，永不因发现失败抛错或阻塞。
 - 置 `false` 关闭：走静态回退工具集 `STATIC_AGENT_TOOLS`，零下游依赖，dev/test 行为不变。
 
 内建工具 `platform.ping` 恒在；agent 工具（静态默认）：`platform.agent.run`、`platform.agent.run_async`、`platform.agent.dag.plan_run`、`platform.agent.dag.plan_run_async`。
@@ -414,7 +421,7 @@ live discovery 影响的是 **MCP 工具目录**（`/interop/mcp/tools`、平台
 |---|---|---|---|
 | `app.interop.discovery-enabled` | `INTEROP_DISCOVERY_ENABLED` | `true` | live discovery 总开关（**默认开**） |
 | `app.interop.capability-ttl` | `INTEROP_CAPABILITY_TTL` | `60s` | discovery 缓存 TTL，过期触发懒刷新 |
-| `app.interop.agent-base-url` | `AGENT_BASE_URL` | `http://localhost:8085` | 代理到的 agent-service 基址 |
+| `app.interop.agent-base-url` | `AGENT_BASE_URL` | `http://localhost:18085` | 代理到的 AgentScope 基址 |
 | `app.interop.conversation-base-url` | `CONVERSATION_BASE_URL` | `http://localhost:8081` | `message/stream`（chat）代理的 conversation 基址 |
 | `app.interop.connect-timeout` | `INTEROP_CONNECT_TIMEOUT` | `1s` | 出站连接超时 |
 | `app.interop.read-timeout` | `INTEROP_READ_TIMEOUT` | `30s` | 出站读超时 |

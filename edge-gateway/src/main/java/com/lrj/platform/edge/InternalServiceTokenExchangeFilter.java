@@ -52,6 +52,7 @@ public class InternalServiceTokenExchangeFilter implements GlobalFilter, Ordered
                 .build();
         ServerWebExchange verified = exchange.mutate().request(request).build();
         verified.getAttributes().put(VERIFIED_ATTRIBUTE, Boolean.TRUE);
+        EdgeAuthenticatedTenant.set(verified, tenant);
         return chain.filter(verified);
     }
 

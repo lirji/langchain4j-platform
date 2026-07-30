@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.concurrent.Executor;
 
 /**
- * interop-service 的装配中心：注册指向 agent-service / conversation-service 的 {@link RestTemplate}
+ * interop-service 的装配中心：注册指向 AgentScope / conversation-service 的 {@link RestTemplate}
  * （均挂 {@link OutboundTenantForwarder} + {@link OutboundTraceForwarder} 做租户与 trace 透传）、
  * A2A 流式/push 中继的后台执行器（{@code interopStreamExecutor}，用 TaskDecorator 把租户与 MDC 透传到工作线程），
  * 以及 MCP 工具目录 {@link InteropToolRegistry}（可选按 {@code app.interop.discovery-enabled} 挂 live 能力发现）。
@@ -108,8 +108,8 @@ public class InteropConfig {
     }
 
     /**
-     * MCP 工具目录：注入 discovery client（若 discovery 开启则存在，否则回退静态默认）。
-     * 拿不到 client 时 registry 走纯静态行为，保持 dev/test 零依赖。
+     * MCP 工具目录：注入 discovery client。拿不到 client 时 registry 只暴露本地 ping，
+     * Agent capability 始终以 AgentScope 为唯一事实源。
      */
     @Bean
     InteropToolRegistry interopToolRegistry(ObjectProvider<AgentCapabilityClient> discoveryClient,

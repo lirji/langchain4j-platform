@@ -6,14 +6,14 @@ import org.springframework.boot.context.properties.NestedConfigurationProperty;
 import java.time.Duration;
 
 /**
- * {@code app.interop.*} 配置绑定：agent-service / conversation-service 基址与连接/读超时、
+ * {@code app.interop.*} 配置绑定：AgentScope / conversation-service 基址与连接/读超时、
  * live 能力发现开关（{@link #discoveryEnabled}）与缓存 TTL，以及内嵌的 A2A Agent Card 元数据与
  * push 回调中继参数（{@link A2a}）。由 {@link InteropConfig} 消费。
  */
 @ConfigurationProperties(prefix = "app.interop")
 public class InteropProperties {
 
-    private String agentBaseUrl = "http://localhost:8085";
+    private String agentBaseUrl = "http://localhost:18085";
     private String conversationBaseUrl = "http://localhost:8081";
     private Duration connectTimeout = Duration.ofSeconds(1);
     private Duration readTimeout = Duration.ofSeconds(30);
@@ -21,11 +21,11 @@ public class InteropProperties {
     private Duration streamReadTimeout = Duration.ofSeconds(120);
 
     /**
-     * live capability discovery 开关。默认关（false）—— 保持静态 registry 行为、零下游依赖，
-     * dev/test 与既有测试不变。开启后 interop 懒加载 + TTL 从 agent-service 拉取能力，
-     * 下游不可达时确定性回退到静态默认。
+     * live capability discovery 开关。默认开；关闭时只暴露 interop 本地工具，不再回退一份
+     * Java 静态 Agent 工具目录。开启后 interop 懒加载 + TTL 从 AgentScope 拉取能力，
+     * 下游不可达时仅使用 last-known-good。
      */
-    private boolean discoveryEnabled = false;
+    private boolean discoveryEnabled = true;
 
     /** live discovery 缓存 TTL；过期后下次访问触发懒刷新。 */
     private Duration capabilityTtl = Duration.ofSeconds(60);
@@ -103,7 +103,7 @@ public class InteropProperties {
         private String agentName = "langchain4j-platform";
         private String agentDescription =
                 "Platform agent exposed over the A2A protocol: sync chat and async deep-research tasks, "
-                        + "proxied to agent-service.";
+                        + "proxied to AgentScope.";
         private String baseUrl = "http://localhost:8080";
         private String version = "0.1.0";
         /** edge 认证合同：only（Bearer）| dual（Bearer/API key 二选一）| apikey（legacy）。 */

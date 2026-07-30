@@ -63,6 +63,8 @@ class ApiKeyToInternalTokenFilterTest {
         String internal = captured.get().getRequest().getHeaders().getFirst(props.getInternalHeader());
         assertThat(internal).isNotNull();
         assertThat(tokens.verify(internal).tenantId()).isEqualTo("acme");
+        assertThat(EdgeAuthenticatedTenant.get(captured.get()).tenantId()).isEqualTo("acme");
+        assertThat(EdgeAuthenticatedTenant.get(captured.get()).userId()).isEqualTo("alice");
         // 外部 api-key 被剥离，不泄进内网
         assertThat(captured.get().getRequest().getHeaders().getFirst(props.getApiKeyHeader())).isNull();
     }
@@ -87,6 +89,7 @@ class ApiKeyToInternalTokenFilterTest {
         String internal = captured.get().getRequest().getHeaders().getFirst(props.getInternalHeader());
         assertThat(tokens.verify(internal).tenantId()).isEqualTo("_platform");
         assertThat(tokens.verify(internal).userId()).isEqualTo("edge-gateway");
+        assertThat(EdgeAuthenticatedTenant.get(captured.get()).tenantId()).isEqualTo("_platform");
     }
 
     private static GatewayFilterChain passThrough(AtomicBoolean flag) {

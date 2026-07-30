@@ -35,6 +35,8 @@ class InternalServiceTokenExchangeFilterTest {
         assertThat(captured.get().getRequest().getHeaders().getFirst(props.getInternalHeader())).isEqualTo(jwt);
         assertThat((Boolean) captured.get().getAttribute(InternalServiceTokenExchangeFilter.VERIFIED_ATTRIBUTE))
                 .isEqualTo(Boolean.TRUE);
+        assertThat(EdgeAuthenticatedTenant.get(captured.get()).tenantId()).isEqualTo("acme");
+        assertThat(EdgeAuthenticatedTenant.get(captured.get()).userId()).isEqualTo("alice");
     }
 
     @Test

@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * InteropToolRegistryDiscoveryTest：验证 {@link InteropToolRegistry} 的 live 能力发现行为——
- * 无 client 或发现抛异常/返回空时回退静态工具集，发现成功时采用 live 工具，并按 TTL 缓存与过期后重取。
+ * 无 client 或冷启动发现失败时只暴露本地工具，发现成功时采用 live 工具，并按 TTL 缓存与过期后重取。
  */
 class InteropToolRegistryDiscoveryTest {
 
@@ -21,13 +21,11 @@ class InteropToolRegistryDiscoveryTest {
     }
 
     @Test
-    void staticRegistryWhenNoClient() {
+    void exposesOnlyLocalToolsWhenNoClient() {
         InteropToolRegistry registry = new InteropToolRegistry();
 
         assertThat(registry.capabilityNames())
-                .contains(InteropToolRegistry.PING_TOOL,
-                        InteropToolRegistry.AGENT_RUN_TOOL,
-                        InteropToolRegistry.AGENT_DAG_PLAN_RUN_ASYNC_TOOL);
+                .containsExactly(InteropToolRegistry.PING_TOOL);
     }
 
     @Test
@@ -42,23 +40,19 @@ class InteropToolRegistryDiscoveryTest {
     }
 
     @Test
-    void fallsBackToStaticWhenDiscoveryThrows() {
+    void doesNotAdvertiseAgentToolsWhenColdStartDiscoveryThrows() {
         InteropToolRegistry registry = new InteropToolRegistry(() -> {
             throw new RuntimeException("agent unreachable");
         }, Duration.ofSeconds(60));
 
-        // ping (local built-in) + 4 static agent tools
-        assertThat(registry.capabilityNames())
-                .contains(InteropToolRegistry.PING_TOOL,
-                        InteropToolRegistry.AGENT_RUN_TOOL,
-                        InteropToolRegistry.AGENT_DAG_PLAN_RUN_TOOL);
+        assertThat(registry.capabilityNames()).containsExactly(InteropToolRegistry.PING_TOOL);
     }
 
     @Test
-    void fallsBackToStaticWhenDiscoveryReturnsEmpty() {
+    void doesNotAdvertiseAgentToolsWhenColdStartDiscoveryReturnsEmpty() {
         InteropToolRegistry registry = new InteropToolRegistry(List::of, Duration.ofSeconds(60));
 
-        assertThat(registry.capabilityNames()).contains(InteropToolRegistry.AGENT_RUN_TOOL);
+        assertThat(registry.capabilityNames()).containsExactly(InteropToolRegistry.PING_TOOL);
     }
 
     @Test
@@ -88,6 +82,23 @@ class InteropToolRegistryDiscoveryTest {
         Thread.sleep(5);
         registry.tools();
 
+        assertThat(calls.get()).isEqualTo(2);
+    }
+
+    @Test
+    void usesLastKnownGoodWhenRefreshFails() throws InterruptedException {
+        AtomicInteger calls = new AtomicInteger();
+        InteropToolRegistry registry = new InteropToolRegistry(() -> {
+            if (calls.incrementAndGet() == 1) {
+                return List.of(tool("platform.agent.run"));
+            }
+            throw new RuntimeException("agent unreachable");
+        }, Duration.ofMillis(1));
+
+        assertThat(registry.capabilityNames()).contains("platform.agent.run");
+        Thread.sleep(5);
+
+        assertThat(registry.capabilityNames()).contains("platform.agent.run");
         assertThat(calls.get()).isEqualTo(2);
     }
 }

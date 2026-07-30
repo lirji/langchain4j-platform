@@ -1,13 +1,22 @@
 # MCP 接入指南
 
+> **AgentScope 全量切换说明（2026-07-29）**：默认 Agent 后端已经切换为独立
+> `agentscope-platform`。下文“平台 agent 作为 MCP client”描述的是 Java
+> `agent-service` 的回滚期能力，不再位于默认调用链；interop 暴露的 MCP surface 则继续可用，
+> 并从 AgentScope 动态发现四个 `platform.agent.*` 工具。
+
 本文覆盖平台与 MCP（Model Context Protocol）的**两个方向**：
 
-1. **平台 agent 作为 MCP client** —— `agent-service` 在 ReAct 循环里通过 `mcp_call` 动作调用外部 MCP server 暴露的工具。
+1. **旧 Java agent 作为 MCP client（回滚期能力）** —— `agent-service` 在 ReAct 循环里通过 `mcp_call` 动作调用外部 MCP server 暴露的工具。
 2. **平台经 interop 暴露 MCP-style tool surface** —— `interop-service` 用 tools/list、tool schema、call 三个 HTTP 端点，把平台内部能力包装成 MCP 风格工具，供外部编排器调用。
 
-两个方向相互独立，可只开其一。**方向 ① agent 作 MCP client 默认关闭**（`AGENT_MCP_ENABLED=false`，不配置外部 server 时对现有行为零影响）；**方向 ② interop 的 MCP surface 恒在**，工具目录默认经 live discovery（`INTEROP_DISCOVERY_ENABLED=true`）从 agent-service 动态发现、下游不可达即确定性回退静态。
+两个方向相互独立。**方向 ① 不在 AgentScope 默认链路且仍默认关闭**（`AGENT_MCP_ENABLED=false`）；
+**方向 ② interop 的 MCP surface 恒在**，工具目录默认经 live discovery
+（`INTEROP_DISCOVERY_ENABLED=true`）从 AgentScope 动态发现，下游不可达即确定性回退静态目录。
 
-> 端点访问约定：业务端点建议走 `edge-gateway`（`http://localhost:8080`，带 `X-Api-Key`，网关内部换发内部 JWT）。服务直连端口仅用于本地调试：`agent-service` :8085、`interop-service` :8088。
+> 端点访问约定：业务端点建议走 `edge-gateway`（`http://localhost:18080`，带有效外部
+> 身份，网关内部换发内部 JWT）。服务直连端口仅用于本地调试：AgentScope
+> `http://localhost:18085`、`interop-service` `http://localhost:8088`。
 
 ---
 
@@ -119,7 +128,11 @@ curl -s -X POST 'http://localhost:8080/agent/run' \
 | `platform.agent.dag.plan_run` | 自动规划并执行 DAG | `goal` |
 | `platform.agent.dag.plan_run_async` | 异步规划并执行 DAG | `goal`（可选 `webhookUrl`） |
 
-`platform.ping` 是 interop 本地内建工具（恒在）；四个 `platform.agent.*` 工具经 live capability discovery（`INTEROP_DISCOVERY_ENABLED`，**默认 true**）懒加载 + 按 TTL（`INTEROP_CAPABILITY_TTL`，默认 60s）从 agent-service 拉取能力；下游不可达时确定性回退到上面的静态默认，永不因下游故障抛错或阻塞。置 `INTEROP_DISCOVERY_ENABLED=false` 则纯取静态目录。
+`platform.ping` 是 interop 本地内建工具（恒在）；四个 `platform.agent.*` 工具经 live
+capability discovery（`INTEROP_DISCOVERY_ENABLED`，**默认 true**）懒加载 + 按 TTL
+（`INTEROP_CAPABILITY_TTL`，默认 60s）从 AgentScope 拉取能力；下游不可达时确定性回退到
+last-known-good 或静态默认目录，永不因发现失败阻断目录读取。置
+`INTEROP_DISCOVERY_ENABLED=false` 则纯取静态目录。
 
 ```bash
 curl -s 'http://localhost:8080/interop/mcp/tools' \

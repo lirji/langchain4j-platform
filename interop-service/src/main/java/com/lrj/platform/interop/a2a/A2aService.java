@@ -17,7 +17,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * 真 A2A 协议核心：把 JSON-RPC method 路由到 agent-service（经 {@link A2aAgentGateway} 代理），
+ * 真 A2A 协议核心：把 JSON-RPC method 路由到 AgentScope（经 {@link A2aAgentGateway} 代理），
  * 做 A2A 协议 ↔ agent 内部端点的翻译。
  *
  * <p>覆盖方法：{@code message/send}（chat 同步 / deep-research 异步 Task）、{@code tasks/get}
@@ -63,9 +63,9 @@ public class A2aService {
         } catch (IllegalArgumentException e) {
             return JsonRpcResponse.error(id, JsonRpcError.invalidParams(e.getMessage()));
         } catch (RestClientException e) {
-            log.warn("A2A method {} failed calling agent-service", method, e);
+            log.warn("A2A method {} failed calling AgentScope", method, e);
             return JsonRpcResponse.error(id, JsonRpcError.of(JsonRpcError.INTERNAL_ERROR,
-                    "agent-service call failed: " + e.getMessage()));
+                    "AgentScope call failed: " + e.getMessage()));
         } catch (Exception e) {
             log.error("A2A method {} failed", method, e);
             return JsonRpcResponse.error(id, JsonRpcError.of(JsonRpcError.INTERNAL_ERROR,
@@ -85,13 +85,13 @@ public class A2aService {
         String text = msg.textContent();
 
         if (SKILL_RESEARCH.equals(skill)) {
-            // 异步：代理到 agent-service /agent/run/async，返回 A2A Task（submitted/working）。
+            // 异步：代理到 AgentScope /agent/run/async，返回 A2A Task（submitted/working）。
             // webhook 一律指向 interop 自己的 push 回调（而非客户端 URL）：终态由 A2aPushForwarder 按 A2A
             // 信封中继。这样即便 push 配置晚于 send 通过 tasks/pushNotificationConfig/set 登记，也能生效。
             AgentTaskView task = gateway.submitTask(text, props.getA2a().getPushCallbackUrl());
             if (task == null) {
                 return JsonRpcResponse.error(id, JsonRpcError.of(JsonRpcError.INTERNAL_ERROR,
-                        "agent-service did not return a task"));
+                        "AgentScope did not return a task"));
             }
             PushNotificationConfig push = pushConfig(p);
             if (push != null && push.url() != null && !push.url().isBlank()) {
