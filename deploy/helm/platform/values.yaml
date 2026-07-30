@@ -73,9 +73,11 @@ config:
   # --- 跨服务 base-url（下游服务互调） ---
   KNOWLEDGE_BASE_URL: "http://knowledge-service:8084"
   ANALYTICS_BASE_URL: "http://analytics-service:8083"
+  WORKFLOW_BASE_URL: "http://workflow-service:8082"
+  ORDER_BASE_URL: "http://order-service:8093"
   ASYNC_TASK_BASE_URL: "http://async-task-service:8086"
   VISION_BASE_URL: "http://vision-service:8090"
-  AGENT_BASE_URL: "http://agent-service:8085"
+  AGENT_BASE_URL: "http://agentscope-orchestrator:8085"
   VOICE_CONVERSATION_BASE_URL: "http://conversation-service:8081"
 
   # --- edge-gateway 路由目标 URI ---
@@ -83,11 +85,11 @@ config:
   WORKFLOW_URI: "http://workflow-service:8082"
   ANALYTICS_URI: "http://analytics-service:8083"
   KNOWLEDGE_URI: "http://knowledge-service:8084"
-  AGENT_URI: "http://agent-service:8085"
+  AGENT_URI: "http://agentscope-orchestrator:8085"
+  EDGE_AGENT_BASELINE_BACKEND: "agentscope"
   ASYNC_TASK_URI: "http://async-task-service:8086"
   CHANNEL_URI: "http://channel-service:8087"
   INTEROP_URI: "http://interop-service:8088"
-  EVAL_URI: "http://eval-service:8089"
   VISION_URI: "http://vision-service:8090"
   VOICE_URI: "http://voice-service:8091"
   # 登录/RBAC 服务（edge-gateway 路由 /auth/** 到此）。
@@ -104,7 +106,7 @@ config:
   KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
   QDRANT_HOST: "qdrant"
   QDRANT_PORT: "6334"
-  QDRANT_COLLECTION_NAME: "knowledge_segments"
+  QDRANT_COLLECTION_NAME: "knowledge_segments_bailian_v4"
 
   # --- workflow（Flowable BPMN） ---
   WORKFLOW_ENABLED: "true"
@@ -119,10 +121,15 @@ config:
   NL2SQL_DB_ADMIN_USER: "root"
 
   # --- knowledge（RAG / 向量库 / GraphRAG） ---
-  RAG_EMBEDDING_PROVIDER: "hash"
-  RAG_EMBEDDING_MODEL: "embedding-default"
-  RAG_VECTOR_STORE_PROVIDER: "in-memory"
-  RAG_REGISTRY_STORE: "in-memory"
+  # 百炼 embedding 走业务空间 OpenAI-compatible 入口；安装时必须替换 WorkspaceId。
+  RAG_EMBEDDING_PROVIDER: "openai"
+  RAG_EMBEDDING_BASE_URL: "https://REPLACE_WITH_WORKSPACE_ID.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+  RAG_EMBEDDING_MODEL: "text-embedding-v4"
+  RAG_EMBEDDING_DIMENSIONS: "1024"
+  RAG_EMBEDDING_MAX_SEGMENTS_PER_BATCH: "10"
+  RAG_VECTOR_STORE_PROVIDER: "qdrant"
+  RAG_VECTOR_STORE_BASE_COLLECTION: "knowledge_segments_bailian_v4"
+  RAG_REGISTRY_STORE: "redis"
   RAG_HYBRID_ENABLED: "true"
   RAG_RANKING_VECTOR_WEIGHT: "1.0"
   RAG_RANKING_KEYWORD_WEIGHT: "1.0"
@@ -133,6 +140,13 @@ config:
   RAG_GRAPH_QUERY_TOP_K: "20"
   RAG_GRAPH_DB_URL: "jdbc:mysql://mysql:3306/knowledge_graph?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true"
   RAG_GRAPH_DB_USER: "root"
+  # 百炼 qwen3-rerank 使用 compatible-api（与 embedding 的 compatible-mode 不同）。
+  RAG_RERANK_ENABLED: "true"
+  RAG_RERANK_TYPE: "bailian"
+  RAG_RERANK_BAILIAN_BASE_URL: "https://REPLACE_WITH_WORKSPACE_ID.cn-beijing.maas.aliyuncs.com/compatible-api/v1"
+  RAG_RERANK_BAILIAN_MODEL: "qwen3-rerank"
+  RAG_RERANK_BAILIAN_TIMEOUT: "30s"
+  RAG_RERANK_BAILIAN_MAX_DOCUMENTS: "500"
   # --- ES 全文混排（es-hybrid-rerank，默认开）。需外部 ES（装中文分析器插件 smartcn/analysis-ik），
   #     由 externalInfra.elasticsearch 提供 DNS。ES 不可达时惰性连接 + 查询降级，不阻断启动/查询。
   #     不想用：置 RAG_ES_ENABLED=false 且 externalInfra.elasticsearch.enabled=false。
@@ -159,6 +173,12 @@ config:
   # --- conversation（可选 RAG 增强） ---
   CONVERSATION_RAG_ENABLED: "false"
   CONVERSATION_RAG_TOP_K: "5"
+  # 独立 conversation runtime 尚未通过创建门禁；仅预留默认关闭的无状态 shadow client。
+  CONVERSATION_SHADOW_ENABLED: "false"
+  CONVERSATION_SHADOW_BASE_URL: ""
+  CONVERSATION_SHADOW_HISTORY_MAX_MESSAGES: "12"
+  CONVERSATION_SHADOW_HISTORY_MAX_CHARS: "6000"
+  CONVERSATION_SHADOW_HISTORY_MAX_MESSAGE_CHARS: "2000"
 
   # --- agent（ReAct + DAG + 异步） ---
   AGENT_ENABLED: "true"
@@ -183,15 +203,21 @@ config:
   AGENT_ASYNC_LEASE_SECONDS: "300"
 
   # --- async-task ---
-  # 单副本默认内存存储；如需多副本水平扩展，改 ASYNC_TASK_STORE=jdbc（持久化到 MySQL），
-  # 否则各副本内存态不共享。见 services.async-task-service 注释。
-  ASYNC_TASK_STORE: "in-memory"
+  # Phase 3 Agent 异步流量要求任务、事件与 outbox 共享持久化；生产 chart 明确使用 JDBC。
+  ASYNC_TASK_STORE: "jdbc"
   ASYNC_TASK_DB_URL: "jdbc:mysql://mysql:3306/async_task?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true"
   ASYNC_TASK_DB_USER: "root"
   ASYNC_TASK_WEBHOOK_ENABLED: "true"
   ASYNC_TASK_WEBHOOK_MAX_ATTEMPTS: "3"
   ASYNC_TASK_WEBHOOK_BACKOFF: "250ms"
   ASYNC_TASK_WEBHOOK_DELIVERED_RETENTION: "P7D"
+  ASYNC_TASK_EVENT_RETENTION: "PT24H"
+  ASYNC_TASK_EVENT_MAX_BYTES: "262144"
+  ASYNC_TASK_ORPHAN_ENABLED: "false"
+  ASYNC_TASK_ORPHAN_PENDING_TIMEOUT: "PT2M"
+  ASYNC_TASK_ORPHAN_LEASE_GRACE: "PT30S"
+  ASYNC_TASK_ORPHAN_BATCH_SIZE: "100"
+  ASYNC_TASK_ORPHAN_KINDS: "agent.run,agent.dag,agent.dag-plan,agent.analyst,agent.process"
 
   # --- channel（出站投递 + Kafka 事件） ---
   CHANNEL_OUTBOUND_ENABLED: "false"
@@ -199,8 +225,9 @@ config:
   CHANNEL_EVENTS_ENABLED: "false"
   CHANNEL_EVENTS_TOPIC: "platform.channel.events"
 
-  # --- vision ---
-  VISION_ENABLED: "false"
+  # --- vision（外部 LiteLLM 需将 vision-default 映射到百炼 qwen3-vl-plus） ---
+  VISION_ENABLED: "true"
+  VISION_MODEL: "vision-default"
   VISION_MAX_IMAGE_BYTES: "10485760"
 
   # --- voice（ASR→对话→TTS 语音闭环；默认关。开启时 VOICE_API_KEY 走 Secret/ESO） ---
@@ -233,11 +260,15 @@ secrets:
     INTERNAL_JWT_SECRET: "dev-only-internal-secret-change-me-please-32b"
     # LiteLLM 网关 master key（各服务调 LLM 用）。
     GATEWAY_API_KEY: "sk-litellm-master"
+    # 百炼 API Key：embedding 与 rerank 可共用同一值；占位值必须由 ESO/Secret 覆盖。
+    RAG_EMBEDDING_API_KEY: "REPLACE_WITH_BAILIAN_API_KEY"
+    RAG_RERANK_BAILIAN_API_KEY: "REPLACE_WITH_BAILIAN_API_KEY"
     # 各数据库口令。
     WORKFLOW_DB_PASSWORD: "change-me"
     NL2SQL_DB_ADMIN_PASSWORD: "change-me"
     ASYNC_TASK_DB_PASSWORD: "change-me"
     RAG_GRAPH_DB_PASSWORD: "change-me"
+    RAG_INGESTION_DB_PASSWORD: "change-me"
     ORDER_DB_PASSWORD: "change-me"
     # auth-service 账号库口令（AUTH_STORE=jdbc 时）。
     AUTH_DB_PASSWORD: "change-me"
@@ -265,6 +296,15 @@ secrets:
   # 必须 >=32 字节。生产经 ESO 从 Vault 注入。
   sessionJwt:
     SESSION_JWT_SECRET: "dev-only-session-secret-change-me-please-32b"
+
+  # Knowledge 原文最小权限凭据。ingest 只允许写入/失败清理，worker 只允许读取；
+  # query 不引用这两个 Secret。生产由 workload identity 或 ESO 注入。
+  knowledgeSourceIngest:
+    RAG_SOURCE_S3_ACCESS_KEY: "REPLACE_WITH_INGEST_S3_ACCESS_KEY"
+    RAG_SOURCE_S3_SECRET_KEY: "REPLACE_WITH_INGEST_S3_SECRET_KEY"
+  knowledgeSourceWorker:
+    RAG_SOURCE_S3_ACCESS_KEY: "REPLACE_WITH_WORKER_S3_ACCESS_KEY"
+    RAG_SOURCE_S3_SECRET_KEY: "REPLACE_WITH_WORKER_S3_SECRET_KEY"
 
   # --- edge-gateway api-key→租户 目录（Secret 卷挂载为 yaml，SPRING_CONFIG_IMPORT 追加导入） ---
   # 占位与 edge-gateway/application.yml 一致；生产从 Vault 注入真实目录。
@@ -414,12 +454,184 @@ services:
       minReplicas: 1
       maxReplicas: 4
 
+  # Knowledge split release artifact。默认关闭，不改变现有 edge 路由和 combined 回滚目标。
+  # 启用前必须由 values override/ESO 提供真实 S3 endpoint、bucket、access key 和数据库口令。
+  knowledge-query:
+    enabled: false
+    port: 8084
+    replicaCount: 2
+    image:
+      repository: ghcr.io/your-org/langchain4j-platform/knowledge-service
+    env:
+      - name: RAG_RUNTIME_ROLE
+        value: query
+      - name: RAG_VECTOR_STORE_PROVIDER
+        value: qdrant
+      - name: RAG_REGISTRY_STORE
+        value: redis
+      - name: RAG_HYBRID_ENABLED
+        value: "true"
+      - name: RAG_ES_ENABLED
+        value: "true"
+      - name: RAG_ES_QUERY_ENABLED
+        value: "true"
+      - name: RAG_GRAPH_ENABLED
+        value: "false"
+    hpa:
+      enabled: false
+      minReplicas: 2
+      maxReplicas: 8
+
+  knowledge-ingest-api:
+    enabled: false
+    port: 8084
+    replicaCount: 2
+    image:
+      repository: ghcr.io/your-org/langchain4j-platform/knowledge-service
+    env:
+      - name: RAG_RUNTIME_ROLE
+        value: ingest-api
+      - name: RAG_INGESTION_STORE
+        value: jdbc
+      - name: RAG_INGESTION_DB_URL
+        value: "jdbc:mysql://mysql:3306/knowledge_ingestion?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+      - name: RAG_INGESTION_DB_USER
+        value: root
+      - name: RAG_INGESTION_DB_PASSWORD
+        secret: RAG_INGESTION_DB_PASSWORD
+      - name: RAG_SOURCE_STORE
+        value: s3
+      - name: RAG_SOURCE_S3_ENDPOINT
+        value: "https://REPLACE_WITH_S3_COMPATIBLE_ENDPOINT"
+      - name: RAG_SOURCE_S3_REGION
+        value: us-east-1
+      - name: RAG_SOURCE_S3_BUCKET
+        value: knowledge-sources
+      - name: RAG_SOURCE_S3_ACCESS_KEY
+        secret: RAG_SOURCE_S3_ACCESS_KEY
+        secretName: knowledge-source-ingest
+      - name: RAG_SOURCE_S3_SECRET_KEY
+        secret: RAG_SOURCE_S3_SECRET_KEY
+        secretName: knowledge-source-ingest
+      - name: RAG_REGISTRY_STORE
+        value: redis
+      - name: RAG_GRAPH_ENABLED
+        value: "false"
+      - name: RAG_ES_ENABLED
+        value: "false"
+      - name: RAG_VECTOR_STORE_PROVIDER
+        value: in-memory
+    hpa:
+      enabled: false
+      minReplicas: 2
+      maxReplicas: 6
+
+  knowledge-ingest-worker:
+    enabled: false
+    port: 8084
+    replicaCount: 1
+    image:
+      repository: ghcr.io/your-org/langchain4j-platform/knowledge-service
+    service:
+      enabled: false
+    env:
+      - name: RAG_RUNTIME_ROLE
+        value: ingest-worker
+      - name: RAG_INGESTION_STORE
+        value: jdbc
+      - name: RAG_INGESTION_DB_URL
+        value: "jdbc:mysql://mysql:3306/knowledge_ingestion?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+      - name: RAG_INGESTION_DB_USER
+        value: root
+      - name: RAG_INGESTION_DB_PASSWORD
+        secret: RAG_INGESTION_DB_PASSWORD
+      - name: RAG_SOURCE_STORE
+        value: s3
+      - name: RAG_SOURCE_S3_ENDPOINT
+        value: "https://REPLACE_WITH_S3_COMPATIBLE_ENDPOINT"
+      - name: RAG_SOURCE_S3_REGION
+        value: us-east-1
+      - name: RAG_SOURCE_S3_BUCKET
+        value: knowledge-sources
+      - name: RAG_SOURCE_S3_ACCESS_KEY
+        secret: RAG_SOURCE_S3_ACCESS_KEY
+        secretName: knowledge-source-worker
+      - name: RAG_SOURCE_S3_SECRET_KEY
+        secret: RAG_SOURCE_S3_SECRET_KEY
+        secretName: knowledge-source-worker
+      - name: RAG_VECTOR_STORE_PROVIDER
+        value: qdrant
+      - name: RAG_REGISTRY_STORE
+        value: redis
+      - name: RAG_ES_ENABLED
+        value: "true"
+      - name: RAG_GRAPH_ENABLED
+        value: "true"
+      - name: RAG_INGESTION_ASYNC_TASK_ENABLED
+        value: "true"
+      - name: RAG_INGESTION_ASYNC_TASK_BASE_URL
+        value: "http://async-task-service:8086"
+      - name: RAG_INGESTION_VERSION_GC_ENABLED
+        value: "false"
+      - name: RAG_INGESTION_VERSION_GC_RETAIN_VERSIONS
+        value: "2"
+      - name: RAG_INGESTION_VERSION_GC_GRACE_PERIOD
+        value: "P7D"
+    hpa:
+      enabled: false
+      minReplicas: 1
+      maxReplicas: 8
+
   agent-service:
+    enabled: false
     port: 8085
     replicaCount: 1
+    # 旧 Java Agent 只作为显式整服务回滚目标，不接收默认 edge/interop 流量；
+    # 回滚时需显式 enabled=true，并同步切换 AGENT_URI/AGENT_BASE_URL 与 backend 标识。
     # 水平扩展提醒：agent 副本 >1 时，异步任务须以 async-task-service 为权威，
     # 在 config.* 设 AGENT_ASYNC_EXTERNAL_ENABLED=true + AGENT_ASYNC_EXTERNAL_AUTHORITATIVE=true，
     # 否则各副本内存态各自领取会冲突。默认单副本。
+    hpa:
+      enabled: false
+      minReplicas: 1
+      maxReplicas: 4
+
+  agentscope-orchestrator:
+    port: 8085
+    replicaCount: 1
+    image:
+      repository: ghcr.io/your-org/agentscope-platform
+    env:
+      - name: APP_ENV
+        value: "production"
+      - name: APP_PORT
+        value: "8085"
+      - name: AGENT_V2_ENABLED
+        value: "false"
+      - name: ASYNC_TASK_ENABLED
+        value: "true"
+      - name: ASYNC_TASK_WORKER_ID
+        value: "agentscope-orchestrator"
+      - name: INTERNAL_JWT_ALGORITHM
+        config: PLATFORM_SECURITY_JWT_ALGORITHM
+      - name: INTERNAL_JWT_PUBLIC_KEY
+        secret: PLATFORM_SECURITY_JWT_PUBLIC_KEY
+      - name: OTEL_SERVICE_NAME
+        value: "agentscope-orchestrator"
+    probes:
+      enabled: true
+      livenessPath: /health
+      readinessPath: /readiness
+      liveness:
+        initialDelaySeconds: 20
+        periodSeconds: 15
+        timeoutSeconds: 3
+        failureThreshold: 6
+      readiness:
+        initialDelaySeconds: 10
+        periodSeconds: 10
+        timeoutSeconds: 3
+        failureThreshold: 6
     hpa:
       enabled: false
       minReplicas: 1
@@ -484,8 +696,10 @@ services:
       - name: AUTH_SEED_ENABLED
         value: "false"
 
-  # eval-service 是回归测试客户端，不是常驻业务服务。默认副本 0（不常驻）；
-  # 需要跑评测时临时 `--set services.eval-service.replicaCount=1` 或改造成 Job/CronJob 按需触发。
+  # eval-service 是离线回归客户端，不是常驻业务服务。默认不渲染任何资源；
+  # 需要跑 Java 检索/HTTP harness 时显式 `--set services.eval-service.enabled=true`，
+  # 或在环境层改造成 Job/CronJob 按需触发。它不应通过 edge-gateway 暴露。
   eval-service:
+    enabled: false
     port: 8089
-    replicaCount: 0
+    replicaCount: 1

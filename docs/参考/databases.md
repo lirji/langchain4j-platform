@@ -91,7 +91,10 @@ mvn -pl knowledge-service spring-boot:run
 
 1. **数据不迁移**。换 provider 得到的是空库，原有向量不会跟着过去——需**重新 ingest 文档**。
 2. **外部后端要先起来**（in-memory 除外）。pgvector/milvus/chroma/doris 都得有对应服务可达，否则启动即失败。
-3. **隔离模式限制**。默认 `collection-per-tenant`（每租户独立 collection/表）四个后端全支持；`RAG_VECTOR_STORE_ISOLATION=shared` **仅 in-memory / qdrant** 支持，其它 provider 用 shared 会直接抛异常。另外换 embedding provider（hash=64 维 vs openai/ollama 维度不同）也需重建库，维度守卫 `DimensionMismatchException` 会拦截不匹配。
+3. **隔离模式限制**。默认 `collection-per-tenant`（每租户独立 collection/表）各后端均支持；
+   `RAG_VECTOR_STORE_ISOLATION=shared` **仅 in-memory / qdrant** 支持。换 embedding provider
+   （hash 64、nomic 768、百炼 text-embedding-v4 1024 维）需迁移到新 collection，
+   维度守卫 `DimensionMismatchException` 会拦截不匹配。
 
 ## 四、Elasticsearch 8.15 + Kibana（全文检索，:9200 / :5601）
 
@@ -125,7 +128,9 @@ mvn -pl knowledge-service spring-boot:run
 | 5 | **文档登记 registry** | 文档级元数据/版本目录（`list`/`get`/覆盖判定） | **Redis** key `rag:docs:<tenant>`（第二节） | `RAG_REGISTRY_STORE=redis`（默认）；可退 `in-memory` | `registry.put(info)` |
 | 6 | **SpiceDB（授权关系，外部 `auth-platform`）** | 不是内容，是「谁能看」——文档 `owner` + `home_dept`（上传人部门）关系元组 | 外部 `auth-platform-server` :8200 → SpiceDB | 仅 `app.rag.authz.mode=shadow`/`enforce`；且仅**新建**文档写（同名覆盖保留原 owner，不夺权）。默认 `disabled` 不写 | `knowledgeAuthz.onDocumentCreated(...)` |
 
-其中 1–4 是代码注释里说的「**四个 sink**」（向量 + 内存镜像 + ES + 图谱），5、6 另算。embedding provider（`hash` 64 维 / `ollama` nomic 768 维等）决定的是**写进向量库的内容**，本身不是一处存储。
+其中 1–4 是代码注释里说的「**四个 sink**」（向量 + 内存镜像 + ES + 图谱），5、6 另算。
+embedding provider（hash 64 / nomic 768 / 百炼 text-embedding-v4 1024 维）决定的是
+**写进向量库的内容**，本身不是一处存储。
 
 ### 全部按 `tenantId` 同源分区
 

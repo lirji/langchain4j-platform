@@ -103,8 +103,10 @@ Redis 后端已就位，可直接做多 pod 硬预算（拦截兜底当前由限
 ## 3. USD 成本归因（默认关）
 
 `CostConfig`（`app.cost.*`，仅 `app.cost.enabled=true` 时整体装配）—— 把 token 用量按 model 单价翻成 **USD**，
-per-tenant 日累加 + Micrometer 指标。默认关是因为**本地 ollama 免费、无需核算**；用云 provider
-（openai/anthropic/deepseek/gemini）时再开。`enabled=false` 时 calculator/tracker/listener 一律不装配，零开销、零回归。
+per-tenant 日累加 + Micrometer 指标。该能力仍默认关；当前 embedding/rerank/vision 已使用百炼云模型，
+生产建议显式开启成本归因。仅切回本地 Ollama 时模型成本可按 0 配置；使用百炼、OpenAI、
+Anthropic、DeepSeek、Gemini 等云 provider 时应配置对应价格。`enabled=false` 时
+calculator/tracker/listener 一律不装配，零开销、零回归。
 
 ### 3.1 定价表与换算
 

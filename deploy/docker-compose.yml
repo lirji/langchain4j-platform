@@ -1,7 +1,7 @@
 # 本地整网：LiteLLM(AI 网关) + Redis + MySQL + Kafka + Qdrant + Elasticsearch/Kibana + 各服务。
 # 用法见 deploy/README.md。基础设施(litellm/redis/mysql/kafka/qdrant/elasticsearch/kibana)先起，应用服务需先 `mvn -DskipTests package`。
-# 注意：knowledge-service 默认走 nomic 语义 embedding（宿主机 Ollama）+ ES 全文混排(RRF)，
-#       前置 `ollama pull nomic-embed-text`；要零依赖可设 RAG_EMBEDDING_PROVIDER=hash / RAG_ES_ENABLED=false。
+# 注意：标准栈默认走百炼 text-embedding-v4 + qwen3-rerank + qwen3-vl-plus。
+#       凭据由 start-*.sh 从 BAILIAN_CREDENTIAL_CSV 指向的本地 CSV 注入，不写入本文件或 Git。
 name: langchain4j-platform
 
 services:
@@ -14,6 +14,10 @@ services:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
       # chat-default 主目标 = DeepSeek（云端，OpenAI 兼容）。key 取自宿主环境变量，不落盘。
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      # vision-default = 百炼 qwen3-vl-plus；启动脚本从本地凭据 CSV 注入，不写入仓库/.env。
+      BAILIAN_BASE_URL: ${BAILIAN_BASE_URL:-}
+      BAILIAN_API_KEY: ${BAILIAN_API_KEY:-}
+      BAILIAN_VISION_MODEL: ${BAILIAN_VISION_MODEL:-openai/qwen3-vl-plus}
       # ── spend 记账 / virtual key / 管理 UI（http://localhost:4000/ui，master key 或下面 UI 账号登录）──
       # LiteLLM 只支持 Postgres（独立于业务 MySQL）；DATABASE_URL 存在即自动跑 Prisma migration。
       DATABASE_URL: postgresql://litellm:${LITELLM_PG_PASSWORD:-litellm-dev-pw}@litellm-postgres:5432/litellm
@@ -167,6 +171,12 @@ services:
       KNOWLEDGE_BASE_URL: http://knowledge-service:8084
       CONVERSATION_RAG_TOP_K: ${CONVERSATION_RAG_TOP_K:-5}
       CONVERSATION_RAG_CATEGORY: ${CONVERSATION_RAG_CATEGORY:-}
+      # 独立 conversation runtime 尚处 decision-gate/shadow 阶段；默认关闭且不创建候选服务。
+      CONVERSATION_SHADOW_ENABLED: ${CONVERSATION_SHADOW_ENABLED:-false}
+      CONVERSATION_SHADOW_BASE_URL: ${CONVERSATION_SHADOW_BASE_URL:-}
+      CONVERSATION_SHADOW_HISTORY_MAX_MESSAGES: ${CONVERSATION_SHADOW_HISTORY_MAX_MESSAGES:-12}
+      CONVERSATION_SHADOW_HISTORY_MAX_CHARS: ${CONVERSATION_SHADOW_HISTORY_MAX_CHARS:-6000}
+      CONVERSATION_SHADOW_HISTORY_MAX_MESSAGE_CHARS: ${CONVERSATION_SHADOW_HISTORY_MAX_MESSAGE_CHARS:-2000}
       # ── 能力展示：纯靠 DeepSeek 栈即可跑通的对话高级能力，默认打开（前端 catalog 对应 state=ready）──
       CONVERSATION_ROUTER_ENABLED: ${CONVERSATION_ROUTER_ENABLED:-true}          # /chat/auto 意图路由
       CONVERSATION_ROUTER_ORDER_ENABLED: ${CONVERSATION_ROUTER_ORDER_ENABLED:-true}
@@ -254,25 +264,34 @@ services:
     build:
       context: ../knowledge-service
     extra_hosts:
-      - "host.docker.internal:host-gateway"   # 容器内回连宿主机 Ollama（nomic embedding）
+      - "host.docker.internal:host-gateway"   # 仅切回可选 Ollama embedding provider 时使用
     environment:
       GATEWAY_BASE_URL: http://litellm:4000/v1
       GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
       PLATFORM_GATEWAY_TENANT_ATTRIBUTION: ${PLATFORM_GATEWAY_TENANT_ATTRIBUTION:-none}
       MANAGEMENT_TRACING_ENABLED: ${MANAGEMENT_TRACING_ENABLED:-false}
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
-      # 语义 embedding 默认走宿主机 Ollama 的 nomic-embed-text（768 维）。
-      # 前置：宿主机已 `ollama pull nomic-embed-text`。要零依赖 hash（无语义）：设 RAG_EMBEDDING_PROVIDER=hash。
-      RAG_EMBEDDING_PROVIDER: ${RAG_EMBEDDING_PROVIDER:-ollama}
-      RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-nomic-embed-text}
+      # 默认直连百炼 text-embedding-v4；要零外部模型依赖可显式设 provider=hash（无语义）。
+      RAG_EMBEDDING_PROVIDER: ${RAG_EMBEDDING_PROVIDER:-openai}
+      RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-text-embedding-v4}
+      # openai provider 可独立直连阿里云百炼等 OpenAI-compatible /embeddings，
+      # 不复用/覆盖 GATEWAY_*，避免影响 RAG rerank/query-expansion/contextual 所用的聊天模型。
+      RAG_EMBEDDING_BASE_URL: ${RAG_EMBEDDING_BASE_URL:-}
+      RAG_EMBEDDING_API_KEY: ${RAG_EMBEDDING_API_KEY:-}
+      # 直接映射 Spring 属性，保证使用尚未重建的旧镜像时也不会回退到 platform.gateway.*。
+      APP_RAG_EMBEDDING_BASE_URL: ${RAG_EMBEDDING_BASE_URL:-}
+      APP_RAG_EMBEDDING_API_KEY: ${RAG_EMBEDDING_API_KEY:-}
+      RAG_EMBEDDING_DIMENSIONS: ${RAG_EMBEDDING_DIMENSIONS:-1024}
+      RAG_EMBEDDING_MAX_SEGMENTS_PER_BATCH: ${RAG_EMBEDDING_MAX_SEGMENTS_PER_BATCH:-10}
       RAG_EMBEDDING_OLLAMA_BASE_URL: ${RAG_EMBEDDING_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       # nomic 非对称任务前缀（尾部空格必须保留）：对齐 query/document 向量空间，提升检索准确率
       RAG_EMBEDDING_QUERY_PREFIX: "search_query: "
       RAG_EMBEDDING_DOCUMENT_PREFIX: "search_document: "
       RAG_VECTOR_STORE_PROVIDER: ${RAG_VECTOR_STORE_PROVIDER:-qdrant}
+      RAG_VECTOR_STORE_BASE_COLLECTION: ${RAG_VECTOR_STORE_BASE_COLLECTION:-knowledge_segments_bailian_v4}
       QDRANT_HOST: qdrant
       QDRANT_PORT: 6334
-      QDRANT_COLLECTION_NAME: knowledge_segments
+      QDRANT_COLLECTION_NAME: ${QDRANT_COLLECTION_NAME:-knowledge_segments_bailian_v4}
       RAG_REGISTRY_STORE: ${RAG_REGISTRY_STORE:-redis}
       # 公共/共享知识库（默认开启）：查询在隔离查各自租户基础上并入 __public__ 公共分区。回滚设 RAG_PUBLIC_ENABLED=false。
       RAG_PUBLIC_ENABLED: ${RAG_PUBLIC_ENABLED:-true}
@@ -303,12 +322,20 @@ services:
       # min-score 只作用于向量源，比较 langchain4j 归一化相关度 [0,1]（cosine ≈ (cos+1)/2，不相关≈0.5）。
       # 0.6 为起点：先跑一次看真实命中分数（响应/日志），把 floor 卡在“真相关分”与“凑数分”之间；过高会返回空。
       RAG_QUERY_MIN_SCORE: ${RAG_QUERY_MIN_SCORE:-0.6}
-      # 重排（默认关）：type=llm 复用共享 temp=0 网关模型给候选打分重排，精排掉残余 filler（覆盖全部通道，不止向量）。
-      # 需 LiteLLM 可达；每次查询多一次 LLM 调用（延迟/成本↑，候选池 = top-k × RAG_RERANK_CANDIDATE_MULTIPLIER）。
+      # 重排（默认开）：llm 复用 LiteLLM，bailian 批量调用 qwen3-rerank；覆盖全部召回通道。
+      # 每次查询增加一次模型调用，候选池 = top-k × RAG_RERANK_CANDIDATE_MULTIPLIER。
       RAG_RERANK_ENABLED: ${RAG_RERANK_ENABLED:-true}
+      RAG_RERANK_TYPE: ${RAG_RERANK_TYPE:-bailian}
       # 重排相关性阈值(0..1)：低于此分的候选丢弃 → topK 成为"上限"，不再凑数返回不相关文档（方案③）。
       # 0.5 为起点：先看日志/响应里的真实 rerank 分，把它卡在“真相关分”与“凑数分”之间；过高会返回空。
       RAG_RERANK_MIN_SCORE: ${RAG_RERANK_MIN_SCORE:-0.5}
+      # 百炼 qwen3-rerank：compatible-api 与 embedding 的 compatible-mode 是两个不同入口。
+      RAG_RERANK_BAILIAN_BASE_URL: ${RAG_RERANK_BAILIAN_BASE_URL:-}
+      RAG_RERANK_BAILIAN_API_KEY: ${RAG_RERANK_BAILIAN_API_KEY:-}
+      RAG_RERANK_BAILIAN_MODEL: ${RAG_RERANK_BAILIAN_MODEL:-qwen3-rerank}
+      RAG_RERANK_BAILIAN_INSTRUCT: ${RAG_RERANK_BAILIAN_INSTRUCT:-Given a user question, retrieve passages that directly answer it.}
+      RAG_RERANK_BAILIAN_TIMEOUT: ${RAG_RERANK_BAILIAN_TIMEOUT:-30s}
+      RAG_RERANK_BAILIAN_MAX_DOCUMENTS: ${RAG_RERANK_BAILIAN_MAX_DOCUMENTS:-500}
       RAG_GRAPH_ENABLED: ${RAG_GRAPH_ENABLED:-true}
       RAG_GRAPH_STORE: ${RAG_GRAPH_STORE:-jdbc}
       RAG_GRAPH_INCLUDE_IN_QUERY: ${RAG_GRAPH_INCLUDE_IN_QUERY:-${RAG_GRAPH_ENABLED:-true}}
@@ -318,9 +345,14 @@ services:
       RAG_GRAPH_DB_URL: jdbc:mysql://mysql:3306/knowledge_graph?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
       RAG_GRAPH_DB_USER: root
       RAG_GRAPH_DB_PASSWORD: root
-      # 图片 RAG 必须有显式、容器可达的 CLIP/jina embedding 端点才可开启；缺 provider 时诚实关闭。
+      # 图片 RAG：标准启动脚本注入百炼 qwen3-vl-embedding；仍可切回 OpenAI-compatible CLIP/jina。
       RAG_MULTIMODAL_ENABLED: ${RAG_MULTIMODAL_ENABLED:-false}
+      RAG_MULTIMODAL_PROVIDER: ${RAG_MULTIMODAL_PROVIDER:-bailian}
       RAG_MULTIMODAL_BASE_URL: ${RAG_MULTIMODAL_BASE_URL:-}
+      RAG_MULTIMODAL_API_KEY: ${RAG_MULTIMODAL_API_KEY:-${BAILIAN_API_KEY:-}}
+      RAG_MULTIMODAL_MODEL: ${RAG_MULTIMODAL_MODEL:-qwen3-vl-embedding}
+      RAG_MULTIMODAL_DIMENSION: ${RAG_MULTIMODAL_DIMENSION:-1024}
+      RAG_MULTIMODAL_BASE_COLLECTION: ${RAG_MULTIMODAL_BASE_COLLECTION:-knowledge_images_bailian_qwen3vl}
       # 指向栈内 redis 容器：registry/semantic-cache/rate-limit/token-budget/cost 默认已持久化到 redis
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
       INTERNAL_AUTH_REQUIRED: "true"
@@ -340,6 +372,8 @@ services:
       - "8084:8084"
 
   agent-service:
+    # 旧 Java Agent 仅作为整服务回滚目标；默认栈不启动。
+    profiles: ["legacy-agent"]
     build:
       context: ../agent-service
     environment:
@@ -392,6 +426,55 @@ services:
     ports:
       - "8085:8085"
 
+  # Agent 编排权威服务。旧 Java agent-service 仅保留为显式整服务回滚目标，不接收默认流量。
+  agentscope-orchestrator:
+    image: ${AGENTSCOPE_IMAGE:-agentscope-platform:local}
+    environment:
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8085
+      APP_ENV: ${APP_ENV:-local}
+      GATEWAY_BASE_URL: http://litellm:4000/v1
+      GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
+      GATEWAY_MODEL: ${AGENTSCOPE_GATEWAY_MODEL:-chat-default}
+      AGENT_MAX_STEPS: ${AGENT_MAX_STEPS:-8}
+      AGENT_RAG_TOP_K: ${AGENT_RAG_TOP_K:-5}
+      AGENT_RAG_CATEGORY: ${AGENT_RAG_CATEGORY:-}
+      AGENT_V2_ENABLED: ${AGENT_V2_ENABLED:-false}
+      KNOWLEDGE_BASE_URL: http://knowledge-service:8084
+      ANALYTICS_BASE_URL: http://analytics-service:8083
+      WORKFLOW_BASE_URL: http://workflow-service:8082
+      ORDER_BASE_URL: http://order-service:8093
+      ASYNC_TASK_ENABLED: "true"
+      ASYNC_TASK_BASE_URL: http://async-task-service:8086
+      ASYNC_TASK_WORKER_ID: ${AGENTSCOPE_ASYNC_TASK_WORKER_ID:-agentscope-orchestrator}
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      INTERNAL_AUTH_REQUIRED: "true"
+      OTEL_ENABLED: ${OTEL_ENABLED:-false}
+      OTEL_SERVICE_NAME: agentscope-orchestrator
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+    depends_on:
+      - litellm
+      - knowledge-service
+      - analytics-service
+      - workflow-service
+      - order-service
+      - async-task-service
+    ports:
+      - "${AGENTSCOPE_HOST_PORT:-18085}:8085"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8085/readiness', timeout=2)",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
   async-task-service:
     build:
       context: ../async-task-service
@@ -409,6 +492,15 @@ services:
       ASYNC_TASK_WEBHOOK_MAX_ATTEMPTS: ${ASYNC_TASK_WEBHOOK_MAX_ATTEMPTS:-3}
       ASYNC_TASK_WEBHOOK_BACKOFF: ${ASYNC_TASK_WEBHOOK_BACKOFF:-250ms}
       ASYNC_TASK_WEBHOOK_DELIVERED_RETENTION: ${ASYNC_TASK_WEBHOOK_DELIVERED_RETENTION:-P7D}
+      ASYNC_TASK_EVENT_RETENTION: ${ASYNC_TASK_EVENT_RETENTION:-PT24H}
+      ASYNC_TASK_EVENT_MAX_BYTES: ${ASYNC_TASK_EVENT_MAX_BYTES:-262144}
+      ASYNC_TASK_ORPHAN_ENABLED: ${ASYNC_TASK_ORPHAN_ENABLED:-false}
+      ASYNC_TASK_ORPHAN_SCAN_DELAY_MS: ${ASYNC_TASK_ORPHAN_SCAN_DELAY_MS:-30000}
+      ASYNC_TASK_ORPHAN_INITIAL_DELAY_MS: ${ASYNC_TASK_ORPHAN_INITIAL_DELAY_MS:-30000}
+      ASYNC_TASK_ORPHAN_PENDING_TIMEOUT: ${ASYNC_TASK_ORPHAN_PENDING_TIMEOUT:-PT2M}
+      ASYNC_TASK_ORPHAN_LEASE_GRACE: ${ASYNC_TASK_ORPHAN_LEASE_GRACE:-PT30S}
+      ASYNC_TASK_ORPHAN_BATCH_SIZE: ${ASYNC_TASK_ORPHAN_BATCH_SIZE:-100}
+      ASYNC_TASK_ORPHAN_KINDS: ${ASYNC_TASK_ORPHAN_KINDS:-agent.task,agent.run,agent.dag,agent.dag-plan,agent.analyst,agent.process}
     depends_on:
       - mysql
     ports:
@@ -476,17 +568,18 @@ services:
       INTERNAL_API_KEY_FALLBACK: "false"
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
-      AGENT_BASE_URL: http://agent-service:8085
+      AGENT_BASE_URL: ${AGENT_BASE_URL:-http://agentscope-orchestrator:8085}
       CONVERSATION_BASE_URL: http://conversation-service:8081
       # A2A push 中继回调回到自身（容器内服务名）；agent 任务终态 webhook 打到这里再转发 A2A 客户端
       INTEROP_A2A_PUSH_CALLBACK_BASE_URL: http://interop-service:8088
       INTEROP_A2A_AUTH_MODE: ${EDGE_CASDOOR_MODE:-only}
     depends_on:
-      - agent-service
+      - agentscope-orchestrator
     ports:
       - "8088:8088"
 
   eval-service:
+    profiles: ["evaluation"]
     build:
       context: ../eval-service
     environment:
@@ -516,9 +609,9 @@ services:
       PLATFORM_GATEWAY_TENANT_ATTRIBUTION: ${PLATFORM_GATEWAY_TENANT_ATTRIBUTION:-none}
       MANAGEMENT_TRACING_ENABLED: ${MANAGEMENT_TRACING_ENABLED:-false}
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
-      # 图像描述（/vision/**）：已默认开。VISION_MODEL 指向 litellm/config.yaml 里的多模态逻辑名 vision-default
-      # （→ 本机 Ollama 的 qwen2.5vl）。只置 enabled 而 VISION_MODEL 留空会 fail-fast 崩溃本服务，故二者需同时给到。
-      # chat.vision 也依赖此项。前置：本机 `ollama pull qwen2.5vl` 且 Ollama 在 :11434 运行（否则仅调用时报错，不影响启动）。
+      # 图像描述（/vision/**）：已默认开。VISION_MODEL 指向 litellm/config.yaml 里的多模态逻辑名
+      # vision-default（→ 百炼，默认 qwen3-vl-plus）。只置 enabled 而 VISION_MODEL 留空会 fail-fast 崩溃本服务。
+      # chat.vision 也依赖此项；百炼凭据由启动脚本从本地 CSV 注入 LiteLLM。
       VISION_ENABLED: ${VISION_ENABLED:-true}
       VISION_MODEL: ${VISION_MODEL:-vision-default}
       VISION_MAX_IMAGE_BYTES: ${VISION_MAX_IMAGE_BYTES:-10485760}
@@ -536,15 +629,17 @@ services:
     build:
       context: ../voice-service
     environment:
-      # 无 provider key 时与 catalog 一致地默认关闭；显式启用需同时注入 VOICE_API_KEY/可达本地 provider。
+      # 标准启动脚本加载百炼 CSV 后启用；raw compose 无凭据时仍默认关闭。
       VOICE_ENABLED: ${VOICE_ENABLED:-false}
-      VOICE_PROVIDER: ${VOICE_PROVIDER:-openai}
-      VOICE_BASE_URL: ${VOICE_BASE_URL:-https://api.openai.com/v1}
-      VOICE_API_KEY: ${VOICE_API_KEY:-${OPENAI_API_KEY:-}}
-      VOICE_ASR_MODEL: ${VOICE_ASR_MODEL:-whisper-1}
-      VOICE_TTS_MODEL: ${VOICE_TTS_MODEL:-tts-1}
-      VOICE_TTS_VOICE: ${VOICE_TTS_VOICE:-alloy}
-      VOICE_TTS_FORMAT: ${VOICE_TTS_FORMAT:-mp3}
+      VOICE_PROVIDER: ${VOICE_PROVIDER:-bailian}
+      VOICE_BASE_URL: ${VOICE_BASE_URL:-${BAILIAN_NATIVE_BASE_URL:-}}
+      VOICE_API_KEY: ${VOICE_API_KEY:-${BAILIAN_API_KEY:-}}
+      VOICE_ASR_MODEL: ${VOICE_ASR_MODEL:-qwen3-asr-flash}
+      VOICE_TTS_MODEL: ${VOICE_TTS_MODEL:-qwen3-tts-flash}
+      VOICE_TTS_VOICE: ${VOICE_TTS_VOICE:-Cherry}
+      VOICE_TTS_FORMAT: ${VOICE_TTS_FORMAT:-wav}
+      VOICE_LANGUAGE: ${VOICE_LANGUAGE:-zh}
+      VOICE_TIMEOUT_SECONDS: ${VOICE_TIMEOUT_SECONDS:-60}
       VOICE_CONVERSATION_BASE_URL: http://conversation-service:8081
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
       INTERNAL_AUTH_REQUIRED: "true"
@@ -624,18 +719,22 @@ services:
       CONVERSATION_URI: http://conversation-service:8081
       WORKFLOW_URI: http://workflow-service:8082
       ANALYTICS_URI: http://analytics-service:8083
-      KNOWLEDGE_URI: http://knowledge-service:8084
-      AGENT_URI: http://agent-service:8085
+      KNOWLEDGE_URI: ${KNOWLEDGE_URI:-http://knowledge-service:8084}
+      # AgentScope 是全量默认目标；Java agent-service 仅用于显式整服务回滚。
+      AGENT_URI: ${AGENT_URI:-http://agentscope-orchestrator:8085}
+      EDGE_AGENT_BASELINE_BACKEND: ${EDGE_AGENT_BASELINE_BACKEND:-agentscope}
+      EDGE_AGENT_CANARY_ENABLED: ${EDGE_AGENT_CANARY_ENABLED:-false}
+      EDGE_AGENT_CANARY_URI: ${EDGE_AGENT_CANARY_URI:-http://agentscope-orchestrator:8085}
+      EDGE_AGENT_CANARY_TENANTS: ${EDGE_AGENT_CANARY_TENANTS:-}
       ASYNC_TASK_URI: http://async-task-service:8086
       CHANNEL_URI: http://channel-service:8087
       INTEROP_URI: http://interop-service:8088
-      EVAL_URI: http://eval-service:8089
       VISION_URI: http://vision-service:8090
       VOICE_URI: http://voice-service:8091
       AUTH_URI: http://auth-service:8092
       ORDER_URI: http://order-service:8093
       # 允许分离部署的展示前端跨域（含 compose 内 :8093 与本地 dev/preview 端口）。
-      GATEWAY_CORS_ORIGINS: ${GATEWAY_CORS_ORIGINS:-http://localhost:8093,http://localhost:5173,http://localhost:5273,http://localhost:4173}
+      GATEWAY_CORS_ORIGINS: ${GATEWAY_CORS_ORIGINS:-http://localhost:8093,http://127.0.0.1:8093,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5273,http://127.0.0.1:5273,http://localhost:4173,http://127.0.0.1:4173}
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
       SESSION_JWT_SECRET: ${SESSION_JWT_SECRET:-dev-only-session-secret-change-me-please-32b}
       # ③ Casdoor SSO（阶段④联调）。默认关，引入即安全。开启后 edge 验 Casdoor access token → 换发内部 JWT。
@@ -659,7 +758,7 @@ services:
       - workflow-service
       - analytics-service
       - knowledge-service
-      - agent-service
+      - agentscope-orchestrator
       - async-task-service
       - auth-service
       - channel-service
@@ -667,6 +766,9 @@ services:
       - vision-service
       - voice-service
       - order-service
+    extra_hosts:
+      # Casdoor 等宿主机依赖在 Linux Docker 下也可解析。
+      - "host.docker.internal:host-gateway"
     ports:
       - "${EDGE_HOST_PORT:-8080}:8080"
 

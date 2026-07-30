@@ -4,7 +4,10 @@
 原单体**冻结为参考实现 / 行为基准**，逻辑逐步移植过来。设计与阶段见
 `~/.claude/plans/ai-sprightly-feigenbaum.md`。
 
-> **最新变更**（2026-07）：Casdoor SSO 整栈默认开且 `only` 严格模式、继承式 RBAC、ES 全文混排 + RRF、order-service、前端移动端/响应式适配、LiteLLM spend 记账/failover、各服务增强开关默认全开。逐项见 [docs/变更记录](docs/变更记录.md)。
+> **最新变更**（2026-07）：Docker/Helm RAG 已统一为百炼 `text-embedding-v4`（1024 维）+
+> `qwen3-rerank`；Docker `vision-default` 映射百炼 `qwen3-vl-plus`，Helm 要求外部 LiteLLM
+> 提供同名映射。Ollama 仅保留 `llama3.1` 文本故障回退。其它变更见
+> [docs/变更记录](docs/变更记录.md)。
 
 ## 目标拓扑
 
@@ -24,6 +27,10 @@ client ──X-Api-Key/Bearer──▶ edge-gateway (Spring Cloud Gateway)
 
 - **两层网关分工**：`edge-gateway` 管业务 API 路由/鉴权；`LiteLLM` 管 LLM provider 路由/failover。
 - **三种对外凭据**：`X-Api-Key`、登录会话 `Authorization: Bearer`（`auth-service` 签发）、或 **Casdoor SSO Bearer**（`edge.casdoor.enabled` **默认开**、`mode=only` 严格，JWKS 验签，支持多租户登录）；边缘统一换发内部 JWT，下游只认 JWT（`platform-security`），对凭据来源无感知。
+- **AgentScope 编排**：独立 `../agentscope-platform` 已成为全部 `/agent/**` 与 interop Agent
+  调用的默认目标；Java `agent-service` 仅保留为显式整服务回滚目标。接口契约保持不变，
+  当前工具面只读且不会把未迁高风险动作静默回退到 Java。见
+  [全量切换与回滚手册](docs/Agent编排/agentscope-full-cutover.md)。
 
 ## 模块
 
@@ -41,7 +48,8 @@ client ──X-Api-Key/Bearer──▶ edge-gateway (Spring Cloud Gateway)
 | `workflow-service` | 服务 | `/workflow/**` Flowable 退款审批流 + outbox |
 | `analytics-service` | 服务 | `/chat/sql`、`/analytics/sql` NL2SQL / ChatBI；`/analytics/schema/tables`(+`/{table}`) 按需探表（供数据分析智能体） |
 | `knowledge-service` | 服务 | `/rag/documents/**` 文档上传/列表/删除 + `/rag/query` 四路混排（向量 + 内存关键词 + Elasticsearch BM25 全文 + 图谱，RRF 融合，可选 rerank / query-expansion / contextual / HanLP 分词）；`/rag/image*` 多模态；`/rag/graph/**` GraphRAG；`/rag/config` 运行时配置 + 公共/共享知识库；`/rag/obsidian/import` Obsidian 导入；可选**文档级 ReBAC 授权**（委托外部 auth-platform，`RAG_AUTHZ_MODE`=disabled/shadow/enforce 默认关，含部门层级隔离 + 单篇分享） |
-| `agent-service` | 服务 | `/agent/run`(+`/async`) 深度 Agent 编排 + `/agent/tasks/**` SSE；`/agent/dag/**` 多 Agent DAG（含自动规划/重规划）；`/agent/analyst/run`(+`/async`) 数据分析智能体（DAG 编排：探表→取数→计算→解读）；`/agent/process/run`(+`/async`) 业务流程智能体（人在环，默认关）；`/agent/chain` 提示词链、`/agent/vote` 投票自一致、`/agent/reflexive`(+`/stream`) Reflexion 自反思；动作跨服务调用 knowledge / analytics / vision |
+| `agentscope-platform`（独立仓库，部署名 `agentscope-orchestrator`） | 服务 | `/agent/**` 权威编排：ReAct、DAG/Planner/Analyst、只读 Process、chain/vote/reflexion、中央异步任务/SSE、能力发现；通过 HTTP 复用 knowledge / analytics / workflow / order |
+| `agent-service` | 回滚服务 | 旧 Java Agent 实现；不接收默认 edge/interop 流量，仅保留一个完整回滚周期 |
 | `async-task-service` | 服务 | `/async/tasks/**` 通用任务状态、SSE 断点续订、取消与 webhook 通知中心；后续 agent/workflow 会逐步切到该服务 |
 | `channel-service` | 服务 | `/channel/**` 渠道 ACL：webhook/Feishu/voice 出站、async-task/workflow callback、出入站签名校验；`/channel/dingtalk/events`·`/channel/feishu/events` 入站客服桥；可选 Kafka event |
 | `interop-service` | 服务 | `/interop/**` A2A（`message/send`、`message/stream` 真 SSE、push 通知中继 `/interop/a2a/push-callback`、`/.well-known/agent-card.json`）、MCP tool surface，并可代理 agent run/async/DAG 能力 |
@@ -72,38 +80,41 @@ client ──X-Api-Key/Bearer──▶ edge-gateway (Spring Cloud Gateway)
 
 ## 本地跑（Phase 0）
 
-前置：本机 Ollama（`ollama pull llama3.1`）、Docker、JDK 21、Maven。
+前置：Docker、JDK 21、Maven、阿里云百炼业务空间凭据 CSV。Ollama `llama3.1` 仅作为
+`chat-default` 可选故障回退，不再承担 embedding 或视觉。
 
 ```bash
-# 1. 构建
+# 1. 构建 Java 服务（启动脚本还会从同级 ../agentscope-platform 构建 AgentScope 镜像）
 mvn -DskipTests package
 
-# 2. 起整网（LiteLLM + Redis + MySQL + Kafka + Qdrant + Elasticsearch/Kibana + 全部服务含 auth + 前端 + edge）
-docker compose -f deploy/docker-compose.yml up --build
-#    或用一键脚本（本机端口重映射避开 apollo 占用的 8080/8090/3306）：
-#    bash deploy/start-all.sh   # 全 docker 含前端 nginx :8093
-#    bash deploy/start-dev.sh   # 后端 docker + 前端 vite HMR :5173
+# 2. 配置百炼凭据路径（API Key 只在运行时从 CSV 读取，不写入 .env/Git）
+cp deploy/.env.example deploy/.env
+# 编辑 deploy/.env 的 BAILIAN_CREDENTIAL_CSV=/绝对路径/凭据.csv
 
-# 3. 打一条 /chat（走边缘网关，用 api-key，网关内部换 JWT 转发给 conversation-service）
+# 3. 起整网（推荐脚本会构建 AgentScope、加载凭据并完成 Compose 注入）
+bash deploy/start-all.sh       # 全 docker 含前端 nginx :8093
+# 或 bash deploy/start-dev.sh  # 后端 docker + 前端 vite HMR :5173
+
+# 4. 打一条 /chat（走边缘网关，用 api-key，网关内部换 JWT 转发给 conversation-service）
 curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
   -H 'X-Api-Key: dev-key-acme' \
   -H 'Content-Type: application/json' \
   -d '{"message":"用一句话介绍你自己"}'
 # 期望：{"reply":"...","tenantId":"acme","userId":"alice",...} —— tenantId 由内部 JWT 跨跳还原
 
-# 4. 启动一个退款审批流程（dev-key-acme 带 approve scope）
+# 5. 启动一个退款审批流程（dev-key-acme 带 approve scope）
 curl -s -X POST 'http://localhost:8080/workflow/refund/start' \
   -H 'X-Api-Key: dev-key-acme' \
   -H 'Content-Type: application/json' \
   -d '{"chatId":"u1","message":"用户申请退款，金额 99 元"}'
 
-# 5. NL2SQL / ChatBI（tenantA demo key 对应种子数据）
+# 6. NL2SQL / ChatBI（tenantA demo key 对应种子数据）
 curl -s -X POST 'http://localhost:8080/chat/sql' \
   -H 'X-Api-Key: dev-key-tenantA-admin' \
   -H 'Content-Type: application/json' \
   -d '{"question":"2026 年 5 月一共退款了多少钱？"}'
 
-# 6. 上传一篇知识库文档（当前默认 in-memory store，查询默认启用 keyword hybrid）
+# 7. 上传一篇知识库文档
 curl -s -X POST 'http://localhost:8080/rag/documents' \
   -H 'X-Api-Key: dev-key-acme-ingest' \
   -H 'Content-Type: application/json' \
@@ -115,13 +126,18 @@ curl -s -X POST 'http://localhost:8080/rag/query' \
   -d '{"query":"知识库文档","topK":3,"category":"manual"}'
 ```
 
-`knowledge-service` 的 application.yml 现默认 `RAG_VECTOR_STORE_PROVIDER=qdrant` + hash embedding + ES 全文混排（`docker compose` demo 另把 embedding 切到 nomic 语义向量）；单测仍零依赖（纯 POJO），真正零依赖单跑需显式退回 `RAG_VECTOR_STORE_PROVIDER=in-memory RAG_REGISTRY_STORE=in-memory RAG_GRAPH_STORE=in-memory RAG_ES_ENABLED=false`。向量库 provider 可选 `in-memory` | `qdrant`（默认）| `pgvector` | `milvus` | `chroma` | `doris`，全部走 collection-per-tenant 强隔离，基名由 `RAG_VECTOR_STORE_BASE_COLLECTION`（默认 `knowledge_segments`）决定。
+`knowledge-service` 的 application.yml 默认仍是 hash embedding；Docker/Helm 部署覆盖为百炼
+`text-embedding-v4`（1024 维）并写入 `knowledge_segments_bailian_v4_<tenant>`。单测仍零依赖（纯 POJO），
+真正零依赖单跑需显式退回 `RAG_EMBEDDING_PROVIDER=hash RAG_VECTOR_STORE_PROVIDER=in-memory
+RAG_REGISTRY_STORE=in-memory RAG_GRAPH_STORE=in-memory RAG_ES_ENABLED=false`。向量库 provider 可选
+`in-memory`、`qdrant`、`pgvector`、`milvus`、`chroma`、`doris`。
 `/rag/query` 会**四路混排**融合 vector、keyword（内存 BM25）、es（Elasticsearch 真 BM25 全文，`RAG_ES_ENABLED=true` 默认开，smartcn 中文分析器）、可选 GraphRAG 命中：ES 参与时**有效默认 RRF 融合**（`1/(k+rank)`，免疫量纲差），否则按 `RAG_RANKING_*_WEIGHT` 加权。中文 keyword 检索用 HanLP 分词。
 
-检索质量增强开关（默认全关，可叠加）：
+检索质量增强开关（当前默认开启，可覆盖）：
 
 ```bash
-RAG_RERANK_ENABLED=true            # 召回后重排；RAG_RERANK_TYPE=llm|jina
+RAG_RERANK_ENABLED=true            # 召回后重排；Docker/Helm 默认 bailian/qwen3-rerank
+RAG_RERANK_TYPE=bailian            # bailian|llm|jina
 RAG_RERANK_CANDIDATE_MULTIPLIER=3  # 先取 topK*N 候选再重排回 topK
 RAG_QUERY_EXPANSION_ENABLED=true   # 查询改写扩展；RAG_QUERY_EXPANSION_MAX_VARIANTS=4
 RAG_CONTEXTUAL_ENABLED=true        # 入库时给分块补文档级上下文；RAG_CONTEXTUAL_MAX_DOC_CHARS=8000
@@ -135,12 +151,13 @@ curl -s -X POST 'http://localhost:8080/rag/obsidian/import' \
   -F 'file=@./my-vault.zip' -F 'category=notes'
 ```
 
-图片走原生 CLIP 多模态 embedding：向量存入独立的 image collection（`knowledge_images_<tenant>`，与文本集合隔离），文本 query 可跨模态检索图片。**默认关闭**（`RAG_MULTIMODAL_ENABLED=false`）；启用时必须同时配置可达的 `RAG_MULTIMODAL_BASE_URL`，缺失会在启动期 fail-fast，避免运行时回落到容器内 localhost。
+图片走原生 Qwen-VL / CLIP 多模态 embedding：向量存入独立的 image collection，与文本集合隔离，文本 query 可跨模态检索图片。源码默认关闭；标准本地百炼加载器默认选择 `qwen3-vl-embedding`（1024 维），也可切回 OpenAI 兼容 CLIP/jina provider。启用但缺少 provider URL/key 时启动期 fail-fast。
 
 > ⚠️ **破坏性变更**：旧的「图 → 文字（caption/OCR）」路径已移除，上传图片不再接受 `caption`/`ocrText` 字段，`RAG_IMAGE_TEXT_*` / `ImageTextProvider` 全部删除。
 
 ```bash
 RAG_MULTIMODAL_ENABLED=true
+RAG_MULTIMODAL_PROVIDER=openai
 RAG_MULTIMODAL_BASE_URL=http://localhost:8000/v1     # OpenAI 兼容 /embeddings（vLLM/TEI/云 jina）
 RAG_MULTIMODAL_MODEL=jinaai/jina-clip-v2
 RAG_MULTIMODAL_DIMENSION=1024
@@ -159,13 +176,16 @@ curl -s -X POST 'http://localhost:8080/rag/image-search' \
 # 返回 {"query":"...","results":[{"id":"...","fileName":"screenshot.png","score":0.87}]}
 ```
 
-需要走 LiteLLM/OpenAI-compatible embedding 时，可设置：
+百炼 embedding 的 Docker/Helm 默认配置：
 
 ```bash
 RAG_EMBEDDING_PROVIDER=openai
-RAG_EMBEDDING_MODEL=embedding-default
-GATEWAY_BASE_URL=http://localhost:4000/v1
-GATEWAY_API_KEY=sk-litellm-master
+RAG_EMBEDDING_BASE_URL=https://<WorkspaceId>.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
+RAG_EMBEDDING_API_KEY=<DASHSCOPE_API_KEY>
+RAG_EMBEDDING_MODEL=text-embedding-v4
+RAG_EMBEDDING_DIMENSIONS=1024
+RAG_EMBEDDING_MAX_SEGMENTS_PER_BATCH=10
+RAG_VECTOR_STORE_BASE_COLLECTION=knowledge_segments_bailian_v4
 ```
 
 需要使用 Qdrant 持久化向量库时，可设置：
@@ -529,14 +549,20 @@ curl -s -X PATCH 'http://localhost:8080/async/tasks/{taskId}/status' \
   -H 'Content-Type: application/json' \
   -d '{"status":"SUCCEEDED","result":{"answer":"done"},"workerId":"worker-1"}'
 
+curl -s -X POST 'http://localhost:8080/async/tasks/{taskId}/events' \
+  -H 'X-Api-Key: dev-key-acme' \
+  -H 'Content-Type: application/json' \
+  -d '{"eventKey":"worker-1:step-1","event":"dag-worker-start","data":{"taskId":"t1"},"workerId":"worker-1"}'
+
 curl -s 'http://localhost:8080/async/webhook-outbox/dead?limit=50' \
   -H 'X-Api-Key: dev-key-acme'
 ```
 
-SSE 事件包含可恢复的 event id；客户端断线后可通过标准 `Last-Event-ID` header 或 `lastEventId` query 参数恢复最近事件窗口。
+SSE 事件使用 JDBC `ASYNC_TASK_EVENT` 的 task-scoped sequence 作为可恢复 event id；客户端
+断线或服务重启后可通过标准 `Last-Event-ID` header 或 `lastEventId` query 参数恢复。
 分布式 worker 可先调用 `/lease` 把任务从 `PENDING` claim 到 `RUNNING`；未过期 lease 只允许 owner worker 更新状态，过期后其他 worker 可重新 claim。
 
-任务进入 `SUCCEEDED` / `FAILED` / `CANCELLED` 后，`async-task-service` 会投递任务快照到 `webhookUrl`，请求头包含 `X-Async-Task-Id`、`X-Async-Task-Status`、`X-Tenant-Id`。JDBC outbox 中投递耗尽的记录会进入 `DEAD` 状态，可通过 `/async/webhook-outbox/dead` 按当前租户查询。当前默认是内存任务表，并已支持 agent-service 可选 mirror/authoritative，以及 workflow-service 终态通知迁移。
+任务进入 `SUCCEEDED` / `FAILED` / `CANCELLED` 后，`async-task-service` 会投递任务快照到 `webhookUrl`，请求头包含 `X-Async-Task-Id`、`X-Async-Task-Status`、`X-Tenant-Id`；五种新 Agent kind 额外提供旧十字段 payload 与 `X-Agent-Task-*` alias。JDBC outbox 中投递耗尽的记录会进入 `DEAD` 状态，可通过 `/async/webhook-outbox/dead` 按当前租户查询。重复终态事件不会把 `DELIVERED/DEAD` 重新置为待投递。
 
 需要让任务表和 webhook outbox 持久化到 MySQL 时，开启 JDBC store：
 
@@ -547,7 +573,11 @@ ASYNC_TASK_DB_USER=root
 ASYNC_TASK_DB_PASSWORD=root
 ```
 
-JDBC 模式下会自动创建 `ASYNC_TASK` 和 `ASYNC_TASK_WEBHOOK_OUTBOX` 表；终态 webhook 先入 outbox，再由调度器按 `ASYNC_TASK_WEBHOOK_MAX_ATTEMPTS` / `ASYNC_TASK_WEBHOOK_BACKOFF` 重投。已投递成功的 outbox 记录默认保留 7 天，可通过 `ASYNC_TASK_WEBHOOK_DELIVERED_RETENTION` 调整，设为 0 或负值可关闭清理。
+JDBC 模式下会自动创建 `ASYNC_TASK`、`ASYNC_TASK_EVENT` 和
+`ASYNC_TASK_WEBHOOK_OUTBOX` 表；终态、lifecycle event 与 HTTP/Kafka outbox 在同一事务
+提交。定向 orphan reaper 默认关闭；只允许
+`agent.run/agent.dag/agent.dag-plan/agent.analyst/agent.process`，开启前配置
+`ASYNC_TASK_ORPHAN_ENABLED=true` 并先验证 pending timeout/lease grace。
 
 不用 Docker 也可本地分别跑（需本机有 LiteLLM 或把 `platform.gateway.base-url` 指向可用的 OpenAI-compat 端点）：
 

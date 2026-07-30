@@ -60,7 +60,9 @@
 - **（默认关）文档/部门级授权**：在租户硬隔离之上可再叠一层**文档级 ReBAC**（接外部 `auth-platform`：Casdoor 身份 + SpiceDB 授权），由 `RAG_AUTHZ_MODE=disabled(默认)/shadow/enforce` 门控——`enforce` 下检索按当前用户 `view` 权过滤命中、新建文档绑定上传人部门（`home_dept`），`disabled` 时逐字等同接入前。详见 ⑥ 与 `rbac-and-public-kb.md`。
 - **前置提速**：可选 L1 语义缓存（问题级、按租户分桶、在 RAG 之前，命中即短路 RAG+LLM）与多轮记忆（会话隔离滑窗）。
 
-**状态**：**核心可跑**——单测零依赖；`docker-compose` demo 开箱即是「qdrant 向量 + nomic 语义 embedding + ES(smartcn) 全文混排 + RRF」的完整 RAG 栈（application.yml 裸跑亦默认 qdrant + ES，仅 embedding 默认 hash；真正零依赖单跑需显式退回 in-memory + `RAG_ES_ENABLED=false`）。
+**状态**：**核心可跑**——单测零依赖；Docker/Helm 默认是「Qdrant + 百炼
+`text-embedding-v4` + `qwen3-rerank` + ES(smartcn) + RRF」完整 RAG 栈。application.yml
+裸跑仍以 hash 为 embedding 默认；真正零依赖需显式退回 in-memory 并关闭 ES。
 检索重排（`RAG_RERANK_ENABLED`）、查询扩展（`RAG_QUERY_EXPANSION_ENABLED`）、上下文增强（`RAG_CONTEXTUAL_ENABLED`）、`/chat` RAG 增强（`CONVERSATION_RAG_ENABLED`）、公共库（`RAG_PUBLIC_ENABLED`）、GraphRAG（`RAG_GRAPH_ENABLED`，`store=jdbc`）**现均默认开**；按需关闭置对应开关为 `false`。
 
 **深入看**：接入/向量库选型/GraphRAG/语义缓存联动 → `rag-guide.md`；多轮记忆与长期画像 → `memory-guide.md`；
@@ -92,7 +94,8 @@ L1 语义缓存单篇 → `semantic-cache.md`；检索召回评测（Recall@k / 
 `POST /workflow/tasks/{taskId}/complete` 审批（body `{approved, comment}`）；`GET /workflow/instances/{instanceId}` 查状态。
 回复生成 / 工单抽取默认经 HTTP 调 conversation-service（`/conversation/workflow/reply`、`/ticket`），不直连本地 ChatModel。
 
-**状态**：**核心可跑**——端点常开，需一个可登录的 MySQL（Flowable 自管其表）；assess/resolve 调模型需可达 chat provider（如本机 Ollama）。
+**状态**：**核心可跑**——端点常开，需一个可登录的 MySQL（Flowable 自管其表）；
+assess/resolve 调模型需 LiteLLM 的 `chat-default` 上游可达。
 终态通知默认本地投递，可切 `WORKFLOW_TERMINAL_NOTIFICATION_MODE=async-task` 走异步任务中心 outbox，或 Kafka 档下经事件总线原子回推。
 
 **深入看** → `workflow-guide.md`。**注意「workflow」在本平台有两层含义**：
@@ -199,7 +202,9 @@ workflow 侧 `WORKFLOW_ENABLED=true`（其 assess/resolve 还调 conversation-se
 
 **状态**：**核心可跑（需配模型）**。`vision-service` `VISION_ENABLED=true` **默认装配**，但 `VISION_MODEL` 留空则启动 fail-fast；
 对话入口另需 `CONVERSATION_VISION_ENABLED=true` + `CONVERSATION_VISION_BASE_URL`（默认 `http://localhost:8090`）；
-图片 RAG 需 `RAG_MULTIMODAL_ENABLED=true` + CLIP/jina-clip embedding；agent 视觉动作需 `AGENT_VISION_ENABLED=true`。开启后需一个多模态模型（如 `gpt-4o-mini` / `qwen2.5-vl`，经 LiteLLM 路由）。
+图片 RAG 需 `RAG_MULTIMODAL_ENABLED=true` + CLIP/jina-clip embedding；agent 视觉动作需
+`AGENT_VISION_ENABLED=true`。Docker 默认 `vision-default` 经 LiteLLM 路由到百炼 `qwen3-vl-plus`，
+可通过 `BAILIAN_VISION_MODEL=openai/qwen3.7-plus|openai/qwen3.6-flash` 切换。
 
 **深入看** → `vision-guide.md`。
 
@@ -248,7 +253,7 @@ live discovery（`INTEROP_DISCOVERY_ENABLED`）**默认开**，从下游动态�
 | --- | --- | --- | --- |
 | ① RAG `/chat` 增强 | `CONVERSATION_RAG_ENABLED` | `true` | `/chat` 是否先查 RAG 再作答 |
 | ① 持久化向量库 | `RAG_VECTOR_STORE_PROVIDER` | `qdrant` | yml/compose 默认 qdrant；可退 `in-memory`/切 `pgvector`/`milvus`/`chroma`/`doris` |
-| ① 真 embedding | `RAG_EMBEDDING_PROVIDER` | `hash`（compose `ollama`） | `openai`/`ollama` 语义向量（compose 默认 nomic 768 维） |
+| ① 真 embedding | `RAG_EMBEDDING_PROVIDER` | `hash`（Docker/Helm 覆盖 `openai`） | 部署默认百炼 `text-embedding-v4` 1024 维；Ollama 仍可选 |
 | ① ES 全文混排 | `RAG_ES_ENABLED` / `RAG_FUSION_STRATEGY` | `true` / 空→rrf | ES BM25 并入四路混排、多源 RRF 融合 |
 | ① 公共/共享知识库 | `RAG_PUBLIC_ENABLED` | `true` | 查询并入 `__public__` 分区；写需 `public-ingest` scope |
 | ① L1 语义缓存 | `CONVERSATION_SEMANTIC_CACHE_ENABLED` | `true` | 命中即短路 RAG+LLM |

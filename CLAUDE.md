@@ -17,7 +17,10 @@ Maven 多模块，Java 21，Spring Boot 3.3.5。无 Maven wrapper —— 使用�
 - 起整套本地栈（LiteLLM + Redis + MySQL + Kafka + 各服务）：`docker compose -f deploy/docker-compose.yml up --build`
 - Qdrant RAG 冒烟测试：`bash deploy/smoke-qdrant-rag.sh`
 
-本地运行前置：JDK 21、Maven、Docker，以及一个可达的 LiteLLM。LiteLLM 的 `chat-default` 默认映射到 DeepSeek（`deploy/litellm/config.yaml`），需在环境变量提供 `DEEPSEEK_API_KEY`；也可改该配置指向本机 Ollama（`ollama pull llama3.1`）或任意 OpenAI 兼容端点，应用侧（都用逻辑名 `chat-default`）无需改动。
+本地运行前置：JDK 21、Maven、Docker、可达的 LiteLLM，以及百炼业务空间凭据 CSV。默认模型栈为
+`text-embedding-v4` + `qwen3-rerank` + `vision-default`→`qwen3-vl-plus`；凭据由
+`deploy/load-bailian-env.sh` 从 CSV 注入。LiteLLM 的 `chat-default` 仍映射 DeepSeek，
+Ollama `llama3.1` 仅作文本故障回退。
 
 ## 架构
 

@@ -5,7 +5,7 @@
 # 背景 / 为什么需要这个脚本：
 #   1) 本机 apollo 容器占用了 8080(configservice) / 8090(adminservice) / 13306(apollo-db)，宿主 3306 也曾被占。
 #      故 edge-gateway→18080、vision→18090、mysql→13307（compose 用 ${*_HOST_PORT} 变量，
-#      deploy/ 下没有 .env，必须在启动时把这几个变量带上——否则 mysql 退回 3306 冲突、启动失败）。
+#      这些端口由脚本显式导出，避免依赖各开发者本地、未提交的 deploy/.env。
 #      注意：Docker Desktop 重启后 apollo/blog-postgres/open-webui 等 restart-policy 容器会自动复活抢端口。
 #   2) compose 里的展示能力开关（意图路由 / 级联 / 长期画像 / RAG 等）默认 true，
 #      但只有【重建容器】才会生效；长跑的老容器可能没带上 → /chat/auto 报 "router not enabled"。
@@ -15,11 +15,11 @@
 #   ./start-local.sh          # 重启【后端应用服务】(基础设施保持运行) —— 日常最常用
 #   ./start-local.sh --all    # 连基础设施(mysql/redis/kafka/qdrant/litellm/litellm-postgres/jaeger)一起重启
 #   ./start-local.sh --build  # 先 mvn package 再重建镜像后起（改了后端代码用；不加会装旧 jar）
-#   ./start-local.sh --es     # (已弃用) ES 全文混排 + nomic 现已默认开启；本开关保留为兼容 no-op
+#   ./start-local.sh --es     # (已弃用) ES 全文混排现已默认开启；本开关保留为兼容 no-op
 #
-# 默认栈已含 Elasticsearch(smartcn)+Kibana，且 knowledge-service 默认走 nomic 语义 embedding。
-# 前置：宿主机 `ollama pull nomic-embed-text`（缺则 RAG 入库/检索报错，不影响其余能力）。
-# 要退回零依赖：export RAG_EMBEDDING_PROVIDER=hash RAG_ES_ENABLED=false 后再跑。
+# 默认栈已含 Elasticsearch(smartcn)+Kibana，并使用百炼 embedding/rerank/vision。
+# 百炼凭据通过 deploy/.env 的 BAILIAN_CREDENTIAL_CSV 指向本地 CSV。
+# 要退回无模型 embedding：export RAG_EMBEDDING_PROVIDER=hash 后再跑。
 #
 # 可用环境变量覆盖端口：EDGE_HOST_PORT / VISION_HOST_PORT / MYSQL_HOST_PORT
 #
@@ -30,6 +30,18 @@ cd "$(dirname "$0")"   # 切到 deploy/（compose 与本机端口变量的工作
 export EDGE_HOST_PORT="${EDGE_HOST_PORT:-18080}"
 export VISION_HOST_PORT="${VISION_HOST_PORT:-18090}"
 export MYSQL_HOST_PORT="${MYSQL_HOST_PORT:-13307}"
+export AGENTSCOPE_IMAGE="${AGENTSCOPE_IMAGE:-agentscope-platform:local}"
+AGENTSCOPE_REPO="${AGENTSCOPE_REPO:-../../agentscope-platform}"
+
+# ── 百炼 embedding/rerank/vision 凭据（CSV 仅留本机，不把 API Key 写进仓库/.env）──
+# shellcheck source=load-bailian-env.sh
+source "./load-bailian-env.sh"
+load_bailian_env "${BAILIAN_CREDENTIAL_CSV:-}"
+if [ -n "${RAG_EMBEDDING_API_KEY:-}" ]; then
+  echo "ℹ  knowledge embedding: ${RAG_EMBEDDING_MODEL} / ${RAG_EMBEDDING_DIMENSIONS} 维（百炼）"
+  echo "ℹ  knowledge rerank: ${RAG_RERANK_BAILIAN_MODEL}（百炼）"
+  echo "ℹ  vision: vision-default → ${BAILIAN_VISION_MODEL#openai/}（百炼）"
+fi
 
 # ── 参数解析 ──
 BUILD_FLAG="--no-build"
@@ -38,10 +50,11 @@ for arg in "$@"; do
   case "$arg" in
     --all)   SCOPE="all" ;;
     --build) BUILD_FLAG="--build" ;;
-    --es)    echo "ℹ  --es 已弃用：ES 全文混排 + nomic 现为默认（见 docker-compose.yml），无需再加。" ;;
-    *) echo "未知参数: $arg（可用: --all, --build）"; exit 2 ;;
+    --es)    echo "ℹ  --es 已弃用：ES 全文混排现为默认（见 docker-compose.yml），无需再加。" ;;
+    *) echo "未知参数: ${arg}（可用: --all, --build）"; exit 2 ;;
   esac
 done
+verify_bailian_vision_model
 
 # ── LLM key 检查（litellm 的 chat-default 走 DeepSeek）。env 缺失时先尝试从既有 litellm 容器提取
 #    （容器创建时注入过的 env 不随停止丢失；重建部署时最常用的找回路径）。──
@@ -79,8 +92,19 @@ echo
 # ── 改了后端代码必须先打 jar：各服务 Dockerfile 是 COPY target/*.jar，--build 只重建镜像不打包，
 #    不先 package 会把旧 jar 装进镜像（跑旧代码）。故 --build 前置一次全量 package。──
 if [ "$BUILD_FLAG" = "--build" ]; then
+  if [ ! -f "${AGENTSCOPE_REPO}/compose.yml" ]; then
+    echo "✗ 未找到独立 AgentScope 项目: ${AGENTSCOPE_REPO}/compose.yml"
+    echo "  请把 agentscope-platform 与本仓库放在同级目录，或设置 AGENTSCOPE_REPO。"
+    exit 1
+  fi
+  echo "▶ 构建 AgentScope 权威编排镜像 ${AGENTSCOPE_IMAGE}"
+  docker compose -f "${AGENTSCOPE_REPO}/compose.yml" build orchestrator
   echo "▶ mvn -DskipTests package（--build 前置，避免镜像装旧 jar）"
   ( cd .. && mvn -DskipTests package )
+elif [ "$AGENTSCOPE_IMAGE" = "agentscope-platform:local" ] \
+    && ! docker image inspect "$AGENTSCOPE_IMAGE" >/dev/null 2>&1; then
+  echo "✗ 缺少 ${AGENTSCOPE_IMAGE}。使用 --build，或设置 AGENTSCOPE_IMAGE 为已发布镜像。"
+  exit 1
 fi
 
 # ── 重建并启动（--force-recreate 确保应用当前 compose 配置 = 真正重启一遍）──
@@ -129,9 +153,10 @@ cat <<EOF
                    → http://localhost:5173  (.env.local 已指向 :${EDGE_HOST_PORT})
   • LiteLLM 记账   http://localhost:4000/ui  (spend/模型/token/费用；admin / litellm-ui-dev)
   • 链路追踪       Jaeger http://localhost:16686  (LiteLLM span 常开；Java 侧 MANAGEMENT_TRACING_ENABLED=true 后同 trace)
-  • RAG 检索       默认 nomic 语义 embedding + ES(smartcn) 全文混排 + RRF
+  • RAG 检索       百炼 text-embedding-v4 + qwen3-rerank + ES(smartcn) RRF
                    Kibana http://localhost:5601 · ES http://localhost:9200
-                   前置 ollama pull nomic-embed-text；首次 ES 需 --all --build 构建镜像
+  • 视觉模型       vision-default → ${BAILIAN_VISION_MODEL:-openai/qwen3-vl-plus}（百炼）
+                   首次 ES 需 --all --build 构建镜像
   • 查看日志       docker compose logs -f conversation-service
 ════════════════════════════════════════════════════════════
 EOF

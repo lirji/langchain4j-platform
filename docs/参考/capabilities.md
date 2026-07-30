@@ -10,7 +10,9 @@
 - **服务直连端口**（本地诊断/服务间调用）：conversation `:8081`、workflow `:8082`、analytics `:8083`、knowledge `:8084`、agent `:8085`、async-task `:8086`、channel `:8087`、interop `:8088`、eval `:8089`、vision `:8090`、voice `:8091`、**auth `:8092`（登录 + RBAC）**、order `:8093`（按订单号只读查订单，agent order_query 下游；compose 宿主机映射 8094）。除 health/info 外，直连业务端点默认强制有效内部 JWT，不会降级 anonymous。
 - **前端与检索基础设施**：能力展示前端 `capability-showcase-frontend`（:8093，Vue3 静态 SPA / nginx，前后端分离，浏览器跨域直调网关）；RAG 检索基础设施 Elasticsearch（:9200，BM25 全文混排）+ Kibana（:5601，查询 UI）+ Qdrant（:6333/:6334，向量库）。
 - **不经 edge-gateway 暴露**：`config-server`（:8888，集中配置基础设施，仅服务内部经 `spring.config.import` 拉取）。
-- **默认开关基线**：两套「默认」需分清——**application.yml 裸跑默认**（2026-07 起大多数**行为增强**已默认打开：RAG 增强、多轮记忆/长期画像、注入/PII 护栏、语义缓存、模型级联、意图路由、看图对话、RAG rerank/查询扩展/上下文增强/GraphRAG/ES 全文/公共库、DAG 重规划、agent 动作 vision/analytics/workflow/order、interop discovery、eval judge/embedding、vision 等；MCP、code-exec、浏览器、图片多模态 embedding、语音、渠道入站桥/事件、RAG enforce 授权、自助注册、成本归因等仍默认关；同时 embedding 仍用确定性 `hash`、部分存储用内存，保单测零外部依赖）与 **docker-compose demo 默认**（再叠加真实基础设施：qdrant/redis/jdbc/ES + nomic embedding + hanlp 分词 + 登录 RBAC）。下文标注以 application.yml 默认为准，并在有差异处注明 compose 覆盖。
+- **默认开关基线**：application.yml 裸跑层 embedding 仍为确定性 `hash`；Docker/Helm 部署层覆盖为
+  百炼 `text-embedding-v4` + `qwen3-rerank`，Docker 的 `vision-default` 映射百炼
+  `qwen3-vl-plus`。下文以 application.yml 为基础，并在有差异处注明部署覆盖。
 
 ## 核心能力矩阵
 
@@ -43,7 +45,7 @@
 | Obsidian 导入 | 把 zip 打包的 Obsidian vault 批量导入 RAG（`[[双链]]`→GraphRAG 三元组） | `POST /rag/obsidian/import`（multipart） | 端点常开 |
 | 多租户隔离 | collection-per-tenant 强隔离（每租户独立 collection/namespace） | knowledge 向量库 | `RAG_VECTOR_STORE_ISOLATION=collection-per-tenant`（默认） |
 | 向量存储 | qdrant 默认；in-memory/pgvector/milvus/chroma/doris 可选，均 collection-per-tenant | knowledge | `RAG_VECTOR_STORE_PROVIDER=qdrant`（yml/compose 默认，可退 in-memory） |
-| Embedding | 确定性 hash / OpenAI-compat（LiteLLM）/ Ollama | knowledge | `RAG_EMBEDDING_PROVIDER=hash`（yml 默认）；compose 走 `ollama`/`nomic-embed-text`（768 维） |
+| Embedding | 确定性 hash / OpenAI-compatible / Ollama | knowledge | yml 默认 hash；Docker/Helm 默认百炼 `text-embedding-v4`（1024 维） |
 | GraphRAG | 确定性三元组抽取、实体链接、邻居查询、可选融合到 `/rag/query` | `/rag/graph/query`、`/rag/graph/entities` | `RAG_GRAPH_ENABLED=true`（默认开） |
 | 图谱持久化 | in-memory 或 JDBC/MySQL | knowledge | `RAG_GRAPH_STORE=jdbc`（默认） |
 | NL2SQL / ChatBI | 自然语言转 SQL、只读查询保护 | `/chat/sql`、`/analytics/sql`（analytics :8083） | 常开 |
@@ -59,7 +61,7 @@
 | 互操作（A2A/MCP） | 真 A2A JSON-RPC task 协议、agent-card、MCP tool surface、可选 live discovery | `/interop/**`、`/interop/a2a`、`/.well-known/agent-card.json`（interop :8088） | 常开；live discovery `INTEROP_DISCOVERY_ENABLED=true`（默认开） |
 | 回归评测 | HTTP case/suite 执行、检索质量评测、双跑门禁、contains/JSON-path/semantic/oracle 断言 | `/eval/**`（eval :8089） | 常开；judge/embedding 比较默认开 |
 | 多模态视觉 | 图片 caption/描述（多模态 ChatModel 经 LiteLLM），供 knowledge/agent 复用 | `/vision/caption`、`/vision/describe`（vision :8090） | `VISION_ENABLED=true`（默认开；须配 `VISION_MODEL` 否则 fail-fast） |
-| 语音闭环 | 音频 → ASR(whisper) → `/chat` → TTS，支持整轮 / SSE 半流式 / 纯转写 | `/voice/chat`、`/voice/chat/stream`、`/voice/transcribe`（voice :8091） | `VOICE_ENABLED=false`（默认整服务不装配） |
+| 语音闭环 | 音频 → ASR → `/chat` → TTS，支持百炼原生 Qwen3 与 OpenAI 兼容 provider | `/voice/chat`、`/voice/chat/stream`、`/voice/transcribe`（voice :8091） | 源码默认关；本地百炼加载器默认开启 |
 | 订单查询（工具调用示例） | 按订单号确定性只读查订单（状态/金额/客户/日期），持久化 MySQL、参数化按租户隔离；供深度 Agent 的 `order_query` 动作在对话里自主调用 | `/orders/{orderNo}`（order :8093）；agent 侧 `order_query` 动作 | order-service 常开；agent 侧 `AGENT_ORDER_ENABLED=true`（默认开） |
 | 审计与计量 | 审计日志、LLM audit listener、token budget、cost attribution | `platform-audit`、`platform-metering` | audit/budget 常开、cost 默认关 |
 | 可观测性 | trace id 生成与跨服务透传 | `platform-observability` | 常开 |
@@ -85,16 +87,17 @@
 - **LangChain4j 1.13.1**（`langchain4j-bom` 统一版本，`langchain4j-spring-boot-starter`）：声明式 `@AiService` / `AiServices.builder`、全局单个 `ChatModel` bean、`ChatModelListener` SPI（审计/计量/成本的挂载点）。
 - **LiteLLM**（外部，非 Java 模块）：统一 OpenAI 兼容 LLM 网关，provider 路由 / failover / 模型名映射集中在 `deploy/litellm/config.yaml` —— **Java 侧无任何 provider switch**。
 - 已接入的 LangChain4j provider/集成：`langchain4j-open-ai`（走 LiteLLM）、`langchain4j-ollama`、`langchain4j-anthropic`、`langchain4j-mcp`（1.13.1-beta23）、`langchain4j-document-parser-apache-tika`、`langchain4j-easy-rag`。
-- **本机 Ollama**（默认本地模型后端，如 `llama3.1`、embedding `nomic-embed-text`）；容器经 `host.docker.internal:11434` 访问。
+- **本机 Ollama**为可选后端；当前只保留 `llama3.1` 作为 `chat-default` 故障回退。embedding、rerank、视觉部署默认均走百炼。
 
 ### RAG / 向量 / 全文 / 知识图谱（`knowledge-service`）
 - **四路混排检索**：向量（余弦）+ 内存关键词（BM25 近似）+ **Elasticsearch 真 BM25 全文** + GraphRAG 三元组，交 `HybridFusionService` 融合。融合策略 `RRF`（`1/(k+rank)`，k=60，免疫 BM25/余弦量纲差；ES 开启时有效默认）或 `WEIGHTED_MAX`（历史加权语义）。
 - **Elasticsearch 8.15.x**（自建镜像装 `analysis-smartcn` 中文分析器，:9200 + Kibana :5601）：自研 `EsGateway`（低层 `RestClient` + 手工 JSON），索引 `knowledge_segments_text`（keyword 精确字段 + `text`/smartcn 全文）；ingest 期同步 upsert、查询期 `match+filter` 召回。刻意排除 Spring 的 ES 自动配置/健康指示器（避免 ES 关闭时 readiness DOWN）。
 - 向量库集成：**Qdrant**（`langchain4j-qdrant`，yml/compose 默认）、**in-memory**（零依赖回退）；另打包 **Milvus / Chroma / pgvector**（含向量+PG 全文 RRF 的 HYBRID 模式）/ **Doris** 可选后端（gRPC 版本钉到 `1.59.1` 以兼容 Milvus + Qdrant 共存）。
-- Embedding：确定性 hash（yml 默认，64 维）/ OpenAI 兼容（LiteLLM）/ Ollama（compose 默认 `nomic-embed-text`，768 维，带非对称 query/document 任务前缀）。切换 provider = 换向量维度，需重灌。
+- Embedding：确定性 hash（yml 默认，64 维）/ OpenAI-compatible / Ollama；Docker/Helm 默认百炼
+  `text-embedding-v4`（1024 维，单批 10 条）并使用独立 collection。切换 provider = 换向量维度，需迁移或重灌。
 - 文档抽取：**Apache Tika**（PDF/Office/HTML/纯文本）；分块：Markdown header / parent-child / semantic；中文分词 `simple`（默认零依赖）/ `hanlp`（compose 默认，更准）。
 - **GraphRAG**：自研确定性三元组抽取 + 实体链接 + 邻居查询；存储 in-memory 或 JDBC/MySQL（默认 JDBC）。
-- **图片多模态 RAG**：走 OpenAI 兼容多模态 embedding 端点（`jina-clip-v2`，1024 维），独立 image collection（`knowledge_images_<tenant>`），text→image 跨模态检索；不参与四路文本融合。
+- **图片多模态 RAG**：默认本地走百炼原生 `qwen3-vl-embedding`（1024 维），也支持 OpenAI 兼容 `jina-clip-v2`；独立 image collection，text→image 跨模态检索，不参与四路文本融合。
 - **公共/共享知识库**：保留租户分区 `__public__`，查询并入、写入需 `public-ingest` scope（见安全/RBAC）。
 
 ### 工作流引擎
@@ -159,7 +162,7 @@
 | interop | 8088 | A2A JSON-RPC · MCP surface |
 | eval | 8089 | HTTP 回归 · 可选 judge/embedding |
 | vision | 8090 | LangChain4j 多模态 ChatModel |
-| voice | 8091 | OpenAI 兼容 ASR(whisper)/TTS · 分句半流式 SSE · 转发 conversation `/chat` |
+| voice | 8091 | 百炼原生 Qwen3 或 OpenAI 兼容 ASR/TTS · 分句半流式 SSE · 转发 conversation `/chat` |
 | capability-showcase-frontend | 8093 | Vue3 + Vite 静态 SPA · nginx · 跨域直调网关 · 前后端分离（非 Maven 模块） |
 | platform-\* | — | security(JJWT) · observability · gateway-client · protocol · audit · metering · eventbus(Kafka) |
 
@@ -227,41 +230,41 @@
 `knowledge-service`（`/rag/**`）：
 
 - **文档 ingestion**：`POST /rag/documents`（JSON 文本或 multipart 文件）、`GET /rag/documents`、`GET /rag/documents/{docId}`、`DELETE /rag/documents/{docId}`。Apache Tika 抽取 PDF/Office/HTML/纯文本；支持 Markdown header、parent-child、semantic 等分块。
-- **图片多模态 embedding（CLIP）**（默认关，`RAG_MULTIMODAL_ENABLED=false`）：启用时必须配置可达的 CLIP/jina 多模态 embedding 端点，否则启动 fail-fast。图片向量存入独立 image collection（`knowledge_images_<tenant>`，与文本集合隔离）。`POST /rag/image`（multipart `image`）入库、`POST /rag/image-search`（文本 query 跨模态检索图片）；通用 `POST /rag/documents` 传 `image/*` 或 `imageBase64` 也走多模态。关闭时上传图片返回 400。⚠️ 旧的「图 → 文字（caption/OCR）」路径（`RAG_IMAGE_TEXT_*`）已移除，不再接受 `caption`/`ocrText`。
+- **图片多模态 embedding**（源码默认关）：`RAG_MULTIMODAL_PROVIDER=bailian` 使用百炼原生 `qwen3-vl-embedding`，`openai` 使用 CLIP/jina 兼容 `/embeddings`。图片向量存入独立 image collection（本地百炼集合基名 `knowledge_images_bailian_qwen3vl`，按租户隔离）。`POST /rag/image` 入库、`POST /rag/image-search` 文本搜图；关闭时上传图片返回 400。⚠️ 旧的 caption/OCR 文本入库路径已移除。
 - **检索（四路混排 + RRF）**：`POST /rag/query`（别名 `/knowledge/query`）并行召回四路——vector（向量）、keyword（内存 BM25 近似）、es（Elasticsearch 真 BM25 全文，`RAG_ES_ENABLED=true` 默认开）、graph（可选）——交 `HybridFusionService` 融合。融合策略 `RAG_FUSION_STRATEGY`：留空时 ES 参与查询则**有效默认 `rrf`**（`1/(k+rank)`，`RAG_FUSION_RRF_K=60`，免疫 BM25/余弦量纲差），否则 `weighted_max`（权重 `RAG_RANKING_VECTOR_WEIGHT`/`_KEYWORD_WEIGHT`/`_ES_WEIGHT`/`_GRAPH_WEIGHT`）。命中多源标 `source=hybrid`。keyword hybrid 默认开（`RAG_HYBRID_ENABLED=true`）。
 - **ES 全文索引**：ingest 时 `SegmentIndexer` 把同批明文分块同步 upsert 进 `knowledge_segments_text`（`RAG_ES_INDEX_NAME`）；字段 `tenantId/docId/category/...` 为 keyword 精确过滤、`text` 用 smartcn 中文分析器全文（`RAG_ES_ANALYZER=smartcn`，不可用 standard）。ES 写失败默认 best-effort（`RAG_ES_FAIL_FAST=false`），查询失败降级返回空、由内存关键词源兜底。开启 ES 后需重灌历史文档以填充索引（`seed-kb.sh`）。
 - **公共/共享知识库**（默认开，`RAG_PUBLIC_ENABLED`）：保留租户分区 `__public__`；各租户查询在隔离查自己分区基础上并入公共分区（向量/keyword/ES 三路并，graph 本期不并），命中标 `visibility=public`。写共享库 `POST /rag/documents`（`visibility=public|shared`）需 `public-ingest` scope（否则 403），列/查共享库普通登录用户即可；运行时 `GET /rag/config` 回显 `publicKbEnabled` 供前端决定是否展示共享库视图。
 - **多租户强隔离**：`RAG_VECTOR_STORE_ISOLATION=collection-per-tenant`（默认）—— 每租户独立 collection/namespace，EmbeddingStore/Model 按租户路由；可退回 `shared`（单 store + metadata filter）。
 - **向量存储**：`RAG_VECTOR_STORE_PROVIDER=qdrant`（yml/compose 默认，`QDRANT_HOST`/`QDRANT_PORT`）| `in-memory`（零依赖回退）| `pgvector`（`RAG_PGVECTOR_*`，含 `SEARCH_MODE=HYBRID` 向量+PG 全文 RRF）| `milvus`（`RAG_MILVUS_*`）| `chroma`（`RAG_CHROMA_*`）| `doris`（自研 JDBC + HNSW ANN，`RAG_DORIS_*`）。collection/表基名统一由 `RAG_VECTOR_STORE_BASE_COLLECTION`（默认 `knowledge_segments`）决定。
-- **Embedding provider**：`RAG_EMBEDDING_PROVIDER=hash`（默认，确定性本地）| `openai`（走 LiteLLM/OpenAI 兼容）| `ollama`（`RAG_EMBEDDING_OLLAMA_BASE_URL`、`RAG_EMBEDDING_OLLAMA_MODEL`，默认 `nomic-embed-text`）。含维度守卫、超时/重试参数。
+- **Embedding provider**：application.yml 默认 `hash`；Docker/Helm 默认 `openai` 直连百炼
+  `text-embedding-v4`。仍支持复用 LiteLLM 的 OpenAI 兼容端点或显式切回 Ollama。
 - **GraphRAG**（默认开，`RAG_GRAPH_ENABLED`）：`POST /rag/graph/query`（实体邻居查询）、`GET /rag/graph/entities`。确定性三元组抽取，受控格式 `subject|relation|object`（换行或分号分隔）；`RAG_GRAPH_INCLUDE_IN_QUERY` 决定是否融合进 `/rag/query`；关系白名单 `RAG_GRAPH_RELATION_WHITELIST`、别名 `RAG_GRAPH_ALIASES`、最大跳数 `RAG_GRAPH_MAX_HOPS`。图谱存储 `RAG_GRAPH_STORE=in-memory`（默认）| `jdbc`（MySQL）。
 - **语义缓存失效联动**（默认开，`RAG_CACHE_INVALIDATION_ENABLED`）：文档 `upload`/`delete` 成功后，尽力而为地调 conversation 的 `DELETE /chat/cache` 失效同租户语义缓存（松耦合、带内部 JWT 传播租户、失败只记日志不阻断 ingest），配合 §1 的失效端点实现「文档更新 → 缓存即新鲜」。关闭时为 Noop 实现，零影响。
-- **检索重排（rerank）**（默认开，`RAG_RERANK_ENABLED`）：先按 `RAG_RERANK_CANDIDATE_MULTIPLIER`（默认 3）放大召回，再二次打分重排。`RAG_RERANK_TYPE=llm`（默认，复用共享 temp=0 ChatModel 让 LLM 打 0..1 相关性分，零外部依赖）|`jina`（Jina reranker 云 API，`RAG_RERANK_JINA_MODEL`，默认 `jina-reranker-v2-base-multilingual` + `JINA_API_KEY`）。关闭时为 Noop 不重排。
+- **检索重排（rerank）**（默认开）：application.yml 默认 `llm`；Docker/Helm 默认
+  `RAG_RERANK_TYPE=bailian` + `qwen3-rerank`，一次批量重排候选并在上游失败时 fail-open 保留融合顺序。
+  仍支持 `llm` 与 `jina`。
 - **查询扩展（query-expansion）**（默认开，`RAG_QUERY_EXPANSION_ENABLED`）：用共享 temp=0 ChatModel 为原 query 生成同义/多角度变体扩大召回，`RAG_QUERY_EXPANSION_MAX_VARIANTS`（默认 4，含原 query）。关闭时为 Noop 不扩展。
 - **上下文增强（Contextual Retrieval）**（默认开，`RAG_CONTEXTUAL_ENABLED`）：入库时逐 chunk 用共享 temp=0 ChatModel 生成「该片段在全文中的位置与主题」一句上下文前缀再嵌入，提升脱离全文后的可检索性；`RAG_CONTEXTUAL_MAX_DOC_CHARS`（默认 8000）限制喂给生成器的文档截断。每 chunk 一次 LLM 调用，仅 ingest 期发生。关闭时为 Noop 不增强。
 - **中文分词（HanLP）**：keyword hybrid 检索的分词器 `RAG_HYBRID_TOKENIZER=simple`（默认，零依赖）|`hanlp`（HanLP 中文分词，切词更准，随 knowledge 依赖引入，需 HanLP 词典）。
 - **Obsidian vault 导入**：`POST /rag/obsidian/import`（multipart `file`=vault zip，可选 `category`）把一个 zip 打包的 Obsidian 库批量导入 RAG —— 每篇 `.md` 笔记成为一个文档、`[[双链]]` 成为 GraphRAG 三元组；缺文件返回 400。端点常开，需带具备 ingest 权限的 api-key。
 
-### 3. Agent 编排（五种模式）
+### 3. AgentScope 编排
 
-`agent-service`（`/agent/**`，`AGENT_ENABLED=true` 默认开）。所有模式共用 gateway `ChatModel`、审计+计量 listener、SSE 进度 sink。
+独立 `agentscope-platform`（部署名 `agentscope-orchestrator`）是 `/agent/**` 的权威服务；
+edge 与 interop 默认都指向它，Java `agent-service` 仅作整服务回滚。
 
-- **深度 Agent（ReAct）**：`POST /agent/run`（同步）、`POST /agent/run/async`（返回 taskId）。内置动作 `rag_search`（调 knowledge）、`analytics_sql`（调 analytics，`AGENT_ANALYTICS_ENABLED=true`）、`current_time`、`delegate`（受控委派，`AGENT_ALLOW_DELEGATION`/`AGENT_MAX_DEPTH`）、`finish`。步数/时长/token/循环等有护栏参数。
+- **深度 Agent（ReAct）**：`POST /agent/run`（同步）、`POST /agent/run/async`（返回 taskId）。只读工具为 `current_time`、`rag_search`、`order_query`、`schema_explore`、`analytics_sql`、`workflow_status`、`workflow_tasks`，并有步数/时长/token/循环护栏。
 - **DAG 多 Agent**：`POST /agent/dag/run`（显式传 DAG）、`POST /agent/dag/plan-run`（Planner 自动拆 DAG）、二者 `/async` 变体。Kahn 拓扑分层，同层并行、下游看上游结果、末尾综合。可选质量闭环 `AGENT_DAG_REPLAN_ENABLED=true`：每轮综合由 Critic 加权评分，低于 `AGENT_DAG_REPLAN_THRESHOLD`（默认 0.75）则 Replanner 修订后再跑，上限 `AGENT_DAG_REPLAN_MAX_REPLANS`。SSE 除任务状态外还有 `dag-planned`/`dag-level-*`/`dag-worker-*`/`dag-synthesis-*`/`dag-critique`/`dag-replan*` 阶段事件。
-- **链式 Agent（chaining）**：`POST /agent/chain`。顺序步骤 + 步间确定性 gate（`gate-min-length`/`gate-must-contain`/`gate-must-match`），不过即短路。`app.agent.chaining.steps` 默认空 —— 需先在配置里定义链，否则端点返回 400。
+- **Analyst / Process**：`POST /agent/analyst/run` 与 `/agent/process/run`（各有 `/async`）。Process 严格只读，不发起、认领或审批流程。
+- **链式 Agent（chaining）**：`POST /agent/chain`。顺序步骤 + 步间确定性 gate，不过即短路。
 - **投票 Agent（voting）**：`POST /agent/vote`。同题并行 N 次（`AGENT_VOTING_N`，默认 3）取共识。`AGENT_VOTING_STRATEGY=majority`（默认，确定性多数表决，适合离散/分类题）| `synthesis`（聚合器 LLM 收口，适合自由文本）；`AGENT_VOTING_MIN_AGREEMENT` 阈值。
 - **反思 Agent（reflexion）**：`POST /agent/reflexive`、`POST /agent/reflexive/stream`（SSE）。单答案 answer→critique→improve 自省环，评分复用 DAG 的 Critic，加权聚合达 `AGENT_REFLEXION_THRESHOLD`（默认 0.75）或到 `AGENT_REFLEXION_MAX_ATTEMPTS` 即停。
 
 **Agent 任务态**：`GET /agent/tasks`、`GET /agent/tasks/{taskId}`、`GET /agent/tasks/{taskId}/stream`（SSE）、`DELETE /agent/tasks/{taskId}`。`GET /agent/capabilities` 返回能力清单。
 
-**可选 Agent 工具（全部默认关）**：
-
-- `code_exec`（`AGENT_CODE_EXEC_ENABLED=true`）：受限 Java 片段执行。默认 `AGENT_CODE_EXEC_SANDBOX=subprocess`（独立子进程 + `-Xmx`/空 cwd/进程 kill，中等隔离）；仍非强隔离容器，不可信输入慎开。含超时/输出截断/denylist 参数。
-- `mcp_call`（`AGENT_MCP_ENABLED=true`）：调外部 MCP server，`AGENT_MCP_TRANSPORT=stdio`（默认）| `http`。
-- browser 动作（`AGENT_BROWSER_ENABLED=true`）：`browser_open`/`browser_click`/`browser_click_xy`/`browser_type`/`browser_screenshot`，依赖 Playwright Chromium。
-- `browser_see` 视觉动作：**双门控**，需 `AGENT_BROWSER_ENABLED=true` 且 `AGENT_VISION_ENABLED=true`（`VISION_BASE_URL` 指向 vision-service），agent POST 截图字节给 vision-service 看图。
-
-**任务中心迁移**：agent 可选把本地任务生命周期同步到 async-task-service，mirror 模式（`AGENT_ASYNC_EXTERNAL_ENABLED=true`）或 authoritative 模式（再加 `AGENT_ASYNC_EXTERNAL_AUTHORITATIVE=true`，含 worker lease 认领）。终态 webhook 可本地投递或交中心 outbox（`AGENT_ASYNC_EXTERNAL_MIRROR_WEBHOOK`）。
+Java-only `refund_start`、code、browser、MCP-client 和 vision 工具尚未迁移，在权威路径明确不可用，
+不会按请求静默回退 Java。AgentScope 的异步任务以 `async-task-service` 为权威，使用 lease、
+心跳、取消、持久事件 journal、SSE 恢复与中心 webhook outbox。
 
 ### 4. 异步任务中心
 
@@ -318,20 +321,20 @@
 
 ### 10. 多模态视觉
 
-`vision-service`（:8090，`/vision/**`）独立多模态服务，**默认开启但须配模型**（`VISION_ENABLED=true`；`VISION_MODEL` 留空则启动 fail-fast，须配一个 LiteLLM `model_list` 里的多模态模型逻辑名，compose 默认 `vision-default`→本机 Ollama qwen2.5vl）：
+`vision-service`（:8090，`/vision/**`）独立多模态服务，**默认开启但须配模型**（`VISION_ENABLED=true`；`VISION_MODEL` 留空则启动 fail-fast，须配一个 LiteLLM `model_list` 里的多模态模型逻辑名，compose 默认 `vision-default`→百炼 `qwen3-vl-plus`）：
 
-- `POST /vision/caption`（别名 `/vision/describe`）：JSON（`imageBase64`）或 multipart 图片，返回 caption/描述。多模态 ChatModel 与文本共用同一 LiteLLM base-url，仅逻辑模型名不同（`VISION_MODEL`，如 gpt-4o-mini / qwen2.5-vl）。
+- `POST /vision/caption`（别名 `/vision/describe`）：JSON（`imageBase64`）或 multipart 图片，返回 caption/描述。Docker 的 `vision-default` 默认路由百炼 `qwen3-vl-plus`，可用 `BAILIAN_VISION_MODEL` 切换。
 - 图片字节上限 `VISION_MAX_IMAGE_BYTES`（默认 10MB）、允许 MIME `VISION_ALLOWED_MIME`、caption 结果按内容 SHA-256 缓存（`VISION_CAPTION_CACHE_SIZE`）。vision token 计入 metering。
 - 供 agent-service（`browser_see`）复用。
 
 ### 11. 语音闭环（ASR → 对话 → TTS）
 
-`voice-service`（:8091，`/voice/**`）独立语音客服服务，**默认整服务不装配**（`VOICE_ENABLED=false`）。走与 `/chat` 同一套鉴权链（edge-gateway 签发内部 JWT + 多租户），语音转出的文本经 HTTP 调 conversation-service（`VOICE_CONVERSATION_BASE_URL`，默认 `http://localhost:8081`）应答：
+`voice-service`（:8091，`/voice/**`）独立语音客服服务。源码默认不装配（`VOICE_ENABLED=false`），受支持的本地百炼启动流程加载凭据后默认开启。走与 `/chat` 同一套鉴权链，语音转出的文本经 HTTP 调 conversation-service 应答：
 
 - **`POST /voice/chat`**（multipart `audio`[，`chatId`]）：完整轮次 音频 → ASR → `/chat` → TTS，返回 `transcript` + 回复文本 + base64 语音；未传 `chatId` 自动生成 `voice-<uuid>`。
 - **`POST /voice/chat/stream`**（multipart，SSE）：半流式 —— 先发 `transcript` 事件，再按句切分逐句 TTS 发 `audio-chunk`（`{text, audioContentType, audioBase64}`），最后 `done`。句最小字数 `VOICE_STREAM_MIN_CHARS`（默认 8）防碎句、省调用。
 - **`POST /voice/transcribe`**（multipart `audio`）：仅做 ASR（调试 / 纯转写），返回 `transcript`。
-- provider `VOICE_PROVIDER=openai`（OpenAI 兼容协议，`VOICE_BASE_URL` 可指云 OpenAI / Azure / 本地 whisper+tts 网关，`VOICE_API_KEY`）；ASR 模型 `VOICE_ASR_MODEL`（默认 `whisper-1`）、TTS 模型 `VOICE_TTS_MODEL`（默认 `tts-1`）、音色 `VOICE_TTS_VOICE`（默认 `alloy`）、输出格式 `VOICE_TTS_FORMAT`（默认 `mp3`，决定回复 content-type）、ASR 语言提示 `VOICE_LANGUAGE`（留空自动检测）。
+- `VOICE_PROVIDER=bailian` 走原生 DashScope 多模态生成协议（本地默认 `qwen3-asr-flash`、`qwen3-tts-flash`、`Cherry`、`wav`）；`openai` 保留 OpenAI 兼容 `/audio/*` 协议作为回滚选项。
 - 上传音频上限 `VOICE_MAX_AUDIO_BYTES`（默认 25MB，超限返回 400）+ multipart 上限 `VOICE_MAX_UPLOAD`（默认 25MB）；超时 `VOICE_TIMEOUT_SECONDS`（默认 30）。
 
 ### 12. 认证、登录与 RBAC
@@ -350,4 +353,4 @@
 - A2A `message/stream` 已是真 SSE（chat 代理 conversation token 流、research 代理 agent 任务流）；push 通知按 A2A Task 信封由 interop 中继回推（默认经 agent webhook 触发，零外部依赖；push 配置存储默认内存、多副本需换 Redis/JDBC）。
 - 契约测试当前覆盖 knowledge/agent 两个 P0 provider（analytics/async-task 待补），网关 failover 为独立 smoke 脚本、不进默认 CI。
 - `code_exec` 子进程沙箱是中等隔离，非强隔离容器；生产对不可信输入应进一步收紧。
-- RS256、Config Server git 后端、vision 模型（`VISION_MODEL` 需配）、voice ASR/TTS（需真实 OpenAI 兼容语音端点）、RAG rerank 的 jina 云 reranker、HanLP 分词、Kafka EOS、agent code-exec/browser/MCP 等生产能力默认关闭或需填真实外部配置。
+- RS256、Config Server git 后端、vision/voice/图片向量模型（需真实 provider 凭据）、RAG rerank 的 jina 云 reranker、HanLP 分词、Kafka EOS、agent code-exec/browser/MCP 等生产能力默认关闭或需填真实外部配置。

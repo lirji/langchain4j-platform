@@ -227,7 +227,8 @@ curl -s -X POST 'http://localhost:8080/extract?type=ticket' \
 - 公共/共享库：可传 `visibility=public|shared` 写入 `__public__` 公共分区，需 `public-ingest` scope（否则 403）；缺省写本租户私有库。
 - 文档级授权（仅 `RAG_AUTHZ_MODE=enforce`，**默认 `disabled` 不影响**）：**新建**（非共享）文档时把 `owner`（上传人）+ `home_dept`（上传人部门）关系写入外部 auth-platform；若判不出上传人部门（内部 JWT 无 `dept`）→ **403**「cannot determine uploader's home department」。**同名覆盖**既有非共享文档需对其有 `edit` 权限（否则 403，覆盖不夺原 owner）。disabled/shadow 不触发上述拦截。
 - 响应：`DocumentInfo`。
-- 经网关：是。默认开启（application.yml 默认向量库 `qdrant` + hash embedding，compose 走 nomic + ES 全文混排）。
+- 经网关：是。默认开启（application.yml 默认 `qdrant` + hash；Docker/Helm 默认百炼
+  `text-embedding-v4` + `qwen3-rerank` + ES 全文混排）。
 
 JSON 示例：
 
@@ -378,9 +379,10 @@ JSON 示例：
 
 ---
 
-## Agent（agent-service）
+## Agent（AgentScope；Java agent-service 仅回滚）
 
-深度 Agent 相关端点条件装配于 `DeepAgentService`/`AgentDagService`/各 sibling service（bean 存在才注册），部分能力默认关闭需开关。
+全部端点默认由独立 `agentscope-platform` 的 `agentscope-orchestrator` 提供，继续使用既有
+HTTP/JSON/SSE 契约和内部 JWT。当前工具面只读；旧 Java 高风险/写动作不在默认路径。
 
 ### POST `/agent/run`
 
@@ -467,16 +469,18 @@ JSON 示例：
 
 ### POST `/agent/process/run`（+ `/agent/process/run/async`）
 
-- 用途：业务流程智能体（人在环）——传自然语言流程诉求 `{ "goal": "..." }`，DAG 拆「发起 → 查询 → 汇报」子任务执行，synthesis 如实告知进展（绝不代替审批）。
+- 用途：只读业务流程智能体——传自然语言流程诉求 `{ "goal": "..." }`，只查询实例/待办并综合汇报，不发起、认领或审批流程。
 - 响应：`AgentDagRunReply`；缺 `goal` → 400。
-- 经网关：是。**双门控**——`AGENT_ENABLED=true` 且 `AGENT_WORKFLOW_ENABLED=true`（两者默认开）。
+- 经网关：是。默认开启。
 
 ### GET `/agent/capabilities`
 
-- 用途：live capability discovery，返回 agent-service 当前暴露的 MCP 工具描述（`McpToolDescriptor[]`：`platform.agent.run`、`platform.agent.run_async`、`platform.agent.dag.plan_run`、`platform.agent.dag.plan_run_async`）。
-- 经网关：是。默认开启（`@ConditionalOnBean(DeepAgentService.class)`）。
+- 用途：live capability discovery，返回 AgentScope 当前暴露的 MCP 工具描述（`McpToolDescriptor[]`：`platform.agent.run`、`platform.agent.run_async`、`platform.agent.dag.plan_run`、`platform.agent.dag.plan_run_async`）。
+- 经网关：是。默认开启并要求内部认证。
 
-> 其他 agent 动作开关（默认关闭）：`AGENT_CODE_EXEC_ENABLED`（JShell 非沙箱）、`AGENT_MCP_ENABLED`（`mcp_call`）、`AGENT_BROWSER_ENABLED`（Playwright 浏览器动作）。`AGENT_DAG_REPLAN_ENABLED`（Critic/Replan 闭环）现已**默认开**。详见 README。
+> Java-only `code_exec`、`mcp_call`、browser/vision 与 `refund_start` 未迁入当前权威服务；
+> 不会自动回退到 Java。现有只读工具为 current_time、RAG、订单、analytics schema/SQL 和
+> workflow 状态/待办。
 
 ---
 

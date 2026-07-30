@@ -19,11 +19,15 @@
 | JDK | 21（Spring Boot 3.3.5，Java 21） |
 | Maven | 系统 `mvn`（无 wrapper） |
 | Docker / Docker Compose | 起本地整网基础设施与服务镜像 |
-| Ollama | 本机运行；LiteLLM 默认回连宿主机 Ollama。compose 的 RAG 语义 embedding 默认走 `nomic-embed-text`，故需 `ollama pull nomic-embed-text`（另可 `ollama pull llama3.1` / `qwen2.5vl` 供本地对话/视觉） |
+| Ollama | 可选本机后端；当前仅保留 `llama3.1` 作为 `chat-default` 的故障回退。embedding、rerank 和视觉分别已切到百炼 `text-embedding-v4`、`qwen3-rerank`、`qwen3-vl-plus` |
 | LiteLLM | 由 compose 提供；不用 compose 时需自行准备一个可达的 OpenAI 兼容端点，并把 `GATEWAY_BASE_URL` 指过去。compose 的 `chat-default` 默认映射 DeepSeek，需宿主环境 `DEEPSEEK_API_KEY` |
 
 > **单测零外部依赖**：测试是纯 POJO（不加载 Spring context），`mvn test` 无需任何基础设施。
-> **两套「默认」需分清**：① **application.yml 裸跑默认**——2026-07 起多数**行为增强**已默认打开（RAG 增强、多轮记忆/长期画像、注入/PII 护栏、语义缓存、模型级联、意图路由、看图对话、RAG rerank/查询扩展/上下文/GraphRAG/ES/公共库/多模态、DAG 重规划、agent 动作 vision/analytics/workflow/order、interop discovery、eval judge/embedding、vision 等），仅 MCP、code-exec、浏览器、语音、渠道入站/事件、RAG enforce 授权、自助注册、成本归因等仍默认关；**基础设施类**（事件总线、async/registry 存储的部分档）仍默认内存/关闭，embedding 默认 `hash` 不真调，保单测零依赖。但 knowledge-service 的 application.yml 现已默认 `RAG_VECTOR_STORE_PROVIDER=qdrant`、`RAG_REGISTRY_STORE=redis`、`RAG_GRAPH_STORE=jdbc`、`RAG_ES_ENABLED=true`，故**单跑 knowledge-service 期望 qdrant/redis/mysql/ES 可达**；要真正零依赖单跑需显式 `RAG_VECTOR_STORE_PROVIDER=in-memory RAG_REGISTRY_STORE=in-memory RAG_GRAPH_STORE=in-memory RAG_ES_ENABLED=false`。② **docker-compose demo 默认**——再叠加真实基础设施（qdrant/redis/jdbc/ES）、nomic 语义 embedding、hanlp 分词、多模态端点、登录 RBAC 等，并自带全部基础设施。
+> **两套「默认」需分清**：① application.yml 裸跑层多数行为增强已开启，但 embedding 仍默认
+> `hash`；knowledge-service 单跑仍期望 qdrant/redis/mysql/ES。② Docker/Helm 部署层叠加真实基础设施，
+> 并将模型覆盖为百炼 `text-embedding-v4` + `qwen3-rerank`；Docker 的
+> `vision-default` 再映射到百炼 `qwen3-vl-plus`。真正零依赖单跑需显式切
+> `in-memory` + `hash` 并关闭 ES/外部增强。
 
 ---
 
@@ -83,7 +87,8 @@ mvn -pl platform-security -Dtest=InternalTokenTest test   # 单类（务必带 -
 | workflow-service | 8082 | `/workflow`、`/workflow/**` | Flowable 退款审批流 + outbox |
 | analytics-service | 8083 | `/chat/sql`、`/analytics`、`/analytics/**` | NL2SQL / ChatBI |
 | knowledge-service | 8084 | `/rag`、`/rag/**`、`/knowledge`、`/knowledge/**` | 混合 RAG + GraphRAG |
-| agent-service | 8085 | `/agent`、`/agent/**` | ReAct + 多 Agent DAG |
+| agentscope-orchestrator | 8085（宿主 18085） | `/agent`、`/agent/**` | AgentScope 权威编排 |
+| agent-service | 8085 | 默认不路由 | 旧 Java 整服务回滚目标 |
 | async-task-service | 8086 | `/async`、`/async/**` | 通用任务中心、SSE、webhook outbox |
 | channel-service | 8087 | `/channel`、`/channel/**` | 渠道出站/回调 + 可选 Kafka 事件 |
 | interop-service | 8088 | `/interop`、`/interop/**`、`/.well-known/agent-card.json` | A2A + MCP surface |
@@ -343,9 +348,9 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 |---|---|---|
 | `RAG_VECTOR_STORE_PROVIDER` | `qdrant` | `in-memory` \| `qdrant`（yml/compose 默认）\| `pgvector` \| `milvus` \| `chroma` \| `doris`；真正零依赖单跑需显式设 `in-memory` |
 | `RAG_VECTOR_STORE_ISOLATION` | `collection-per-tenant` | `collection-per-tenant`（强隔离，每租户独立 collection）或 `shared`（单 store + metadata filter） |
-| `RAG_VECTOR_STORE_BASE_COLLECTION` | `knowledge_segments`（沿用 `QDRANT_COLLECTION_NAME`） | 所有 provider 通用的 collection/表基名，实际按租户拼成 `<base>_<tenant>` |
+| `RAG_VECTOR_STORE_BASE_COLLECTION` | yml `knowledge_segments`；Docker/Helm `knowledge_segments_bailian_v4` | 所有 provider 通用的 collection/表基名，实际按租户拼成 `<base>_<tenant>` |
 | `QDRANT_HOST` / `QDRANT_PORT` | `localhost` / `6334` | Qdrant gRPC 地址（compose 内为 `qdrant:6334`） |
-| `QDRANT_COLLECTION_NAME` | `knowledge_segments` | collection 基名（`RAG_VECTOR_STORE_BASE_COLLECTION` 缺省时沿用它） |
+| `QDRANT_COLLECTION_NAME` | yml `knowledge_segments`；Docker/Helm `knowledge_segments_bailian_v4` | collection 基名（`RAG_VECTOR_STORE_BASE_COLLECTION` 缺省时沿用它） |
 | `QDRANT_USE_TLS` / `QDRANT_API_KEY` | `false` / 空 | TLS 与鉴权 |
 | `QDRANT_TIMEOUT` / `QDRANT_HEALTH_TIMEOUT` | `10s` / `3s` | 超时 |
 | `RAG_PGVECTOR_HOST` / `_PORT` / `_DATABASE` | `localhost` / `5432` / `postgres` | pgvector 档 PostgreSQL 连接 |
@@ -384,14 +389,19 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `RAG_EMBEDDING_PROVIDER` | `hash` | `hash`（确定性，本地/单测）、`openai`（走 LiteLLM/OpenAI-compat）或 `ollama` |
-| `RAG_EMBEDDING_MODEL` | `embedding-default` | `openai` 档逻辑模型名 |
-| `RAG_EMBEDDING_DIMENSIONS` | `0` | 0 = 由 provider 决定 |
+| `RAG_EMBEDDING_PROVIDER` | yml `hash`；Docker/Helm `openai` | `hash`（确定性，本地/单测）、`openai`（OpenAI-compatible）或 `ollama` |
+| `RAG_EMBEDDING_BASE_URL` / `_API_KEY` | 未设（复用 gateway） | 独立 embedding 入口与凭据；Docker/Helm 百炼部署必须配置 |
+| `RAG_EMBEDDING_MODEL` | yml `embedding-default`；Docker/Helm `text-embedding-v4` | embedding 模型名 |
+| `RAG_EMBEDDING_DIMENSIONS` | yml `0`；Docker/Helm `1024` | 0 = 由 provider 决定 |
+| `RAG_EMBEDDING_MAX_SEGMENTS_PER_BATCH` | yml `0`；Docker/Helm `10` | 百炼 `text-embedding-v4` 单批上限 |
 | `RAG_EMBEDDING_TIMEOUT` / `_MAX_RETRIES` | `60s` / `3` | 调用超时与重试 |
 | `RAG_EMBEDDING_OLLAMA_BASE_URL` | `http://localhost:11434` | `ollama` 档 Ollama 地址 |
 | `RAG_EMBEDDING_OLLAMA_MODEL` | `nomic-embed-text` | `ollama` 档 embedding 模型 |
 
-> `openai` 档复用 `GATEWAY_BASE_URL` / `GATEWAY_API_KEY`。application.yml 默认 `hash`（64 维，不真调 embedding）；**compose 默认 `ollama` + `nomic-embed-text`（768 维）**，并注入非对称任务前缀 `RAG_EMBEDDING_QUERY_PREFIX="search_query: "` / `RAG_EMBEDDING_DOCUMENT_PREFIX="search_document: "`（尾部空格必须保留，仅 ollama 生效）。切换 provider = 换向量维度，需删旧 collection 重灌。
+> `openai` 档未设置独立地址时复用 `GATEWAY_BASE_URL` / `GATEWAY_API_KEY`。application.yml 默认
+> `hash`（64 维）；Docker/Helm 默认百炼 `text-embedding-v4`（1024 维），使用独立
+> `RAG_EMBEDDING_BASE_URL/API_KEY`。切换 provider 通常改变维度，应迁移到新 collection；不要删除旧集合，
+> 可用 `deploy/migrate-qdrant-embeddings.sh` 保留回滚面。Ollama/nomic 仅为可选回滚配置。
 
 ### 混合检索与排序（四路 → RRF）
 
@@ -442,10 +452,13 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `RAG_RERANK_ENABLED` | `true` | 召回后重排序开关（默认开，llm 档零外部依赖；jina 档需 key） |
-| `RAG_RERANK_TYPE` | `llm` | `llm`（复用共享 temp=0 ChatModel 打分）或 `jina`（Jina reranker 云 API） |
+| `RAG_RERANK_ENABLED` | `true` | 召回后重排序开关 |
+| `RAG_RERANK_TYPE` | yml `llm`；Docker/Helm `bailian` | `llm`、`jina` 或 `bailian` |
 | `RAG_RERANK_CANDIDATE_MULTIPLIER` | `3` | 送入重排的候选倍数（先多召回再截断到 top-k） |
 | `RAG_RERANK_JINA_MODEL` | `jina-reranker-v2-base-multilingual` | `jina` 档 reranker 模型（配合 `JINA_API_KEY`） |
+| `RAG_RERANK_BAILIAN_BASE_URL` / `_API_KEY` | 空 | 百炼 `compatible-api/v1` 地址与凭据 |
+| `RAG_RERANK_BAILIAN_MODEL` | `qwen3-rerank` | `bailian` 档模型 |
+| `RAG_RERANK_BAILIAN_TIMEOUT` / `_MAX_DOCUMENTS` | `30s` / `500` | 超时和单请求文档上限 |
 | `RAG_QUERY_EXPANSION_ENABLED` | `true` | 查询扩展开关（默认开）：把 1 query 扩成 N 变体多路召回 |
 | `RAG_QUERY_EXPANSION_MAX_VARIANTS` | `4` | 扩展变体上限 |
 | `RAG_CONTEXTUAL_ENABLED` | `true` | Contextual Retrieval（默认开）：入库时逐 chunk 加文档级上下文前缀再嵌入（每 chunk 一次 LLM 调用） |
@@ -470,10 +483,12 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 
 > 无 Flyway/Liquibase：JDBC store 靠 `Jdbc*Store` 类里的 `CREATE TABLE IF NOT EXISTS` 自建表。
 
-### 图片多模态 embedding（CLIP，`RAG_MULTIMODAL_*`，默认开）
+### 图片多模态 embedding（`RAG_MULTIMODAL_*`，源码默认关）
 
-原生 CLIP / jina-clip 多模态 embedding：图片直接向量化，存入**独立的 image collection**（基名 `knowledge_images`，
-每租户 `knowledge_images_<tenant>`，与文本集合 `knowledge_segments` 物理/维度隔离）。**默认关闭**；开启时必须提供可达的多模态 embedding 端点，否则启动 fail-fast。关闭时上传图片会返回
+原生 Qwen-VL / CLIP / jina-clip 多模态 embedding：图片直接向量化，存入**独立的 image collection**，
+与文本集合 `knowledge_segments` 物理/维度隔离。源码默认关闭；标准本地百炼加载器会选择
+`qwen3-vl-embedding`、1024 维和独立集合 `knowledge_images_bailian_qwen3vl`。开启时必须提供
+可达端点，否则启动 fail-fast。关闭时上传图片会返回
 明确 400（提示需开启此开关），不再静默转文字。
 
 > ⚠️ 破坏性变更：旧的「图 → 文字（caption/OCR）」路径（`RAG_IMAGE_TEXT_*` / `ImageTextProvider`）已整体移除，
@@ -482,7 +497,8 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `RAG_MULTIMODAL_ENABLED` | `false` | 图片多模态开关；开启时要求配置可达端点，关闭时上传图片返回 400 |
-| `RAG_MULTIMODAL_BASE_URL` | 空 | OpenAI 兼容 `/embeddings` 端点（指向 vLLM/TEI/云 jina）；开启时必填 |
+| `RAG_MULTIMODAL_PROVIDER` | `openai` | `bailian` 原生协议或 `openai` 兼容 `/embeddings` |
+| `RAG_MULTIMODAL_BASE_URL` | 空 | provider API 根；开启时必填 |
 | `RAG_MULTIMODAL_API_KEY` | 空 | 端点鉴权 key（可选） |
 | `RAG_MULTIMODAL_MODEL` | `jinaai/jina-clip-v2` | 多模态 embedding 模型 |
 | `RAG_MULTIMODAL_DIMENSION` | `1024` | 图片向量维度 |
@@ -651,7 +667,7 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `AGENT_BASE_URL` | `http://localhost:8085` | 代理 agent 能力的目标 |
+| `AGENT_BASE_URL` | standalone `http://localhost:18085`；Compose/Helm `http://agentscope-orchestrator:8085` | interop 代理 AgentScope 的目标 |
 | `INTEROP_DISCOVERY_ENABLED` | `true` | live 能力发现（默认开）；关时用静态 registry（零下游依赖） |
 | `INTEROP_CAPABILITY_TTL` | `60s` | 能力缓存 TTL |
 | `INTEROP_A2A_AGENT_NAME` / `_BASE_URL` / `_VERSION` | `langchain4j-platform` / `http://localhost:8080` / `0.1.0` | A2A agent-card 字段 |
@@ -682,21 +698,21 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 | `VISION_CAPTION_CACHE_SIZE` | `256` | caption 缓存条数（按图内容 SHA-256 去重），0 = 关缓存 |
 | `VISION_MAX_UPLOAD` | `12MB` | multipart 上传上限 |
 
-### Voice（`app.voice.*`，:8091，默认关）
+### Voice（`app.voice.*`，:8091，源码默认关）
 
-语音闭环：ASR（转写）→ 转发 conversation-service `/chat` 取回复 → TTS（合成）。端点：`POST /voice/chat`（multipart audio → 音频/JSON）、`POST /voice/chat/stream`（SSE 流式）、`POST /voice/transcribe`（仅转写）。**总开关默认关 → voice 相关 Bean 全不装配，零依赖、零网络。**
+语音闭环：ASR（转写）→ 转发 conversation-service `/chat` 取回复 → TTS（合成）。端点：`POST /voice/chat`（multipart audio → 音频/JSON）、`POST /voice/chat/stream`（SSE 流式）、`POST /voice/transcribe`（仅转写）。application.yml 默认关；标准本地百炼加载器默认开启 Qwen3 原生 provider。
 
 单跑：`mvn -pl voice-service spring-boot:run`（:8091）。
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `VOICE_ENABLED` | `false` | 总开关；关时不装配任何 voice Bean |
-| `VOICE_PROVIDER` | `openai` | ASR/TTS provider（目前仅 openai 兼容协议） |
+| `VOICE_PROVIDER` | `openai` | `bailian` 原生 DashScope 或 `openai` 兼容语音协议 |
 | `VOICE_BASE_URL` | `https://api.openai.com/v1` | provider base-url（可指云 OpenAI / Azure / 本地 whisper+tts 网关） |
 | `VOICE_API_KEY` | 空（回退 `OPENAI_API_KEY`） | provider 鉴权 key |
-| `VOICE_ASR_MODEL` | `whisper-1` | 语音转写模型 |
-| `VOICE_TTS_MODEL` | `tts-1` | 语音合成模型 |
-| `VOICE_TTS_VOICE` | `alloy` | TTS 音色 |
+| `VOICE_ASR_MODEL` | `whisper-1` | 百炼加载器覆盖为 `qwen3-asr-flash` |
+| `VOICE_TTS_MODEL` | `tts-1` | 百炼加载器覆盖为 `qwen3-tts-flash` |
+| `VOICE_TTS_VOICE` | `alloy` | 百炼加载器覆盖为 `Cherry` |
 | `VOICE_TTS_FORMAT` | `mp3` | TTS 输出音频格式 |
 | `VOICE_LANGUAGE` | 空 | ASR 语言提示（留空自动识别） |
 | `VOICE_TIMEOUT_SECONDS` | `30` | provider 调用超时（秒） |

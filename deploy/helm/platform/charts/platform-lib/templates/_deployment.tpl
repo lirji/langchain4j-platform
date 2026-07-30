@@ -8,7 +8,7 @@ health group（/actuator/health/liveness、/actuator/health/readiness）。
 {{- $svc := .svc -}}
 {{- $root := .root -}}
 {{- $g := $root.Values.global -}}
-{{- $probes := $g.probes -}}
+{{- $probes := $svc.probes | default $g.probes -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

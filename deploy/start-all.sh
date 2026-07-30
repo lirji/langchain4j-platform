@@ -7,7 +7,8 @@
 #
 # 为什么要这个脚本：
 #   docker-compose.yml 里已含前端容器 capability-showcase-frontend(nginx, :8093)，
-#   直接 docker compose up 就能一条命令起前后端；但默认端口(8080/8090，13306=apollo-db)会与本机
+#   直接 docker compose up 不会读取百炼 CSV；本脚本会先安全加载凭据。默认端口
+#   (8080/8090，13306=apollo-db)还可能与本机
 #   apollo 冲突（Docker Desktop 重启后 apollo 系 restart-policy 容器会自动复活抢端口），
 #   且前端构建期需把网关地址(SHOWCASE_EDGE_BASE_URL)烘焙进去。本脚本把这些变量补齐后一键拉起。
 #
@@ -19,10 +20,10 @@
 #   ./start-all.sh            # mvn package + 构建并起【全部服务(含前端 nginx + 基础设施)】—— 首次/改动后用
 #   ./start-all.sh --no-build # 不打包不重建，直接用已有镜像拉起(快)
 #   ./start-all.sh --recreate # 强制重建容器(--force-recreate)，确保 compose 里的能力开关生效
-#   ./start-all.sh --es       # (已弃用) ES 全文混排 + nomic 现已默认；本开关保留为兼容 no-op
+#   ./start-all.sh --es       # (已弃用) ES 全文混排已默认；本开关保留为兼容 no-op
 #
-# 默认栈已含 Elasticsearch(smartcn)+Kibana，knowledge-service 默认 nomic 语义 embedding。
-# 前置：宿主机 `ollama pull nomic-embed-text`（缺则 RAG 入库/检索报错）。零依赖回退：export RAG_EMBEDDING_PROVIDER=hash RAG_ES_ENABLED=false。
+# 默认栈已含 Elasticsearch(smartcn)+Kibana，并使用百炼 embedding/rerank/vision。
+# 百炼凭据通过 deploy/.env 的 BAILIAN_CREDENTIAL_CSV 指向本地 CSV；零模型依赖回退可设 RAG_EMBEDDING_PROVIDER=hash。
 #
 # 可用环境变量覆盖端口：EDGE_HOST_PORT(默认 18080) / VISION_HOST_PORT / MYSQL_HOST_PORT
 #
@@ -33,6 +34,8 @@ cd "$(dirname "$0")"   # 切到 deploy/
 export EDGE_HOST_PORT="${EDGE_HOST_PORT:-18080}"
 export VISION_HOST_PORT="${VISION_HOST_PORT:-18090}"
 export MYSQL_HOST_PORT="${MYSQL_HOST_PORT:-13307}"
+export AGENTSCOPE_IMAGE="${AGENTSCOPE_IMAGE:-agentscope-platform:local}"
+AGENTSCOPE_REPO="${AGENTSCOPE_REPO:-../../agentscope-platform}"
 # 前端容器构建期烘焙的网关基址：浏览器从宿主直调网关，必须指向宿主端口 EDGE_HOST_PORT。
 export SHOWCASE_EDGE_BASE_URL="${SHOWCASE_EDGE_BASE_URL:-http://localhost:${EDGE_HOST_PORT}}"
 
@@ -43,11 +46,22 @@ for arg in "$@"; do
   case "$arg" in
     --no-build) BUILD_FLAG="" ;;
     --recreate) RECREATE_FLAG="--force-recreate" ;;
-    --es)       echo "ℹ  --es 已弃用：ES 全文混排 + nomic 现为默认（见 docker-compose.yml），无需再加。" ;;
-    -h|--help)  grep -E '^#( |$)' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *) echo "未知参数: $arg（可用: --no-build, --recreate）"; exit 2 ;;
+    --es)       echo "ℹ  --es 已弃用：ES 全文混排现为默认（见 docker-compose.yml），无需再加。" ;;
+    -h|--help)  grep -E '^#( |$)' "$PWD/start-all.sh" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "未知参数: ${arg}（可用: --no-build, --recreate）"; exit 2 ;;
   esac
 done
+
+# ── 百炼 embedding/rerank/vision 凭据（CSV 仅留本机，不把 API Key 写进仓库/.env）──
+# shellcheck source=load-bailian-env.sh
+source "./load-bailian-env.sh"
+load_bailian_env "${BAILIAN_CREDENTIAL_CSV:-}"
+if [ -n "${RAG_EMBEDDING_API_KEY:-}" ]; then
+  echo "ℹ  knowledge embedding: ${RAG_EMBEDDING_MODEL} / ${RAG_EMBEDDING_DIMENSIONS} 维（百炼）"
+  echo "ℹ  knowledge rerank: ${RAG_RERANK_BAILIAN_MODEL}（百炼）"
+  echo "ℹ  vision: vision-default → ${BAILIAN_VISION_MODEL#openai/}（百炼）"
+fi
+verify_bailian_vision_model
 
 # ── LLM key 检查（litellm 的 chat-default 走 DeepSeek）。env 缺失时先尝试从既有 litellm 容器提取。──
 if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
@@ -70,8 +84,19 @@ echo
 # ── 改了后端代码必须先打 jar：各服务 Dockerfile 是 COPY target/*.jar，--build 只重建镜像不打包。
 #    默认走 --build，故默认前置一次全量 package；--no-build 时跳过（直接用已有镜像）。──
 if [ -n "$BUILD_FLAG" ]; then
+  if [ ! -f "${AGENTSCOPE_REPO}/compose.yml" ]; then
+    echo "✗ 未找到独立 AgentScope 项目: ${AGENTSCOPE_REPO}/compose.yml"
+    echo "  请把 agentscope-platform 与本仓库放在同级目录，或设置 AGENTSCOPE_REPO。"
+    exit 1
+  fi
+  echo "▶ 构建 AgentScope 权威编排镜像 ${AGENTSCOPE_IMAGE}"
+  docker compose -f "${AGENTSCOPE_REPO}/compose.yml" build orchestrator
   echo "▶ mvn -DskipTests package（构建前置，避免镜像装旧 jar）"
   ( cd .. && mvn -DskipTests package )
+elif [ "$AGENTSCOPE_IMAGE" = "agentscope-platform:local" ] \
+    && ! docker image inspect "$AGENTSCOPE_IMAGE" >/dev/null 2>&1; then
+  echo "✗ 缺少 ${AGENTSCOPE_IMAGE}。先运行默认构建，或设置 AGENTSCOPE_IMAGE 为已发布镜像。"
+  exit 1
 fi
 
 # ── 拉起全部服务（不排除任何 service，含前端与基础设施）──

@@ -22,7 +22,8 @@
 - [业务场景总览](scenarios.md)：知识库问答 / 智能客服(NL2SQL+工作流+渠道+语音) / 深度 Agent / 多模态 / 互操作——各场景怎么拼、入口端点、跑到什么程度。
 
 **对话与检索**
-- [RAG 接入指南](对话与检索/rag-guide.md)：文档/图片上传、向量库 provider、collection-per-tenant 隔离、embedding（hash/openai/ollama）、混合检索、检索增强（rerank/查询扩展/上下文分块/HanLP 分词）、GraphRAG、Obsidian 导入、语义缓存 L1。
+- [RAG 接入指南](对话与检索/rag-guide.md)：文档/图片上传、向量库 provider、collection-per-tenant 隔离、Docker/Helm 默认百炼 `text-embedding-v4` + `qwen3-rerank`、混合检索、GraphRAG、Obsidian 导入、语义缓存。
+- [知识库文档更新与存储](对话与检索/知识库文档更新与存储.md)：同名重传的全量替换规则、更新参数与版本字段、向量/Redis/内存/ES/GraphRAG/SpiceDB 多存储落点、原始文件缺口和跨存储一致性边界。
 - [ES 全文混排指南](对话与检索/es-hybrid-rerank.md)：Elasticsearch 真 BM25 全文分支并入四路混合检索、多源 RRF 融合、smartcn 中文分析器、`knowledge_segments_text` 索引与量纲处理。
 - [ES / Kibana 查询速查](对话与检索/es-kibana-查询速查.md)：Kibana Dev Tools 常用 DSL、按租户/分类过滤、排障命令。
 - [RAG API 演示](对话与检索/rag-api-demo.md)：`seed-kb.sh` / `rag-demo.sh` 驱动的上传→检索→查单闭环、示例语料与断言。
@@ -33,12 +34,13 @@
 
 **Agent 与编排**
 - [Agent 能力与编排指南](Agent编排/agent-guide.md)：深度 Agent(ReAct)、多 Agent DAG（含重规划）、数据分析/业务流程(人在环)智能体、reflexion/voting/chaining、各 ReAct 动作（含 `order_query`）与开关。
+- [意图识别与 Agent 执行原理](Agent编排/意图识别与Agent执行原理.md)：`/chat/auto` 的订单确定性快路径 + LLM Router、ReAct 的 Reasoning→Action→Observation 循环、动作注册表、DAG worker/综合/重规划调用链及当前实现边界。
 - [工作流指南](Agent编排/workflow-guide.md)：两条「workflow」线——Flowable 退款审批业务引擎（`/workflow/**` + 三种终态通知）与 LLM 编排 5 模式（chain/routing/DAG/voting/reflexion，映射到 `/agent/**`）。
 - [让 Agent 主动调接口（工具调用 / 自定义动作接入）](Agent编排/让Agent主动调接口.md)：怎么让模型在对话里自己决定调你的接口（如查订单）。两套机制——ReAct 动作 `AgentAction`（`/agent/run`，描述驱动的可插拔注册表）vs langchain4j 原生 `@Tool`（专用助手）；含 `order_query` 手把手示例、`description()` 即工具说明书、副作用双门控、租户/trace 自动透传、`@Tool` 别做成 Spring bean 的坑。
 - [Code Interpreter 动作指南](Agent编排/code-exec.md)：agent `code_exec` 动作（默认关）；默认 subprocess 子进程隔离 + 可选 JShell、denylist/超时/输出截断与威胁模型。
 
 **多模态与语音**
-- [视觉指南](多模态语音/vision-guide.md)：vision-service `/vision/caption`·`/describe` + 对话入口 `/chat/vision` + agent `browser_see`；图像描述模型、大小/MIME 护栏。
+- [视觉指南](多模态语音/vision-guide.md)：vision-service `/vision/caption`·`/describe` + 对话入口 `/chat/vision` + agent `browser_see`；Docker `vision-default` 默认映射百炼 `qwen3-vl-plus`。
 - [语音指南](多模态语音/voice-guide.md)：voice-service 语音闭环 `/voice/transcribe`·`/voice/chat`(+`/stream`)，ASR(whisper)→对话大脑→TTS。
 
 **互操作与渠道**
@@ -55,7 +57,9 @@
 - [LiteLLM 网关能力指南](平台工程/litellm-gateway-guide.md)：spend 记账 + 管理 UI（自带 Postgres）、租户归因三档（`platform.gateway.tenant-attribution`=none/user/virtual-key，默认 none）、per-tenant virtual key 预算/TPM/RPM 硬保底、Redis 响应缓存、正式 fallback（chat-default→ollama）、LiteLLM↔Java 同 trace 的 OTel；含签发/轮换/备份/回滚 runbook 与 8 步冒烟。
 - [成本归因与配额指南](平台工程/cost-attribution.md)：per-tenant USD 成本归因 + token 预算，redis 默认的分布式计数（水平扩容正确性）、`/actuator/{tokenbudget,cost}`；与 LiteLLM spend 双轨分工见 LiteLLM 网关能力指南。
 - [评测指南](平台工程/eval-guide.md)：eval-service `/eval/**` 回归客户端、检索召回评测（Recall@k/MRR/Hit@k）、baseline suite、对冻结单体双跑 oracle 门禁。
-- [部署指南](平台工程/deployment-guide.md)：本地 docker-compose、k8s/Helm 伞状 chart、External Secrets、Service DNS、Config Server。
+- [简历指标查询与计算](平台工程/简历指标查询与计算.md)：RAG Recall@K、NL2SQL 正确率、P95、语义缓存命中率和租户容量的查询方式、公式与证据要求。
+- [2026-07-27 简历指标本地评测](qa/resume-metrics-0727-1539/QA_REPORT.md)：200 条 RAG、150 条 NL2SQL、20 条 Agent 及缓存/引用实测结果、失败样例、限制与可复现原始数据。
+- [部署指南](平台工程/deployment-guide.md)：本地 Docker、k8s/Helm、百炼凭据注入、External Secrets、Service DNS、Config Server。
 - [能力展示与试用控制台](平台工程/能力展示控制台.md)：前后端分离的独立前端 `capability-showcase-frontend/`（Vue3 静态 SPA，可独立部署，**含移动端/响应式适配**）；82 条能力跨 9 模块、direct mode 跨域直调业务能力、能力五态诚实呈现、catalog 静态数据驱动；登录默认走 Casdoor OIDC（`VITE_AUTH_MODE` 源码默认 `apikey`、整栈构建期烘焙 `oidc`），亦支持账号密码/api-key；后端仅 edge-gateway 加 CORS。
 - [能力前端模块拆分建议](平台工程/能力前端模块拆分建议.md)：平台能力 → 可独立拆出的前端模块（Chat/RAG/Agent/Async/Analytics/Workflow/Multimodal/Interop-Eval/Channel）的边界、优先级与拆分性。
 - [数据存储清单](参考/databases.md)：MySQL/Redis/Qdrant/Elasticsearch/Kafka/H2 的端口、账号密码、所属服务与落库开关；含可选向量库（pgvector/milvus/chroma/doris）。

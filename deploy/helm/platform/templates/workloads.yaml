@@ -4,14 +4,18 @@
 */}}
 {{- $root := . -}}
 {{- range $name, $svc := .Values.services }}
+{{- if not (and (hasKey $svc "enabled") (not $svc.enabled)) }}
 ---
 {{ include "platform-lib.deployment" (dict "name" $name "svc" $svc "root" $root) }}
+{{- if not (and (hasKey $svc "service") (hasKey $svc.service "enabled") (not $svc.service.enabled)) }}
 ---
 {{ include "platform-lib.service" (dict "name" $name "svc" $svc "root" $root) }}
+{{- end }}
 {{- if $svc.hpa }}
 {{- if $svc.hpa.enabled }}
 ---
 {{ include "platform-lib.hpa" (dict "name" $name "svc" $svc "root" $root) }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}

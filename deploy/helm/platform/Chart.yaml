@@ -1,8 +1,8 @@
 apiVersion: v2
 name: platform
 description: >-
-  langchain4j-platform 伞状（umbrella）Helm chart。用 values 参数化 12 个 Java
-  Spring Boot 微服务的 Deployment/Service/HPA（复用 charts/platform-lib 库模板），
+  langchain4j-platform 伞状（umbrella）Helm chart。用 values 参数化 Java
+  Spring Boot 微服务与 AgentScope 编排服务的 Deployment/Service/HPA（复用 charts/platform-lib 库模板），
   基础设施（MySQL/Redis/Kafka/Qdrant/LiteLLM）以 ExternalName Service 指向外部托管实例，
   不自建 StatefulSet。密钥走 Secret（占位值，生产用 External Secrets Operator/Vault 注入），
   内部 JWT 采用 RS256（edge-gateway 私钥签发、下游公钥验签）。

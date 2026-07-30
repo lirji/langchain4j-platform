@@ -2,7 +2,12 @@
 
 平台有两种部署形态：**本地 docker-compose 一体化栈**（开发/演示）和 **k8s / Helm 伞状 chart**（生产）。二者共享同一套服务命名与跨服务 base-url——k8s Service 名 == compose 服务名 == 各服务 env 里硬编码的主机名，因此从 compose 迁到 k8s 近零改动。
 
-前置：JDK 21、Maven、Docker/Docker Compose、可用的 LiteLLM（可再接 Ollama/OpenAI/Anthropic）。**多数行为增强开关现默认开**（RAG 混排/ES/rerank/query-expansion/contextual/GraphRAG/multimodal、对话 rag/router/vision/护栏/级联/记忆画像、agent vision/analytics/workflow/order/dag-replan、nl2sql、interop discovery、eval、vision）——不依赖外部资源者走栈内基础设施或内存/确定性实现即可跑通。**仍默认关**的是 `conversation.mcp`、`agent.code-exec/mcp/browser`、`voice`、`channel.feishu/dingtalk/events`、RAG 文档级授权 `app.rag.authz.mode=enforce`、自助注册、成本（cost），开启前须自备对应外部资源。身份侧 **Casdoor SSO 现为整栈默认**：edge `EDGE_CASDOOR_ENABLED=true` + `EDGE_CASDOOR_MODE=only`（严格 Casdoor-only，非 open-path 无有效 token → 401，需先起外部 auth 栈；`dual` 为灰度回滚窗口，验不过透传 legacy）；`app.rag.authz.mode=enforce` 时才需外部 `auth-platform-server`(:8200) 可达。全部开关明细见 [operations.md](../参考/operations.md)。
+前置：JDK 21、Maven、Docker/Docker Compose、可用的 LiteLLM 和百炼业务空间凭据。
+Docker/Helm RAG 默认统一为 `text-embedding-v4` + `qwen3-rerank`；Docker 的
+`vision-default` 映射 `qwen3-vl-plus`，Helm 使用外部 LiteLLM 时须提供同名映射。
+Ollama 只保留 `llama3.1` 文本故障回退。**多数行为增强开关现默认开**；仍默认关的是
+`conversation.mcp`、`agent.code-exec/mcp/browser`、`voice`、渠道事件、文档级 enforce、自助注册和成本。
+身份侧 Casdoor SSO 整栈默认 `only`。全部开关见 [operations.md](../参考/operations.md)。
 
 ---
 
@@ -12,8 +17,10 @@
 # 1. 构建产物
 mvn -DskipTests package
 
-# 2. 起整套栈（LiteLLM + Redis + MySQL + Kafka + Qdrant + 各业务服务）
-docker compose -f deploy/docker-compose.yml up --build
+# 2. 配置本地凭据 CSV 路径，再由启动脚本安全注入百炼 Key
+cp deploy/.env.example deploy/.env
+# 编辑 deploy/.env 的 BAILIAN_CREDENTIAL_CSV
+bash deploy/start-all.sh
 
 # 3. 打一条 /chat（走 edge-gateway，用 api-key，网关内部换内部 JWT 转发）
 curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
@@ -27,7 +34,8 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 |---|---|
 | `deploy/docker-compose.yml` | 完整本地栈（ES/Kibana + 语义 embedding + 持久化后端现已默认并入） |
 | `deploy/docker-compose.es.yml` | ES 全文混排 override（现已并入基础栈，冗余；仅供 `smoke-es-hybrid-rag.sh` 显式分层或非默认组合叠加 ES） |
-| `deploy/docker-compose.rag-full.yml` | 语义 RAG 全量 override（Ollama nomic embedding + qdrant/redis/jdbc 持久化；现已并入基础栈，冗余，保留兼容旧脚本） |
+| `deploy/docker-compose.rag-full.yml` | 百炼 embedding/rerank + qdrant/redis/jdbc 全量 override（已并入基础栈，保留兼容旧脚本） |
+| `deploy/.env.example` / `load-bailian-env.sh` | 仅保存凭据 CSV 路径和非敏感模型默认值；运行时读取 Key，不落 Git |
 | `deploy/docker-compose.failover.yml` + `deploy/litellm/config.failover.yaml` | LiteLLM 双上游 + fallback 故障转移冒烟（配 `deploy/smoke-failover.sh`） |
 | `deploy/docker-compose.oracle.yml` | 起冻结单体作 oracle，供 eval 双跑回归门禁（D4）真实比对 |
 | `deploy/start-all.sh` / `start-dev.sh` / `start-local.sh` | 一键起栈：全 docker 起前后端 / 后端 docker + 前端 vite dev 热更 / 仅本机后端 docker 栈 |
@@ -42,7 +50,9 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 
 compose 编排的各服务端口（容器内部）：edge-gateway `8080`、config-server `8888`、conversation `8081`、workflow `8082`、analytics `8083`、knowledge `8084`、agent `8085`、async-task `8086`、channel `8087`、interop `8088`、eval `8089`、vision `8090`、voice `8091`、auth `8092`、order `8093`；前端 `capability-showcase-frontend` 容器 80。服务间调用/内部路由一律用容器端口。
 
-> **宿主端口重映射**：推荐用 `bash deploy/start-all.sh` 起整栈（配已提交的 `deploy/.env`），它把宿主端口挪开以避开本机 Apollo——网关 `EDGE_HOST_PORT=18080`、vision `VISION_HOST_PORT=18090`、MySQL `MYSQL_HOST_PORT=13307`；前端固定宿主 `8093`，order-service 宿主 `8094`（宿主 8093 已被前端占用）。裸 `docker compose up` 时网关宿主为 `8080`（会与 Apollo 冲突，故上文 curl 用 `:8080` 仅适用裸起）。
+> **宿主端口重映射**：推荐用 `bash deploy/start-all.sh` 起整栈（本地 `deploy/.env` 不提交），
+> 它把宿主端口挪开以避开本机 Apollo——网关 `18080`、vision `18090`、MySQL `13307`；
+> 前端 `8093`、order-service `8094`。裸 `docker compose up` 不会读取百炼 CSV，且端口会回到 compose 默认值。
 
 > **身份/RBAC 整栈默认**：compose 默认 `AUTH_STORE=jdbc`、`AUTH_RBAC_ENABLED=true`、`AUTH_RBAC_ADMIN_WRITES_ENABLED=true`、`AUTH_RBAC_INHERITANCE_ENABLED=true`、bootstrap admin=`alice`（各服务 yml 兜底默认则全关、`AUTH_STORE=in-memory`）；edge `EDGE_CASDOOR_ENABLED=true` + `EDGE_CASDOOR_MODE=only`、前端 `SHOWCASE_AUTH_MODE=oidc`——故裸起整栈需先起外部 Casdoor/auth 栈，否则登录/业务全 401（应急可临时 `EDGE_CASDOOR_MODE=dual`）。
 

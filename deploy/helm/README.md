@@ -32,10 +32,29 @@ helm template platform deploy/helm/platform            # 离线渲染全部资�
 # 安装（先备好命名空间与镜像仓库/外部基础设施）
 helm install platform deploy/helm/platform -n platform --create-namespace \
   --set global.image.registry=<your-registry> \
-  --set global.image.tag=<git-sha>
+  --set global.image.tag=<git-sha> \
+  --set config.RAG_EMBEDDING_BASE_URL=https://REPLACE_WITH_WORKSPACE_ID.cn-beijing.maas.aliyuncs.com/compatible-mode/v1 \
+  --set config.RAG_RERANK_BAILIAN_BASE_URL=https://REPLACE_WITH_WORKSPACE_ID.cn-beijing.maas.aliyuncs.com/compatible-api/v1 \
+  --set-string secrets.shared.RAG_EMBEDDING_API_KEY=REPLACE_WITH_BAILIAN_API_KEY \
+  --set-string secrets.shared.RAG_RERANK_BAILIAN_API_KEY=REPLACE_WITH_BAILIAN_API_KEY
 ```
 
 > 库 chart `platform-lib` 已 vendored 在 `charts/` 下，`helm template`/`lint` 无需 `helm dependency build`（离线可用）。
+> 生产不要把 API Key 留在命令历史中；上例只展示字段，实际使用 ESO/Vault 或受控 values 文件。
+
+## 百炼模型栈
+
+Chart 与 Docker 默认口径一致：
+
+- embedding：`text-embedding-v4`，1024 维、单批 10 条，collection 基名
+  `knowledge_segments_bailian_v4`；
+- rerank：`qwen3-rerank`，`RAG_RERANK_TYPE=bailian`；
+- vision：应用侧使用逻辑名 `vision-default`。本 Chart 的 LiteLLM 是外部托管服务，必须在外部
+  LiteLLM 配置中将该逻辑名映射到百炼 `qwen3-vl-plus`（或 `qwen3.7-plus`/`qwen3.6-flash`）。
+
+embedding 使用 `compatible-mode/v1`，rerank 使用 `compatible-api/v1`，两个 base URL 不能互换。
+API Key 放 `platform-secrets`；启用 ESO 时，模板会从
+`<vaultPath>/bailian` 的 `api-key` 属性同步到 embedding 与 rerank 两个环境变量。
 
 ## values 结构
 
@@ -67,7 +86,8 @@ helm install platform deploy/helm/platform -n platform --create-namespace \
 | `workflow-service` | 8082 | edge-gateway 路由 |
 | `analytics-service` | 8083 | agent → `ANALYTICS_BASE_URL` |
 | `knowledge-service` | 8084 | conversation/agent → `KNOWLEDGE_BASE_URL` |
-| `agent-service` | 8085 | interop → `AGENT_BASE_URL` |
+| `agentscope-orchestrator` | 8085 | edge/interop 默认 Agent 目标 |
+| `agent-service` | 8085 | 旧 Java 整服务回滚目标 |
 | `async-task-service` | 8086 | workflow/agent → `ASYNC_TASK_BASE_URL` |
 | `channel-service` | 8087 | edge-gateway 路由 |
 | `interop-service` | 8088 | edge-gateway 路由 |
@@ -164,14 +184,17 @@ helm upgrade platform deploy/helm/platform \
 
 `templates/externalsecret-sample.yaml` 会为 `platform-secrets` / `edge-gateway-jwt` 渲染
 `ExternalSecret` CRD，从 Vault 拉取真值填充**同名** Secret（服务 envFrom 引用不变）。
+百炼凭据应存为 `<vaultPath>/bailian.api-key`，模板会同时映射
+`RAG_EMBEDDING_API_KEY` 和 `RAG_RERANK_BAILIAN_API_KEY`。
 
 ## 有状态语义与水平扩展
 
 - **async-task-service**：多副本必须 `--set config.ASYNC_TASK_STORE=jdbc`（持久化到 MySQL），
   否则内存态各副本分裂（任务/租约/webhook 状态不共享）。默认 `replicaCount=1` + in-memory。
-- **agent-service**：多副本必须 `--set config.AGENT_ASYNC_EXTERNAL_ENABLED=true`
-  `--set config.AGENT_ASYNC_EXTERNAL_AUTHORITATIVE=true`，让 async-task-service 成为异步任务权威，
-  避免各副本重复领取。默认单副本。
+- **agentscope-orchestrator**：默认以 async-task-service 为异步任务权威；多副本共享任务态，
+  worker lease 防止重复领取。使用独立 `ghcr.io/your-org/agentscope-platform` 镜像仓库。
+- **agent-service**：只作回滚；若回滚后扩成多副本，仍须开启 Java 的 external authoritative
+  模式避免重复领取。
 - **workflow-service**：Flowable 在共享 MySQL 自管表，多副本安全。
 - **eval-service**：回归测试客户端，非常驻。默认 `replicaCount=0`；按需
   `--set services.eval-service.replicaCount=1` 触发，或改造成 Job/CronJob。

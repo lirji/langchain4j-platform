@@ -15,7 +15,7 @@
 #   ./start-dev.sh              # 起后端 docker(应用服务) + 前端 dev(:5173)  —— 日常最常用
 #   ./start-dev.sh --all        # 连基础设施一起重启后端，再起前端 dev
 #   ./start-dev.sh --build      # 先 mvn package 再重建后端镜像后起，再起前端 dev
-#   ./start-dev.sh --es         # (已弃用) ES 全文混排 + nomic 现为后端默认；本开关保留为兼容 no-op
+#   ./start-dev.sh --es         # (已弃用) ES 全文混排现为后端默认；本开关保留为兼容 no-op
 #   ./start-dev.sh --front-only # 后端已在跑，只起前端 dev
 #   ./start-dev.sh --back-only  # 只起/重启后端 docker（等价于 start-local.sh）
 #

@@ -34,7 +34,11 @@ Java 服务(6个: conversation/workflow/analytics/knowledge/agent/vision)
 ## 2. 快速开始
 
 ```bash
-# 起栈（新增 litellm-postgres / jaeger 会自动拉起；镜像已固定 v1.74.3-stable）
+# 先从本地 CSV 注入 vision-default 所需百炼凭据
+source deploy/load-bailian-env.sh
+load_bailian_env /path/to/bailian-credentials.csv
+verify_bailian_vision_model
+# 起栈（litellm-postgres / jaeger 自动拉起；镜像固定 v1.74.3-stable）
 docker compose -f deploy/docker-compose.yml up -d litellm
 
 # 管理 UI（本地开发默认凭据 admin / litellm-ui-dev，生产必须换）
@@ -43,8 +47,10 @@ open http://localhost:4000/ui
 open http://localhost:16686
 ```
 
-UI 里能看到：每次请求用了哪个模型、输入/输出 token、按内置价目算出的费用（deepseek-chat
-有价；ollama 记 0）、按 key/end-user 聚合的 spend、预算与限流配置。
+UI 里能看到：每次请求用了哪个模型、输入/输出 token、按内置价目算出的费用、按 key/end-user
+聚合的 spend、预算与限流配置。当前 `vision-default` 映射百炼 `qwen3-vl-plus`；
+`BAILIAN_VISION_MODEL` 可切换其他百炼视觉模型。`verify_bailian_vision_model` 只读取
+百炼 `/models` 目录，不执行推理；凭据无效或模型不存在时会在重建容器前失败。
 
 **镜像升级流程**（固定 tag 的意义）：先 `docker run --rm -v langchain4j-platform_litellm-postgres-data:/d
 alpine tar czf - /d > litellm-pg-backup.tgz` 快照卷（或 `pg_dump`），再改 `LITELLM_IMAGE_TAG`
@@ -125,10 +131,12 @@ namespace `litellm.cache`（与应用侧限流/token 预算 key 区隔）。复�
 
 `chat-default`（DeepSeek）→ `chat-default-fallback`（本机 Ollama `llama3.1`）。
 
-- 前置：宿主机 `ollama pull llama3.1` 且 Ollama 在 :11434（同 nomic embedding 的前置方式）。
+- 前置：仅在需要文本故障回退时，宿主机运行 Ollama :11434 并已拉取 `llama3.1`。
+- fallback 通过 Ollama 的 OpenAI-compatible `/v1` 端点转发；不要改回 LiteLLM native
+  `ollama/` provider，该路径不能处理当前 AgentScope 的 list/string 混合消息内容。
 - **能力不等价告示**：llama3.1 在工具调用/JSON schema/上下文窗上弱于 deepseek-chat，
   只作故障降级，不承诺等价——重要链路灰度前先跑代表性用例。
-- 视觉（vision-default）刻意无 fallback：没有第二个可用视觉 provider，不虚构。
+- 视觉（`vision-default` → 百炼 `qwen3-vl-plus`）刻意无 fallback：当前没有第二个可用视觉 provider。
 - 回滚：删掉 config.yaml 的 `fallbacks` 块 + 重启 litellm。
 - 验证：`bash deploy/smoke-failover.sh`（8 步冒烟，见 §8）。
 
