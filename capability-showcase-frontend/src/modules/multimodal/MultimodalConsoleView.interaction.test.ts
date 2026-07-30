@@ -385,29 +385,30 @@ describe('MultimodalConsoleView interaction', () => {
     wrapper.unmount()
   })
 
-  // Voice 与图片 embedding 均在 provider 未配置时 fail-closed；vision caption 仍默认 ready。
-  it('MM-14 voice 三能力目录 fail-closed，vision/rag 保持可用态，banner 文案准确', () => {
+  it('MM-14 百炼标准栈的 vision、voice 与图片向量能力均为可执行态', () => {
     for (const id of ['voice.transcribe', 'voice.chat', 'voice.chat.stream']) {
-      expect(capability(id)).toMatchObject({ featureFlagDefault: false, state: 'flag-off' })
+      expect(capability(id)).toMatchObject({ featureFlagDefault: true, state: 'ready' })
     }
     for (const id of ['vision.caption.file', 'vision.caption.json', 'chat.vision']) {
       expect(capability(id).state).toBe('ready')
     }
-    for (const id of ['rag.image.ingest', 'rag.image.search']) {
-      expect(capability(id).state).toBe('flag-off')
-    }
-    // banner 不再声称「多数能力默认未注册」。
+    expect(capability('rag.image.ingest')).toMatchObject({
+      featureFlagDefault: true,
+      state: 'scope-required',
+    })
+    expect(capability('rag.image.search')).toMatchObject({
+      featureFlagDefault: true,
+      state: 'ready',
+    })
     const wrapper = mount(MultimodalConsoleView, { props: { moduleId: 'multimodal' }, ...opts })
     expect(wrapper.text()).not.toContain('多数能力默认未注册')
-    expect(wrapper.text()).toContain('app.voice.enabled')
+    expect(wrapper.text()).toContain('百炼')
     wrapper.unmount()
   })
 
   it('MM-15 rag.image.ingest 开启后标 scope-required：gate 对缺 scope 的 Bearer 前置禁用（issue-20 已修）', () => {
     const ingest = capability('rag.image.ingest')
     expect(ingest.requiredScopes).toContain('ingest')
-    expect(ingest.state).toBe('flag-off')
-    ingest.state = 'scope-required'
     expect(ingest.state).toBe('scope-required')
   })
 

@@ -31,6 +31,9 @@ export interface GateResult {
  */
 export function executionGate(cap: Capability, ctx: GateContext): GateResult {
   if (cap.state === 'flag-off') {
+    if (cap.unavailableReason) {
+      return { allowed: false, reason: cap.unavailableReason }
+    }
     const flag = cap.featureFlag ? `需开启 ${cap.featureFlag}=true` : '需开启对应 feature flag'
     return { allowed: false, reason: `该能力未注册：${flag}。` }
   }

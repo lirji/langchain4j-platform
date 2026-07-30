@@ -40,6 +40,21 @@ describe('executionGate', () => {
     expect(r.reason).toContain('app.nl2sql.enabled')
   })
 
+  it('离线控制面使用显式不可用原因', () => {
+    const r = executionGate(
+      cap({
+        state: 'flag-off',
+        featureFlag: 'evaluation',
+        unavailableReason: '离线评测控制面未部署；请通过独立 CLI/CI Job 执行。',
+      }),
+      { hasApiKey: true },
+    )
+    expect(r).toEqual({
+      allowed: false,
+      reason: '离线评测控制面未部署；请通过独立 CLI/CI Job 执行。',
+    })
+  })
+
   it('executableByDefault=false（危险端点）未确认 → 禁止', () => {
     const r = executionGate(
       cap({ executableByDefault: false, riskLevel: 'destructive', state: 'display-only' }),

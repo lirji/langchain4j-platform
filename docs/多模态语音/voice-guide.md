@@ -8,7 +8,9 @@
 - `POST /voice/chat` —— 完整轮次：ASR → conversation `/chat` → TTS，返回文字 + base64 语音。
 - `POST /voice/chat/stream` —— SSE 半流式：整段 ASR → conversation `/chat/stream` 逐 token → 分句 TTS 逐句推回。
 
-> **默认关。** 总开关 `VOICE_ENABLED=false`（对应 `app.voice.enabled`）。关闭时整个 `VoiceConfig` +
+> **源码默认关，标准百炼启动流程会开启。** `application.yml` 的总开关仍是
+> `VOICE_ENABLED=false`（对应 `app.voice.enabled`）；`deploy/load-bailian-env.sh` 成功加载本地
+> 百炼凭据后会默认导出 `VOICE_ENABLED=true` 和原生 Qwen3 ASR/TTS 配置。关闭时整个 `VoiceConfig` +
 > `VoiceController` 都不装配（`@ConditionalOnProperty`），容器照常启动、health 绿，但**不映射任何 `/voice/**`**——
 > 打过去得 404。这是刻意的「空壳容器」：不装配即零依赖、零网络。
 
@@ -183,7 +185,7 @@ data:
 app:
   voice:
     enabled: ${VOICE_ENABLED:false}                 # 总开关，默认关 → 不装配任何 voice bean
-    provider: ${VOICE_PROVIDER:openai}              # 目前仅 openai 兼容协议
+    provider: ${VOICE_PROVIDER:openai}              # openai 兼容协议 | bailian 原生 DashScope
     base-url: ${VOICE_BASE_URL:https://api.openai.com/v1}   # 可指云 OpenAI / Azure / 本地网关
     api-key: ${VOICE_API_KEY:${OPENAI_API_KEY:}}    # 未配走本地网关时可留空
     asr-model: ${VOICE_ASR_MODEL:whisper-1}         # 或 gpt-4o-transcribe / 本地模型名
@@ -201,13 +203,16 @@ app:
 
 要点：
 
-- **provider 抽象**：`SpeechService` 接口 + `OpenAiSpeechService` 实现（JDK `HttpClient`，零新依赖）。ASR 走
+- **provider 抽象**：`SpeechService` 有 `OpenAiSpeechService` 与 `BailianSpeechService` 两个实现，均使用
+  JDK `HttpClient`。OpenAI 模式的 ASR 走
   `POST {base-url}/audio/transcriptions`（multipart，字段 `file`+`model`[+`language`]），TTS 走
   `POST {base-url}/audio/speech`（JSON `model/voice/input/response_format`）。**`base-url` 一换即可指**
-  云 OpenAI / Azure / 本地 `faster-whisper` + `openedai-speech` / 任意 OpenAI 兼容语音网关。接别家在 `SpeechService` 加实现。
-- **没有内置 stub/内存实现**：跟平台多数「默认内存实现、开箱即跑」的能力不同，语音一旦 `VOICE_ENABLED=true`，
-  **必须有一个可达的 OpenAI 兼容 ASR/TTS 后端**——否则 ASR/TTS 调用直接抛错。本地想不掏云费用，就起一套本地
-  whisper+tts 网关，把 `VOICE_BASE_URL` 指过去、`VOICE_API_KEY` 留空。
+  云 OpenAI / Azure / 本地 `faster-whisper` + `openedai-speech`。
+- **百炼原生模式**：`VOICE_PROVIDER=bailian` 时，ASR/TTS 都调用
+  `{VOICE_BASE_URL}/services/aigc/multimodal-generation/generation`；ASR 上传 Base64 Data URI，
+  TTS 解码内联音频或下载百炼返回的短时 OSS URL。下载只接受阿里云受信域名，并将 provider 可能返回的
+  `http` 地址升级为 `https`。
+- **没有内置 stub/内存实现**：语音一旦启用，必须有一个与所选 provider 契约匹配且可达的后端。
 - **两处大小限制**：`VOICE_MAX_AUDIO_BYTES`（业务层，超限返回 400）与 Spring 的 multipart 上限
   `VOICE_MAX_UPLOAD`（默认 25MB，`spring.servlet.multipart.max-file-size`）应保持一致。
 - **api-key 空会 401**：连云 OpenAI 却没配 `VOICE_API_KEY`/`OPENAI_API_KEY` 时，启动日志会 warn，运行时 ASR/TTS 401。
@@ -219,8 +224,15 @@ app:
 ### 5.1 本地单跑
 
 ```bash
-# 起一个 OpenAI 兼容语音后端（云 OpenAI，或本地 faster-whisper + openedai-speech），并确保 conversation-service 在 :8081
+# 推荐：加载本地百炼凭据与原生 Qwen3 语音默认值，并确保 conversation-service 在 :8081
+source deploy/load-bailian-env.sh
+load_bailian_env
+VOICE_CONVERSATION_BASE_URL=http://localhost:8081 \
+  mvn -pl voice-service -am spring-boot:run
+
+# 备选：OpenAI 兼容语音后端
 VOICE_ENABLED=true \
+VOICE_PROVIDER=openai \
 VOICE_BASE_URL=https://api.openai.com/v1 \
 VOICE_API_KEY=sk-... \
 VOICE_CONVERSATION_BASE_URL=http://localhost:8081 \
@@ -232,13 +244,12 @@ VOICE_CONVERSATION_BASE_URL=http://localhost:8081 \
 ### 5.2 整套栈
 
 `voice-service` 已进 `deploy/docker-compose.yml`（`:8091`，`edge-gateway` 的 `VOICE_URI` 已指向它、`depends_on`
-已挂）与 Helm chart（`deploy/helm/platform/values.yaml`，`VOICE_ENABLED: "false"`）。**两处默认都关**，
-所以整栈起来时 `voice-service` 是个空壳容器（health 绿、无 `/voice/**`）。要启用：
+已挂）与 Helm chart。源码/Helm 默认仍关闭；受支持的本地启动脚本加载百炼 CSV 后会开启并选择
+`qwen3-asr-flash` + `qwen3-tts-flash`。不要用未加载环境的裸 `docker compose up` 期待语音可用。
 
 ```bash
-# docker-compose：显式开开关 + 给 provider 凭据
-VOICE_ENABLED=true VOICE_API_KEY=sk-... \
-  docker compose -f deploy/docker-compose.yml up --build voice-service edge-gateway conversation-service
+# 从本地 CSV 安全加载，不会把 key 写入 Git
+bash deploy/start-all.sh
 ```
 
 compose 里 `voice-service` 的 `VOICE_CONVERSATION_BASE_URL` 已固定为 `http://conversation-service:8081`。
@@ -252,7 +263,7 @@ Helm 生产启用时把 `VOICE_ENABLED` 置 `true`，`VOICE_API_KEY` 走 Secret 
 **决策：**
 - **`voice-service` 只是薄壳，脑子在 `conversation`**：ASR/TTS 与对话逻辑解耦，语音端零业务判断，行为可预测、可单测
   （`SentenceChunker`、`VoiceConversationService` 都是纯逻辑，测试用 mock 的 `SpeechService`/`ConversationClient`）。
-- **provider 用 OpenAI 兼容协议**：跟平台 chat/embedding 一个路子，`base-url` 一换即换后端，不锁厂商、零新依赖。
+- **provider 显式分流**：OpenAI 兼容语音继续可选；百炼 Qwen3 走原生 DashScope 契约，避免把模型名硬塞进不兼容的 `/audio/*`。
 - **引用标记只在语音侧剥、文字侧留**：`reply`/`audio-chunk.text` 保留 `[doc=...]`（可点引用），TTS 前统一 `stripCitations`。
 
 **坑：**
@@ -277,12 +288,12 @@ Helm 生产启用时把 `VOICE_ENABLED` 置 `true`，`VOICE_API_KEY` 走 Secret 
 | 环境变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `VOICE_ENABLED` | `false` | 总开关。关 → 不装配任何 voice bean，`/voice/**` 返回 404 |
-| `VOICE_PROVIDER` | `openai` | ASR/TTS provider，目前仅 openai 兼容协议 |
-| `VOICE_BASE_URL` | `https://api.openai.com/v1` | provider base-url，可指云 OpenAI / Azure / 本地网关 |
+| `VOICE_PROVIDER` | `openai` | `openai`（兼容协议）或 `bailian`（原生 DashScope） |
+| `VOICE_BASE_URL` | `https://api.openai.com/v1` | provider base-url；本地百炼加载器设为 `https://dashscope.aliyuncs.com/api/v1` |
 | `VOICE_API_KEY` | 空（回退 `OPENAI_API_KEY`） | provider 凭据；连云却留空 → 401 |
-| `VOICE_ASR_MODEL` | `whisper-1` | ASR 模型（或 `gpt-4o-transcribe` / 本地模型名） |
-| `VOICE_TTS_MODEL` | `tts-1` | TTS 模型（或 `gpt-4o-mini-tts`） |
-| `VOICE_TTS_VOICE` | `alloy` | TTS 音色 |
+| `VOICE_ASR_MODEL` | `whisper-1` | 百炼本地默认覆盖为 `qwen3-asr-flash` |
+| `VOICE_TTS_MODEL` | `tts-1` | 百炼本地默认覆盖为 `qwen3-tts-flash` |
+| `VOICE_TTS_VOICE` | `alloy` | 百炼本地默认覆盖为 `Cherry` |
 | `VOICE_TTS_FORMAT` | `mp3` | TTS 输出格式，决定回复 content-type（mp3/wav/opus/aac/flac/pcm） |
 | `VOICE_LANGUAGE` | 空（自动检测） | ASR 语言提示，如 `zh` |
 | `VOICE_TIMEOUT_SECONDS` | `30` | ASR/TTS provider 调用超时 |

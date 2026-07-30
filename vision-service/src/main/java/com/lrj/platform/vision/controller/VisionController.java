@@ -4,6 +4,7 @@ import com.lrj.platform.protocol.vision.VisionCaptionReply;
 import com.lrj.platform.protocol.vision.VisionCaptionRequest;
 import com.lrj.platform.vision.VisionContentGuard;
 import com.lrj.platform.vision.VisionModel;
+import dev.langchain4j.exception.InvalidRequestException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -85,6 +86,19 @@ public class VisionController {
     public Map<String, String> badRequest(IllegalArgumentException e) {
         log.warn("vision request rejected: {}", e.getMessage());
         return Map.of("error", "bad_request", "message", e.getMessage() == null ? "" : e.getMessage());
+    }
+
+    /**
+     * 模型供应商确认请求本身无效时同样属于调用方 4xx，而不是服务故障。
+     * 不透传供应商原始文案，避免把实现细节、模型名或上游 request id 暴露给客户端。
+     */
+    @ExceptionHandler(InvalidRequestException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Map<String, String> providerBadRequest(InvalidRequestException e) {
+        log.warn("vision provider rejected request type={}", e.getClass().getSimpleName());
+        return Map.of(
+                "error", "bad_request",
+                "message", "image request was rejected by the vision provider");
     }
 
     private static byte[] decode(String base64) {

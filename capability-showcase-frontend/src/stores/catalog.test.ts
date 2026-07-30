@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import type { Catalog } from '../types/catalog'
-import { mergeLive, tagCatalogSource } from '../api/catalog'
+import { fetchCatalog, mergeLive, tagCatalogSource } from '../api/catalog'
 import { useCatalogStore } from './catalog'
 import { useSessionStore } from './session'
 
@@ -90,6 +90,18 @@ function mockFetch(handler: (url: string) => { ok: boolean; body: unknown }) {
 describe('catalog store 加载与 live 回退', () => {
   beforeEach(() => setActivePinia(createPinia()))
   afterEach(() => vi.unstubAllGlobals())
+
+  it('静态目录禁用浏览器缓存，部署后立即读取新能力状态', async () => {
+    const fetchMock = mockFetch(() => ({ ok: true, body: sampleCatalog() }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchCatalog('/catalog.json')
+
+    expect(fetchMock).toHaveBeenCalledWith('/catalog.json', {
+      cache: 'no-store',
+      headers: { Accept: 'application/json' },
+    })
+  })
 
   it('加载静态目录成功 → ready 且全部 manifest', async () => {
     vi.stubGlobal(

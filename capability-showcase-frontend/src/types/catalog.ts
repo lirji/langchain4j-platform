@@ -73,6 +73,8 @@ export interface Capability {
   requiredScopes: string[]
   featureFlag?: string
   featureFlagDefault?: boolean
+  /** 默认不可执行时的部署/边界说明；优先于通用 feature-flag 提示。 */
+  unavailableReason?: string
   riskLevel: RiskLevel
   state: CapabilityState
   executableByDefault: boolean

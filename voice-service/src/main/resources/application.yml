@@ -27,7 +27,7 @@ app:
   voice:
     # 总开关。默认关 → voice 相关 Bean 全不装配，零依赖、零网络。
     enabled: ${VOICE_ENABLED:false}
-    # ASR/TTS provider（目前仅 openai 兼容协议）。base-url 可指云 OpenAI / Azure / 本地 whisper+tts 网关。
+    # ASR/TTS provider：openai 兼容协议或 bailian 原生 DashScope 协议。
     provider: ${VOICE_PROVIDER:openai}
     base-url: ${VOICE_BASE_URL:https://api.openai.com/v1}
     api-key: ${VOICE_API_KEY:${OPENAI_API_KEY:}}

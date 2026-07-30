@@ -1,16 +1,16 @@
 # 视觉 / 多模态接入指南
 
 本指南面向要给平台接入「看图」能力的开发者。在新微服务平台里，视觉/多模态横跨**三个入口面**，
-外加一条正交的原生 CLIP 图片 embedding（在 `rag-guide.md` 里单独讲）：
+外加一条正交的原生跨模态图片 embedding（在 `rag-guide.md` 里单独讲）：
 
 | 入口面 | 服务 / 端点 | 干什么 | 开关（默认） |
 | --- | --- | --- | --- |
 | ① 独立视觉服务 | `vision-service`（`:8090`）`POST /vision/caption`、`POST /vision/describe` | 一张图 + 可选指令 → 文本（描述 + OCR 转写，或按问题看图作答） | `VISION_ENABLED=true`（须配 `VISION_MODEL`，否则 fail-fast） |
 | ② 看图对话 | `conversation-service` `POST /chat/vision` | multipart `image` + `message` 的单轮看图问答，薄委托转发给 ①  | `CONVERSATION_VISION_ENABLED=true` |
 | ③ Agent 视觉动作 | `agent-service` `browser_see` 工具 | 深度 Agent 截当前页面图交 ① 理解，「看」文本抽不出的页面（图表/布局/纯图片页） | `AGENT_VISION_ENABLED=true`（`browser_see` 还需 `AGENT_BROWSER_ENABLED=true`，默认关） |
-| （正交）原生 CLIP 图片 embedding | `knowledge-service` `POST /rag/image`、`POST /rag/image-search` | 图片直接向量化进跨模态空间，文本 query ↔ 图片互检索 | 默认关；启用 `RAG_MULTIMODAL_ENABLED=true` 时需可达端点（详见 [`rag-guide.md`](../对话与检索/rag-guide.md) 第 3 节） |
+| （正交）原生跨模态 embedding | `knowledge-service` `POST /rag/image`、`POST /rag/image-search` | 图片直接向量化进跨模态空间，文本 query ↔ 图片互检索 | 源码默认关；本地百炼加载器启用 `qwen3-vl-embedding`（详见 [`rag-guide.md`](../对话与检索/rag-guide.md) 第 3 节） |
 
-**三个入口面默认全关**，关闭时相关 Bean / 路由 / 网络依赖一概不装配，零开销。所有对外调用统一走
+当前整栈中三个入口面默认开启；显式关闭时相关 Bean / 路由 / 网络依赖不装配。所有对外调用统一走
 边缘网关 `http://localhost:8080` + `-H 'X-Api-Key: dev-key-acme'`（网关校验 api-key → 签发内部 JWT → 路由下游）。
 `dev-key-acme` 已带 `vision` scope。
 
@@ -41,7 +41,8 @@
   所以视觉 `ChatModel` 由 `VisionConfig` 经 `GatewayChatModelFactory.build(...)` **直接构造、塞进 `DefaultVisionModel` 内部持有，
   不暴露成 Bean**；对外只暴露自定义 `VisionModel` 接口。放进独立服务后，天然与主 `ChatModel` 隔离。
 - **模型解耦、但走同一 LiteLLM**：视觉模型与主文本模型**共用同一个 LiteLLM base-url**，仅逻辑模型名不同
-  （`VISION_MODEL` 指向 LiteLLM `model_list` 里的多模态模型，如 `gpt-4o-mini` / `qwen2.5-vl`）。
+  （`VISION_MODEL` 指向 LiteLLM `model_list` 里的多模态模型；compose 当前
+  `vision-default` → 百炼 `qwen3-vl-plus`）。
   **新项目里没有 `provider` switch**（老单体的 `openai-compat`/`ollama` 分流已收敛进 LiteLLM 配置）——
   换 provider/failover 改 `deploy/litellm/config.yaml`，不改 Java、不改这里的环境变量。
 - **租户 token 正确归因**：视觉 `ChatModel` 由 `GatewayChatModelFactory` 自动挂上全部 `ChatModelListener`
@@ -53,11 +54,12 @@
 `VISION_ENABLED=true` 时**必须**配 `VISION_MODEL`，否则启动 **fail-fast** 明确报错（绝不静默降级到文本模型）。
 
 ```bash
-# 单跑视觉服务（LiteLLM 需可达，且其 model_list 里有名为 gpt-4o-mini 的多模态模型）
+# 单跑视觉服务（LiteLLM 需可达，且 model_list 中已配置 vision-default）
 VISION_ENABLED=true \
-VISION_MODEL=gpt-4o-mini \
+VISION_MODEL=vision-default \
   mvn -pl vision-service spring-boot:run
-# 或整套本地栈：VISION_ENABLED=true VISION_MODEL=gpt-4o-mini docker compose -f deploy/docker-compose.yml up --build
+# 整套本地栈会从 deploy/.env 指定的百炼凭据 CSV 注入 Key：
+bash deploy/start-all.sh --no-build
 ```
 
 ### 调用 A —— JSON（跨服务契约 `VisionCaptionRequest`）
@@ -76,7 +78,7 @@ curl -s -X POST 'http://localhost:8080/vision/caption' \
 响应体 `VisionCaptionReply`：
 
 ```json
-{ "caption": "图为2024各季度营收柱状图……Q2 为 320 万元……", "model": "gpt-4o-mini", "chars": 128 }
+{ "caption": "图为2024各季度营收柱状图……Q2 为 320 万元……", "model": "vision-default", "chars": 128 }
 ```
 
 `caption` = 描述/转写/回答正文；`model` = 实际视觉模型名（便于审计/观测）；`chars` = 字符数（调用方快速判空）。
@@ -203,14 +205,16 @@ VISION_BASE_URL=http://localhost:8090 \
 
 ---
 
-## 4. 原生 CLIP 图片 embedding（正交，见 rag-guide）
+## 4. 原生跨模态图片 embedding（正交，见 rag-guide）
 
 上面三面都是「图 → 文本」（caption/OCR/问答）。要「以文搜图 / 保留图的原生视觉语义」，用另一条**正交**路径：
-`knowledge-service` 的原生 CLIP / jina-clip 多模态 embedding——图片**直接**向量化进跨模态空间，文本 query 用同一模型
+`knowledge-service` 的原生 Qwen-VL / CLIP / jina-clip 多模态 embedding——图片**直接**向量化进跨模态空间，文本 query 用同一模型
 embed 后算相似度，命中「红色跑车」这类难以言说的视觉语义。
 
 - `POST /rag/image`（图片入库）、`POST /rag/image-search`（文本搜图）
-- 开关 `RAG_MULTIMODAL_ENABLED`（默认关；开启时 base URL 必填），模型 `jinaai/jina-clip-v2`、维度 1024，向量存**独立 image collection**
+- 开关 `RAG_MULTIMODAL_ENABLED`（源码默认关；开启时 base URL 必填）。本地百炼加载器默认选择
+  `RAG_MULTIMODAL_PROVIDER=bailian`、`qwen3-vl-embedding`、1024 维；仍可切回
+  `RAG_MULTIMODAL_PROVIDER=openai` 使用 `jinaai/jina-clip-v2`。向量存**独立 image collection**
   （与文本索引维度隔离）
 
 完整配置、curl、维度安全与租户隔离**不在本文重复**，详见 [`rag-guide.md`](../对话与检索/rag-guide.md) 第 3 节「图片多模态 embedding（CLIP）」。
@@ -225,6 +229,11 @@ embed 后算相似度，命中「红色跑车」这类难以言说的视觉语�
 - **fail-fast 而非静默降级**：`VISION_ENABLED=true` 却没配 `VISION_MODEL` → 启动直接报错。视觉答错/乱计量比启动失败更难查。
 - **provider 收敛进 LiteLLM**：不要找 `APP_VISION_PROVIDER`——新项目没有。云 OpenAI / vLLM / 本地 Ollama 多模态模型的选择与
   failover 全在 `deploy/litellm/config.yaml` 的 `model_list`，Java 侧只认一个逻辑模型名。
+- **百炼视觉入口**：`vision-default` 当前映射 `qwen3-vl-plus`，使用业务空间
+  `compatible-mode/v1/chat/completions`。凭据由 `deploy/load-bailian-env.sh` 从本地 CSV 注入，
+  API Key 不进入 Git；2026-07-29 实时目录确认 `qwen3-vl-plus`、`qwen3-vl-flash` 及其日期版本
+  可用。可在启动前设置 `BAILIAN_VISION_MODEL=openai/qwen3-vl-flash` 切换模型，Java 与
+  `VISION_MODEL` 无需改动；`verify_bailian_vision_model` 会先查 `/models` 精确确认。
 - **token 计量不绕过配额**：视觉 `ChatModel` 经 `GatewayChatModelFactory` 挂全部 `ChatModelListener`；租户在请求线程的
   `TenantContext` 上，归因正确。（注：限流 `ingest` family 不预拦视觉调用，但 token 用量仍被记账可见。）
 - **caption 缓存只覆盖默认指令路径**：同图重复入库式描述复用；带问题的看图问答不缓存。
@@ -255,7 +264,7 @@ embed 后算相似度，命中「红色跑车」这类难以言说的视觉语�
 | `AGENT_VISION_ENABLED` | `true` | Agent 视觉后端开关（`browser_see` 门控之一） | agent-service |
 | `VISION_BASE_URL` | `http://localhost:8090` | agent 转发到 vision-service 的地址 | agent-service |
 | `AGENT_VISION_READ_TIMEOUT` | `60s` | agent → vision 读超时 | agent-service |
-| `RAG_MULTIMODAL_ENABLED` | `false` | 原生 CLIP 图片 embedding（正交路径，详见 rag-guide.md） | knowledge-service |
+| `RAG_MULTIMODAL_ENABLED` | `false` | 原生跨模态图片 embedding；本地百炼加载器会设为 `true` | knowledge-service |
 
 > 相关文档：[`rag-guide.md`](../对话与检索/rag-guide.md)（CLIP 图片 embedding）、[`agent-guide.md`](../Agent编排/agent-guide.md)（`browser_see` 等 Agent 工具）、
 > [`operations.md`](../参考/operations.md)（运行配置）、[`api-reference.md`](../参考/api-reference.md)（接口速查）。

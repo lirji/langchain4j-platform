@@ -43,9 +43,14 @@ const isMultipart = computed(
 
     <!-- 诚实呈现的前置提示 -->
     <div v-if="cap.state === 'flag-off'" class="caphead__notice caphead__notice--off">
-      该能力未注册：需开启
-      <code>{{ cap.featureFlag ?? '（未知 feature flag）' }}=true</code>
-      后端才会挂载此端点。当前不可执行，仅可预览请求。
+      <template v-if="cap.unavailableReason">
+        {{ cap.unavailableReason }}
+      </template>
+      <template v-else>
+        该能力未注册：需开启
+        <code>{{ cap.featureFlag ?? '（未知 feature flag）' }}=true</code>
+        后端才会挂载此端点。当前不可执行，仅可预览请求。
+      </template>
     </div>
     <div v-else-if="cap.state === 'ready-degraded'" class="caphead__notice caphead__notice--warn">
       当前为内存 / 确定性降级实现（非真实语义或生产依赖）。可执行，结果仅供演示。

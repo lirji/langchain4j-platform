@@ -112,11 +112,10 @@ const focusedIsStream = computed(
   <div v-else class="mm">
     <ModuleHeader :module-id="moduleId" />
 
-    <InfoNote tone="warning" class="mm__banner">
-      语音能力默认未注册：需开启 <code>app.voice.enabled</code> 后端才会挂载。图像侧
-      （<code>app.vision.enabled</code>、<code>app.conversation.vision.enabled</code>、
-      <code>app.rag.multimodal-embedding.enabled</code>）也会在未配置 CLIP provider 时保持关闭。
-      未启用能力可预览请求 / 复制 curl，但不可执行（运行器会标注具体 flag）。首期仅支持文件上传，暂不做浏览器录音采集。
+    <InfoNote tone="info" class="mm__banner">
+      标准本地栈使用百炼提供视觉、语音 ASR/TTS 与图片跨模态向量能力。语音与图片均通过文件上传，
+      暂不采集浏览器麦克风；图片入库仍需 <code>ingest</code> scope。若部署关闭对应 feature flag，
+      运行器会继续 fail-closed 并显示具体开关。
     </InfoNote>
 
     <WorkbenchSection

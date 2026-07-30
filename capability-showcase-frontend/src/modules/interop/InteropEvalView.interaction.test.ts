@@ -49,7 +49,14 @@ function runnerExecute(wrapper: ReturnType<typeof mount>) {
 }
 
 describe('InteropEvalView interaction', () => {
-  beforeEach(() => setupCatalog())
+  beforeEach(() => {
+    setupCatalog()
+    // 大部分用例验证显式部署 evaluation harness 后的交互合同。
+    // 生产静态目录默认仍是 flag-off，另有 IE-23 锁定其 0-fetch 行为。
+    for (const capability of useCatalogStore().allCapabilities) {
+      if (capability.id.startsWith('eval.')) capability.state = 'ready'
+    }
+  })
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
@@ -451,6 +458,21 @@ describe('InteropEvalView interaction', () => {
     await settle()
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
     expect(wrapper.get('.stat__value').text()).toBe('0.500')
+    wrapper.unmount()
+  })
+
+  it('IE-23 默认在线拓扑把 Eval 标为离线并阻止 retrieval 网络请求', async () => {
+    const retrieval = useCatalogStore().capabilityById('eval.retrieval')!
+    retrieval.state = 'flag-off'
+    retrieval.unavailableReason = '离线评测控制面未部署；请通过独立 CLI/CI Job 执行。'
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(InteropEvalView, { props: { moduleId: 'interop-eval' }, ...opts })
+    expect(runRetrievalButton(wrapper).attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('离线评测控制面未部署')
+    await runRetrievalButton(wrapper).trigger('click')
+    expect(fetchMock).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 

@@ -2,12 +2,13 @@ package com.lrj.platform.voice;
 
 /**
  * {@code app.voice.*} 绑定。默认关 → voice 相关 Bean 全不装配。
- * {@code base-url} 可指云 OpenAI / Azure / 本地 whisper+tts 网关——只要 OpenAI 兼容协议。
+ * {@code provider=openai} 时 base-url 指 OpenAI-compatible audio 网关；
+ * {@code provider=bailian} 时指 DashScope 原生 {@code /api/v1}。
  */
 public class VoiceProperties {
 
     private boolean enabled = false;
-    /** 目前仅 {@code openai}（兼容协议）。接别家在 SpeechService 加实现 + 这里加分支。 */
+    /** {@code openai}（兼容协议）或 {@code bailian}（DashScope 原生协议）。 */
     private String provider = "openai";
     private String baseUrl = "https://api.openai.com/v1";
     private String apiKey = "";

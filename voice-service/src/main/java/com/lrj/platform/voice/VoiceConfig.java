@@ -17,7 +17,7 @@ import java.time.Duration;
 /**
  * 语音客服装配。<strong>整个 config 条件化在 {@code app.voice.enabled=true}</strong> ——
  * 关闭（默认）时 voice 相关 Bean 全不存在（{@code /voice/**} 端点走软依赖缺失分支，见 {@link VoiceController}）。
- * SpeechService 按 provider 选实现（目前仅 openai 兼容）；对话经 HTTP 调 conversation-service。
+ * SpeechService 按 provider 选择 OpenAI-compatible 或百炼原生实现；对话经 HTTP 调 conversation-service。
  */
 @Configuration
 @ConditionalOnProperty(name = "app.voice.enabled", havingValue = "true")
@@ -37,6 +37,20 @@ public class VoiceConfig {
                     "app.voice.api-key is blank; cloud OpenAI will 401. Set OPENAI_API_KEY if not using a local gateway.");
         }
         return new OpenAiSpeechService(props, mapper);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "app.voice.provider", havingValue = "bailian")
+    SpeechService bailianSpeechService(VoiceProperties props, ObjectMapper mapper) {
+        if (props.getApiKey() == null || props.getApiKey().isBlank()) {
+            throw new IllegalStateException(
+                    "app.voice.provider=bailian requires VOICE_API_KEY/BAILIAN_API_KEY");
+        }
+        if (props.getBaseUrl() == null || props.getBaseUrl().isBlank()) {
+            throw new IllegalStateException(
+                    "app.voice.provider=bailian requires VOICE_BASE_URL/BAILIAN_NATIVE_BASE_URL");
+        }
+        return new BailianSpeechService(props, mapper);
     }
 
     @Bean

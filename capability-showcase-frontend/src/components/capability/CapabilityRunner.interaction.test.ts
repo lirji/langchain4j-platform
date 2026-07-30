@@ -25,7 +25,7 @@ const EXPECTED: Record<string, Contract> = {
   'memory.profile.get': ['GET', '/memory/profile', 'none', 'ready'],
   'memory.profile.clear': ['DELETE', '/memory/profile', 'none', 'ready'],
   'chat.cache.clear': ['DELETE', '/chat/cache', 'none', 'ready'],
-  'rag.query': ['POST', '/rag/query', 'json', 'ready-degraded'],
+  'rag.query': ['POST', '/rag/query', 'json', 'ready'],
   'rag.upload.file': ['POST', '/rag/documents', 'multipart', 'scope-required'],
   'rag.upload.file.shared': ['POST', '/rag/documents?visibility=public', 'multipart', 'scope-required'],
   'rag.upload.json': ['POST', '/rag/documents', 'json', 'scope-required'],

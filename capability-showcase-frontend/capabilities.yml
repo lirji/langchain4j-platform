@@ -271,7 +271,7 @@ modules:
         requiredScopes: []
         featureFlagDefault: true
         riskLevel: safe
-        state: ready-degraded
+        state: ready
         executableByDefault: true
         tags: [core]
       - id: rag.upload.file
@@ -460,10 +460,10 @@ modules:
   # ─────────────────────────── P0：Agent ───────────────────────────
   - id: agent
     title: 智能体 Agent Lab
-    description: ReAct 目标执行与异步任务流，以及 DAG、链式、投票、反思等高级编排能力。agent-service。
+    description: AgentScope 2.0 ReAct 目标执行与异步任务流，以及 DAG、链式、投票、反思等只读编排能力。
     order: 3
     priority: P0
-    service: agent-service
+    service: agentscope-orchestrator
     standalone: high
     capabilities:
       - id: agent.run
@@ -1233,7 +1233,7 @@ modules:
         executableByDefault: false
   - id: multimodal
     title: 多模态 Multimodal Console
-    description: "图像描述(vision) + 语音闭环(voice) + 图文对话/图片检索。图像描述/图文对话已默认开启（走 LiteLLM 可路由的本机 Ollama 视觉模型 qwen2.5vl，需本机拉好模型并运行 :11434）。语音与图片检索也默认开启（装配 boot-safe，实际调用需自备 ASR/TTS Key 或多模态 embedding 端点）。首期文件上传，录音后续增强。"
+    description: "图像描述(vision) + 语音闭环(voice) + 图文对话/图片检索。图像描述/图文对话已默认开启（走 LiteLLM 的 vision-default，当前映射百炼 qwen3-vl-plus）。语音与图片检索也默认开启（装配 boot-safe，实际调用需自备 ASR/TTS Key 或多模态 embedding 端点）。首期文件上传，录音后续增强。"
     order: 7
     priority: P1
     service: vision-service / voice-service
@@ -1317,10 +1317,9 @@ modules:
           - { name: audio, in: form-data, type: file, required: true, label: 音频文件, accept: "audio/*" }
         requiredScopes: []
         featureFlag: app.voice.enabled
-        # 后端 voice-service 为 VOICE_ENABLED:false 默认关（2026-07 增强默认全开时有意留关）——目录 fail-closed。
-        featureFlagDefault: false
+        featureFlagDefault: true
         riskLevel: safe
-        state: flag-off
+        state: ready
         executableByDefault: true
       - id: voice.chat
         module: multimodal
@@ -1335,9 +1334,9 @@ modules:
           - { name: chatId, in: query, type: string, required: false, label: 会话ID, defaultValue: "default" }
         requiredScopes: []
         featureFlag: app.voice.enabled
-        featureFlagDefault: false
+        featureFlagDefault: true
         riskLevel: safe
-        state: flag-off
+        state: ready
         executableByDefault: true
       - id: voice.chat.stream
         module: multimodal
@@ -1352,9 +1351,9 @@ modules:
           - { name: chatId, in: query, type: string, required: false, label: 会话ID, defaultValue: "default" }
         requiredScopes: []
         featureFlag: app.voice.enabled
-        featureFlagDefault: false
+        featureFlagDefault: true
         riskLevel: safe
-        state: flag-off
+        state: ready
         executableByDefault: true
         sseEvents: [message, done, error]
         tags: [sse]
@@ -1370,10 +1369,9 @@ modules:
           - { name: image, in: form-data, type: file, required: true, label: 图片, accept: "image/*" }
         requiredScopes: [ingest]
         featureFlag: app.rag.multimodal-embedding.enabled
-        featureFlagDefault: false
+        featureFlagDefault: true
         riskLevel: caution
-        # provider 未配置时先按开关 fail-closed；启用后 live config + requiredScopes 继续做 ingest 判定。
-        state: flag-off
+        state: scope-required
         executableByDefault: true
       - id: rag.image.search
         module: multimodal
@@ -1395,9 +1393,9 @@ modules:
             body: '{"query":"系统架构示意图"}'
         requiredScopes: []
         featureFlag: app.rag.multimodal-embedding.enabled
-        featureFlagDefault: false
+        featureFlagDefault: true
         riskLevel: safe
-        state: flag-off
+        state: ready
         executableByDefault: true
   - id: interop-eval
     title: 互操作与评测 Interop & Eval Tools
@@ -1516,21 +1514,23 @@ modules:
       - id: eval.capabilities
         module: interop-eval
         title: 评测能力发现
-        description: "GET /eval/capabilities。"
+        description: "离线评测控制面能力发现。默认在线拓扑不发布 /eval/**；通过 evaluation profile 的独立 harness 或 CI Job 执行。"
         method: GET
         path: /eval/capabilities
         requestKind: none
         responseKind: json
         params: []
         requiredScopes: []
-        featureFlagDefault: true
+        featureFlag: evaluation
+        featureFlagDefault: false
+        unavailableReason: "离线评测控制面未部署；请通过 evaluation profile 的独立 harness 或 CLI/CI Job 执行。"
         riskLevel: safe
-        state: ready
+        state: flag-off
         executableByDefault: true
       - id: eval.retrieval
         module: interop-eval
         title: 检索评测
-        description: "POST /eval/retrieval，RetrievalRunRequest(cases[], topK, category)。Recall@k/MRR/Hit@k。"
+        description: "离线 POST /eval/retrieval，RetrievalRunRequest(cases[], topK, category)。Recall@k/MRR/Hit@k；默认在线网关不发布。"
         method: POST
         path: /eval/retrieval
         requestKind: json
@@ -1549,14 +1549,16 @@ modules:
           - label: "带期望命中"
             body: '{"cases":[{"id":"c1","question":"退款政策","relevantDocIds":["doc-1"]}],"topK":10}'
         requiredScopes: []
-        featureFlagDefault: true
+        featureFlag: evaluation
+        featureFlagDefault: false
+        unavailableReason: "离线评测控制面未部署；请通过 evaluation profile 的独立 harness 或 CLI/CI Job 执行。"
         riskLevel: safe
-        state: ready
+        state: flag-off
         executableByDefault: true
       - id: eval.run
         module: interop-eval
         title: 端到端评测
-        description: "POST /eval/run，EvalRunRequest(targetBaseUrl, cases[])。"
+        description: "离线 POST /eval/run，EvalRunRequest(targetBaseUrl, cases[])；默认在线网关不发布。"
         method: POST
         path: /eval/run
         requestKind: json
@@ -1571,14 +1573,16 @@ modules:
           - label: "多用例"
             body: '{"cases":[{"input":"你好","assert":"reply"},{"input":"介绍一下平台","assert":"reply"}]}'
         requiredScopes: []
-        featureFlagDefault: true
+        featureFlag: evaluation
+        featureFlagDefault: false
+        unavailableReason: "离线评测控制面未部署；请通过 evaluation profile 的独立 harness 或 CLI/CI Job 执行。"
         riskLevel: safe
-        state: ready
+        state: flag-off
         executableByDefault: true
       - id: eval.suite.run
         module: interop-eval
         title: 运行评测套件
-        description: "POST /eval/suites/{suiteName}/run，EvalSuiteRunRequest(targetBaseUrl)。"
+        description: "离线 POST /eval/suites/{suiteName}/run，EvalSuiteRunRequest(targetBaseUrl)；默认在线网关不发布。"
         method: POST
         path: /eval/suites/{suiteName}/run
         requestKind: json
@@ -1587,14 +1591,16 @@ modules:
           - { name: suiteName, in: path, type: string, required: true, label: 套件名, placeholder: "baseline" }
           - { name: targetBaseUrl, in: body, type: string, required: false, label: 目标 base URL }
         requiredScopes: []
-        featureFlagDefault: true
+        featureFlag: evaluation
+        featureFlagDefault: false
+        unavailableReason: "离线评测控制面未部署；请通过 evaluation profile 的独立 harness 或 CLI/CI Job 执行。"
         riskLevel: safe
-        state: ready
+        state: flag-off
         executableByDefault: true
       - id: eval.dual-run
         module: interop-eval
         title: 双跑对比 (oracle vs candidate)
-        description: "POST /eval/dual-run，EvalDualRunRequest。HTTP 恒 200（信息化门禁明细）。"
+        description: "离线 POST /eval/dual-run，EvalDualRunRequest。HTTP 恒 200（信息化门禁明细）；默认在线网关不发布。"
         method: POST
         path: /eval/dual-run
         requestKind: json
@@ -1606,14 +1612,16 @@ modules:
           - { name: oracleSnapshot, in: body, type: string, required: false, label: oracle 快照 }
           - { name: runs, in: body, type: integer, required: false, label: 跑数 }
         requiredScopes: []
-        featureFlagDefault: true
+        featureFlag: evaluation
+        featureFlagDefault: false
+        unavailableReason: "离线评测控制面未部署；请通过 evaluation profile 的独立 harness 或 CLI/CI Job 执行。"
         riskLevel: safe
-        state: ready
+        state: flag-off
         executableByDefault: true
       - id: eval.gate
         module: interop-eval
         title: CI 门禁 (gate)
-        description: "POST /eval/gate，回归则返回 HTTP 422（供 CI fail），body 为门禁明细。422 是业务门禁结果，非网络错误。"
+        description: "离线 POST /eval/gate，回归则返回 HTTP 422（供 CI fail），body 为门禁明细；默认在线网关不发布。"
         method: POST
         path: /eval/gate
         requestKind: json
@@ -1625,9 +1633,11 @@ modules:
           - { name: oracleSnapshot, in: body, type: string, required: false, label: oracle 快照 }
           - { name: runs, in: body, type: integer, required: false, label: 跑数 }
         requiredScopes: []
-        featureFlagDefault: true
+        featureFlag: evaluation
+        featureFlagDefault: false
+        unavailableReason: "离线评测控制面未部署；请通过 evaluation profile 的独立 harness 或 CLI/CI Job 执行。"
         riskLevel: safe
-        state: ready
+        state: flag-off
         executableByDefault: true
   - id: channel
     title: 渠道 Channel Console

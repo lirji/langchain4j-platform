@@ -4,10 +4,12 @@ import com.lrj.platform.protocol.vision.VisionCaptionReply;
 import com.lrj.platform.protocol.vision.VisionCaptionRequest;
 import com.lrj.platform.vision.VisionContentGuard;
 import com.lrj.platform.vision.VisionModel;
+import dev.langchain4j.exception.InvalidRequestException;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.util.Base64;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -88,5 +90,16 @@ class VisionControllerTest {
                 new VisionCaptionRequest(b64("x".getBytes()), "image/webp", "q")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("unsupported image type");
+    }
+
+    @Test
+    void mapsProviderInvalidRequestToStableBadRequestResponse() {
+        Map<String, String> response = controller.providerBadRequest(
+                new InvalidRequestException("provider rejected tiny image"));
+
+        assertThat(response).containsEntry("error", "bad_request");
+        assertThat(response).containsEntry(
+                "message", "image request was rejected by the vision provider");
+        assertThat(response.values()).noneMatch(value -> value.contains("tiny image"));
     }
 }

@@ -23,7 +23,10 @@ export interface LiveDescriptor {
 
 /** 拉取静态能力目录。 */
 export async function fetchCatalog(url: string = CATALOG_URL): Promise<Catalog> {
-  const res = await fetch(url, { headers: { Accept: 'application/json' } })
+  const res = await fetch(url, {
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
   if (!res.ok) throw new Error(`加载能力目录失败：HTTP ${res.status}`)
   return (await res.json()) as Catalog
 }

@@ -22,14 +22,13 @@ function runnerIds(wrapper: ReturnType<typeof mount>): string[] {
 describe('MultimodalConsoleView', () => {
   beforeEach(setupCatalog)
 
-  it('着陆页渲染 图像 / 语音 分区与 flag 提示', () => {
+  it('着陆页渲染图像、语音分区与百炼启用提示', () => {
     const wrapper = mount(MultimodalConsoleView, { props: { moduleId: 'multimodal' }, ...mountOpts })
     const text = wrapper.text()
     expect(text).toContain('图像')
     expect(text).toContain('语音')
-    // flag-off 顶部提示
-    expect(text).toContain('app.vision.enabled')
-    expect(text).toContain('app.voice.enabled')
+    expect(text).toContain('百炼')
+    expect(text).toContain('ingest')
   })
 
   it('选择器提供图像 / 语音各能力，默认挂载首个的运行器', () => {
