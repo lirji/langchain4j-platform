@@ -135,6 +135,21 @@ app:
         model-name: ${CONVERSATION_SEMANTIC_CACHE_EMBEDDING_MODEL:embedding-default}
       redis:
         ttl: ${CONVERSATION_SEMANTIC_CACHE_REDIS_TTL:0s}
+    # 独立无状态 conversation runtime 的候选 shadow。默认关闭；候选只接收已完成 Java 护栏/RAG
+    # 后的生成输入，不拥有 memory/profile/cache，也不能改变 primary 返回。
+    shadow:
+      enabled: ${CONVERSATION_SHADOW_ENABLED:false}
+      base-url: ${CONVERSATION_SHADOW_BASE_URL:}
+      connect-timeout: ${CONVERSATION_SHADOW_CONNECT_TIMEOUT:500ms}
+      read-timeout: ${CONVERSATION_SHADOW_READ_TIMEOUT:5s}
+      executor:
+        core-size: ${CONVERSATION_SHADOW_CORE_SIZE:1}
+        max-size: ${CONVERSATION_SHADOW_MAX_SIZE:2}
+        queue-capacity: ${CONVERSATION_SHADOW_QUEUE_CAPACITY:128}
+      history:
+        max-messages: ${CONVERSATION_SHADOW_HISTORY_MAX_MESSAGES:12}
+        max-chars: ${CONVERSATION_SHADOW_HISTORY_MAX_CHARS:6000}
+        max-message-chars: ${CONVERSATION_SHADOW_HISTORY_MAX_MESSAGE_CHARS:2000}
   # Model Cascade（便宜模型先答 → 低置信才升级强模型）。默认开；置 false 关闭时对现有 /chat 行为零影响。
   # cheap-model / strong-model 为 LiteLLM model_list 里的逻辑模型名；留空退化为网关默认模型。
   chat:

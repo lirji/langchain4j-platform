@@ -26,6 +26,9 @@ platform:
 app:
   nl2sql:
     enabled: ${NL2SQL_ENABLED:true}
+    # Shadow-only：允许外部 AI planner 提交候选 SQL；Java 仍执行全部 guard 与只读查询。
+    external-planner:
+      enabled: ${NL2SQL_EXTERNAL_PLANNER_ENABLED:false}
     datasource:
       url: ${NL2SQL_DB_URL:jdbc:mysql://localhost:3306/nl2sql_demo?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useInformationSchema=true}
       readonly-url: ${NL2SQL_DB_READONLY_URL:jdbc:mysql://localhost:3306/nl2sql_demo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useInformationSchema=true}

@@ -87,6 +87,22 @@ public class Nl2SqlConfig {
         return new NlToSqlService(assistant, nl2sqlSchemaProvider, audit, props.isNumberGrounding());
     }
 
+    @Bean
+    @ConditionalOnProperty(
+            name = "app.nl2sql.external-planner.enabled",
+            havingValue = "true")
+    public GuardedSqlExecutor guardedSqlExecutor(
+            JdbcTemplate nl2sqlReadOnlyJdbc,
+            Nl2SqlProperties props
+    ) {
+        SqlGuard guard = new SqlGuard(
+                props.getAllowTables(),
+                props.getTenantScopedTables(),
+                props.getMaxRows(),
+                props.isEnforceTenantPredicate());
+        return new GuardedSqlExecutor(nl2sqlReadOnlyJdbc, guard);
+    }
+
     private static HikariDataSource pool(String url, String user, String pass, boolean readOnly, String name) {
         HikariConfig c = new HikariConfig();
         c.setJdbcUrl(url);

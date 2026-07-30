@@ -6,7 +6,11 @@ import com.lrj.platform.conversation.cache.SemanticCache;
 import com.lrj.platform.conversation.grounding.NoopGroundingChecker;
 import com.lrj.platform.conversation.guardrail.ConversationGuardrail;
 import com.lrj.platform.conversation.history.NoopHistoryAwareQueryCompressor;
+import com.lrj.platform.conversation.memory.ConversationHistoryReader;
 import com.lrj.platform.conversation.prompt.ResolvedAssistantStyle;
+import com.lrj.platform.conversation.shadow.ConversationShadowObserver;
+import com.lrj.platform.protocol.conversation.ConversationGenerationRequest;
+import com.lrj.platform.protocol.conversation.ConversationHistoryMessage;
 import com.lrj.platform.security.TenantContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -14,9 +18,11 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -85,12 +91,14 @@ class ConversationControllerTest {
     void chatShortCircuitsRagAndLlmOnSemanticCacheHit() {
         Assistant assistant = mock(Assistant.class);
         RagPromptAugmenter augmenter = mock(RagPromptAugmenter.class);
+        ConversationShadowObserver shadowObserver = mock(ConversationShadowObserver.class);
         when(augmenter.contextWithHits("hello", null)).thenReturn(new RagPromptAugmenter.RagContext("context", List.of()));
         when(assistant.chat("acme::c1", "中文", "简洁", "cite", "", "hello", "context")).thenReturn("first-reply");
         SemanticCache cache = new SemanticCache(new HashSemanticCacheEmbedder(),
                 new InMemorySemanticCacheStore(1000), true, 0.95);
-        ConversationController controller = new ConversationController(assistant, augmenter, cache, disabledGuardrail(),
-                new NoopHistoryAwareQueryCompressor(), new NoopGroundingChecker(), STYLE);
+        ConversationController controller = new ConversationController(
+                assistant, augmenter, cache, disabledGuardrail(),
+                new NoopHistoryAwareQueryCompressor(), new NoopGroundingChecker(), STYLE, shadowObserver);
         TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
 
         Map<String, Object> first = controller.chat("c1", Map.of("message", "hello"));
@@ -101,6 +109,8 @@ class ConversationControllerTest {
         // 第二次命中缓存：RAG 增强与 LLM 各自只被调用了一次（第一次未命中时）。
         verify(augmenter, org.mockito.Mockito.times(1)).contextWithHits("hello", null);
         verify(assistant, org.mockito.Mockito.times(1)).chat("acme::c1", "中文", "简洁", "cite", "", "hello", "context");
+        verify(shadowObserver, org.mockito.Mockito.times(1))
+                .observe(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("first-reply"));
     }
 
     @Test
@@ -161,9 +171,11 @@ class ConversationControllerTest {
     void chat_blockedInjection_shortCircuitsRagLlm() {
         Assistant assistant = mock(Assistant.class);
         RagPromptAugmenter augmenter = mock(RagPromptAugmenter.class);
-        ConversationController controller = new ConversationController(assistant, augmenter, disabledCache(),
+        ConversationShadowObserver shadowObserver = mock(ConversationShadowObserver.class);
+        ConversationController controller = new ConversationController(
+                assistant, augmenter, disabledCache(),
                 new ConversationGuardrail(true, "block", false), new NoopHistoryAwareQueryCompressor(),
-                new NoopGroundingChecker(), STYLE);
+                new NoopGroundingChecker(), STYLE, shadowObserver);
         TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
 
         Map<String, Object> res = controller.chat("c1",
@@ -173,6 +185,7 @@ class ConversationControllerTest {
         // 拦截后不进 RAG / LLM
         org.mockito.Mockito.verifyNoInteractions(assistant);
         org.mockito.Mockito.verifyNoInteractions(augmenter);
+        org.mockito.Mockito.verifyNoInteractions(shadowObserver);
     }
 
     @Test
@@ -192,5 +205,51 @@ class ConversationControllerTest {
                 .contains("[REDACTED-email]")
                 .contains("[REDACTED-phone]")
                 .doesNotContain("a@b.com");
+    }
+
+    @Test
+    void chatShadowsOnlyStatelessGenerationInputAndKeepsPrimaryReply() {
+        Assistant assistant = mock(Assistant.class);
+        RagPromptAugmenter augmenter = mock(RagPromptAugmenter.class);
+        when(augmenter.contextWithHits("hello", null))
+                .thenReturn(new RagPromptAugmenter.RagContext("knowledge", List.of()));
+        when(assistant.chat("acme::c1", "中文", "简洁", "cite", "",
+                "hello", "knowledge")).thenReturn("primary");
+        AtomicReference<ConversationGenerationRequest> candidateRequest = new AtomicReference<>();
+        AtomicReference<String> observedPrimary = new AtomicReference<>();
+        ConversationHistoryReader historyReader = mock(ConversationHistoryReader.class);
+        when(historyReader.snapshot("acme", "c1")).thenReturn(List.of(
+                new ConversationHistoryMessage("user", "previous question"),
+                new ConversationHistoryMessage("assistant", "previous answer")));
+        ConversationController controller = new ConversationController(
+                assistant,
+                augmenter,
+                disabledCache(),
+                disabledGuardrail(),
+                new NoopHistoryAwareQueryCompressor(),
+                new NoopGroundingChecker(),
+                STYLE,
+                historyReader,
+                (request, primaryReply) -> {
+                    candidateRequest.set(request);
+                    observedPrimary.set(primaryReply);
+                });
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
+
+        Map<String, Object> response = controller.chat("c1", Map.of("message", "hello"));
+
+        assertThat(response).containsEntry("reply", "primary");
+        assertThat(observedPrimary).hasValue("primary");
+        assertThat(candidateRequest.get().schema_version()).isEqualTo("1");
+        assertThat(candidateRequest.get().message()).isEqualTo("hello");
+        assertThat(candidateRequest.get().context()).isEqualTo("knowledge");
+        assertThat(candidateRequest.get().style().citation_policy()).isEqualTo("cite");
+        assertThat(candidateRequest.get().history()).containsExactly(
+                new ConversationHistoryMessage("user", "previous question"),
+                new ConversationHistoryMessage("assistant", "previous answer"));
+        var ordered = inOrder(historyReader, assistant);
+        ordered.verify(historyReader).snapshot("acme", "c1");
+        ordered.verify(assistant).chat("acme::c1", "中文", "简洁", "cite", "",
+                "hello", "knowledge");
     }
 }

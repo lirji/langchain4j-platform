@@ -105,6 +105,7 @@ public class WorkflowProperties {
     public static class AiClient {
         private String mode = "http";
         private String conversationBaseUrl = "http://localhost:8081";
+        private String agentScopeBaseUrl = "http://localhost:8085";
         private Duration connectTimeout = Duration.ofSeconds(1);
         private Duration readTimeout = Duration.ofSeconds(3);
 
@@ -112,6 +113,8 @@ public class WorkflowProperties {
         public void setMode(String mode) { this.mode = mode; }
         public String getConversationBaseUrl() { return conversationBaseUrl; }
         public void setConversationBaseUrl(String conversationBaseUrl) { this.conversationBaseUrl = conversationBaseUrl; }
+        public String getAgentScopeBaseUrl() { return agentScopeBaseUrl; }
+        public void setAgentScopeBaseUrl(String agentScopeBaseUrl) { this.agentScopeBaseUrl = agentScopeBaseUrl; }
         public Duration getConnectTimeout() { return connectTimeout; }
         public void setConnectTimeout(Duration connectTimeout) { this.connectTimeout = connectTimeout; }
         public Duration getReadTimeout() { return readTimeout; }

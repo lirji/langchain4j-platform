@@ -5,8 +5,12 @@ import com.lrj.platform.conversation.grounding.GroundingChecker;
 import com.lrj.platform.conversation.grounding.GroundingResult;
 import com.lrj.platform.conversation.guardrail.ConversationGuardrail;
 import com.lrj.platform.conversation.history.HistoryAwareQueryCompressor;
+import com.lrj.platform.conversation.memory.ConversationHistoryReader;
 import com.lrj.platform.conversation.prompt.ResolvedAssistantStyle;
+import com.lrj.platform.conversation.shadow.ConversationShadowObserver;
+import com.lrj.platform.protocol.conversation.ConversationGenerationRequest;
 import com.lrj.platform.security.TenantContext;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -29,14 +33,19 @@ public class ConversationController {
     private final HistoryAwareQueryCompressor historyCompressor;
     private final GroundingChecker groundingChecker;
     private final ResolvedAssistantStyle style;
+    private final ConversationHistoryReader historyReader;
+    private final ConversationShadowObserver shadowObserver;
 
+    @Autowired
     public ConversationController(Assistant assistant,
                                   RagPromptAugmenter ragPromptAugmenter,
                                   SemanticCache semanticCache,
                                   ConversationGuardrail guardrail,
                                   HistoryAwareQueryCompressor historyCompressor,
                                   GroundingChecker groundingChecker,
-                                  ResolvedAssistantStyle style) {
+                                  ResolvedAssistantStyle style,
+                                  ConversationHistoryReader historyReader,
+                                  ConversationShadowObserver shadowObserver) {
         this.assistant = assistant;
         this.ragPromptAugmenter = ragPromptAugmenter;
         this.semanticCache = semanticCache;
@@ -44,6 +53,34 @@ public class ConversationController {
         this.historyCompressor = historyCompressor;
         this.groundingChecker = groundingChecker;
         this.style = style;
+        this.historyReader = historyReader;
+        this.shadowObserver = shadowObserver;
+    }
+
+    public ConversationController(Assistant assistant,
+                                  RagPromptAugmenter ragPromptAugmenter,
+                                  SemanticCache semanticCache,
+                                  ConversationGuardrail guardrail,
+                                  HistoryAwareQueryCompressor historyCompressor,
+                                  GroundingChecker groundingChecker,
+                                  ResolvedAssistantStyle style,
+                                  ConversationShadowObserver shadowObserver) {
+        this(assistant, ragPromptAugmenter, semanticCache, guardrail, historyCompressor,
+                groundingChecker, style, (tenantId, chatId) -> java.util.List.of(), shadowObserver);
+    }
+
+    ConversationController(Assistant assistant,
+                           RagPromptAugmenter ragPromptAugmenter,
+                           SemanticCache semanticCache,
+                           ConversationGuardrail guardrail,
+                           HistoryAwareQueryCompressor historyCompressor,
+                           GroundingChecker groundingChecker,
+                           ResolvedAssistantStyle style) {
+        this(assistant, ragPromptAugmenter, semanticCache, guardrail, historyCompressor,
+                groundingChecker, style, (tenantId, currentChatId) -> java.util.List.of(),
+                (request, primaryReply) -> {
+                    // tests and direct construction default to no shadow
+                });
     }
 
     @PostMapping("/chat")
@@ -77,8 +114,21 @@ public class ConversationController {
         // 输出 PII 脱敏在回填缓存之前，保证缓存里存的也是（含 grounding 后缀的）脱敏答案。
         String reply = semanticCache.getOrCompute(effective, () -> {
             RagPromptAugmenter.RagContext rag = ragPromptAugmenter.contextWithHits(retrievalQuery, category);
+            var history = historyReader.snapshot(tenant.tenantId(), chatId);
             String answer = assistant.chat(memoryKey, style.getLanguage(), style.getTone(),
                     style.getCitationPolicy(), style.getExtra(), effective, rag.context());
+            shadowObserver.observe(
+                    new ConversationGenerationRequest(
+                            "1",
+                            effective,
+                            rag.context(),
+                            new ConversationGenerationRequest.Style(
+                                    style.getLanguage(),
+                                    style.getTone(),
+                                    style.getCitationPolicy(),
+                                    style.getExtra()),
+                            history),
+                    answer);
             GroundingResult grounded = groundingChecker.verify(answer, rag.hits());
             return guardrail.redactOutput(grounded.answer());
         });

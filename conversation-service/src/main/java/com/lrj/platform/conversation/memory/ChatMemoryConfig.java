@@ -66,6 +66,24 @@ public class ChatMemoryConfig {
         };
     }
 
+    @Bean
+    @ConditionalOnProperty(name = "app.conversation.shadow.enabled", havingValue = "true")
+    ConversationHistoryReader conversationHistoryReader(
+            ChatMemoryStore store,
+            @Value("${app.conversation.shadow.history.max-messages:12}") int maxMessages,
+            @Value("${app.conversation.shadow.history.max-chars:6000}") int maxChars,
+            @Value("${app.conversation.shadow.history.max-message-chars:2000}") int maxMessageChars) {
+        return new StoreBackedConversationHistoryReader(
+                store, maxMessages, maxChars, maxMessageChars);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "app.conversation.shadow.enabled", havingValue = "false",
+            matchIfMissing = true)
+    ConversationHistoryReader noOpConversationHistoryReader() {
+        return (tenantId, chatId) -> java.util.List.of();
+    }
+
     static ChatMemoryProvider messagesProvider(ChatMemoryStore store, int maxMessages) {
         return memoryId -> MessageWindowChatMemory.builder()
                 .id(memoryId)

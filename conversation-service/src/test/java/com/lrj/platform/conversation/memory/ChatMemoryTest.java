@@ -19,6 +19,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ChatMemoryTest {
 
+    @Test
+    void disabledShadowHistoryReaderIsNoop() {
+        ConversationHistoryReader reader =
+                new ChatMemoryConfig().noOpConversationHistoryReader();
+
+        assertThat(reader.snapshot("acme", "c1")).isEmpty();
+    }
+
     /** messages 窗口：只保留最近 N 条，旧的直接丢。 */
     @Test
     void messagesWindow_keepsOnlyRecent() {

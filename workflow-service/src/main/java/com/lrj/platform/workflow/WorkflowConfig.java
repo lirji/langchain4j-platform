@@ -114,6 +114,21 @@ public class WorkflowConfig {
                 .build();
     }
 
+    @Bean
+    @Qualifier("agentScopeWorkflowRestTemplate")
+    public RestTemplate agentScopeWorkflowRestTemplate(RestTemplateBuilder builder,
+                                                       WorkflowProperties props,
+                                                       OutboundTenantForwarder tenantForwarder,
+                                                       OutboundTraceForwarder traceForwarder) {
+        WorkflowProperties.AiClient ai = props.getAiClient();
+        return builder
+                .rootUri(ai.getAgentScopeBaseUrl())
+                .additionalInterceptors(tenantForwarder, traceForwarder)
+                .setConnectTimeout(ai.getConnectTimeout())
+                .setReadTimeout(ai.getReadTimeout())
+                .build();
+    }
+
     /**
      * 默认（推荐 prod）：{@link WorkflowAiClient} 经 HTTP 调 conversation-service。
      * {@code app.workflow.ai-client.mode} 未设或为 {@code http} 时装配。
@@ -132,6 +147,17 @@ public class WorkflowConfig {
     @ConditionalOnProperty(name = "app.workflow.ai-client.mode", havingValue = "local")
     public WorkflowAiClient localWorkflowAiClient(org.springframework.beans.factory.ObjectProvider<dev.langchain4j.model.chat.ChatModel> chatModelProvider) {
         return new DefaultWorkflowAiClient(chatModelProvider);
+    }
+
+    /** 主结果仍来自 conversation；AgentScope 只做失败隔离的影子草稿。 */
+    @Bean
+    @ConditionalOnProperty(name = "app.workflow.ai-client.mode", havingValue = "agentscope-shadow")
+    public WorkflowAiClient shadowWorkflowAiClient(
+            @Qualifier("conversationRestTemplate") RestTemplate conversationRestTemplate,
+            @Qualifier("agentScopeWorkflowRestTemplate") RestTemplate agentScopeWorkflowRestTemplate) {
+        return new ShadowWorkflowAiClient(
+                new HttpWorkflowAiClient(conversationRestTemplate),
+                new AgentScopeWorkflowAiClient(agentScopeWorkflowRestTemplate));
     }
 
     @Bean
