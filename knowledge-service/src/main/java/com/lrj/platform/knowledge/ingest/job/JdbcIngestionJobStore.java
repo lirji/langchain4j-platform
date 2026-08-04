@@ -9,7 +9,6 @@ import org.springframework.jdbc.core.RowMapper;
 
 import javax.sql.DataSource;
 import java.sql.Timestamp;
-import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -175,110 +174,13 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
     }
 
     private void initialize() {
-        jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS KNOWLEDGE_INGESTION_JOB (
-                  TENANT_ID VARCHAR(128) NOT NULL,
-                  JOB_ID VARCHAR(128) NOT NULL,
-                  IDEMPOTENCY_KEY VARCHAR(512) NOT NULL,
-                  USER_ID VARCHAR(256) NOT NULL,
-                  SCOPES_JSON TEXT NOT NULL,
-                  DEPARTMENT VARCHAR(256),
-                  TRACE_ID VARCHAR(256) NOT NULL,
-                  DOCUMENT_ID VARCHAR(256) NOT NULL,
-                  DISPLAY_NAME VARCHAR(1024) NOT NULL,
-                  CATEGORY VARCHAR(256),
-                  DOCUMENT_VERSION BIGINT NOT NULL,
-                  NEW_DOCUMENT BOOLEAN NOT NULL,
-                  REVISION BIGINT NOT NULL,
-                  SOURCE_BUCKET VARCHAR(256) NOT NULL,
-                  SOURCE_OBJECT_KEY VARCHAR(1024) NOT NULL,
-                  SOURCE_HASH VARCHAR(256) NOT NULL,
-                  SOURCE_CONTENT_TYPE VARCHAR(256) NOT NULL,
-                  SOURCE_SIZE BIGINT NOT NULL,
-                  STATUS VARCHAR(32) NOT NULL,
-                  SINKS_JSON TEXT NOT NULL,
-                  REQUIRED_SINKS_JSON TEXT NOT NULL,
-                  ERROR_TEXT TEXT,
-                  CREATED_AT TIMESTAMP NOT NULL,
-                  UPDATED_AT TIMESTAMP NOT NULL,
-                  PRIMARY KEY (TENANT_ID, JOB_ID),
-                  CONSTRAINT UK_KNOWLEDGE_INGEST_IDEM UNIQUE (TENANT_ID, IDEMPOTENCY_KEY),
-                  CONSTRAINT UK_KNOWLEDGE_INGEST_VERSION
-                    UNIQUE (TENANT_ID, DOCUMENT_ID, DOCUMENT_VERSION)
-                )
-                """);
-        migrateLegacyTable();
-    }
-
-    private void migrateLegacyTable() {
-        addColumnIfMissing("DISPLAY_NAME", "VARCHAR(1024)");
-        addColumnIfMissing("CATEGORY", "VARCHAR(256)");
-        addColumnIfMissing("NEW_DOCUMENT", "BOOLEAN DEFAULT FALSE");
-        jdbc.update("""
-                UPDATE KNOWLEDGE_INGESTION_JOB
-                SET DISPLAY_NAME=DOCUMENT_ID
-                WHERE DISPLAY_NAME IS NULL OR DISPLAY_NAME=''
-                """);
-        addUniqueIndexIfMissing(
-                "UK_KNOWLEDGE_INGEST_VERSION",
-                "TENANT_ID, DOCUMENT_ID, DOCUMENT_VERSION");
-    }
-
-    private void addColumnIfMissing(String column, String definition) {
-        if (!columnExists(column)) {
-            jdbc.execute("ALTER TABLE KNOWLEDGE_INGESTION_JOB ADD COLUMN "
-                    + column + " " + definition);
-        }
-    }
-
-    private boolean columnExists(String column) {
-        DataSource dataSource = jdbc.getDataSource();
-        if (dataSource == null) {
-            throw new IllegalStateException("ingestion job datasource is unavailable");
-        }
-        try (Connection connection = dataSource.getConnection()) {
-            try (ResultSet columns = connection.getMetaData().getColumns(
-                    connection.getCatalog(), null, "KNOWLEDGE_INGESTION_JOB", column)) {
-                if (columns.next()) {
-                    return true;
-                }
-            }
-            try (ResultSet columns = connection.getMetaData().getColumns(
-                    connection.getCatalog(), null,
-                    "knowledge_ingestion_job", column.toLowerCase())) {
-                return columns.next();
-            }
-        } catch (SQLException ex) {
-            throw new IllegalStateException("cannot inspect ingestion job schema", ex);
-        }
-    }
-
-    private void addUniqueIndexIfMissing(String indexName, String columns) {
-        if (indexExists(indexName)) {
-            return;
-        }
-        jdbc.execute("CREATE UNIQUE INDEX " + indexName
-                + " ON KNOWLEDGE_INGESTION_JOB (" + columns + ")");
-    }
-
-    private boolean indexExists(String indexName) {
-        DataSource dataSource = jdbc.getDataSource();
-        if (dataSource == null) {
-            throw new IllegalStateException("ingestion job datasource is unavailable");
-        }
-        try (Connection connection = dataSource.getConnection();
-             ResultSet indexes = connection.getMetaData().getIndexInfo(
-                     connection.getCatalog(), null,
-                     "KNOWLEDGE_INGESTION_JOB", true, false)) {
-            while (indexes.next()) {
-                if (indexName.equalsIgnoreCase(indexes.getString("INDEX_NAME"))) {
-                    return true;
-                }
-            }
-            return false;
-        } catch (SQLException ex) {
-            throw new IllegalStateException("cannot inspect ingestion job indexes", ex);
-        }
+        jdbc.queryForList("""
+                SELECT TENANT_ID, JOB_ID, IDEMPOTENCY_KEY, USER_ID, SCOPES_JSON, DEPARTMENT,
+                       TRACE_ID, DOCUMENT_ID, DISPLAY_NAME, CATEGORY, DOCUMENT_VERSION,
+                       NEW_DOCUMENT, REVISION, SOURCE_BUCKET, SOURCE_OBJECT_KEY, SOURCE_HASH,
+                       SOURCE_CONTENT_TYPE, SOURCE_SIZE, STATUS, SINKS_JSON, REQUIRED_SINKS_JSON,
+                       ERROR_TEXT, CREATED_AT, UPDATED_AT
+                FROM KNOWLEDGE_INGESTION_JOB WHERE 1=0""");
     }
 
     private String writeSinks(Map<IngestionSink, IngestionSinkState> sinks) {

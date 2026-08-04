@@ -14,8 +14,8 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * JDBC 用户↔组成员存储（{@code AUTH_STORE=jdbc}）。表结构演进沿用项目约定：{@code CREATE TABLE IF NOT EXISTS}
- * 字面量写在类里，无 Flyway。语义镜像 {@code USER_ROLE} 的关系化写/反查。不建外键，级联清理由服务层在事务内做。
+ * JDBC 用户↔组成员存储（{@code AUTH_STORE=jdbc}）。schema 由独立 migration 管理；
+ * 语义镜像 {@code USER_ROLE} 的关系化写/反查。
  */
 @Component
 @ConditionalOnProperty(name = "app.auth.store", havingValue = "jdbc")
@@ -31,19 +31,8 @@ public class JdbcUserGroupStore implements UserGroupStore {
     }
 
     private void init() {
-        jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS USER_GROUP (
-                  USERNAME VARCHAR(128) NOT NULL,
-                  GROUP_NAME VARCHAR(128) NOT NULL,
-                  CREATED_AT BIGINT NOT NULL,
-                  PRIMARY KEY (USERNAME, GROUP_NAME)
-                )""");
-        try {
-            jdbc.execute("CREATE INDEX IF NOT EXISTS IDX_USER_GROUP_GROUP ON USER_GROUP (GROUP_NAME)");
-        } catch (org.springframework.dao.DataAccessException e) {
-            log.debug("USER_GROUP group index not created (non-fatal): {}", e.getMessage());
-        }
-        log.info("USER_GROUP table ready");
+        jdbc.queryForList("SELECT USERNAME, GROUP_NAME, CREATED_AT FROM USER_GROUP WHERE 1=0");
+        log.info("USER_GROUP schema verified");
     }
 
     @Override

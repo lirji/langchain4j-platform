@@ -22,6 +22,9 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.UUID;
 
 /**
  * 将 Agent 异步任务镜像/托管到中央 async-task-service（:8086）的 REST 客户端。封装对
@@ -37,11 +40,16 @@ public class ExternalAsyncTaskClient {
 
     private final RestTemplate restTemplate;
     private final ExternalAsyncTaskProperties properties;
+    private final ConcurrentMap<String, Long> leaseEpochs = new ConcurrentHashMap<>();
+    private final String workerId;
 
     public ExternalAsyncTaskClient(@Qualifier("asyncTaskRestTemplate") RestTemplate restTemplate,
                                    ExternalAsyncTaskProperties properties) {
         this.restTemplate = restTemplate;
         this.properties = properties;
+        String serviceId = configuredWorkerId();
+        this.workerId = serviceId.substring(0, Math.min(serviceId.length(), 91))
+                + "." + UUID.randomUUID();
     }
 
     public boolean create(AgentAsyncTask task) {
@@ -87,7 +95,8 @@ public class ExternalAsyncTaskClient {
                             status(task.status()),
                             task.result(),
                             task.error(),
-                            workerId())),
+                            workerId(),
+                            leaseEpoch(task.taskId()))),
                     Void.class,
                     task.taskId());
             return response.getStatusCode().is2xxSuccessful();
@@ -105,7 +114,14 @@ public class ExternalAsyncTaskClient {
                     new AsyncTaskLeaseRequest(workerId(), properties.getLeaseSeconds()),
                     AsyncTask.class,
                     taskId);
-            return response.getStatusCode().is2xxSuccessful();
+            AsyncTask leased = response.getBody();
+            if (!response.getStatusCode().is2xxSuccessful()
+                    || leased == null
+                    || leased.leaseEpoch() <= 0) {
+                return false;
+            }
+            leaseEpochs.put(taskId, leased.leaseEpoch());
+            return true;
         } catch (RestClientException ex) {
             log.warn("agent async task lease failed taskId={} workerId={}: {}",
                     taskId, workerId(), ex.toString());
@@ -137,8 +153,20 @@ public class ExternalAsyncTaskClient {
     }
 
     private String workerId() {
+        return workerId;
+    }
+
+    private String configuredWorkerId() {
         String configured = properties.getWorkerId();
         return configured == null || configured.isBlank() ? "agent-service" : configured.trim();
+    }
+
+    private long leaseEpoch(String taskId) {
+        Long epoch = leaseEpochs.get(taskId);
+        if (epoch == null || epoch <= 0) {
+            throw new IllegalStateException("async task must be leased before status update");
+        }
+        return epoch;
     }
 
     private static Map<String, Object> withoutWebhook(Map<String, Object> input) {

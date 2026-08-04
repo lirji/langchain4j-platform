@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.matchesPattern;
 import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
@@ -52,13 +53,19 @@ class ExternalAsyncTaskClientTest {
         properties.setWorkerId("agent-worker-1");
         ExternalAsyncTaskClient client = new ExternalAsyncTaskClient(restTemplate, properties);
 
+        server.expect(once(), requestTo("http://async.local/async/tasks/task-1/lease"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(jsonPath("$.workerId").value(matchesPattern("agent-worker-1\\.[0-9a-f-]{36}")))
+                .andRespond(withSuccess("{\"leaseEpoch\":7}", MediaType.APPLICATION_JSON));
         server.expect(once(), requestTo("http://async.local/async/tasks/task-1/status"))
                 .andExpect(method(HttpMethod.PATCH))
                 .andExpect(jsonPath("$.status").value("SUCCEEDED"))
                 .andExpect(jsonPath("$.result.answer").value("done"))
-                .andExpect(jsonPath("$.workerId").value("agent-worker-1"))
+                .andExpect(jsonPath("$.workerId").value(matchesPattern("agent-worker-1\\.[0-9a-f-]{36}")))
+                .andExpect(jsonPath("$.leaseEpoch").value(7))
                 .andRespond(withSuccess());
 
+        assertThat(client.lease("task-1")).isTrue();
         client.update(task(AgentTaskStatus.SUCCEEDED));
 
         server.verify();
@@ -75,9 +82,9 @@ class ExternalAsyncTaskClientTest {
 
         server.expect(once(), requestTo("http://async.local/async/tasks/task-1/lease"))
                 .andExpect(method(HttpMethod.POST))
-                .andExpect(jsonPath("$.workerId").value("agent-worker-1"))
+                .andExpect(jsonPath("$.workerId").value(matchesPattern("agent-worker-1\\.[0-9a-f-]{36}")))
                 .andExpect(jsonPath("$.leaseSeconds").value(120))
-                .andRespond(withSuccess());
+                .andRespond(withSuccess("{\"leaseEpoch\":1}", MediaType.APPLICATION_JSON));
 
         assertThat(client.lease("task-1")).isTrue();
         server.verify();

@@ -34,4 +34,30 @@ public interface ConversationClient {
             onError.accept(e);
         }
     }
+
+    /** 可取消变体；HTTP 实现会在下游断连时关闭上游 response body。 */
+    default void chatStream(String chatId, String message, VoiceStreamCancellation cancellation,
+                            Consumer<String> onToken, Runnable onDone, Consumer<Throwable> onError) {
+        if (cancellation.isCancelled()) {
+            return;
+        }
+        chatStream(
+                chatId,
+                message,
+                token -> {
+                    if (!cancellation.isCancelled()) {
+                        onToken.accept(token);
+                    }
+                },
+                () -> {
+                    if (!cancellation.isCancelled()) {
+                        onDone.run();
+                    }
+                },
+                error -> {
+                    if (!cancellation.isCancelled()) {
+                        onError.accept(error);
+                    }
+                });
+    }
 }

@@ -9,11 +9,11 @@ import org.springframework.stereotype.Component;
  * 对话护栏编排（移植单体 {@code PromptInjectionGuardrail} + {@code PiiGuardrail}）。在 controller 层
  * 前置扫描输入、后置脱敏输出——纯逻辑、确定性、可单测，且流式/非流式一致，不依赖 langchain4j guardrail SPI。
  *
- * <p>两档独立开关，默认全关（零回归、零依赖 dev/test）：
+ * <p>两档独立开关，构造器占位值默认关闭，但应用 {@code application.yml} 为生产安全默认开启：
  * <ul>
- *   <li>{@code app.conversation.guardrail.injection.enabled}（默认 false）+ {@code .mode}：
+ *   <li>{@code app.conversation.guardrail.injection.enabled} + {@code .mode}：
  *       {@code block}（命中即拒答，默认）/ {@code sanitize}（剥离控制 token 后继续）/ {@code audit}（仅记日志放行）</li>
- *   <li>{@code app.conversation.guardrail.pii.enabled}（默认 false）：输出里的 email/手机号/身份证就地脱敏</li>
+ *   <li>{@code app.conversation.guardrail.pii.enabled}：输出里的 email/手机号/身份证就地脱敏</li>
  * </ul>
  * 生产建议开启（安全合规）；因平台约定默认关，需显式打开。
  */
@@ -77,6 +77,11 @@ public class ConversationGuardrail {
             return reply;
         }
         return PiiRedactor.redact(reply);
+    }
+
+    /** 流式输出用：决定是否需要跨 token 缓冲后再脱敏。 */
+    public boolean redactsPii() {
+        return piiEnabled;
     }
 
     /**

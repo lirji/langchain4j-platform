@@ -1,22 +1,30 @@
 package com.lrj.platform.asynctask;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lrj.platform.audit.AuditEventType;
 import com.lrj.platform.audit.AuditLogger;
 import com.lrj.platform.protocol.asynctask.AsyncTask;
+import com.lrj.platform.security.OutboundCallbackPolicy;
+import com.lrj.platform.security.OutboundWebhookSigner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.net.URI;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.Executor;
 
 /**
@@ -35,15 +43,34 @@ public class AsyncTaskWebhookNotifier {
     private final AsyncTaskWebhookProperties properties;
     private final AuditLogger audit;
     private final Executor executor;
+    private final ObjectMapper mapper;
+    private final OutboundCallbackPolicy callbackPolicy;
 
     public AsyncTaskWebhookNotifier(@Qualifier("asyncTaskWebhookRestTemplate") RestTemplate restTemplate,
                                     AsyncTaskWebhookProperties properties,
                                     AuditLogger audit,
                                     @Qualifier("asyncTaskExecutor") Executor executor) {
+        this(restTemplate, properties, audit, executor,
+                new ObjectMapper().findAndRegisterModules(), null);
+    }
+
+    @Autowired
+    public AsyncTaskWebhookNotifier(
+            @Qualifier("asyncTaskWebhookRestTemplate") RestTemplate restTemplate,
+            AsyncTaskWebhookProperties properties,
+            AuditLogger audit,
+            @Qualifier("asyncTaskExecutor") Executor executor,
+            ObjectMapper mapper,
+            OutboundCallbackPolicy callbackPolicy) {
         this.restTemplate = restTemplate;
         this.properties = properties;
         this.audit = audit;
         this.executor = executor;
+        this.mapper = mapper;
+        this.callbackPolicy = callbackPolicy;
+        if (properties.isEnabled() && !properties.isKafkaTransport()) {
+            OutboundWebhookSigner.requireStrongSecret(properties.getHmacSecret());
+        }
     }
 
     @EventListener
@@ -57,33 +84,68 @@ public class AsyncTaskWebhookNotifier {
     }
 
     private void deliver(AsyncTask task, URI target) {
+        final String body;
+        try {
+            body = mapper.writeValueAsString(AsyncTaskWebhookPayloadFactory.payload(task));
+        } catch (Exception exception) {
+            recordFailure(task, target, "payload_serialization");
+            return;
+        }
+        String deliveryId = UUID.randomUUID().toString();
         int attempts = Math.max(1, properties.getMaxAttempts());
         for (int attempt = 1; attempt <= attempts; attempt++) {
             try {
-                restTemplate.postForEntity(
-                        target,
-                        new HttpEntity<>(AsyncTaskWebhookPayloadFactory.payload(task), headers(task)),
-                        Void.class);
-                audit.record(AuditEventType.WEBHOOK_DELIVERED,
-                        Map.of("taskId", task.taskId(), "status", task.status().name(), "target", target.toString()));
-                return;
+                URI checked = callbackPolicy == null ? target : callbackPolicy.requireAllowed(target.toString());
+                ResponseEntity<Void> response = restTemplate.postForEntity(
+                        checked, new HttpEntity<>(body, signedHeaders(task, body, deliveryId)), Void.class);
+                if (response.getStatusCode().is2xxSuccessful()) {
+                    audit.record(AuditEventType.WEBHOOK_DELIVERED,
+                            Map.of("taskId", task.taskId(), "status", task.status().name(),
+                                    "target", target.toString()));
+                    return;
+                }
+                if (response.getStatusCode().is3xxRedirection()
+                        || response.getStatusCode().is4xxClientError()) {
+                    recordFailure(task, target, response.getStatusCode().is3xxRedirection()
+                            ? "redirect_rejected" : "client_4xx");
+                    return;
+                }
             } catch (RestClientException ex) {
                 if (attempt == attempts) {
-                    audit.record(AuditEventType.WEBHOOK_FAILED, Map.of(
-                            "taskId", task.taskId(),
-                            "status", task.status().name(),
-                            "target", target.toString(),
-                            "error", ex.getMessage() == null ? ex.toString() : ex.getMessage()));
+                    recordFailure(task, target, "delivery_failed");
                     log.warn("async task webhook failed taskId={} target={}: {}", task.taskId(), target, ex.toString());
                     return;
                 }
-                sleepBackoff();
+            } catch (OutboundCallbackPolicy.UnsafeCallbackException exception) {
+                recordFailure(task, target, "callback_policy");
+                return;
             }
+            if (attempt < attempts) sleepBackoff();
         }
     }
 
     static HttpHeaders headers(AsyncTask task) {
         return AsyncTaskWebhookPayloadFactory.headers(task);
+    }
+
+    private HttpHeaders signedHeaders(AsyncTask task, String body, String deliveryId) {
+        OutboundWebhookSigner.SignedHeaders signed = OutboundWebhookSigner.sign(
+                properties.getHmacSecret(), "async-task.finished", deliveryId, Instant.now(), body);
+        HttpHeaders headers = headers(task);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("X-Webhook-Event", signed.event());
+        headers.set("X-Webhook-Delivery", signed.deliveryId());
+        headers.set("X-Webhook-Timestamp", Long.toString(signed.timestamp()));
+        headers.set("X-Webhook-Signature", signed.signature());
+        return headers;
+    }
+
+    private void recordFailure(AsyncTask task, URI target, String reason) {
+        audit.record(AuditEventType.WEBHOOK_FAILED, Map.of(
+                "taskId", task.taskId(),
+                "status", task.status().name(),
+                "target", target.toString(),
+                "error", reason));
     }
 
     private void sleepBackoff() {

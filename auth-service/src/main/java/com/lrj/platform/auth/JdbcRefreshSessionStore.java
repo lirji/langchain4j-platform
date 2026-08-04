@@ -28,17 +28,10 @@ public class JdbcRefreshSessionStore implements RefreshSessionStore {
     }
 
     private void init() {
-        jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS AUTH_SESSION (
-                  TOKEN_HASH VARCHAR(128) NOT NULL PRIMARY KEY,
-                  USERNAME VARCHAR(128) NOT NULL,
-                  CREATED_AT BIGINT NOT NULL,
-                  EXPIRES_AT BIGINT NOT NULL,
-                  REVOKED BOOLEAN NOT NULL,
-                  INDEX IDX_AUTH_SESSION_USER (USERNAME),
-                  INDEX IDX_AUTH_SESSION_EXPIRES (EXPIRES_AT)
-                )""");
-        log.info("AUTH_SESSION table ready");
+        jdbc.queryForList("""
+                SELECT TOKEN_HASH, USERNAME, CREATED_AT, EXPIRES_AT, REVOKED
+                FROM AUTH_SESSION WHERE 1=0""");
+        log.info("AUTH_SESSION schema verified");
     }
 
     @Override

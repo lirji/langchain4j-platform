@@ -23,6 +23,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * 内部租户传播令牌的签发 / 校验。框架无关，servlet 与 reactive 两侧都能用。
@@ -33,20 +34,31 @@ import java.util.Set;
  *   <li><b>RS256</b>（可选）：非对称。edge-gateway 持私钥签发，下游只持公钥验签，缩小轮转爆炸半径。</li>
  * </ul>
  *
- * <p>边缘用 API key 换发一个短时 JWT（claims: tenantId=sub / userId / scopes），每个跨服务调用把它
- * 放进内部 header；下游校验签名 + 过期后重建 {@link TenantContext.Tenant}，无需再持有 API key 表。
+ * <p>边缘用 API key 换发一个短时 JWT（严格绑定 issuer/audience/kid/token-use/jti/iat/exp 与
+ * tenantId=sub / userId / scopes），每个跨服务调用把它放进内部 header；下游完整校验安全上下文后
+ * 重建 {@link TenantContext.Tenant}，无需再持有 API key 表。
  * 这是原单体所没有、微服务化后租户能跨网络跳的关键件。
  */
 public final class InternalToken {
 
     private static final String TOKEN_USE_CLAIM = "token_use";
+    private static final String INTERNAL_TOKEN_USE = "internal_access";
     private static final String SERVICE_TOKEN_USE = "service_callback";
+    private static final String DEFAULT_ISSUER = "langchain4j-platform";
+    private static final String DEFAULT_AUDIENCE = "platform-internal";
+    private static final String DEFAULT_KEY_ID = "platform-internal-v1";
+    private static final Duration DEFAULT_CLOCK_SKEW = Duration.ofSeconds(5);
 
     /** 签发用密钥：HS256 为对称 {@link SecretKey}，RS256 为 {@link PrivateKey}；仅验签节点可为 null。 */
     private final Key signingKey;
     /** 验签用密钥：HS256 为对称 {@link SecretKey}，RS256 为 {@link PublicKey}；仅签发节点可为 null。 */
     private final Key verificationKey;
     private final Duration ttl;
+    private final Duration clockSkew;
+    private final String algorithm;
+    private final String issuer;
+    private final String audience;
+    private final String keyId;
 
     /**
      * HS256（对称）构造：签发/验签共用同一 secret。向后兼容的既有入口。
@@ -58,13 +70,25 @@ public final class InternalToken {
         this.signingKey = k;
         this.verificationKey = k;
         this.ttl = ttl;
+        this.clockSkew = DEFAULT_CLOCK_SKEW;
+        this.algorithm = "HS256";
+        this.issuer = DEFAULT_ISSUER;
+        this.audience = DEFAULT_AUDIENCE;
+        this.keyId = DEFAULT_KEY_ID;
     }
 
     /** RS256（非对称）构造：{@code signingKey} 私钥可为 null（纯验签节点），{@code verificationKey} 公钥可为 null（纯签发节点）。 */
-    private InternalToken(PrivateKey signingKey, PublicKey verificationKey, Duration ttl) {
+    private InternalToken(Key signingKey, Key verificationKey, Duration ttl,
+                          Duration clockSkew, String algorithm, String issuer,
+                          String audience, String keyId) {
         this.signingKey = signingKey;
         this.verificationKey = verificationKey;
         this.ttl = ttl;
+        this.clockSkew = clockSkew;
+        this.algorithm = algorithm;
+        this.issuer = requireText(issuer, "issuer");
+        this.audience = requireText(audience, "audience");
+        this.keyId = requireText(keyId, "key-id");
     }
 
     /**
@@ -79,11 +103,34 @@ public final class InternalToken {
      */
     public static InternalToken forAlgorithm(String algorithm, String secret,
                                              String privateKeyPem, String publicKeyPem, Duration ttl) {
+        return forAlgorithm(algorithm, secret, privateKeyPem, publicKeyPem, ttl,
+                DEFAULT_ISSUER, DEFAULT_AUDIENCE, DEFAULT_KEY_ID, DEFAULT_CLOCK_SKEW);
+    }
+
+    /** 按算法及完整令牌安全上下文构造，供自动装配与跨语言契约测试使用。 */
+    public static InternalToken forAlgorithm(String algorithm, String secret,
+                                             String privateKeyPem, String publicKeyPem, Duration ttl,
+                                             String issuer, String audience, String keyId) {
+        return forAlgorithm(algorithm, secret, privateKeyPem, publicKeyPem, ttl,
+                issuer, audience, keyId, DEFAULT_CLOCK_SKEW);
+    }
+
+    /** 按算法、issuer/audience/kid 与时钟偏差构造。 */
+    public static InternalToken forAlgorithm(String algorithm, String secret,
+                                             String privateKeyPem, String publicKeyPem, Duration ttl,
+                                             String issuer, String audience, String keyId,
+                                             Duration clockSkew) {
         String alg = (algorithm == null || algorithm.isBlank())
                 ? "HS256" : algorithm.trim().toUpperCase(Locale.ROOT);
+        Duration safeClockSkew = clockSkew == null ? Duration.ZERO : clockSkew;
+        if (safeClockSkew.isNegative() || safeClockSkew.compareTo(Duration.ofSeconds(30)) > 0) {
+            throw new IllegalArgumentException("内部 JWT clock-skew 必须在 0 到 30 秒之间");
+        }
         switch (alg) {
             case "HS256":
-                return new InternalToken(secret, ttl);
+                SecretKey key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+                return new InternalToken(key, key, ttl, safeClockSkew, alg,
+                        issuer, audience, keyId);
             case "RS256":
                 PrivateKey priv = hasText(privateKeyPem) ? parsePrivateKey(privateKeyPem) : null;
                 PublicKey pub = hasText(publicKeyPem) ? parsePublicKey(publicKeyPem) : null;
@@ -91,7 +138,8 @@ public final class InternalToken {
                     throw new IllegalStateException(
                             "platform.security.jwt.algorithm=RS256 需要至少配置 private-key(签发) 或 public-key(验签)");
                 }
-                return new InternalToken(priv, pub, ttl);
+                return new InternalToken(priv, pub, ttl, safeClockSkew, alg,
+                        issuer, audience, keyId);
             default:
                 throw new IllegalArgumentException(
                         "不支持的内部 JWT 算法: " + algorithm + "（仅支持 HS256 / RS256）");
@@ -115,32 +163,38 @@ public final class InternalToken {
         }
         Instant now = Instant.now();
         var builder = Jwts.builder()
+                .header().type("JWT").keyId(keyId).and()
+                .issuer(issuer)
+                .audience().add(audience).and()
                 .subject(tenant.tenantId())
                 .claim("uid", tenant.userId())
                 .claim("scopes", List.copyOf(tenant.scopes() == null ? Set.of() : tenant.scopes()))
+                .claim(TOKEN_USE_CLAIM, tokenUse == null ? INTERNAL_TOKEN_USE : tokenUse)
+                .id(UUID.randomUUID().toString())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(ttl)));
-        if (tokenUse != null) {
-            builder.claim(TOKEN_USE_CLAIM, tokenUse);
-        }
         // 可选加法字段 dept（部门层级授权用）：旧 reader 忽略此 claim；新 reader 遇旧 token 缺失时 department=null。
         if (tenant.department() != null && !tenant.department().isBlank()) {
             builder.claim("dept", tenant.department());
         }
-        return builder.signWith(signingKey).compact();
+        return switch (algorithm) {
+            case "HS256" -> builder.signWith((SecretKey) signingKey, Jwts.SIG.HS256).compact();
+            case "RS256" -> builder.signWith((PrivateKey) signingKey, Jwts.SIG.RS256).compact();
+            default -> throw new IllegalStateException("未配置受支持的内部 JWT 签名算法: " + algorithm);
+        };
     }
 
     /** 校验签名 + 过期，重建 Tenant；无效返回 null（调用方决定拒绝或降级 anonymous）。 */
     public TenantContext.Tenant verify(String jwt) {
-        return verify(jwt, false);
+        return verify(jwt, INTERNAL_TOKEN_USE);
     }
 
     /** 校验栈内服务回调令牌；缺少专用用途声明的普通内部 JWT 必须拒绝。 */
     public TenantContext.Tenant verifyService(String jwt) {
-        return verify(jwt, true);
+        return verify(jwt, SERVICE_TOKEN_USE);
     }
 
-    private TenantContext.Tenant verify(String jwt, boolean serviceRequired) {
+    private TenantContext.Tenant verify(String jwt, String expectedTokenUse) {
         if (jwt == null || jwt.isBlank()) return null;
         if (verificationKey == null) return null;
         try {
@@ -152,19 +206,52 @@ public final class InternalToken {
             } else {
                 return null;
             }
+            parser.clockSkewSeconds(clockSkew.toSeconds());
             Jws<Claims> jws = parser.build().parseSignedClaims(jwt);
             Claims c = jws.getPayload();
-            if (serviceRequired && !SERVICE_TOKEN_USE.equals(c.get(TOKEN_USE_CLAIM, String.class))) {
+            if (!algorithm.equalsIgnoreCase(jws.getHeader().getAlgorithm())
+                    || !"JWT".equals(jws.getHeader().getType())
+                    || !keyId.equals(jws.getHeader().getKeyId())
+                    || !issuer.equals(c.getIssuer())
+                    || c.getAudience() == null
+                    || c.getAudience().size() != 1
+                    || !c.getAudience().contains(audience)
+                    || !expectedTokenUse.equals(c.get(TOKEN_USE_CLAIM, String.class))
+                    || !hasText(c.getId())
+                    || c.getIssuedAt() == null
+                    || c.getExpiration() == null) {
+                return null;
+            }
+            Instant issuedAt = c.getIssuedAt().toInstant();
+            Instant expiresAt = c.getExpiration().toInstant();
+            Duration lifetime = Duration.between(issuedAt, expiresAt);
+            if (lifetime.isNegative() || lifetime.isZero()
+                    || lifetime.compareTo(ttl.plus(clockSkew)) > 0
+                    || issuedAt.isAfter(Instant.now().plus(clockSkew))) {
                 return null;
             }
             Object rawScopes = c.get("scopes");
             Set<String> scopes = new LinkedHashSet<>();
             if (rawScopes instanceof List<?> list) {
-                for (Object o : list) scopes.add(String.valueOf(o));
+                if (list.size() > 64) return null;
+                for (Object item : list) {
+                    if (!(item instanceof String scope) || scope.isBlank() || scope.length() > 128
+                            || !scopes.add(scope)) {
+                        return null;
+                    }
+                }
+            } else {
+                return null;
             }
+            String subject = c.getSubject();
             String uid = c.get("uid", String.class);
             String dept = c.get("dept", String.class);   // 旧 token 无 dept -> null（向后兼容）
-            return new TenantContext.Tenant(c.getSubject(), uid, scopes, dept);
+            if (!hasText(subject) || !hasText(uid)
+                    || subject.length() > 256 || uid.length() > 256
+                    || (dept != null && (dept.isBlank() || dept.length() > 256))) {
+                return null;
+            }
+            return new TenantContext.Tenant(subject, uid, scopes, dept);
         } catch (JwtException | IllegalArgumentException e) {
             return null;
         }
@@ -172,6 +259,13 @@ public final class InternalToken {
 
     private static boolean hasText(String s) {
         return s != null && !s.isBlank();
+    }
+
+    private static String requireText(String value, String name) {
+        if (!hasText(value) || value.length() > 128) {
+            throw new IllegalArgumentException("内部 JWT " + name + " 必须为 1 到 128 字符");
+        }
+        return value;
     }
 
     private static PrivateKey parsePrivateKey(String pem) {

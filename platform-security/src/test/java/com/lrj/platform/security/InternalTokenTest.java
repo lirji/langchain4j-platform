@@ -31,6 +31,18 @@ class InternalTokenTest {
     }
 
     @Test
+    void configuredFactoryMintThenVerify_roundTripsTenant() {
+        InternalToken t = InternalToken.forAlgorithm(
+                "HS256", "x".repeat(64), null, null, Duration.ofMinutes(5),
+                "langchain4j-platform", "platform-internal", "platform-internal-v1",
+                Duration.ofSeconds(5));
+        TenantContext.Tenant tenant =
+                new TenantContext.Tenant("qa", "metrics-scraper", Set.of("metrics"));
+
+        assertEquals(tenant, t.verify(t.mint(tenant)));
+    }
+
+    @Test
     void verify_wrongSignature_returnsNull() {
         InternalToken minter = new InternalToken(SECRET, Duration.ofMinutes(5));
         InternalToken verifier = new InternalToken("a-totally-different-secret-32-bytes-min", Duration.ofMinutes(5));
@@ -61,7 +73,26 @@ class InternalTokenTest {
 
         assertNull(t.verifyService(t.mint(tenant)));
         assertEquals(tenant, t.verifyService(t.mintService(tenant)));
-        // 下游收到 edge 换发后的同一服务令牌时，仍可按普通内部身份校验。
-        assertEquals(tenant, t.verify(t.mintService(tenant)));
+        // service_callback 令牌只允许进入专用 exchange，不能冒充普通内部访问令牌。
+        assertNull(t.verify(t.mintService(tenant)));
+    }
+
+    @Test
+    void verificationBindsIssuerAudienceAndKeyId() {
+        TenantContext.Tenant tenant = new TenantContext.Tenant("acme", "alice", Set.of("read"));
+        InternalToken verifier = new InternalToken(SECRET, Duration.ofMinutes(5));
+        InternalToken wrongIssuer = InternalToken.forAlgorithm(
+                "HS256", SECRET, null, null, Duration.ofMinutes(5),
+                "other-platform", "platform-internal", "platform-internal-v1");
+        InternalToken wrongAudience = InternalToken.forAlgorithm(
+                "HS256", SECRET, null, null, Duration.ofMinutes(5),
+                "langchain4j-platform", "workflow-service", "platform-internal-v1");
+        InternalToken wrongKeyId = InternalToken.forAlgorithm(
+                "HS256", SECRET, null, null, Duration.ofMinutes(5),
+                "langchain4j-platform", "platform-internal", "retired-key");
+
+        assertNull(verifier.verify(wrongIssuer.mint(tenant)));
+        assertNull(verifier.verify(wrongAudience.mint(tenant)));
+        assertNull(verifier.verify(wrongKeyId.mint(tenant)));
     }
 }

@@ -18,11 +18,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
 /**
  * 异步任务存储的默认内存实现（{@code app.async-task.store=in-memory}，缺省即启用），基于
- * {@link ConcurrentHashMap}。提供增改查、按租户列举、worker 租约（lease）抢占与到期回收，以及按 TTL
+ * {@link ConcurrentHashMap}。提供增改查、按租户与 owner 列举、worker 租约（lease）抢占与到期回收，以及按 TTL
  * 定时清理终态任务。JDBC 变体 {@link JdbcAsyncTaskStore} 继承本类并覆写各方法；租约/状态迁移的纯函数工具
  * （{@link #withStatus}、{@link #withLease}）由两种实现共享。
  */
@@ -57,11 +59,22 @@ public class AsyncTaskStore {
                                      AsyncTaskStatus target,
                                      Object result,
                                      String error) {
+        return transition(taskId, tenantId, workerId, null, target, result, error);
+    }
+
+    public MutationResult transition(String taskId,
+                                     String tenantId,
+                                     String workerId,
+                                     Long leaseEpoch,
+                                     AsyncTaskStatus target,
+                                     Object result,
+                                     String error) {
         MutationResult[] outcome = new MutationResult[1];
         tasks.computeIfPresent(taskId, (ignored, task) -> {
             if (!tenantId.equals(task.tenantId())
                     || task.status().isTerminal()
-                    || (target != AsyncTaskStatus.CANCELLED && !leaseOwnedBy(task, workerId))) {
+                    || (target != AsyncTaskStatus.CANCELLED
+                        && !leaseOwnedBy(task, workerId, leaseEpoch))) {
                 outcome[0] = new MutationResult(task, false);
                 return task;
             }
@@ -73,13 +86,56 @@ public class AsyncTaskStore {
     }
 
     public Optional<AsyncTask> lease(String taskId, String workerId, Instant leaseExpiresAt) {
+        return Optional.ofNullable(lease(taskId, workerId, leaseExpiresAt, null).task());
+    }
+
+    public LeaseResult lease(
+            String taskId,
+            String workerId,
+            Instant leaseExpiresAt,
+            Long expectedLeaseEpoch) {
         Instant now = Instant.now();
-        return Optional.ofNullable(tasks.computeIfPresent(taskId, (ignored, task) -> {
-            if (task.status().isTerminal() || !leaseAvailableFor(task, workerId, now)) {
+        LeaseResult[] outcome = new LeaseResult[1];
+        tasks.computeIfPresent(taskId, (ignored, task) -> {
+            if (task.status().isTerminal()
+                    || !leaseAvailableFor(task, workerId, expectedLeaseEpoch, now)) {
+                outcome[0] = new LeaseResult(task, false);
                 return task;
             }
-            return withLease(task, workerId, leaseExpiresAt);
-        }));
+            long epoch = expectedLeaseEpoch == null
+                    ? Math.addExact(task.leaseEpoch(), 1L)
+                    : task.leaseEpoch();
+            AsyncTask leased = withLease(task, workerId, leaseExpiresAt, epoch);
+            outcome[0] = new LeaseResult(leased, true);
+            return leased;
+        });
+        return outcome[0] == null ? new LeaseResult(null, false) : outcome[0];
+    }
+
+    /**
+     * Executes one side effect while the task's exact lease owner and fencing epoch are still
+     * active. The in-memory implementation serializes this action with lease takeover on the
+     * task key; the JDBC implementation holds the task row lock in the surrounding transaction.
+     */
+    public <T> LeaseActionResult<T> withActiveLease(
+            String taskId,
+            String tenantId,
+            String workerId,
+            long leaseEpoch,
+            Supplier<T> action) {
+        AtomicReference<LeaseActionResult<T>> outcome = new AtomicReference<>();
+        tasks.computeIfPresent(taskId, (ignored, task) -> {
+            if (!tenantId.equals(task.tenantId())
+                    || task.status().isTerminal()
+                    || !leaseOwnedBy(task, workerId, leaseEpoch)) {
+                outcome.set(new LeaseActionResult<>(task, null, false));
+                return task;
+            }
+            outcome.set(new LeaseActionResult<>(task, action.get(), true));
+            return task;
+        });
+        LeaseActionResult<T> result = outcome.get();
+        return result == null ? new LeaseActionResult<>(null, null, false) : result;
     }
 
     public List<AsyncTask> listByTenant(String tenantId) {
@@ -87,6 +143,21 @@ public class AsyncTaskStore {
                 .filter(task -> tenantId.equals(task.tenantId()))
                 .sorted(Comparator.comparing(AsyncTask::createdAt).reversed())
                 .toList();
+    }
+
+    public List<AsyncTask> listByOwner(String tenantId, String userId) {
+        return tasks.values().stream()
+                .filter(task -> tenantId.equals(task.tenantId()) && userId.equals(task.userId()))
+                .sorted(Comparator.comparing(AsyncTask::createdAt).reversed())
+                .toList();
+    }
+
+    /** Returns the process-local count for the in-memory store. JDBC overrides this with a
+     * database count so every replica reports the same central queue state. */
+    public long countByStatus(AsyncTaskStatus status) {
+        return tasks.values().stream()
+                .filter(task -> task.status() == status)
+                .count();
     }
 
     public List<AsyncTask> failOrphans(Set<String> kinds,
@@ -138,10 +209,20 @@ public class AsyncTaskStore {
                 now,
                 status.isTerminal() ? now : task.finishedAt(),
                 status.isTerminal() ? null : task.leaseOwnerId(),
-                status.isTerminal() ? null : task.leaseExpiresAt());
+                status.isTerminal() ? null : task.leaseExpiresAt(),
+                task.leaseEpoch());
     }
 
     static AsyncTask withLease(AsyncTask task, String workerId, Instant leaseExpiresAt) {
+        long epoch = task.leaseEpoch() == 0 ? 1 : task.leaseEpoch();
+        return withLease(task, workerId, leaseExpiresAt, epoch);
+    }
+
+    static AsyncTask withLease(
+            AsyncTask task,
+            String workerId,
+            Instant leaseExpiresAt,
+            long leaseEpoch) {
         Instant now = Instant.now();
         return new AsyncTask(
                 task.taskId(),
@@ -157,17 +238,25 @@ public class AsyncTaskStore {
                 now,
                 task.finishedAt(),
                 workerId,
-                leaseExpiresAt);
+                leaseExpiresAt,
+                leaseEpoch);
     }
 
     static boolean leaseAvailableFor(AsyncTask task, String workerId, Instant now) {
-        if (task.leaseOwnerId() == null || task.leaseOwnerId().isBlank()) {
-            return true;
+        return leaseAvailableFor(task, workerId, null, now);
+    }
+
+    static boolean leaseAvailableFor(
+            AsyncTask task,
+            String workerId,
+            Long expectedLeaseEpoch,
+            Instant now) {
+        if (expectedLeaseEpoch != null) {
+            return leaseOwnedBy(task, workerId, expectedLeaseEpoch, now);
         }
-        if (task.leaseOwnerId().equals(workerId)) {
-            return true;
-        }
-        return task.leaseExpiresAt() != null && task.leaseExpiresAt().isBefore(now);
+        return task.leaseOwnerId() == null
+                || task.leaseOwnerId().isBlank()
+                || (task.leaseExpiresAt() != null && !task.leaseExpiresAt().isAfter(now));
     }
 
     private Optional<AsyncTask> transitionOrphan(String taskId,
@@ -194,12 +283,32 @@ public class AsyncTaskStore {
     }
 
     static boolean leaseOwnedBy(AsyncTask task, String workerId) {
-        if (task.leaseOwnerId() == null || task.leaseOwnerId().isBlank()) {
-            return true;
-        }
-        return workerId != null && task.leaseOwnerId().equals(workerId);
+        return leaseOwnedBy(task, workerId, null);
+    }
+
+    static boolean leaseOwnedBy(AsyncTask task, String workerId, Long leaseEpoch) {
+        return leaseOwnedBy(task, workerId, leaseEpoch, Instant.now());
+    }
+
+    private static boolean leaseOwnedBy(
+            AsyncTask task,
+            String workerId,
+            Long leaseEpoch,
+            Instant now) {
+        return workerId != null
+                && task.leaseOwnerId() != null
+                && task.leaseOwnerId().equals(workerId)
+                && (leaseEpoch == null || task.leaseEpoch() == leaseEpoch)
+                && task.leaseExpiresAt() != null
+                && task.leaseExpiresAt().isAfter(now);
     }
 
     public record MutationResult(AsyncTask task, boolean changed) {
+    }
+
+    public record LeaseResult(AsyncTask task, boolean acquired) {
+    }
+
+    public record LeaseActionResult<T>(AsyncTask task, T value, boolean executed) {
     }
 }

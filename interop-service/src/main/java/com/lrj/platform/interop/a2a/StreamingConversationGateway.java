@@ -11,6 +11,6 @@ import java.util.function.Consumer;
  */
 public interface StreamingConversationGateway {
 
-    void streamChat(String chatId, String message,
+    void streamChat(String chatId, String message, StreamCancellation cancellation,
                     Consumer<String> onToken, Runnable onDone, Consumer<Throwable> onError);
 }

@@ -23,9 +23,9 @@ public class ChannelDedupConfig {
 
     @Bean
     public DataSource channelDedupDataSource(
-            @Value("${channel.dedup.datasource.url:jdbc:mysql://mysql:3306/channel?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}") String url,
-            @Value("${channel.dedup.datasource.username:root}") String username,
-            @Value("${channel.dedup.datasource.password:}") String password,
+            @Value("${channel.dedup.datasource.url:jdbc:mysql://mysql:3306/channel?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}") String url,
+            @Value("${channel.dedup.datasource.username:channel_app}") String username,
+            @Value("${channel.dedup.datasource.password:channel-app-dev}") String password,
             @Value("${channel.dedup.datasource.driver-class-name:com.mysql.cj.jdbc.Driver}") String driver) {
         HikariConfig c = new HikariConfig();
         c.setJdbcUrl(url);

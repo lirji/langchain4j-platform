@@ -1,16 +1,22 @@
 package com.lrj.platform.asynctask;
 
+import com.lrj.platform.security.AsyncTaskWorkerToken;
+import com.lrj.platform.security.InternalSecurityProperties;
 import com.lrj.platform.security.TenantContext;
 import org.slf4j.MDC;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.core.Ordered;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
+import java.net.http.HttpClient;
 import java.util.concurrent.Executor;
 
 /**
@@ -36,10 +42,26 @@ public class AsyncTaskWebConfig {
     }
 
     @Bean
+    FilterRegistrationBean<AsyncTaskWorkerAuthFilter> asyncTaskWorkerAuthFilter(
+            AsyncTaskWorkerToken tokens,
+            InternalSecurityProperties security) {
+        FilterRegistrationBean<AsyncTaskWorkerAuthFilter> registration =
+                new FilterRegistrationBean<>(new AsyncTaskWorkerAuthFilter(tokens, security));
+        registration.addUrlPatterns("/async/tasks/*");
+        registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 10);
+        return registration;
+    }
+
+    @Bean
     RestTemplate asyncTaskWebhookRestTemplate(RestTemplateBuilder builder, AsyncTaskWebhookProperties properties) {
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(properties.getConnectTimeout())
+                .followRedirects(HttpClient.Redirect.NEVER)
+                .build();
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(client);
+        requestFactory.setReadTimeout(properties.getReadTimeout());
         return builder
-                .setConnectTimeout(properties.getConnectTimeout())
-                .setReadTimeout(properties.getReadTimeout())
+                .requestFactory(() -> requestFactory)
                 .build();
     }
 

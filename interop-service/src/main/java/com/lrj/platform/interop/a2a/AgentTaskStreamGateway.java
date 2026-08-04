@@ -11,6 +11,6 @@ import java.util.function.Consumer;
  */
 public interface AgentTaskStreamGateway {
 
-    void streamTask(String taskId,
+    void streamTask(String taskId, StreamCancellation cancellation,
                     Consumer<AgentTaskView> onUpdate, Runnable onDone, Consumer<Throwable> onError);
 }

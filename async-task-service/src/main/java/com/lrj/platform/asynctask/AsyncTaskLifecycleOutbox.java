@@ -5,7 +5,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import javax.sql.DataSource;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * 异步任务生命周期事件的<b>事务性 outbox</b>（A1，收口 async-task 版两段式缺口）。
@@ -31,20 +35,11 @@ public class AsyncTaskLifecycleOutbox {
     }
 
     void init() {
-        jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS ASYNC_TASK_LIFECYCLE_OUTBOX (
-                  EVENT_ID VARCHAR(160) NOT NULL PRIMARY KEY,
-                  TENANT_ID VARCHAR(64),
-                  PAYLOAD_JSON TEXT NOT NULL,
-                  STATUS VARCHAR(16) NOT NULL,
-                  ATTEMPTS INT NOT NULL DEFAULT 0,
-                  NEXT_ATTEMPT_AT BIGINT NOT NULL,
-                  LAST_ERROR VARCHAR(512),
-                  CREATED_AT BIGINT NOT NULL,
-                  UPDATED_AT BIGINT NOT NULL,
-                  INDEX IDX_ASYNC_LIFECYCLE_DUE (STATUS, NEXT_ATTEMPT_AT)
-                )""");
-        log.info("ASYNC_TASK_LIFECYCLE_OUTBOX 表就绪（生命周期事件事务性 outbox，A1）");
+        jdbc.queryForList("""
+                SELECT EVENT_ID, TENANT_ID, PAYLOAD_JSON, STATUS, ATTEMPTS, NEXT_ATTEMPT_AT,
+                       LAST_ERROR, CLAIMED_BY, CLAIMED_UNTIL, CREATED_AT, UPDATED_AT
+                FROM ASYNC_TASK_LIFECYCLE_OUTBOX WHERE 1=0""");
+        log.info("ASYNC_TASK_LIFECYCLE_OUTBOX schema verified");
     }
 
     /** 入队（在 JdbcAsyncTaskStore.update 的事务内调用 → 与终态更新原子提交）。EVENT_ID 冲突即幂等忽略。 */
@@ -58,26 +53,89 @@ public class AsyncTaskLifecycleOutbox {
     }
 
     public List<Row> claimDue(long now, int limit) {
-        return jdbc.query("""
-                SELECT EVENT_ID, TENANT_ID, PAYLOAD_JSON, ATTEMPTS FROM ASYNC_TASK_LIFECYCLE_OUTBOX
-                WHERE STATUS='PENDING' AND NEXT_ATTEMPT_AT <= ?
+        return claimDue(now, limit, UUID.randomUUID().toString(), 120_000L);
+    }
+
+    List<Row> claimDue(long now, int limit, String ownerId, long claimTtlMs) {
+        int boundedLimit = Math.max(1, limit);
+        long claimedUntil = now + Math.max(1_000L, claimTtlMs);
+        List<String> candidateIds = jdbc.queryForList("""
+                SELECT EVENT_ID FROM ASYNC_TASK_LIFECYCLE_OUTBOX
+                WHERE (STATUS='PENDING' AND NEXT_ATTEMPT_AT <= ?)
+                   OR (STATUS='IN_PROGRESS' AND CLAIMED_UNTIL <= ?)
                 ORDER BY NEXT_ATTEMPT_AT ASC LIMIT ?""",
-                (rs, n) -> new Row(rs.getString(1), rs.getString(2), rs.getString(3), rs.getInt(4)),
-                now, limit);
+                String.class, now, now, boundedLimit);
+        if (candidateIds.isEmpty()) {
+            return List.of();
+        }
+        String placeholders = placeholders(candidateIds.size());
+        List<Object> updateArgs = new ArrayList<>(List.of(ownerId, claimedUntil, now));
+        updateArgs.addAll(candidateIds);
+        updateArgs.add(now);
+        updateArgs.add(now);
+        jdbc.update("""
+                UPDATE ASYNC_TASK_LIFECYCLE_OUTBOX
+                SET STATUS='IN_PROGRESS', CLAIMED_BY=?, CLAIMED_UNTIL=?, UPDATED_AT=?
+                WHERE EVENT_ID IN (%s)
+                  AND ((STATUS='PENDING' AND NEXT_ATTEMPT_AT <= ?)
+                    OR (STATUS='IN_PROGRESS' AND CLAIMED_UNTIL <= ?))""".formatted(placeholders),
+                updateArgs.toArray());
+        List<Object> selectArgs = new ArrayList<>();
+        selectArgs.add(ownerId);
+        selectArgs.addAll(candidateIds);
+        selectArgs.add(boundedLimit);
+        return jdbc.query("""
+                SELECT EVENT_ID, TENANT_ID, PAYLOAD_JSON, ATTEMPTS, CLAIMED_BY
+                FROM ASYNC_TASK_LIFECYCLE_OUTBOX
+                WHERE STATUS='IN_PROGRESS' AND CLAIMED_BY=? AND EVENT_ID IN (%s)
+                ORDER BY NEXT_ATTEMPT_AT ASC LIMIT ?""".formatted(placeholders),
+                (rs, n) -> new Row(
+                        rs.getString(1),
+                        rs.getString(2),
+                        rs.getString(3),
+                        rs.getInt(4),
+                        rs.getString(5)),
+                selectArgs.toArray());
     }
 
-    public void markDelivered(String eventId, long now) {
-        jdbc.update("UPDATE ASYNC_TASK_LIFECYCLE_OUTBOX SET STATUS='DELIVERED', UPDATED_AT=? WHERE EVENT_ID=?", now, eventId);
+    public boolean markDelivered(String eventId, String claimOwner, long now) {
+        return jdbc.update("""
+                UPDATE ASYNC_TASK_LIFECYCLE_OUTBOX
+                SET STATUS='DELIVERED', CLAIMED_BY=NULL, CLAIMED_UNTIL=NULL, UPDATED_AT=?
+                WHERE EVENT_ID=? AND STATUS='IN_PROGRESS'
+                  AND CLAIMED_BY=? AND CLAIMED_UNTIL > ?""",
+                now, eventId, claimOwner, now) == 1;
     }
 
-    public void markRetry(String eventId, int attempts, long nextAttemptAt, String lastError, long now) {
-        jdbc.update("UPDATE ASYNC_TASK_LIFECYCLE_OUTBOX SET ATTEMPTS=?, NEXT_ATTEMPT_AT=?, LAST_ERROR=?, UPDATED_AT=? WHERE EVENT_ID=?",
-                attempts, nextAttemptAt, trunc(lastError), now, eventId);
+    public boolean markRetry(
+            String eventId,
+            String claimOwner,
+            int attempts,
+            long nextAttemptAt,
+            String lastError,
+            long now) {
+        return jdbc.update("""
+                UPDATE ASYNC_TASK_LIFECYCLE_OUTBOX
+                SET STATUS='PENDING', ATTEMPTS=?, NEXT_ATTEMPT_AT=?, LAST_ERROR=?,
+                    CLAIMED_BY=NULL, CLAIMED_UNTIL=NULL, UPDATED_AT=?
+                WHERE EVENT_ID=? AND STATUS='IN_PROGRESS'
+                  AND CLAIMED_BY=? AND CLAIMED_UNTIL > ?""",
+                attempts, nextAttemptAt, trunc(lastError), now, eventId, claimOwner, now) == 1;
     }
 
-    public void markDead(String eventId, int attempts, String lastError, long now) {
-        jdbc.update("UPDATE ASYNC_TASK_LIFECYCLE_OUTBOX SET STATUS='DEAD', ATTEMPTS=?, LAST_ERROR=?, UPDATED_AT=? WHERE EVENT_ID=?",
-                attempts, trunc(lastError), now, eventId);
+    public boolean markDead(
+            String eventId,
+            String claimOwner,
+            int attempts,
+            String lastError,
+            long now) {
+        return jdbc.update("""
+                UPDATE ASYNC_TASK_LIFECYCLE_OUTBOX
+                SET STATUS='DEAD', ATTEMPTS=?, LAST_ERROR=?,
+                    CLAIMED_BY=NULL, CLAIMED_UNTIL=NULL, UPDATED_AT=?
+                WHERE EVENT_ID=? AND STATUS='IN_PROGRESS'
+                  AND CLAIMED_BY=? AND CLAIMED_UNTIL > ?""",
+                attempts, trunc(lastError), now, eventId, claimOwner, now) == 1;
     }
 
     /** 指数退避 + DLQ 阈值（纯函数，便于单测）：第 n 次失败后 next = now + base*2^(n-1)；达 maxAttempts 进 DEAD。 */
@@ -93,7 +151,16 @@ public class AsyncTaskLifecycleOutbox {
         return s == null ? null : (s.length() <= 512 ? s : s.substring(0, 512));
     }
 
-    public record Row(String eventId, String tenantId, String payloadJson, int attempts) {}
+    private static String placeholders(int count) {
+        return Collections.nCopies(count, "?").stream().collect(Collectors.joining(","));
+    }
+
+    public record Row(
+            String eventId,
+            String tenantId,
+            String payloadJson,
+            int attempts,
+            String claimOwner) {}
 
     public record Decision(boolean dead, long nextAttemptAt) {}
 }

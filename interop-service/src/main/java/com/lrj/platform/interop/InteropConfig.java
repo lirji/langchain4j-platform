@@ -1,5 +1,11 @@
 package com.lrj.platform.interop;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lrj.platform.interop.a2a.A2aPushNotificationStore;
+import com.lrj.platform.interop.a2a.A2aPushTokenCipher;
+import com.lrj.platform.interop.a2a.A2aStateRepository;
+import com.lrj.platform.interop.a2a.InMemoryA2aStateRepository;
+import com.lrj.platform.interop.a2a.RedisA2aStateRepository;
 import com.lrj.platform.observability.OutboundTraceForwarder;
 import com.lrj.platform.security.OutboundTenantForwarder;
 import com.lrj.platform.security.TenantContext;
@@ -10,6 +16,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.web.client.RestTemplate;
 
@@ -113,7 +120,72 @@ public class InteropConfig {
      */
     @Bean
     InteropToolRegistry interopToolRegistry(ObjectProvider<AgentCapabilityClient> discoveryClient,
-                                            InteropProperties properties) {
-        return new InteropToolRegistry(discoveryClient.getIfAvailable(), properties.getCapabilityTtl());
+                                            InteropProperties properties,
+                                            CapabilityRegistryStore capabilityRegistryStore) {
+        return new InteropToolRegistry(discoveryClient.getIfAvailable(),
+                properties.getCapabilityTtl(), capabilityRegistryStore);
+    }
+
+    @Bean
+    A2aStateRepository a2aStateRepository(InteropProperties properties,
+                                          ObjectProvider<StringRedisTemplate> redis,
+                                          ObjectMapper json) {
+        if (redisState(properties)) {
+            StringRedisTemplate template = redis.getIfAvailable();
+            if (template == null) {
+                throw new IllegalStateException("Redis state store requires StringRedisTemplate");
+            }
+            return new RedisA2aStateRepository(template, json, properties.getStateNamespace());
+        }
+        return new InMemoryA2aStateRepository();
+    }
+
+    @Bean
+    CapabilityRegistryStore capabilityRegistryStore(InteropProperties properties,
+                                                      ObjectProvider<StringRedisTemplate> redis,
+                                                      ObjectMapper json) {
+        if (redisState(properties)) {
+            StringRedisTemplate template = redis.getIfAvailable();
+            if (template == null) {
+                throw new IllegalStateException("Redis state store requires StringRedisTemplate");
+            }
+            return new RedisCapabilityRegistryStore(
+                    template, json, properties.getCapabilityRegistryKey());
+        }
+        return new InMemoryCapabilityRegistryStore();
+    }
+
+    @Bean
+    A2aPushNotificationStore a2aPushNotificationStore(A2aStateRepository repository,
+                                                        InteropProperties properties) {
+        String configuredKey = properties.getA2a().getPushEncryptionKey();
+        if (configuredKey != null
+                && !configuredKey.isBlank()
+                && configuredKey.equals(properties.getA2a().getPushHmacSecret())) {
+            throw new IllegalStateException(
+                    "A2A push encryption key must not reuse the push HMAC secret");
+        }
+        A2aPushTokenCipher cipher;
+        if (configuredKey == null || configuredKey.isBlank()) {
+            if (redisState(properties)) {
+                throw new IllegalStateException(
+                        "INTEROP_A2A_PUSH_ENCRYPTION_KEY is required for Redis state");
+            }
+            cipher = A2aPushTokenCipher.ephemeral();
+        } else {
+            cipher = new A2aPushTokenCipher(configuredKey);
+        }
+        return new A2aPushNotificationStore(repository, cipher, properties.getStateTtl());
+    }
+
+    private static boolean redisState(InteropProperties properties) {
+        String value = properties.getStateStore();
+        if (value == null || value.isBlank() || "memory".equalsIgnoreCase(value)) {
+            return false;
+        }
+        if (!"redis".equalsIgnoreCase(value)) {
+            throw new IllegalStateException("app.interop.state-store must be memory or redis");
+        }
+        return true;
     }
 }

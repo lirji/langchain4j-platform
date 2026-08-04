@@ -37,4 +37,23 @@ class WorkflowOutboxTest {
     void schedule_beyondMaxAttempts_isDead() {
         assertTrue(WorkflowOutbox.schedule(7, 6, 0L, 5000L).dead());
     }
+
+    @Test
+    void claimExpiryAllowsRecoveryAndFencesStaleDispatcher() {
+        var dataSource = WorkflowTestDatabase.migrated("workflow_http_claim");
+        WorkflowOutbox outbox = new WorkflowOutbox(dataSource);
+        long now = 10_000L;
+        outbox.enqueue("wf-1", "acme", "http://callback.local/hook", now);
+
+        WorkflowOutbox.Row stale = outbox.claimDue(
+                now, 10, "dispatcher-1", 1_000L).getFirst();
+        assertTrue(outbox.claimDue(now + 500L, 10, "dispatcher-2", 1_000L).isEmpty());
+        WorkflowOutbox.Row current = outbox.claimDue(
+                now + 1_500L, 10, "dispatcher-2", 30_000L).getFirst();
+
+        assertFalse(outbox.markDelivered(
+                stale.instanceId(), stale.claimOwner(), now + 1_600L));
+        assertTrue(outbox.markDelivered(
+                current.instanceId(), current.claimOwner(), now + 1_600L));
+    }
 }

@@ -7,6 +7,9 @@ spring:
   # 集中配置（可选）：Config Server 不可达时不阻断启动，各 ${ENV:default} 兜底继续生效。
   config:
     import: "optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}"
+  data:
+    redis:
+      url: ${SPRING_DATA_REDIS_URL:redis://localhost:6379/0}
 
 app:
   interop:
@@ -20,6 +23,11 @@ app:
     # 下游暂时不可达时使用 last-known-good，冷启动不可达则不宣称不存在的 Agent 工具。
     discovery-enabled: ${INTEROP_DISCOVERY_ENABLED:true}
     capability-ttl: ${INTEROP_CAPABILITY_TTL:60s}
+    # 生产/多副本必须使用 redis；本地测试可用 memory。
+    state-store: ${INTEROP_STATE_STORE:memory}
+    state-namespace: ${INTEROP_STATE_NAMESPACE:platform:interop:a2a}
+    state-ttl: ${INTEROP_STATE_TTL:7d}
+    capability-registry-key: ${INTEROP_CAPABILITY_REGISTRY_KEY:platform:interop:capability-registry:v1}
     a2a:
       agent-name: ${INTEROP_A2A_AGENT_NAME:langchain4j-platform}
       base-url: ${INTEROP_A2A_BASE_URL:http://localhost:8080}
@@ -28,8 +36,10 @@ app:
       auth-mode: ${INTEROP_A2A_AUTH_MODE:only}
       # A2A push 中继：agent 任务终态 webhook 回到 interop 自己，再按 A2A 信封回推客户端。
       push-callback-base-url: ${INTEROP_A2A_PUSH_CALLBACK_BASE_URL:http://localhost:8088}
-      # 回推客户端时的 HMAC 签名密钥；空则不签名。生产建议配一个共享密钥供客户端校验回调真伪。
-      push-hmac-secret: ${INTEROP_A2A_PUSH_HMAC_SECRET:}
+      # 回推客户端时的版本化 HMAC 签名密钥；生产必须从独立 Secret 注入。
+      push-hmac-secret: ${INTEROP_A2A_PUSH_HMAC_SECRET:dev-only-a2a-webhook-signing-secret-change-me-32b}
+      # 与 push HMAC/JWT 分离的 base64 AES-256 key；Redis state 时必填。
+      push-encryption-key: ${INTEROP_A2A_PUSH_ENCRYPTION_KEY:}
 
 platform:
   security:

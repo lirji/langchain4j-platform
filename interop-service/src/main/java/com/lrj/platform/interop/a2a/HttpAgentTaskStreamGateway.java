@@ -11,6 +11,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.function.Consumer;
+import java.io.InputStream;
 
 /**
  * {@link AgentTaskStreamGateway} 的 HTTP 实现。用 RestTemplate 的 {@code execute} + 流式
@@ -32,7 +33,7 @@ public class HttpAgentTaskStreamGateway implements AgentTaskStreamGateway {
     }
 
     @Override
-    public void streamTask(String taskId,
+    public void streamTask(String taskId, StreamCancellation cancellation,
                            Consumer<AgentTaskView> onUpdate, Runnable onDone, Consumer<Throwable> onError) {
         try {
             interopAgentRestTemplate.execute(
@@ -40,20 +41,32 @@ public class HttpAgentTaskStreamGateway implements AgentTaskStreamGateway {
                     HttpMethod.GET,
                     request -> request.getHeaders().setAccept(List.of(MediaType.TEXT_EVENT_STREAM)),
                     response -> {
-                        SseEvents.read(response.getBody(), (eventName, data) -> {
-                            AgentTaskView view = parseTask(data);
-                            if (view != null && view.status() != null) {
-                                onUpdate.accept(view);
-                            }
-                        });
+                        InputStream body = response.getBody();
+                        if (!cancellation.register(body)) {
+                            return null;
+                        }
+                        try {
+                            SseEvents.read(body, (eventName, data) -> {
+                                AgentTaskView view = parseTask(data);
+                                if (view != null && view.status() != null) {
+                                    onUpdate.accept(view);
+                                }
+                            });
+                        } finally {
+                            cancellation.clear(body);
+                        }
                         return null;
                     },
                     taskId);
         } catch (Exception e) {
-            onError.accept(e);
+            if (!cancellation.isCancelled()) {
+                onError.accept(new IllegalStateException("agent task stream request failed"));
+            }
             return;
         }
-        onDone.run();
+        if (!cancellation.isCancelled()) {
+            onDone.run();
+        }
     }
 
     private AgentTaskView parseTask(String data) {
@@ -63,7 +76,7 @@ public class HttpAgentTaskStreamGateway implements AgentTaskStreamGateway {
         try {
             return json.readValue(data, AgentTaskView.class);
         } catch (Exception e) {
-            log.debug("agent task stream frame not a task snapshot: {}", e.toString());
+            log.debug("agent task stream frame ignored errorType={}", e.getClass().getSimpleName());
             return null;
         }
     }

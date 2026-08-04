@@ -8,7 +8,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import javax.sql.DataSource;
 
 /**
- * JDBC 去重（跨重启）。表结构靠 {@code CREATE TABLE IF NOT EXISTS} 字面量维护（与本仓其它 Jdbc*Store 一致）。
+ * JDBC 去重（跨重启）。schema 由独立版本化 migration 管理。
  * 靠 PK 冲突判定重复：插入成功=首次，主键冲突=已处理。
  */
 public class JdbcProcessedEventStore implements ProcessedEventStore {
@@ -23,12 +23,8 @@ public class JdbcProcessedEventStore implements ProcessedEventStore {
     }
 
     private void init() {
-        jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS PROCESSED_EVENT (
-                  EVENT_ID VARCHAR(128) NOT NULL PRIMARY KEY,
-                  PROCESSED_AT BIGINT NOT NULL
-                )""");
-        log.info("PROCESSED_EVENT table ready");
+        jdbc.queryForList("SELECT EVENT_ID, PROCESSED_AT FROM PROCESSED_EVENT WHERE 1=0");
+        log.info("PROCESSED_EVENT schema verified");
     }
 
     @Override

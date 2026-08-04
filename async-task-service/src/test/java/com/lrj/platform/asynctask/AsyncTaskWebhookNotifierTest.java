@@ -5,6 +5,7 @@ import com.lrj.platform.protocol.asynctask.AsyncTask;
 import com.lrj.platform.protocol.asynctask.AsyncTaskStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
@@ -16,6 +17,7 @@ import java.util.Map;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.springframework.test.web.client.ExpectedCount.times;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
@@ -24,6 +26,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 
 /**
  * AsyncTaskWebhookNotifierTest：用 {@link MockRestServiceServer} 验证 {@link AsyncTaskWebhookNotifier} 的终态
@@ -45,6 +48,10 @@ class AsyncTaskWebhookNotifierTest {
                 .andExpect(header("X-Async-Task-Id", "task-1"))
                 .andExpect(header("X-Async-Task-Status", "SUCCEEDED"))
                 .andExpect(header("X-Tenant-Id", "acme"))
+                .andExpect(header("X-Webhook-Event", "async-task.finished"))
+                .andExpect(header("X-Webhook-Signature", startsWith("v1=")))
+                .andExpect(header("X-Webhook-Delivery", startsWith("")))
+                .andExpect(header("X-Webhook-Timestamp", startsWith("")))
                 .andExpect(jsonPath("$.taskId").value("task-1"))
                 .andExpect(jsonPath("$.status").value("SUCCEEDED"))
                 .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
@@ -99,6 +106,25 @@ class AsyncTaskWebhookNotifierTest {
         server.expect(times(2), requestTo("http://callback.local/tasks")).andRespond(withServerError());
 
         notifier.onTaskEvent(new AsyncTaskEvent(task(AsyncTaskStatus.SUCCEEDED, "http://callback.local/tasks")));
+
+        server.verify();
+    }
+
+    @Test
+    void rejectsRedirectWithoutFollowingOrRetrying() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        AsyncTaskWebhookProperties properties = properties();
+        properties.setMaxAttempts(3);
+        AsyncTaskWebhookNotifier notifier = new AsyncTaskWebhookNotifier(
+                restTemplate, properties, mock(AuditLogger.class), Runnable::run);
+
+        server.expect(once(), requestTo("http://callback.local/tasks"))
+                .andRespond(withStatus(HttpStatus.FOUND)
+                        .header("Location", "http://127.0.0.1/admin"));
+
+        notifier.onTaskEvent(new AsyncTaskEvent(
+                task(AsyncTaskStatus.SUCCEEDED, "http://callback.local/tasks")));
 
         server.verify();
     }

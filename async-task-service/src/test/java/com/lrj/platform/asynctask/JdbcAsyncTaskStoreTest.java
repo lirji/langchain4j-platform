@@ -5,6 +5,7 @@ import com.lrj.platform.protocol.asynctask.AsyncTask;
 import com.lrj.platform.protocol.asynctask.AsyncTaskStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -16,6 +17,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * JdbcAsyncTaskStoreTest：基于内存 H2（MySQL 兼容模式）验证 {@link JdbcAsyncTaskStore} 的关键语义——
@@ -23,6 +25,23 @@ import static org.assertj.core.api.Assertions.assertThat;
  * EVENT_ID 幂等），以及 SQL 层租约的抢占（活跃租约阻断他人）、过期重认领与终态任务不可被租约修改。
  */
 class JdbcAsyncTaskStoreTest {
+
+    @Test
+    void missingSchemaFailsWithoutCreatingTables() {
+        DataSource dataSource = new DriverManagerDataSource(
+                "jdbc:h2:mem:async_task_missing_schema;MODE=MySQL;DB_CLOSE_DELAY=-1", "sa", "");
+
+        assertThatThrownBy(() -> new JdbcAsyncTaskStore(
+                dataSource,
+                new ObjectMapper(),
+                Duration.ofHours(1),
+                new DataSourceTransactionManager(dataSource),
+                provider(null)))
+                .isInstanceOf(DataAccessException.class);
+        assertThat(new JdbcTemplate(dataSource).queryForObject(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='ASYNC_TASK'",
+                Integer.class)).isZero();
+    }
 
     @Test
     void transitionToTerminal_atomicallyWritesLifecycleOutboxRow() {
@@ -81,6 +100,23 @@ class JdbcAsyncTaskStoreTest {
     }
 
     @Test
+    void statusCountsComeFromSharedJdbcState() {
+        String database = "async_task_status_counts";
+        JdbcAsyncTaskStore firstReplica = store(database);
+        JdbcAsyncTaskStore secondReplica = store(database);
+        firstReplica.put(task("pending-1", AsyncTaskStatus.PENDING, null, null));
+        firstReplica.put(task(
+                "running-1",
+                AsyncTaskStatus.RUNNING,
+                "worker-1",
+                Instant.now().plusSeconds(30)));
+
+        assertThat(secondReplica.countByStatus(AsyncTaskStatus.PENDING)).isEqualTo(1);
+        assertThat(secondReplica.countByStatus(AsyncTaskStatus.RUNNING)).isEqualTo(1);
+        assertThat(secondReplica.countByStatus(AsyncTaskStatus.SUCCEEDED)).isZero();
+    }
+
+    @Test
     void leaseDoesNotModifyTerminalTask() {
         JdbcAsyncTaskStore store = store("async_task_lease_terminal");
         store.put(task("task-1", AsyncTaskStatus.CANCELLED, null, null));
@@ -89,6 +125,81 @@ class JdbcAsyncTaskStoreTest {
 
         assertThat(task.status()).isEqualTo(AsyncTaskStatus.CANCELLED);
         assertThat(task.leaseOwnerId()).isNull();
+    }
+
+    @Test
+    void statusTransitionAtomicallyRequiresCurrentLiveLease() {
+        JdbcAsyncTaskStore store = store("async_task_transition_live_lease");
+        store.put(task("without-lease", AsyncTaskStatus.PENDING, null, null));
+        store.put(task(
+                "expired-lease",
+                AsyncTaskStatus.RUNNING,
+                "worker-1",
+                Instant.now().minusSeconds(1)));
+        store.put(task(
+                "live-lease",
+                AsyncTaskStatus.RUNNING,
+                "worker-1",
+                Instant.now().plusSeconds(30)));
+
+        assertThat(store.transition(
+                "without-lease", "acme", "worker-1", AsyncTaskStatus.SUCCEEDED, Map.of(), null).changed())
+                .isFalse();
+        assertThat(store.transition(
+                "expired-lease", "acme", "worker-1", AsyncTaskStatus.SUCCEEDED, Map.of(), null).changed())
+                .isFalse();
+        assertThat(store.transition(
+                "live-lease", "acme", "worker-1", AsyncTaskStatus.SUCCEEDED, Map.of(), null).changed())
+                .isTrue();
+    }
+
+    @Test
+    void sameServiceReplicasRequireLeaseEpochAndStaleOwnerIsFencedAfterTakeover() {
+        JdbcAsyncTaskStore store = store("async_task_lease_fencing");
+        store.put(task("task-1", AsyncTaskStatus.PENDING, null, null));
+
+        AsyncTaskStore.LeaseResult first = store.lease(
+                "task-1", "agentscope-orchestrator", Instant.now().plusSeconds(30), null);
+        AsyncTaskStore.LeaseResult duplicateReplica = store.lease(
+                "task-1", "agentscope-orchestrator", Instant.now().plusSeconds(30), null);
+        AsyncTaskStore.LeaseResult renewed = store.lease(
+                "task-1",
+                "agentscope-orchestrator",
+                Instant.now().plusSeconds(30),
+                first.task().leaseEpoch());
+
+        assertThat(first.acquired()).isTrue();
+        assertThat(first.task().leaseEpoch()).isEqualTo(1L);
+        assertThat(duplicateReplica.acquired()).isFalse();
+        assertThat(renewed.acquired()).isTrue();
+        assertThat(renewed.task().leaseEpoch()).isEqualTo(1L);
+
+        store.update("task-1", task -> AsyncTaskStore.withLease(
+                task,
+                "agentscope-orchestrator",
+                Instant.now().minusSeconds(1),
+                task.leaseEpoch()));
+        AsyncTaskStore.LeaseResult takeover = store.lease(
+                "task-1", "agentscope-orchestrator", Instant.now().plusSeconds(30), null);
+
+        assertThat(takeover.acquired()).isTrue();
+        assertThat(takeover.task().leaseEpoch()).isEqualTo(2L);
+        assertThat(store.transition(
+                "task-1",
+                "acme",
+                "agentscope-orchestrator",
+                first.task().leaseEpoch(),
+                AsyncTaskStatus.SUCCEEDED,
+                Map.of("late", true),
+                null).changed()).isFalse();
+        assertThat(store.transition(
+                "task-1",
+                "acme",
+                "agentscope-orchestrator",
+                takeover.task().leaseEpoch(),
+                AsyncTaskStatus.SUCCEEDED,
+                Map.of("winner", true),
+                null).changed()).isTrue();
     }
 
     @Test
@@ -130,8 +241,7 @@ class JdbcAsyncTaskStoreTest {
     }
 
     private static DataSource h2(String dbName) {
-        return new DriverManagerDataSource(
-                "jdbc:h2:mem:" + dbName + ";MODE=MySQL;DB_CLOSE_DELAY=-1", "sa", "");
+        return AsyncTaskTestDatabase.migrated(dbName);
     }
 
     /** 极简 ObjectProvider：只需 getIfAvailable()（JdbcAsyncTaskStore 唯一用到），其余委托它。 */

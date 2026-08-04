@@ -14,13 +14,10 @@ import java.util.Map;
  * <pre>
  * app.nl2sql:
  *   enabled: false
- *   datasource:                       # 只读执行库（dev 默认 in-mem H2 + demo 种子）
+ *   datasource:                       # 只读执行库（demo schema 先跑独立 migration）
  *     url: jdbc:h2:mem:nl2sql;DB_CLOSE_DELAY=-1;MODE=MySQL;CASE_INSENSITIVE_IDENTIFIERS=TRUE
- *     admin-username: sa              # 建表 / 种子 / 内省 schema 用（有写权限）
- *     admin-password: ""
  *     readonly-username: nl2sql_ro    # SqlQueryTool 实际执行用（只 GRANT SELECT，L1 护栏）
  *     readonly-password: nl2sql_ro
- *     seed-script: db/nl2sql-demo.sql # classpath；置空 = 不建 demo 库（接真实库时）
  *   max-rows: 1000                    # L4 无 LIMIT 时强制追加的行数
  *   query-timeout-seconds: 5          # L5 statement 超时
  *   allow-tables: [orders, customers, refunds]   # L3 表白名单（也是 SchemaProvider 暴露范围）
@@ -48,36 +45,27 @@ public class Nl2SqlProperties {
     private boolean numberGrounding = true;
 
     public static class Datasource {
-        /** admin 连接：建库（createDatabaseIfNotExist）/ 建表 / 种子 / 内省 schema（useInformationSchema 让 getColumns 返回列注释）。 */
+        /** 兼容 URL 字段；业务进程只会用它建立只读 schema 连接。 */
         private String url = "jdbc:mysql://localhost:3306/nl2sql_demo"
-                + "?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true"
+                + "?useSSL=false&allowPublicKeyRetrieval=true"
                 + "&serverTimezone=Asia/Shanghai&useInformationSchema=true";
         /**
-         * 只读池的连接 url（不带 createDatabaseIfNotExist —— 只读账号无建库权限）。
+         * 只读池的连接 url（不允许通过连接参数自动建库 —— 只读账号无建库权限）。
          * 留空则与 admin 共用 {@code url}。
          */
         private String readonlyUrl = "jdbc:mysql://localhost:3306/nl2sql_demo"
                 + "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useInformationSchema=true";
-        private String adminUsername = "root";
-        private String adminPassword = "";
         private String readonlyUsername = "nl2sql_ro";
-        private String readonlyPassword = "nl2sql_ro";
-        private String seedScript = "db/nl2sql-demo.sql";
+        private String readonlyPassword = "nl2sql-readonly-dev";
 
         public String getUrl() { return url; }
         public void setUrl(String url) { this.url = url; }
         public String getReadonlyUrl() { return readonlyUrl; }
         public void setReadonlyUrl(String readonlyUrl) { this.readonlyUrl = readonlyUrl; }
-        public String getAdminUsername() { return adminUsername; }
-        public void setAdminUsername(String adminUsername) { this.adminUsername = adminUsername; }
-        public String getAdminPassword() { return adminPassword; }
-        public void setAdminPassword(String adminPassword) { this.adminPassword = adminPassword; }
         public String getReadonlyUsername() { return readonlyUsername; }
         public void setReadonlyUsername(String readonlyUsername) { this.readonlyUsername = readonlyUsername; }
         public String getReadonlyPassword() { return readonlyPassword; }
         public void setReadonlyPassword(String readonlyPassword) { this.readonlyPassword = readonlyPassword; }
-        public String getSeedScript() { return seedScript; }
-        public void setSeedScript(String seedScript) { this.seedScript = seedScript; }
     }
 
     public boolean isEnabled() { return enabled; }

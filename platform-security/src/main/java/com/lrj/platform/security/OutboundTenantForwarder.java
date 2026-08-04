@@ -17,15 +17,25 @@ public class OutboundTenantForwarder implements ClientHttpRequestInterceptor {
 
     private final InternalToken tokens;
     private final String header;
+    private final String workerHeader;
 
     public OutboundTenantForwarder(InternalToken tokens, String header) {
+        this(tokens, header, null);
+    }
+
+    public OutboundTenantForwarder(InternalToken tokens, String header, String workerHeader) {
         this.tokens = tokens;
         this.header = header;
+        this.workerHeader = workerHeader;
     }
 
     @Override
     public ClientHttpResponse intercept(HttpRequest request, byte[] body,
                                         ClientHttpRequestExecution execution) throws IOException {
+        if (workerHeader != null && request.getHeaders().containsKey(workerHeader)) {
+            request.getHeaders().remove(header);
+            return execution.execute(request, body);
+        }
         TenantContext.Tenant t = TenantContext.captureRaw();
         if (t != null && !TenantContext.ANONYMOUS.equals(t)) {
             request.getHeaders().set(header, tokens.mint(t));

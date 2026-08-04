@@ -21,7 +21,8 @@ public record AsyncTask(String taskId,
                         Instant updatedAt,
                         Instant finishedAt,
                         String leaseOwnerId,
-                        Instant leaseExpiresAt) {
+                        Instant leaseExpiresAt,
+                        long leaseEpoch) {
 
     public AsyncTask(String taskId,
                      String tenantId,
@@ -38,7 +39,28 @@ public record AsyncTask(String taskId,
         this(taskId, tenantId, userId, kind, status, input, result, error, webhookUrl, createdAt, updatedAt, finishedAt, null, null);
     }
 
+    public AsyncTask(String taskId,
+                     String tenantId,
+                     String userId,
+                     String kind,
+                     AsyncTaskStatus status,
+                     Map<String, Object> input,
+                     Object result,
+                     String error,
+                     String webhookUrl,
+                     Instant createdAt,
+                     Instant updatedAt,
+                     Instant finishedAt,
+                     String leaseOwnerId,
+                     Instant leaseExpiresAt) {
+        this(taskId, tenantId, userId, kind, status, input, result, error, webhookUrl,
+                createdAt, updatedAt, finishedAt, leaseOwnerId, leaseExpiresAt, 0L);
+    }
+
     public AsyncTask {
         input = input == null ? Map.of() : Map.copyOf(input);
+        if (leaseEpoch < 0) {
+            throw new IllegalArgumentException("leaseEpoch must not be negative");
+        }
     }
 }

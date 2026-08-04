@@ -1,5 +1,7 @@
 package com.lrj.platform.order;
 
+import com.lrj.platform.migrations.SchemaMigrationRunner;
+import com.lrj.platform.migrations.SchemaName;
 import com.lrj.platform.protocol.order.OrderView;
 import com.lrj.platform.security.TenantContext;
 import org.junit.jupiter.api.AfterEach;
@@ -22,7 +24,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>跑法：
  * <pre>
  * docker compose -f deploy/docker-compose.yml up -d mysql
- * ORDER_IT_MYSQL_URL='jdbc:mysql://localhost:3306/order_it?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true' \
+ * # 先由 DBA/测试环境预建独立 order_it 库和具有 DDL 权限的测试 migrator 账号
+ * ORDER_IT_MYSQL_URL='jdbc:mysql://localhost:3306/order_it?useSSL=false&allowPublicKeyRetrieval=true' \
  *   ORDER_IT_MYSQL_USER=root ORDER_IT_MYSQL_PASSWORD=root mvn -pl order-service test
  * </pre>
  *
@@ -41,6 +44,7 @@ class JdbcOrderStoreMySqlIT {
                 System.getenv("ORDER_IT_MYSQL_URL"),
                 envOr("ORDER_IT_MYSQL_USER", "root"),
                 envOr("ORDER_IT_MYSQL_PASSWORD", "root"));
+        SchemaMigrationRunner.migrate(ds, SchemaName.ORDER);
         jdbc = new JdbcTemplate(ds);
         store = new JdbcOrderStore(jdbc, false); // 关演示种子，自插已知数据
         jdbc.update("DELETE FROM orders");

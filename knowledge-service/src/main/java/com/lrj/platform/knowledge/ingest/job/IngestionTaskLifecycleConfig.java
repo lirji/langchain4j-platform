@@ -2,6 +2,7 @@ package com.lrj.platform.knowledge.ingest.job;
 
 import com.lrj.platform.observability.OutboundTraceForwarder;
 import com.lrj.platform.security.OutboundTenantForwarder;
+import com.lrj.platform.security.AsyncTaskWorkerTokenForwarder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -30,6 +31,7 @@ public class IngestionTaskLifecycleConfig {
     RestTemplate ingestionAsyncTaskRestTemplate(
             RestTemplateBuilder builder,
             OutboundTenantForwarder tenantForwarder,
+            AsyncTaskWorkerTokenForwarder workerTokenForwarder,
             OutboundTraceForwarder traceForwarder,
             @Value("${app.rag.ingestion.async-task.base-url:"
                     + "http://async-task-service:8086}") String baseUrl,
@@ -40,7 +42,7 @@ public class IngestionTaskLifecycleConfig {
     ) {
         return builder
                 .rootUri(baseUrl)
-                .additionalInterceptors(tenantForwarder, traceForwarder)
+                .additionalInterceptors(workerTokenForwarder, tenantForwarder, traceForwarder)
                 .setConnectTimeout(connectTimeout)
                 .setReadTimeout(readTimeout)
                 .build();

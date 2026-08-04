@@ -145,11 +145,12 @@ class InteropControllerTest {
     private InteropController controller(AgentInteropClient agentClient) {
         return new InteropController(
                 new InteropToolRegistry(
-                        () -> List.of(
+                        () -> new com.lrj.platform.protocol.interop.AgentCapabilityRegistry(
+                                "agent-capability-registry.v1", "a".repeat(64), List.of(
                                 tool(InteropToolRegistry.AGENT_RUN_TOOL),
                                 tool(InteropToolRegistry.AGENT_RUN_ASYNC_TOOL),
                                 tool(InteropToolRegistry.AGENT_DAG_PLAN_RUN_TOOL),
-                                tool(InteropToolRegistry.AGENT_DAG_PLAN_RUN_ASYNC_TOOL)),
+                                tool(InteropToolRegistry.AGENT_DAG_PLAN_RUN_ASYNC_TOOL))),
                         Duration.ofMinutes(1)),
                 new InteropToolDispatcher(agentClient));
     }

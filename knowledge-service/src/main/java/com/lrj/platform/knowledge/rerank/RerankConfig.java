@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.convert.DurationStyle;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -66,6 +67,7 @@ public class RerankConfig {
     @Bean
     @ConditionalOnExpression("${app.rag.rerank.enabled:false} and '${app.rag.rerank.type:llm}'.equals('bailian')")
     Reranker bailianReranker(
+            RestTemplateBuilder restTemplateBuilder,
             @Value("${app.rag.rerank.bailian.base-url:}") String baseUrl,
             @Value("${app.rag.rerank.bailian.api-key:}") String apiKey,
             @Value("${app.rag.rerank.bailian.model-name:qwen3-rerank}") String modelName,
@@ -77,7 +79,7 @@ public class RerankConfig {
         log.info("RAG rerank: bailian enabled model={} (candidate x{}, min-score={}, max-documents={})",
                 modelName, multiplier, minScore, maxDocuments);
         BailianRerankClient client = new HttpBailianRerankClient(
-                baseUrl, apiKey, modelName, instruct, parseDuration(timeout));
+                restTemplateBuilder, baseUrl, apiKey, modelName, instruct, parseDuration(timeout));
         return new BailianReranker(client, multiplier, minScore, maxDocuments);
     }
 

@@ -5,7 +5,6 @@ import com.lrj.platform.protocol.asynctask.AsyncTask;
 import com.lrj.platform.protocol.asynctask.AsyncTaskStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import java.time.Instant;
 import java.util.Map;
@@ -37,10 +36,7 @@ class AsyncTaskWebhookOutboxTest {
 
     @Test
     void purgeDeliveredBeforeRemovesOnlyExpiredDeliveredRows() {
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                "jdbc:h2:mem:async_outbox_retention;MODE=MySQL;DB_CLOSE_DELAY=-1",
-                "sa",
-                "");
+        var dataSource = AsyncTaskTestDatabase.migrated("async_outbox_retention");
         AsyncTaskWebhookOutbox outbox = new AsyncTaskWebhookOutbox(dataSource, new ObjectMapper());
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         long now = 10_000L;
@@ -49,9 +45,10 @@ class AsyncTaskWebhookOutboxTest {
         outbox.enqueue(task("new-delivered"), "http://callback.local/new", now);
         outbox.enqueue(task("pending"), "http://callback.local/pending", now);
         outbox.enqueue(task("dead"), "http://callback.local/dead", now);
-        outbox.markDelivered("old-delivered", 1_000L);
-        outbox.markDelivered("new-delivered", 9_000L);
-        outbox.markDead("dead", 3, "failed", 1_000L);
+        outbox.claimDue(now, 10, "worker-1", 30_000L);
+        outbox.markDelivered("old-delivered", "worker-1", 1_000L);
+        outbox.markDelivered("new-delivered", "worker-1", 9_000L);
+        outbox.markDead("dead", "worker-1", 3, "failed", 1_000L);
 
         int deleted = outbox.purgeDeliveredBefore(5_000L);
 
@@ -95,12 +92,29 @@ class AsyncTaskWebhookOutboxTest {
         outbox.enqueue(task("task-1"), "http://callback.local/1", now);
         AsyncTaskWebhookOutbox.Row row = outbox.claimDue(now, 10, "worker-1", 30_000L).getFirst();
 
-        outbox.markRetry(row.outboxId(), 1, now + 500L, "SERVER_ERROR", now + 100L);
+        outbox.markRetry(
+                row.outboxId(), row.claimOwner(), 1, now + 500L, "SERVER_ERROR", now + 100L);
         var beforeDue = outbox.claimDue(now + 400L, 10, "worker-2", 30_000L);
         var afterDue = outbox.claimDue(now + 500L, 10, "worker-2", 30_000L);
 
         assertThat(beforeDue).isEmpty();
         assertThat(afterDue).extracting(AsyncTaskWebhookOutbox.Row::outboxId).containsExactly("task-1");
+    }
+
+    @Test
+    void reclaimedRowRejectsCompletionFromStaleClaimOwner() {
+        AsyncTaskWebhookOutbox outbox = outbox("async_outbox_stale_owner");
+        long now = 10_000L;
+        outbox.enqueue(task("task-1"), "http://callback.local/1", now);
+        AsyncTaskWebhookOutbox.Row stale = outbox.claimDue(
+                now, 10, "worker-1", 1_000L).getFirst();
+        AsyncTaskWebhookOutbox.Row current = outbox.claimDue(
+                now + 1_500L, 10, "worker-2", 30_000L).getFirst();
+
+        assertThat(outbox.markDelivered(
+                stale.outboxId(), stale.claimOwner(), now + 1_600L)).isFalse();
+        assertThat(outbox.markDelivered(
+                current.outboxId(), current.claimOwner(), now + 1_600L)).isTrue();
     }
 
     private static AsyncTask task(String taskId) {
@@ -121,10 +135,7 @@ class AsyncTaskWebhookOutboxTest {
     }
 
     private static AsyncTaskWebhookOutbox outbox(String dbName) {
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                "jdbc:h2:mem:" + dbName + ";MODE=MySQL;DB_CLOSE_DELAY=-1",
-                "sa",
-                "");
+        var dataSource = AsyncTaskTestDatabase.migrated(dbName);
         return new AsyncTaskWebhookOutbox(dataSource, new ObjectMapper());
     }
 

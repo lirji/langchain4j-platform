@@ -20,7 +20,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 /**
  * WorkflowAsyncTaskNotifierTest：借助 {@link org.springframework.test.web.client.MockRestServiceServer}
- * 验证 {@link WorkflowAsyncTaskNotifier#publishTerminal} 先 POST 创建异步任务、再 PATCH 置为 SUCCEEDED 的两步回推，
+ * 验证 {@link WorkflowAsyncTaskNotifier#publishTerminal} 先创建、领取异步任务，再 PATCH 置为 SUCCEEDED，
  * 以及创建返回 409 冲突时仍能幂等地完成既有任务。
  */
 class WorkflowAsyncTaskNotifierTest {
@@ -37,10 +37,18 @@ class WorkflowAsyncTaskNotifierTest {
                 .andExpect(jsonPath("$.kind").value("workflow.terminal"))
                 .andExpect(jsonPath("$.webhookUrl").value("http://callback.local/workflow"))
                 .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo("http://async-task/async/tasks/workflow-pi-1/lease"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(jsonPath("$.workerId").value(
+                        org.hamcrest.Matchers.startsWith("workflow-service.")))
+                .andRespond(withSuccess("{\"leaseEpoch\":1}", MediaType.APPLICATION_JSON));
         server.expect(requestTo("http://async-task/async/tasks/workflow-pi-1/status"))
                 .andExpect(method(HttpMethod.PATCH))
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.status").value("SUCCEEDED"))
+                .andExpect(jsonPath("$.workerId").value(
+                        org.hamcrest.Matchers.startsWith("workflow-service.")))
+                .andExpect(jsonPath("$.leaseEpoch").value(1))
                 .andExpect(jsonPath("$.result.instanceId").value("pi-1"))
                 .andRespond(withSuccess());
 
@@ -58,9 +66,13 @@ class WorkflowAsyncTaskNotifierTest {
         server.expect(requestTo("http://async-task/async/tasks"))
                 .andExpect(method(HttpMethod.POST))
                 .andRespond(withStatus(HttpStatus.CONFLICT));
+        server.expect(requestTo("http://async-task/async/tasks/workflow-pi-1/lease"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess("{\"leaseEpoch\":7}", MediaType.APPLICATION_JSON));
         server.expect(requestTo("http://async-task/async/tasks/workflow-pi-1/status"))
                 .andExpect(method(HttpMethod.PATCH))
                 .andExpect(jsonPath("$.status").value("SUCCEEDED"))
+                .andExpect(jsonPath("$.leaseEpoch").value(7))
                 .andRespond(withSuccess());
 
         assertThat(notifier.publishTerminal("pi-1", "acme", "http://callback.local/workflow", "done"))

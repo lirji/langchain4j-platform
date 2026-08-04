@@ -32,12 +32,16 @@ public class A2aTaskMapper {
      * FAILED 把错误信息挂到 status.message，方便客户端看到失败原因。
      */
     public A2aTask toA2aTask(AgentTaskView task) {
+        return toA2aTask(task, task.taskId());
+    }
+
+    public A2aTask toA2aTask(AgentTaskView task, String contextId) {
         TaskState state = toTaskState(task.status());
         String ts = firstNonBlank(task.updatedAt(), task.createdAt(), Instant.now().toString());
 
         A2aMessage statusMsg = null;
         if ("FAILED".equals(task.status()) && task.error() != null && !task.error().isBlank()) {
-            statusMsg = A2aMessage.agentText(task.error(), task.taskId(), task.taskId());
+            statusMsg = A2aMessage.agentText(task.error(), task.taskId(), contextId);
         }
 
         List<Artifact> artifacts = null;
@@ -50,7 +54,7 @@ public class A2aTaskMapper {
 
         return new A2aTask(
                 task.taskId(),
-                task.taskId(),                       // contextId 复用 taskId（无独立会话归并）
+                contextId,
                 new A2aTaskStatus(state, statusMsg, ts),
                 artifacts,
                 null);

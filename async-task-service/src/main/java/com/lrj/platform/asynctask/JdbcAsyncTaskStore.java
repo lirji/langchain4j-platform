@@ -28,12 +28,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
 /**
  * {@link AsyncTaskStore} 的 JDBC 持久化实现（{@code app.async-task.store=jdbc}），用裸 {@link JdbcTemplate}
- * 直连 MySQL 管理 {@code ASYNC_TASK} 表（表结构以 {@code CREATE TABLE IF NOT EXISTS}/{@code ALTER TABLE} 字面量
- * 在 {@code init()} 内演进）。覆写增改查、租约与清理，其中「非终态→终态」的状态提交在同一事务内原子写入一条
+ * 直连 MySQL 管理 {@code ASYNC_TASK} 表；schema 由独立版本化 migration 管理，
+ * 本 store 启动时只验证 contract。覆写增改查、租约与清理，其中「非终态→终态」的状态提交在同一事务内原子写入一条
  * 生命周期事件 outbox（A1，仅 webhook transport=kafka 时注入 {@link AsyncTaskLifecycleOutbox}），供
  * {@code AsyncTaskLifecycleRelay} relay 到 Kafka。
  */
@@ -84,46 +85,12 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
     }
 
     private void init() {
-        jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS ASYNC_TASK (
-                  TASK_ID VARCHAR(128) NOT NULL PRIMARY KEY,
-                  TENANT_ID VARCHAR(128) NOT NULL,
-                  USER_ID VARCHAR(128) NOT NULL,
-                  KIND VARCHAR(128) NOT NULL,
-                  STATUS VARCHAR(32) NOT NULL,
-                  INPUT_JSON MEDIUMTEXT,
-                  RESULT_JSON MEDIUMTEXT,
-                  ERROR_TEXT VARCHAR(2048),
-                  WEBHOOK_URL VARCHAR(1024),
-                  CREATED_AT BIGINT NOT NULL,
-                  UPDATED_AT BIGINT NOT NULL,
-                  FINISHED_AT BIGINT,
-                  LEASE_OWNER_ID VARCHAR(128),
-                  LEASE_EXPIRES_AT BIGINT,
-                  INDEX IDX_ASYNC_TASK_TENANT_CREATED (TENANT_ID, CREATED_AT),
-                  INDEX IDX_ASYNC_TASK_FINISHED (FINISHED_AT),
-                  INDEX IDX_ASYNC_TASK_LEASE (STATUS, LEASE_EXPIRES_AT)
-                )""");
-        addColumnIfMissing("LEASE_OWNER_ID VARCHAR(128)");
-        addColumnIfMissing("LEASE_EXPIRES_AT BIGINT");
-        addIndexIfMissing("IDX_ASYNC_TASK_STATUS_CREATED", "STATUS, CREATED_AT");
-        log.info("ASYNC_TASK table ready");
-    }
-
-    private void addColumnIfMissing(String definition) {
-        try {
-            jdbc.execute("ALTER TABLE ASYNC_TASK ADD COLUMN " + definition);
-        } catch (Exception ignored) {
-            // MySQL has no portable IF NOT EXISTS for older versions; duplicate-column errors are harmless here.
-        }
-    }
-
-    private void addIndexIfMissing(String name, String columns) {
-        try {
-            jdbc.execute("CREATE INDEX " + name + " ON ASYNC_TASK (" + columns + ")");
-        } catch (Exception ignored) {
-            // Existing-index errors are harmless across supported MySQL/H2 versions.
-        }
+        jdbc.queryForList("""
+                SELECT TASK_ID, TENANT_ID, USER_ID, KIND, STATUS, INPUT_JSON, RESULT_JSON,
+                       ERROR_TEXT, WEBHOOK_URL, CREATED_AT, UPDATED_AT, FINISHED_AT,
+                       LEASE_OWNER_ID, LEASE_EXPIRES_AT, LEASE_EPOCH
+                FROM ASYNC_TASK WHERE 1=0""");
+        log.info("ASYNC_TASK schema verified");
     }
 
     @Override
@@ -131,8 +98,8 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
         txTemplate.executeWithoutResult(status -> {
             jdbc.update("""
                     INSERT INTO ASYNC_TASK
-                    (TASK_ID, TENANT_ID, USER_ID, KIND, STATUS, INPUT_JSON, RESULT_JSON, ERROR_TEXT, WEBHOOK_URL, CREATED_AT, UPDATED_AT, FINISHED_AT, LEASE_OWNER_ID, LEASE_EXPIRES_AT)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (TASK_ID, TENANT_ID, USER_ID, KIND, STATUS, INPUT_JSON, RESULT_JSON, ERROR_TEXT, WEBHOOK_URL, CREATED_AT, UPDATED_AT, FINISHED_AT, LEASE_OWNER_ID, LEASE_EXPIRES_AT, LEASE_EPOCH)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     task.taskId(),
                     task.tenantId(),
                     task.userId(),
@@ -146,7 +113,8 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
                     millis(task.updatedAt()),
                     millis(task.finishedAt()),
                     task.leaseOwnerId(),
-                    millis(task.leaseExpiresAt()));
+                    millis(task.leaseExpiresAt()),
+                    task.leaseEpoch());
             appendLifecycle(task);
         });
     }
@@ -201,6 +169,17 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
                                      AsyncTaskStatus target,
                                      Object result,
                                      String error) {
+        return transition(taskId, tenantId, workerId, null, target, result, error);
+    }
+
+    @Override
+    public MutationResult transition(String taskId,
+                                     String tenantId,
+                                     String workerId,
+                                     Long leaseEpoch,
+                                     AsyncTaskStatus target,
+                                     Object result,
+                                     String error) {
         MutationResult outcome = txTemplate.execute(status -> {
             Optional<AsyncTask> current = getForUpdate(taskId);
             if (current.isEmpty()) {
@@ -209,7 +188,8 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
             AsyncTask before = current.get();
             if (!tenantId.equals(before.tenantId())
                     || before.status().isTerminal()
-                    || (target != AsyncTaskStatus.CANCELLED && !leaseOwnedBy(before, workerId))) {
+                    || (target != AsyncTaskStatus.CANCELLED
+                        && !leaseOwnedBy(before, workerId, leaseEpoch))) {
                 return new MutationResult(before, false);
             }
             AsyncTask updated = withStatus(before, target, result, error);
@@ -239,23 +219,60 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
 
     @Override
     public Optional<AsyncTask> lease(String taskId, String workerId, Instant leaseExpiresAt) {
-        return txTemplate.execute(status -> {
+        LeaseResult result = lease(taskId, workerId, leaseExpiresAt, null);
+        return Optional.ofNullable(result.task());
+    }
+
+    @Override
+    public LeaseResult lease(
+            String taskId,
+            String workerId,
+            Instant leaseExpiresAt,
+            Long expectedLeaseEpoch) {
+        LeaseResult result = txTemplate.execute(status -> {
             Optional<AsyncTask> current = getForUpdate(taskId);
             if (current.isEmpty()) {
-                return Optional.empty();
+                return new LeaseResult(null, false);
             }
             AsyncTask before = current.get();
             if (before.status().isTerminal()
-                    || !leaseAvailableFor(before, workerId, Instant.now())) {
-                return current;
+                    || !leaseAvailableFor(before, workerId, expectedLeaseEpoch, Instant.now())) {
+                return new LeaseResult(before, false);
             }
-            AsyncTask leased = withLease(before, workerId, leaseExpiresAt);
+            long epoch = expectedLeaseEpoch == null
+                    ? Math.addExact(before.leaseEpoch(), 1L)
+                    : before.leaseEpoch();
+            AsyncTask leased = withLease(before, workerId, leaseExpiresAt, epoch);
             persistMutable(leased);
             if (before.status() != AsyncTaskStatus.RUNNING) {
                 appendLifecycle(leased);
             }
-            return Optional.of(leased);
+            return new LeaseResult(leased, true);
         });
+        return result == null ? new LeaseResult(null, false) : result;
+    }
+
+    @Override
+    public <T> LeaseActionResult<T> withActiveLease(
+            String taskId,
+            String tenantId,
+            String workerId,
+            long leaseEpoch,
+            Supplier<T> action) {
+        LeaseActionResult<T> result = txTemplate.execute(status -> {
+            Optional<AsyncTask> current = getForUpdate(taskId);
+            if (current.isEmpty()) {
+                return new LeaseActionResult<>(null, null, false);
+            }
+            AsyncTask task = current.get();
+            if (!tenantId.equals(task.tenantId())
+                    || task.status().isTerminal()
+                    || !leaseOwnedBy(task, workerId, leaseEpoch)) {
+                return new LeaseActionResult<>(task, null, false);
+            }
+            return new LeaseActionResult<>(task, action.get(), true);
+        });
+        return result == null ? new LeaseActionResult<>(null, null, false) : result;
     }
 
     @Override
@@ -265,6 +282,24 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
                 WHERE TENANT_ID=?
                 ORDER BY CREATED_AT DESC""",
                 this::mapTask, tenantId);
+    }
+
+    @Override
+    public List<AsyncTask> listByOwner(String tenantId, String userId) {
+        return jdbc.query("""
+                SELECT * FROM ASYNC_TASK
+                WHERE TENANT_ID=? AND USER_ID=?
+                ORDER BY CREATED_AT DESC""",
+                this::mapTask, tenantId, userId);
+    }
+
+    @Override
+    public long countByStatus(AsyncTaskStatus status) {
+        Long count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM ASYNC_TASK WHERE STATUS=?",
+                Long.class,
+                status.name());
+        return count == null ? 0 : count;
     }
 
     @Override
@@ -325,7 +360,8 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
                 instant(rs.getLong("UPDATED_AT")),
                 instantNullable(rs, "FINISHED_AT"),
                 nullableString(rs, "LEASE_OWNER_ID"),
-                instantNullable(rs, "LEASE_EXPIRES_AT"));
+                instantNullable(rs, "LEASE_EXPIRES_AT"),
+                rs.getLong("LEASE_EPOCH"));
     }
 
     private Optional<AsyncTask> getForUpdate(String taskId) {
@@ -337,7 +373,7 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
         jdbc.update("""
                 UPDATE ASYNC_TASK
                 SET STATUS=?, RESULT_JSON=?, ERROR_TEXT=?, UPDATED_AT=?, FINISHED_AT=?,
-                    LEASE_OWNER_ID=?, LEASE_EXPIRES_AT=?
+                    LEASE_OWNER_ID=?, LEASE_EXPIRES_AT=?, LEASE_EPOCH=?
                 WHERE TASK_ID=?""",
                 updated.status().name(),
                 json(updated.result()),
@@ -346,6 +382,7 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
                 millis(updated.finishedAt()),
                 updated.leaseOwnerId(),
                 millis(updated.leaseExpiresAt()),
+                updated.leaseEpoch(),
                 updated.taskId());
     }
 

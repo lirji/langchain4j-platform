@@ -15,6 +15,15 @@ platform:
     model-name: ${GATEWAY_MODEL:chat-default}
   security:
     jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
+    async-worker:
+      header: ${ASYNC_TASK_WORKER_JWT_HEADER:X-Async-Worker-Token}
+      secret: ${ASYNC_TASK_WORKER_JWT_SECRET:dev-only-async-worker-secret-change-me-32b}
+      issuer: ${ASYNC_TASK_WORKER_JWT_ISSUER:platform-services}
+      audience: ${ASYNC_TASK_WORKER_JWT_AUDIENCE:async-task-worker}
+      key-id: ${ASYNC_TASK_WORKER_JWT_KEY_ID:async-task-worker-v1}
+      ttl: ${ASYNC_TASK_WORKER_JWT_TTL_SECONDS:60}s
+      clock-skew: ${ASYNC_TASK_WORKER_JWT_CLOCK_SKEW_SECONDS:5}s
+      service-id: workflow-service
     allow-api-key-fallback: ${INTERNAL_API_KEY_FALLBACK:false}
     authentication-required: ${INTERNAL_AUTH_REQUIRED:true}
     api-keys:
@@ -27,9 +36,9 @@ app:
   workflow:
     enabled: ${WORKFLOW_ENABLED:true}
     datasource:
-      url: ${WORKFLOW_DB_URL:jdbc:mysql://localhost:3306/flowable?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}
-      username: ${WORKFLOW_DB_USER:root}
-      password: ${WORKFLOW_DB_PASSWORD:root}
+      url: ${WORKFLOW_DB_URL:jdbc:mysql://localhost:3306/flowable?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}
+      username: ${WORKFLOW_DB_USER:workflow_app}
+      password: ${WORKFLOW_DB_PASSWORD:workflow-app-dev}
     # ServiceTask 内 AI 能力来源（C2 / B9）。
     # mode=http（默认，推荐 prod）：经 tenant/trace 传播的 RestTemplate 调 conversation-service，
     #   workflow 断开对本地 ChatModel 的依赖；HTTP 失败抛异常，交 ServiceTaskDelegates 的 withRetry+降级兜底接管。
@@ -47,6 +56,14 @@ app:
       async-task-base-url: ${ASYNC_TASK_BASE_URL:http://localhost:8086}
       async-task-kind: ${WORKFLOW_TERMINAL_ASYNC_TASK_KIND:workflow.terminal}
       fallback-to-local-outbox: ${WORKFLOW_TERMINAL_FALLBACK_LOCAL:true}
+    outbox:
+      poll-interval-ms: ${WORKFLOW_OUTBOX_POLL_INTERVAL_MS:30000}
+      batch-size: ${WORKFLOW_OUTBOX_BATCH_SIZE:50}
+      max-attempts: ${WORKFLOW_OUTBOX_MAX_ATTEMPTS:6}
+      base-backoff-ms: ${WORKFLOW_OUTBOX_BASE_BACKOFF_MS:5000}
+      timeout: ${WORKFLOW_OUTBOX_TIMEOUT:5s}
+      claim-ttl: ${WORKFLOW_OUTBOX_CLAIM_TTL:2m}
+      hmac-secret: ${WORKFLOW_OUTBOX_HMAC_SECRET:dev-only-workflow-webhook-signing-secret-change-me-32b}
 
 management:
   endpoints:

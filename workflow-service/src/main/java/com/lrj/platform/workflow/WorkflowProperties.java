@@ -10,7 +10,7 @@ import java.time.Duration;
  *
  * <p>{@link Datasource} 是 Flowable 引擎自己的 JDBC 源（建 ~25 张 {@code ACT_*} 表）。
  * 走 MySQL（持久化，能真正"挂起等审批、期间重启不丢"）。默认指向本机
- * {@code localhost:3306/flowable}，{@code createDatabaseIfNotExist=true} 首次启动自动建库。
+ * {@code localhost:3306/flowable}；库与表必须由独立 migration stage 预先创建。
  * 跟 NL2SQL 的只读库是两个独立 DataSource，各自手动构建、互不干扰。
  */
 @ConfigurationProperties(prefix = "app.workflow")
@@ -160,8 +160,10 @@ public class WorkflowProperties {
         private long baseBackoffMs = 5_000;
         /** 单次 webhook 投递超时。 */
         private Duration timeout = Duration.ofSeconds(5);
+        /** 多副本 relay 的 claim 租约；到期后其它副本可恢复投递。 */
+        private Duration claimTtl = Duration.ofMinutes(2);
         /** webhook HMAC-SHA256 签名 secret。生产从环境变量 / Secret 注入。 */
-        private String hmacSecret = "dev-secret-change-me";
+        private String hmacSecret = "dev-only-workflow-webhook-signing-secret-change-me-32b";
 
         public long getPollIntervalMs() { return pollIntervalMs; }
         public void setPollIntervalMs(long pollIntervalMs) { this.pollIntervalMs = pollIntervalMs; }
@@ -173,16 +175,18 @@ public class WorkflowProperties {
         public void setBaseBackoffMs(long baseBackoffMs) { this.baseBackoffMs = baseBackoffMs; }
         public Duration getTimeout() { return timeout; }
         public void setTimeout(Duration timeout) { this.timeout = timeout; }
+        public Duration getClaimTtl() { return claimTtl; }
+        public void setClaimTtl(Duration claimTtl) { this.claimTtl = claimTtl; }
         public String getHmacSecret() { return hmacSecret; }
         public void setHmacSecret(String hmacSecret) { this.hmacSecret = hmacSecret; }
     }
 
     public static class Datasource {
-        /** 默认本机 MySQL，首次启动自动建 flowable 库。接已有库时去掉 createDatabaseIfNotExist。 */
-        private String url = "jdbc:mysql://localhost:3306/flowable?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true";
+        /** 默认本机 MySQL；业务进程只验证并使用已迁移的 flowable schema。 */
+        private String url = "jdbc:mysql://localhost:3306/flowable?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true";
         private String driverClassName = "com.mysql.cj.jdbc.Driver";
-        private String username = "root";
-        private String password = "";
+        private String username = "workflow_app";
+        private String password = "workflow-app-dev";
 
         public String getUrl() { return url; }
         public void setUrl(String url) { this.url = url; }

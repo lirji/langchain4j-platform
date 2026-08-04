@@ -15,6 +15,15 @@ platform:
     model-name: ${GATEWAY_MODEL:chat-default}
   security:
     jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
+    async-worker:
+      header: ${ASYNC_TASK_WORKER_JWT_HEADER:X-Async-Worker-Token}
+      secret: ${ASYNC_TASK_WORKER_JWT_SECRET:dev-only-async-worker-secret-change-me-32b}
+      issuer: ${ASYNC_TASK_WORKER_JWT_ISSUER:platform-services}
+      audience: ${ASYNC_TASK_WORKER_JWT_AUDIENCE:async-task-worker}
+      key-id: ${ASYNC_TASK_WORKER_JWT_KEY_ID:async-task-worker-v1}
+      ttl: ${ASYNC_TASK_WORKER_JWT_TTL_SECONDS:60}s
+      clock-skew: ${ASYNC_TASK_WORKER_JWT_CLOCK_SKEW_SECONDS:5}s
+      service-id: ${AGENT_ASYNC_WORKER_ID:agent-service}
     allow-api-key-fallback: ${INTERNAL_API_KEY_FALLBACK:false}
     authentication-required: ${INTERNAL_AUTH_REQUIRED:true}
     api-keys:

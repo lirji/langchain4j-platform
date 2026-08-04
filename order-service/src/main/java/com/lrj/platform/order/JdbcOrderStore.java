@@ -16,16 +16,15 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 订单只读存储。用裸 {@link JdbcTemplate} 直连持久化 MySQL —— 与平台其它持久化一致，
- * 表结构靠 {@code CREATE TABLE IF NOT EXISTS} / {@code ALTER TABLE ADD COLUMN} 字面量在 {@link #init()} 内演进
- * （无 Flyway/JPA），照抄 {@code JdbcAsyncTaskStore} / {@code JdbcGraphStore}。
+ * 订单只读存储。用裸 {@link JdbcTemplate} 直连持久化 MySQL；schema 由发布前的
+ * {@code database-migrations} Job 管理，本类启动时只验证 contract。
  *
  * <p><strong>租户隔离</strong>：{@link #findByOrderNo(String)} 用参数化 {@code WHERE id = ? AND tenant_id = ?}，
  * tenant 取自过滤器链还原的 {@link TenantContext}。绑定参数的 PreparedStatement 天然防注入 ——
  * 不需要 analytics 那套给「LLM 生成的 SQL」兜底的 SqlGuard。别的租户就算知道订单号也查不到（0 行）。
  *
  * <p><strong>幂等种子</strong>：{@code app.order.seed-demo=true}（默认）且表为空时插一批演示订单（tenantA/tenantB，
- * 与 analytics-service 的 nl2sql-demo 数据对齐，便于跨租户隔离演示）。用「表空才插」而非 {@code DROP TABLE}，
+ * 与 analytics-service 的 nl2sql-demo 数据对齐，便于跨租户隔离演示）。只在表空时插入，
  * 保证持久化数据跨重启保留。
  */
 @Component
@@ -44,24 +43,9 @@ public class JdbcOrderStore implements OrderStore {
     }
 
     private void init() {
-        jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS orders (
-                  id          VARCHAR(64)   NOT NULL PRIMARY KEY,
-                  tenant_id   VARCHAR(64)   NOT NULL,
-                  customer_id VARCHAR(64),
-                  amount      DECIMAL(12,2) NOT NULL,
-                  status      VARCHAR(16)   NOT NULL,
-                  created_at  DATE          NOT NULL,
-                  INDEX IDX_ORDERS_TENANT (tenant_id)
-                )""");
-        jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS customers (
-                  id          VARCHAR(64)  NOT NULL PRIMARY KEY,
-                  tenant_id   VARCHAR(64)  NOT NULL,
-                  name        VARCHAR(128) NOT NULL,
-                  INDEX IDX_CUSTOMERS_TENANT (tenant_id)
-                )""");
-        log.info("orders/customers tables ready");
+        jdbc.queryForList("SELECT id, tenant_id, customer_id, amount, status, created_at FROM orders WHERE 1=0");
+        jdbc.queryForList("SELECT id, tenant_id, name FROM customers WHERE 1=0");
+        log.info("orders/customers schema verified");
         if (seedDemo) {
             seedDemoDataIfEmpty();
         }
@@ -73,7 +57,7 @@ public class JdbcOrderStore implements OrderStore {
         if (count != null && count > 0) {
             return;
         }
-        // tenantA 客户 + 订单（对齐 analytics-service db/nl2sql-demo.sql，便于两服务演示同一批数据）
+        // tenantA 客户 + 订单（对齐 analytics-demo migration，便于两服务演示同一批数据）
         jdbc.batchUpdate("INSERT INTO customers (id, tenant_id, name) VALUES (?, ?, ?)",
                 List.of(
                         new Object[]{"1", "tenantA", "张三"},

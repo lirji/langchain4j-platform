@@ -12,8 +12,10 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * 终态事件 Kafka relay（B1b 收口）。定时扫 {@link WorkflowTerminalEventOutbox} 里到期的 PENDING 行，
@@ -39,6 +41,7 @@ public class WorkflowTerminalEventRelay {
     private final EventPublisher eventPublisher;
     private final WorkflowProperties props;
     private final AuditLogger audit;
+    private final String ownerId = "workflow-terminal-event-" + UUID.randomUUID();
 
     public WorkflowTerminalEventRelay(WorkflowTerminalEventOutbox eventOutbox,
                                       WorkflowReplyStore replyStore,
@@ -56,47 +59,65 @@ public class WorkflowTerminalEventRelay {
     public void dispatch() {
         long now = System.currentTimeMillis();
         WorkflowProperties.Outbox cfg = props.getOutbox();
-        List<WorkflowTerminalEventOutbox.Row> due = eventOutbox.claimDue(now, cfg.getBatchSize());
+        List<WorkflowTerminalEventOutbox.Row> due = eventOutbox.claimDue(
+                now, cfg.getBatchSize(), ownerId, claimTtlMillis(cfg));
         if (due.isEmpty()) {
             return;
         }
-        int delivered = 0, dead = 0, retried = 0;
+        int delivered = 0, dead = 0, retried = 0, stale = 0;
         for (WorkflowTerminalEventOutbox.Row row : due) {
             try {
                 switch (relayOne(row, cfg, now)) {
                     case DELIVERED -> delivered++;
                     case DEAD -> dead++;
                     case RETRY -> retried++;
+                    case STALE -> stale++;
                 }
             } catch (Exception e) {
                 // 单条异常不阻断整轮（下轮还会再扫到 PENDING）
                 log.warn("terminal event relay: 实例 {} 发布异常：{}", row.instanceId(), e.toString());
             }
         }
-        log.info("terminal event relay: 到期 {} 条 → delivered={} retry={} dead={}", due.size(), delivered, retried, dead);
+        log.info("terminal event relay: 到期 {} 条 → delivered={} retry={} dead={} stale={}",
+                due.size(), delivered, retried, dead, stale);
     }
 
     private Outcome relayOne(WorkflowTerminalEventOutbox.Row row, WorkflowProperties.Outbox cfg, long now) {
         try {
             WorkflowTerminalMessage message = message(row, replyStore.find(row.instanceId()));
             eventPublisher.publish(EventTopics.WORKFLOW_TERMINAL, row.tenantId(), message);
-            eventOutbox.markDelivered(row.instanceId(), now);
-            audit.record(AuditEventType.WORKFLOW_PUSH_DELIVERED, Map.of(
-                    "instanceId", row.instanceId(), "attempts", row.attempts() + 1, "transport", "kafka"));
-            return Outcome.DELIVERED;
+            if (eventOutbox.markDelivered(row.instanceId(), row.claimOwner(), now)) {
+                audit.record(AuditEventType.WORKFLOW_PUSH_DELIVERED, Map.of(
+                        "instanceId", row.instanceId(), "attempts", row.attempts() + 1, "transport", "kafka"));
+                return Outcome.DELIVERED;
+            }
+            return Outcome.STALE;
         } catch (Exception e) {
             int attemptsAfter = row.attempts() + 1;
             WorkflowOutbox.Decision d = WorkflowOutbox.schedule(attemptsAfter, cfg.getMaxAttempts(), now, cfg.getBaseBackoffMs());
             if (d.dead()) {
-                eventOutbox.markDead(row.instanceId(), attemptsAfter, e.toString(), now);
-                audit.record(AuditEventType.WORKFLOW_PUSH_DEAD, Map.of(
-                        "instanceId", row.instanceId(), "attempts", attemptsAfter, "reason", "max_attempts", "transport", "kafka"));
-                return Outcome.DEAD;
+                if (eventOutbox.markDead(
+                        row.instanceId(), row.claimOwner(), attemptsAfter, e.toString(), now)) {
+                    audit.record(AuditEventType.WORKFLOW_PUSH_DEAD, Map.of(
+                            "instanceId", row.instanceId(), "attempts", attemptsAfter,
+                            "reason", "max_attempts", "transport", "kafka"));
+                    return Outcome.DEAD;
+                }
+                return Outcome.STALE;
             }
-            eventOutbox.markRetry(row.instanceId(), attemptsAfter, d.nextAttemptAt(), e.toString(), now);
-            audit.record(AuditEventType.WORKFLOW_PUSH_FAILED, Map.of(
-                    "instanceId", row.instanceId(), "attempts", attemptsAfter, "reason", "publish_failed", "transport", "kafka"));
-            return Outcome.RETRY;
+            if (eventOutbox.markRetry(
+                    row.instanceId(),
+                    row.claimOwner(),
+                    attemptsAfter,
+                    d.nextAttemptAt(),
+                    e.toString(),
+                    now)) {
+                audit.record(AuditEventType.WORKFLOW_PUSH_FAILED, Map.of(
+                        "instanceId", row.instanceId(), "attempts", attemptsAfter,
+                        "reason", "publish_failed", "transport", "kafka"));
+                return Outcome.RETRY;
+            }
+            return Outcome.STALE;
         }
     }
 
@@ -115,5 +136,12 @@ public class WorkflowTerminalEventRelay {
                 null);
     }
 
-    private enum Outcome { DELIVERED, DEAD, RETRY }
+    private static long claimTtlMillis(WorkflowProperties.Outbox cfg) {
+        Duration ttl = cfg.getClaimTtl();
+        return ttl == null || ttl.isZero() || ttl.isNegative()
+                ? 120_000L
+                : Math.max(1_000L, ttl.toMillis());
+    }
+
+    private enum Outcome { DELIVERED, DEAD, RETRY, STALE }
 }

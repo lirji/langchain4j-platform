@@ -7,9 +7,18 @@ package com.lrj.platform.protocol.asynctask;
 public record AsyncTaskStatusUpdateRequest(AsyncTaskStatus status,
                                            Object result,
                                            String error,
-                                           String workerId) {
+                                           String workerId,
+                                           Long leaseEpoch) {
 
     public AsyncTaskStatusUpdateRequest(AsyncTaskStatus status, Object result, String error) {
-        this(status, result, error, null);
+        this(status, result, error, null, null);
+    }
+
+    public AsyncTaskStatusUpdateRequest(
+            AsyncTaskStatus status,
+            Object result,
+            String error,
+            String workerId) {
+        this(status, result, error, workerId, null);
     }
 }

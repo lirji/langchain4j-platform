@@ -1,6 +1,7 @@
 package com.lrj.platform.asynctask;
 
 import com.lrj.platform.protocol.asynctask.AsyncTask;
+import com.lrj.platform.security.OutboundCallbackPolicy;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -19,10 +20,15 @@ public class AsyncTaskWebhookOutboxEnqueuer {
 
     private final AsyncTaskWebhookProperties properties;
     private final AsyncTaskWebhookOutbox outbox;
+    private final OutboundCallbackPolicy callbackPolicy;
 
-    public AsyncTaskWebhookOutboxEnqueuer(AsyncTaskWebhookProperties properties, AsyncTaskWebhookOutbox outbox) {
+    public AsyncTaskWebhookOutboxEnqueuer(
+            AsyncTaskWebhookProperties properties,
+            AsyncTaskWebhookOutbox outbox,
+            OutboundCallbackPolicy callbackPolicy) {
         this.properties = properties;
         this.outbox = outbox;
+        this.callbackPolicy = callbackPolicy;
     }
 
     @EventListener
@@ -32,7 +38,15 @@ public class AsyncTaskWebhookOutboxEnqueuer {
         if (!properties.isEnabled() || properties.isKafkaTransport() || !task.status().isTerminal()) {
             return;
         }
-        AsyncTaskWebhookNotifier.webhookUri(task.webhookUrl())
-                .ifPresent(uri -> outbox.enqueue(task, uri.toString(), Instant.now().toEpochMilli()));
+        try {
+            if (task.webhookUrl() != null && !task.webhookUrl().isBlank()) {
+                outbox.enqueue(
+                        task,
+                        callbackPolicy.requireAllowed(task.webhookUrl()).toString(),
+                        Instant.now().toEpochMilli());
+            }
+        } catch (OutboundCallbackPolicy.UnsafeCallbackException ignored) {
+            // Registration rejects unsafe URLs; this also protects legacy rows and DNS changes.
+        }
     }
 }

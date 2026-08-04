@@ -65,6 +65,31 @@ class AsyncTaskSseServiceTest {
         assertThat(replay.getLast().id()).isEqualTo("70");
     }
 
+    @Test
+    void publicPayloadRedactsPiiAndReplacesRawFailure() {
+        AsyncTask failed = new AsyncTask(
+                "task-1",
+                "acme",
+                "alice",
+                "agent.run",
+                AsyncTaskStatus.FAILED,
+                Map.of("email", "alice@example.com"),
+                Map.of("phone", "13812345678"),
+                "provider-key=must-not-leak",
+                null,
+                Instant.now(),
+                Instant.now(),
+                Instant.now());
+        AsyncTaskSseService sse = new AsyncTaskSseService(
+                new AsyncTaskStore(Duration.ofHours(1)));
+
+        Object payload = sse.publicTaskPayload(failed);
+
+        assertThat(payload.toString())
+                .contains("[REDACTED-email]", "[REDACTED-phone]", "ASYNC_TASK_EXECUTION_FAILED")
+                .doesNotContain("alice@example.com", "13812345678", "provider-key");
+    }
+
     private static AsyncTask task(String taskId, AsyncTaskStatus status) {
         Instant now = Instant.now();
         return new AsyncTask(

@@ -23,6 +23,15 @@ platform:
       enabled: ${GATEWAY_STREAMING_ENABLED:false}
   security:
     jwt-secret: ${INTERNAL_JWT_SECRET:dev-only-internal-secret-change-me-please-32b}
+    async-worker:
+      header: ${ASYNC_TASK_WORKER_JWT_HEADER:X-Async-Worker-Token}
+      secret: ${ASYNC_TASK_WORKER_JWT_SECRET:dev-only-async-worker-secret-change-me-32b}
+      issuer: ${ASYNC_TASK_WORKER_JWT_ISSUER:platform-services}
+      audience: ${ASYNC_TASK_WORKER_JWT_AUDIENCE:async-task-worker}
+      key-id: ${ASYNC_TASK_WORKER_JWT_KEY_ID:async-task-worker-v1}
+      ttl: ${ASYNC_TASK_WORKER_JWT_TTL_SECONDS:60}s
+      clock-skew: ${ASYNC_TASK_WORKER_JWT_CLOCK_SKEW_SECONDS:5}s
+      service-id: knowledge-service
     allow-api-key-fallback: ${INTERNAL_API_KEY_FALLBACK:false}
     authentication-required: ${INTERNAL_AUTH_REQUIRED:true}
     api-keys:
@@ -56,9 +65,9 @@ app:
         connect-timeout: ${RAG_INGESTION_ASYNC_TASK_CONNECT_TIMEOUT:1s}
         read-timeout: ${RAG_INGESTION_ASYNC_TASK_READ_TIMEOUT:2s}
       datasource:
-        url: ${RAG_INGESTION_DB_URL:jdbc:mysql://localhost:3306/knowledge_ingestion?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
-        username: ${RAG_INGESTION_DB_USER:root}
-        password: ${RAG_INGESTION_DB_PASSWORD:}
+        url: ${RAG_INGESTION_DB_URL:jdbc:mysql://localhost:3306/knowledge_ingestion?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+        username: ${RAG_INGESTION_DB_USER:knowledge_ingestion_app}
+        password: ${RAG_INGESTION_DB_PASSWORD:knowledge-ingestion-app-dev}
         driver-class-name: ${RAG_INGESTION_DB_DRIVER:com.mysql.cj.jdbc.Driver}
         maximum-pool-size: ${RAG_INGESTION_DB_MAX_POOL_SIZE:8}
     # Knowledge 原文权威存储。dev/test 默认 memory；拆分 ingest worker 的生产环境必须使用 s3。
@@ -262,9 +271,9 @@ app:
       aliases: ${RAG_GRAPH_ALIASES:}
       async: ${RAG_GRAPH_ASYNC:false}
       datasource:
-        url: ${RAG_GRAPH_DB_URL:jdbc:mysql://localhost:3306/knowledge_graph?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}
-        username: ${RAG_GRAPH_DB_USER:root}
-        password: ${RAG_GRAPH_DB_PASSWORD:}
+        url: ${RAG_GRAPH_DB_URL:jdbc:mysql://localhost:3306/knowledge_graph?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}
+        username: ${RAG_GRAPH_DB_USER:knowledge_graph_app}
+        password: ${RAG_GRAPH_DB_PASSWORD:knowledge-graph-app-dev}
         driver-class-name: ${RAG_GRAPH_DB_DRIVER:com.mysql.cj.jdbc.Driver}
         maximum-pool-size: ${RAG_GRAPH_DB_MAX_POOL_SIZE:8}
 

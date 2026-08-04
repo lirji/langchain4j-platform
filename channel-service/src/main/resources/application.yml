@@ -28,6 +28,14 @@ platform:
     # Kafka 生产部署设 jdbc 以跨重启去重（需 channel.dedup.datasource.* 指向 MySQL，见 ChannelDedupConfig）。
     processed-event-store: ${CHANNEL_DEDUP_STORE:memory}
 
+channel:
+  dedup:
+    datasource:
+      url: ${CHANNEL_DEDUP_DB_URL:jdbc:mysql://mysql:3306/channel?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}
+      username: ${CHANNEL_DEDUP_DB_USER:channel_app}
+      password: ${CHANNEL_DEDUP_DB_PASSWORD:channel-app-dev}
+      driver-class-name: com.mysql.cj.jdbc.Driver
+
 app:
   channel:
     outbound-enabled: ${CHANNEL_OUTBOUND_ENABLED:false}

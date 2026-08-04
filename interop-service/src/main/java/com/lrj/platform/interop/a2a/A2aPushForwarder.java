@@ -4,19 +4,19 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lrj.platform.interop.InteropProperties;
 import com.lrj.platform.interop.a2a.MessageSendParams.PushNotificationConfig;
 import com.lrj.platform.protocol.agent.AgentTaskView;
+import com.lrj.platform.security.OutboundCallbackPolicy;
+import com.lrj.platform.security.OutboundWebhookSigner;
 import com.lrj.platform.security.TenantContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -39,21 +39,26 @@ public class A2aPushForwarder {
     private final InteropProperties props;
     private final Executor executor;
     private final HttpClient http;
+    private final OutboundCallbackPolicy callbackPolicy;
 
     public A2aPushForwarder(A2aPushNotificationStore store,
                             A2aAgentGateway gateway,
                             A2aTaskMapper mapper,
                             ObjectMapper json,
                             InteropProperties props,
-                            @Qualifier("interopStreamExecutor") Executor executor) {
+                            @Qualifier("interopStreamExecutor") Executor executor,
+                            OutboundCallbackPolicy callbackPolicy) {
         this.store = store;
         this.gateway = gateway;
         this.mapper = mapper;
         this.json = json;
         this.props = props;
         this.executor = executor;
+        this.callbackPolicy = callbackPolicy;
+        OutboundWebhookSigner.requireStrongSecret(props.getA2a().getPushHmacSecret());
         this.http = HttpClient.newBuilder()
                 .connectTimeout(props.getA2a().getPushConnectTimeout())
+                .followRedirects(HttpClient.Redirect.NEVER)
                 .build();
     }
 
@@ -82,7 +87,8 @@ public class A2aPushForwarder {
                 log.warn("A2A push: task {} not found on terminal callback", taskId);
                 return;
             }
-            deliver(mapper.toA2aTask(task.get()), cfg);
+            String contextId = store.contextId(tenantId, taskId).orElse(taskId);
+            deliver(mapper.toA2aTask(task.get(), contextId), cfg);
             store.remove(tenantId, taskId);
         } catch (Exception e) {
             log.warn("A2A push relay failed task={}", taskId, e);
@@ -100,20 +106,17 @@ public class A2aPushForwarder {
             log.warn("A2A push payload serialization failed task={}", task.id(), e);
             return;
         }
-        String secret = props.getA2a().getPushHmacSecret();
-        String signature = (secret != null && !secret.isBlank()) ? hmacSha256Hex(secret, body) : null;
-
         int attempts = Math.max(1, props.getA2a().getPushMaxRetries() + 1);
         long backoffMs = props.getA2a().getPushBackoff().toMillis();
         for (int attempt = 1; attempt <= attempts; attempt++) {
-            Outcome outcome = sendOnce(cfg, body, signature, deliveryId);
+            Outcome outcome = sendOnce(cfg, body, deliveryId);
             if (outcome == Outcome.SUCCESS) {
                 log.info("A2A push delivered task={} deliveryId={} attempt={} url={}",
                         task.id(), deliveryId, attempt, cfg.url());
                 return;
             }
-            if (outcome == Outcome.CLIENT_ERROR) {
-                log.warn("A2A push failed (client 4xx, no retry) task={} deliveryId={} url={}",
+            if (outcome == Outcome.CLIENT_ERROR || outcome == Outcome.POLICY_ERROR) {
+                log.warn("A2A push failed (client/policy, no retry) task={} deliveryId={} url={}",
                         task.id(), deliveryId, cfg.url());
                 return;
             }
@@ -130,17 +133,23 @@ public class A2aPushForwarder {
                 attempts, task.id(), deliveryId, cfg.url());
     }
 
-    private Outcome sendOnce(PushNotificationConfig cfg, String body, String signature, String deliveryId) {
+    private Outcome sendOnce(PushNotificationConfig cfg, String body, String deliveryId) {
         try {
+            var target = callbackPolicy.requireAllowed(cfg.url());
+            OutboundWebhookSigner.SignedHeaders signed = OutboundWebhookSigner.sign(
+                    props.getA2a().getPushHmacSecret(),
+                    "a2a.task.finished",
+                    deliveryId,
+                    Instant.now(),
+                    body);
             HttpRequest.Builder b = HttpRequest.newBuilder()
-                    .uri(URI.create(cfg.url()))
+                    .uri(target)
                     .timeout(props.getA2a().getPushReadTimeout())
                     .header("Content-Type", "application/json; charset=utf-8")
-                    .header("X-Webhook-Event", "a2a.task.finished")
-                    .header("X-Webhook-Delivery", deliveryId);
-            if (signature != null) {
-                b.header("X-Webhook-Signature", signature);
-            }
+                    .header("X-Webhook-Event", signed.event())
+                    .header("X-Webhook-Delivery", signed.deliveryId())
+                    .header("X-Webhook-Timestamp", Long.toString(signed.timestamp()))
+                    .header("X-Webhook-Signature", signed.signature());
             if (cfg.token() != null && !cfg.token().isBlank()) {
                 b.header("X-A2A-Notification-Token", cfg.token());
             }
@@ -151,31 +160,20 @@ public class A2aPushForwarder {
             if (code >= 200 && code < 300) {
                 return Outcome.SUCCESS;
             }
+            if (code >= 300 && code < 400) {
+                return Outcome.POLICY_ERROR;
+            }
             if (code >= 400 && code < 500) {
                 return Outcome.CLIENT_ERROR;
             }
             return Outcome.SERVER_ERROR;
+        } catch (OutboundCallbackPolicy.UnsafeCallbackException e) {
+            return Outcome.POLICY_ERROR;
         } catch (Exception e) {
             log.debug("A2A push attempt failed url={}: {}", cfg.url(), e.toString());
             return Outcome.NETWORK_ERROR;
         }
     }
 
-    static String hmacSha256Hex(String secret, String body) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            byte[] raw = mac.doFinal(body.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder(raw.length * 2);
-            for (byte x : raw) {
-                sb.append(Character.forDigit((x >> 4) & 0xF, 16));
-                sb.append(Character.forDigit(x & 0xF, 16));
-            }
-            return sb.toString();
-        } catch (Exception e) {
-            throw new IllegalStateException("HMAC-SHA256 signing failed", e);
-        }
-    }
-
-    private enum Outcome { SUCCESS, CLIENT_ERROR, SERVER_ERROR, NETWORK_ERROR }
+    private enum Outcome { SUCCESS, CLIENT_ERROR, SERVER_ERROR, NETWORK_ERROR, POLICY_ERROR }
 }

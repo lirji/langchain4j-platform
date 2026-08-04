@@ -9,6 +9,7 @@ import org.springframework.web.client.RestTemplate;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.io.InputStream;
 
 /**
  * {@link StreamingConversationGateway} 的 HTTP 实现。用 RestTemplate 的 {@code execute} + 流式
@@ -29,9 +30,9 @@ public class HttpStreamingConversationGateway implements StreamingConversationGa
     }
 
     @Override
-    public void streamChat(String chatId, String message,
+    public void streamChat(String chatId, String message, StreamCancellation cancellation,
                            Consumer<String> onToken, Runnable onDone, Consumer<Throwable> onError) {
-        String[] streamError = new String[1];
+        boolean[] streamError = new boolean[1];
         try {
             interopConversationRestTemplate.execute(
                     "/chat/stream?chatId={chatId}",
@@ -42,23 +43,36 @@ public class HttpStreamingConversationGateway implements StreamingConversationGa
                         json.writeValue(request.getBody(), Map.of("message", message == null ? "" : message));
                     },
                     response -> {
-                        SseEvents.read(response.getBody(), (eventName, data) ->
-                                dispatch(eventName, data, onToken, streamError));
+                        InputStream body = response.getBody();
+                        if (!cancellation.register(body)) {
+                            return null;
+                        }
+                        try {
+                            SseEvents.read(body, (eventName, data) ->
+                                    dispatch(eventName, data, onToken, streamError));
+                        } finally {
+                            cancellation.clear(body);
+                        }
                         return null;
                     },
                     chatId);
         } catch (Exception e) {
-            onError.accept(e);
+            if (!cancellation.isCancelled()) {
+                onError.accept(new IllegalStateException("conversation stream request failed"));
+            }
             return;
         }
-        if (streamError[0] != null) {
-            onError.accept(new RuntimeException(streamError[0]));
+        if (cancellation.isCancelled()) {
+            return;
+        }
+        if (streamError[0]) {
+            onError.accept(new IllegalStateException("conversation stream failed"));
         } else {
             onDone.run();
         }
     }
 
-    private static void dispatch(String eventName, String data, Consumer<String> onToken, String[] streamError) {
+    private static void dispatch(String eventName, String data, Consumer<String> onToken, boolean[] streamError) {
         if (eventName == null || eventName.isEmpty()) {
             if (!data.isEmpty()) {
                 onToken.accept(data); // 默认事件 = 一个 token
@@ -71,7 +85,7 @@ public class HttpStreamingConversationGateway implements StreamingConversationGa
                     onToken.accept(data); // 拒答话术也念给客户端
                 }
             }
-            case "error" -> streamError[0] = data.isEmpty() ? "stream error" : data;
+            case "error" -> streamError[0] = true;
             default -> { /* done / grounding-warning / 未知具名事件：不产生 token */ }
         }
     }

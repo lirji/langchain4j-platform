@@ -33,7 +33,8 @@ class AsyncTaskLifecycleRelayTest {
                 "asynctask:t1:SUCCEEDED", AsyncTaskLifecycleMessage.CURRENT_SCHEMA_VERSION,
                 "acme", "t1", "agent.run", "SUCCEEDED", java.util.Map.of("answer", "ok"), null,
                 "http://cb/hook", Instant.parse("2026-07-07T10:00:00Z"), "trace");
-        return new AsyncTaskLifecycleOutbox.Row("asynctask:t1:SUCCEEDED", "acme", mapper.writeValueAsString(m), attempts);
+        return new AsyncTaskLifecycleOutbox.Row(
+                "asynctask:t1:SUCCEEDED", "acme", mapper.writeValueAsString(m), attempts, "owner-1");
     }
 
     private AsyncTaskWebhookProperties props() {
@@ -46,19 +47,20 @@ class AsyncTaskLifecycleRelayTest {
     void publishesToLifecycleTopicKeyedByTenantAndMarksDelivered() throws Exception {
         AsyncTaskLifecycleOutbox outbox = mock(AsyncTaskLifecycleOutbox.class);
         EventPublisher publisher = mock(EventPublisher.class);
-        when(outbox.claimDue(anyLong(), anyInt())).thenReturn(List.of(row(0)));
+        when(outbox.claimDue(anyLong(), anyInt(), anyString(), anyLong())).thenReturn(List.of(row(0)));
+        when(outbox.markDelivered(anyString(), anyString(), anyLong())).thenReturn(true);
 
         new AsyncTaskLifecycleRelay(outbox, publisher, mapper, props()).dispatch();
 
         verify(publisher).publish(eq(EventTopics.ASYNCTASK_LIFECYCLE), eq("acme"), any(AsyncTaskLifecycleMessage.class));
-        verify(outbox).markDelivered(eq("asynctask:t1:SUCCEEDED"), anyLong());
+        verify(outbox).markDelivered(eq("asynctask:t1:SUCCEEDED"), eq("owner-1"), anyLong());
     }
 
     @Test
     void emptyDue_doesNothing() {
         AsyncTaskLifecycleOutbox outbox = mock(AsyncTaskLifecycleOutbox.class);
         EventPublisher publisher = mock(EventPublisher.class);
-        when(outbox.claimDue(anyLong(), anyInt())).thenReturn(List.of());
+        when(outbox.claimDue(anyLong(), anyInt(), anyString(), anyLong())).thenReturn(List.of());
 
         new AsyncTaskLifecycleRelay(outbox, publisher, mapper, props()).dispatch();
 
@@ -69,13 +71,16 @@ class AsyncTaskLifecycleRelayTest {
     void publishFailure_marksRetryBeforeMaxAttempts() throws Exception {
         AsyncTaskLifecycleOutbox outbox = mock(AsyncTaskLifecycleOutbox.class);
         EventPublisher publisher = mock(EventPublisher.class);
-        when(outbox.claimDue(anyLong(), anyInt())).thenReturn(List.of(row(0)));
+        when(outbox.claimDue(anyLong(), anyInt(), anyString(), anyLong())).thenReturn(List.of(row(0)));
+        when(outbox.markRetry(anyString(), anyString(), anyInt(), anyLong(), anyString(), anyLong()))
+                .thenReturn(true);
         doThrow(new RuntimeException("broker down")).when(publisher).publish(anyString(), anyString(), any());
 
         new AsyncTaskLifecycleRelay(outbox, publisher, mapper, props()).dispatch();
 
-        verify(outbox).markRetry(eq("asynctask:t1:SUCCEEDED"), eq(1), anyLong(), anyString(), anyLong());
-        verify(outbox, never()).markDelivered(anyString(), anyLong());
+        verify(outbox).markRetry(
+                eq("asynctask:t1:SUCCEEDED"), eq("owner-1"), eq(1), anyLong(), anyString(), anyLong());
+        verify(outbox, never()).markDelivered(anyString(), anyString(), anyLong());
     }
 
     @Test
@@ -83,11 +88,14 @@ class AsyncTaskLifecycleRelayTest {
         AsyncTaskLifecycleOutbox outbox = mock(AsyncTaskLifecycleOutbox.class);
         EventPublisher publisher = mock(EventPublisher.class);
         // 默认 maxAttempts=3：已尝试 2 次再失败 → attemptsAfter=3 → DEAD
-        when(outbox.claimDue(anyLong(), anyInt())).thenReturn(List.of(row(2)));
+        when(outbox.claimDue(anyLong(), anyInt(), anyString(), anyLong())).thenReturn(List.of(row(2)));
+        when(outbox.markDead(anyString(), anyString(), anyInt(), anyString(), anyLong()))
+                .thenReturn(true);
         doThrow(new RuntimeException("broker down")).when(publisher).publish(anyString(), anyString(), any());
 
         new AsyncTaskLifecycleRelay(outbox, publisher, mapper, props()).dispatch();
 
-        verify(outbox).markDead(eq("asynctask:t1:SUCCEEDED"), eq(3), anyString(), anyLong());
+        verify(outbox).markDead(
+                eq("asynctask:t1:SUCCEEDED"), eq("owner-1"), eq(3), anyString(), anyLong());
     }
 }

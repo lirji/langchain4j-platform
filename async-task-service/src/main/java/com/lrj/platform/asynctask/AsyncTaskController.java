@@ -8,6 +8,8 @@ import com.lrj.platform.protocol.asynctask.AsyncTaskLeaseRequest;
 import com.lrj.platform.protocol.asynctask.AsyncTaskStatus;
 import com.lrj.platform.protocol.asynctask.AsyncTaskStatusUpdateRequest;
 import com.lrj.platform.security.TenantContext;
+import com.lrj.platform.security.AsyncTaskWorkerToken;
+import com.lrj.platform.security.OutboundCallbackPolicy;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -34,7 +37,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * {@code /async/tasks/**} 通用异步任务中心的 REST 入口：创建、按 {@link TenantContext} 租户列举/查询、
+ * {@code /async/tasks/**} 通用异步任务中心的 REST 入口：创建、按 {@link TenantContext} tenant + owner 列举/查询、
  * 状态更新、worker 租约（lease）、取消，以及 {@code /stream} 的 SSE 流式（支持 Last-Event-ID 断点续传，
  * 委托 {@link AsyncTaskSseService}）与死信 webhook outbox 巡检。所有操作严格按当前租户隔离；每次生命周期
  * 变更都发布 {@link AsyncTaskEvent}（供 SSE 推送与 webhook 通知消费）并记审计。持久化委托可插拔的
@@ -49,6 +52,7 @@ public class AsyncTaskController {
     private final ApplicationEventPublisher events;
     private final AsyncTaskWebhookOutbox webhookOutbox;
     private final AsyncTaskEventJournal eventJournal;
+    private final OutboundCallbackPolicy callbackPolicy;
     private int eventMaxBytes = 262_144;
 
     public AsyncTaskController(AsyncTaskStore store,
@@ -57,7 +61,8 @@ public class AsyncTaskController {
                                ApplicationEventPublisher events) {
         this(store, sse, audit, events,
                 (AsyncTaskWebhookOutbox) null,
-                (AsyncTaskEventJournal) null);
+                (AsyncTaskEventJournal) null,
+                null);
     }
 
     @Autowired
@@ -66,10 +71,12 @@ public class AsyncTaskController {
                                AuditLogger audit,
                                ApplicationEventPublisher events,
                                ObjectProvider<AsyncTaskWebhookOutbox> webhookOutbox,
-                               ObjectProvider<AsyncTaskEventJournal> eventJournal) {
+                               ObjectProvider<AsyncTaskEventJournal> eventJournal,
+                               ObjectProvider<OutboundCallbackPolicy> callbackPolicy) {
         this(store, sse, audit, events,
                 webhookOutbox == null ? null : webhookOutbox.getIfAvailable(),
-                eventJournal == null ? null : eventJournal.getIfAvailable());
+                eventJournal == null ? null : eventJournal.getIfAvailable(),
+                callbackPolicy == null ? null : callbackPolicy.getIfAvailable());
     }
 
     AsyncTaskController(AsyncTaskStore store,
@@ -77,7 +84,7 @@ public class AsyncTaskController {
                         AuditLogger audit,
                         ApplicationEventPublisher events,
                         AsyncTaskWebhookOutbox webhookOutbox) {
-        this(store, sse, audit, events, webhookOutbox, null);
+        this(store, sse, audit, events, webhookOutbox, null, null);
     }
 
     AsyncTaskController(AsyncTaskStore store,
@@ -86,12 +93,23 @@ public class AsyncTaskController {
                         ApplicationEventPublisher events,
                         AsyncTaskWebhookOutbox webhookOutbox,
                         AsyncTaskEventJournal eventJournal) {
+        this(store, sse, audit, events, webhookOutbox, eventJournal, null);
+    }
+
+    AsyncTaskController(AsyncTaskStore store,
+                        AsyncTaskSseService sse,
+                        AuditLogger audit,
+                        ApplicationEventPublisher events,
+                        AsyncTaskWebhookOutbox webhookOutbox,
+                        AsyncTaskEventJournal eventJournal,
+                        OutboundCallbackPolicy callbackPolicy) {
         this.store = store;
         this.sse = sse;
         this.audit = audit;
         this.events = events;
         this.webhookOutbox = webhookOutbox;
         this.eventJournal = eventJournal;
+        this.callbackPolicy = callbackPolicy;
     }
 
     @PostMapping("/async/tasks")
@@ -107,6 +125,18 @@ public class AsyncTaskController {
         } else if (store.get(taskId).isPresent()) {
             return ResponseEntity.status(409).body(Map.of("error", "task already exists", "taskId", taskId));
         }
+        String webhookUrl = blankToNull(request.webhookUrl());
+        if (webhookUrl != null) {
+            try {
+                if (callbackPolicy != null) {
+                    webhookUrl = callbackPolicy.requireAllowed(webhookUrl).toString();
+                } else if (AsyncTaskWebhookNotifier.webhookUri(webhookUrl).isEmpty()) {
+                    throw new IllegalArgumentException("invalid webhook URL");
+                }
+            } catch (IllegalArgumentException exception) {
+                return ResponseEntity.badRequest().body(Map.of("error", "webhookUrl is not allowed"));
+            }
+        }
         AsyncTask task = new AsyncTask(
                 taskId,
                 tenant.tenantId(),
@@ -116,7 +146,7 @@ public class AsyncTaskController {
                 request.input(),
                 null,
                 null,
-                blankToNull(request.webhookUrl()),
+                webhookUrl,
                 now,
                 now,
                 null);
@@ -129,34 +159,46 @@ public class AsyncTaskController {
 
     @GetMapping("/async/tasks")
     public List<AsyncTask> listMine() {
-        return store.listByTenant(TenantContext.current().tenantId());
+        TenantContext.Tenant caller = TenantContext.current();
+        return store.listByOwner(caller.tenantId(), caller.userId());
     }
 
     @GetMapping("/async/tasks/{taskId}")
     public ResponseEntity<AsyncTask> get(@PathVariable String taskId) {
-        return scoped(taskId).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+        return ownerScoped(taskId).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PatchMapping("/async/tasks/{taskId}/status")
     public ResponseEntity<?> updateStatus(@PathVariable String taskId,
-                                          @RequestBody AsyncTaskStatusUpdateRequest request) {
-        if (request == null || request.status() == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "status is required"));
+                                          @RequestBody AsyncTaskStatusUpdateRequest request,
+                                          @RequestAttribute(AsyncTaskWorkerAuthFilter.PRINCIPAL_ATTRIBUTE)
+                                          AsyncTaskWorkerToken.Principal worker) {
+        if (request == null || request.status() == null || blankToNull(request.workerId()) == null) {
+            return ResponseEntity.badRequest().body(
+                    Map.of("error", "status and workerId are required"));
         }
-        Optional<AsyncTask> existing = scoped(taskId);
+        if (!workerOwns(worker, request.workerId())) {
+            return ResponseEntity.status(403).body(Map.of("error", "worker identity mismatch"));
+        }
+        Optional<AsyncTask> existing = workerScoped(taskId, worker);
         if (existing.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
         if (existing.get().status().isTerminal()) {
             return ResponseEntity.ok(existing.get());
         }
-        if (!leaseOwnedBy(existing.get(), request.workerId())) {
+        if (request.leaseEpoch() == null || request.leaseEpoch() <= 0) {
+            return ResponseEntity.badRequest().body(
+                    Map.of("error", "positive leaseEpoch is required"));
+        }
+        if (!leaseOwnedBy(existing.get(), request.workerId(), request.leaseEpoch())) {
             return ResponseEntity.status(409).body(Map.of("error", "task lease is owned by another worker", "taskId", taskId));
         }
         AsyncTaskStore.MutationResult mutation = store.transition(
                 taskId,
                 TenantContext.current().tenantId(),
                 request.workerId(),
+                request.leaseEpoch(),
                 request.status(),
                 request.result(),
                 request.error());
@@ -180,12 +222,17 @@ public class AsyncTaskController {
 
     @PostMapping("/async/tasks/{taskId}/lease")
     public ResponseEntity<?> lease(@PathVariable String taskId,
-                                   @RequestBody AsyncTaskLeaseRequest request) {
+                                   @RequestBody AsyncTaskLeaseRequest request,
+                                   @RequestAttribute(AsyncTaskWorkerAuthFilter.PRINCIPAL_ATTRIBUTE)
+                                   AsyncTaskWorkerToken.Principal worker) {
         String workerId = request == null ? null : blankToNull(request.workerId());
         if (workerId == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "workerId is required"));
         }
-        Optional<AsyncTask> existing = scoped(taskId);
+        if (!workerOwns(worker, workerId)) {
+            return ResponseEntity.status(403).body(Map.of("error", "worker identity mismatch"));
+        }
+        Optional<AsyncTask> existing = workerScoped(taskId, worker);
         if (existing.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -193,16 +240,14 @@ public class AsyncTaskController {
         if (current.status().isTerminal()) {
             return ResponseEntity.status(409).body(Map.of("error", "terminal task cannot be leased", "taskId", taskId));
         }
-        if (!leaseAvailableFor(current, workerId)) {
-            return ResponseEntity.status(409).body(leaseConflict(taskId, current));
-        }
         Instant leaseExpiresAt = Instant.now().plus(Duration.ofSeconds(leaseSeconds(request)));
-        Optional<AsyncTask> updated = store.lease(taskId, workerId, leaseExpiresAt);
-        AsyncTask leased = updated.orElse(current);
+        AsyncTaskStore.LeaseResult result = store.lease(
+                taskId, workerId, leaseExpiresAt, request.leaseEpoch());
+        AsyncTask leased = result.task() == null ? current : result.task();
         if (leased.status().isTerminal()) {
             return ResponseEntity.status(409).body(Map.of("error", "terminal task cannot be leased", "taskId", taskId));
         }
-        if (!workerId.equals(leased.leaseOwnerId())) {
+        if (!result.acquired()) {
             return ResponseEntity.status(409).body(leaseConflict(taskId, leased));
         }
         if (current.status() != leased.status()) {
@@ -213,7 +258,7 @@ public class AsyncTaskController {
 
     @DeleteMapping("/async/tasks/{taskId}")
     public ResponseEntity<Map<String, Object>> cancel(@PathVariable String taskId) {
-        Optional<AsyncTask> existing = scoped(taskId);
+        Optional<AsyncTask> existing = ownerScoped(taskId);
         if (existing.isEmpty() || existing.get().status().isTerminal()) {
             return ResponseEntity.notFound().build();
         }
@@ -238,32 +283,31 @@ public class AsyncTaskController {
 
     @PostMapping("/async/tasks/{taskId}/events")
     public ResponseEntity<?> appendEvent(@PathVariable String taskId,
-                                         @RequestBody AsyncTaskEventAppendRequest request) {
+                                         @RequestBody AsyncTaskEventAppendRequest request,
+                                         @RequestAttribute(AsyncTaskWorkerAuthFilter.PRINCIPAL_ATTRIBUTE)
+                                         AsyncTaskWorkerToken.Principal worker) {
         if (eventJournal == null) {
             return ResponseEntity.status(503).body(Map.of("error", "task event journal is unavailable"));
         }
-        Optional<AsyncTask> scoped = scoped(taskId);
+        if (request == null || !workerOwns(worker, request.workerId())) {
+            return ResponseEntity.status(403).body(Map.of("error", "worker identity mismatch"));
+        }
+        Optional<AsyncTask> scoped = workerScoped(taskId, worker);
         if (scoped.isEmpty() || !AGENT_KINDS.contains(scoped.get().kind())) {
             return ResponseEntity.notFound().build();
         }
         AsyncTask task = scoped.get();
-        if (request != null && blankToNull(request.eventKey()) != null) {
-            Optional<AsyncTaskStreamEvent> duplicate = eventJournal.eventsAfter(taskId, 0).stream()
-                    .filter(item -> request.eventKey().trim().equals(item.eventKey()))
-                    .findFirst();
-            if (duplicate.isPresent()) {
-                return ResponseEntity.ok(duplicate.get());
-            }
-        }
         if (task.status().isTerminal()
                 || request == null
                 || blankToNull(request.eventKey()) == null
                 || blankToNull(request.event()) == null
-                || blankToNull(request.workerId()) == null) {
+                || blankToNull(request.workerId()) == null
+                || request.leaseEpoch() == null
+                || request.leaseEpoch() <= 0) {
             return ResponseEntity.status(task.status().isTerminal() ? 409 : 400)
                     .body(Map.of("error", task.status().isTerminal()
                             ? "terminal task rejects progress events"
-                            : "eventKey, event and workerId are required"));
+                            : "eventKey, event, workerId and positive leaseEpoch are required"));
         }
         if (!PROGRESS_EVENTS.contains(request.event().trim())) {
             return ResponseEntity.badRequest().body(Map.of("error", "unsupported progress event"));
@@ -272,21 +316,34 @@ public class AsyncTaskController {
                 > eventMaxBytes) {
             return ResponseEntity.status(413).body(Map.of("error", "progress event is too large"));
         }
-        if (!request.workerId().equals(task.leaseOwnerId())
-                || task.leaseExpiresAt() == null
-                || task.leaseExpiresAt().isBefore(Instant.now())) {
+        AsyncTaskStore.LeaseActionResult<EventAppendResult> result = store.withActiveLease(
+                taskId,
+                worker.tenantId(),
+                request.workerId(),
+                request.leaseEpoch(),
+                () -> {
+                    Optional<AsyncTaskStreamEvent> duplicate = eventJournal.eventsAfter(taskId, 0).stream()
+                            .filter(item -> request.eventKey().trim().equals(item.eventKey()))
+                            .findFirst();
+                    if (duplicate.isPresent()) {
+                        return new EventAppendResult(duplicate.get(), true);
+                    }
+                    return new EventAppendResult(eventJournal.append(
+                            taskId,
+                            request.eventKey().trim(),
+                            request.event().trim(),
+                            request.data(),
+                            request.workerId().trim(),
+                            Instant.now()), false);
+                });
+        if (!result.executed()) {
             return ResponseEntity.status(409)
                     .body(Map.of("error", "task lease is not owned by worker"));
         }
-        AsyncTaskStreamEvent appended = eventJournal.append(
-                taskId,
-                request.eventKey().trim(),
-                request.event().trim(),
-                request.data(),
-                request.workerId().trim(),
-                Instant.now());
-        events.publishEvent(new AsyncTaskEvent(task, appended));
-        return ResponseEntity.ok(appended);
+        if (!result.value().duplicate()) {
+            events.publishEvent(new AsyncTaskEvent(result.task(), result.value().event()));
+        }
+        return ResponseEntity.ok(result.value().event());
     }
 
     @GetMapping(value = "/async/tasks/{taskId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -294,7 +351,7 @@ public class AsyncTaskController {
                                              @RequestHeader(name = "Last-Event-ID", required = false) String lastEventIdHeader,
                                              @RequestParam(name = "lastEventId", required = false) String lastEventIdParam) {
         String lastEventId = blankToNull(lastEventIdParam) == null ? lastEventIdHeader : lastEventIdParam;
-        return scoped(taskId).flatMap(task -> sse.subscribe(task.taskId(), lastEventId))
+        return ownerScoped(taskId).flatMap(task -> sse.subscribe(task.taskId(), lastEventId))
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -308,26 +365,39 @@ public class AsyncTaskController {
         return webhookOutbox.listDead(TenantContext.current().tenantId(), Math.max(1, Math.min(200, limit)));
     }
 
-    private Optional<AsyncTask> scoped(String taskId) {
+    private Optional<AsyncTask> tenantScoped(String taskId) {
         String tenantId = TenantContext.current().tenantId();
         return store.get(taskId).filter(task -> tenantId.equals(task.tenantId()));
     }
 
-    private static boolean leaseOwnedBy(AsyncTask task, String workerId) {
-        if (task.leaseOwnerId() == null || task.leaseOwnerId().isBlank()) {
-            return true;
-        }
-        return task.leaseOwnerId().equals(blankToNull(workerId));
+    private Optional<AsyncTask> ownerScoped(String taskId) {
+        TenantContext.Tenant caller = TenantContext.current();
+        return store.get(taskId).filter(task -> caller.tenantId().equals(task.tenantId())
+                && caller.userId().equals(task.userId()));
     }
 
-    private static boolean leaseAvailableFor(AsyncTask task, String workerId) {
-        if (task.leaseOwnerId() == null || task.leaseOwnerId().isBlank()) {
-            return true;
-        }
-        if (task.leaseOwnerId().equals(workerId)) {
-            return true;
-        }
-        return task.leaseExpiresAt() != null && task.leaseExpiresAt().isBefore(Instant.now());
+    private Optional<AsyncTask> workerScoped(
+            String taskId,
+            AsyncTaskWorkerToken.Principal worker) {
+        return store.get(taskId).filter(task -> worker.tenantId().equals(task.tenantId())
+                && worker.actorUserId().equals(task.userId()));
+    }
+
+    private static boolean workerOwns(AsyncTaskWorkerToken.Principal worker, String leaseOwnerId) {
+        String owner = blankToNull(leaseOwnerId);
+        return owner != null
+                && (owner.equals(worker.workerId())
+                    || owner.equals(worker.serviceId())
+                    || owner.startsWith(worker.serviceId() + "."));
+    }
+
+    private static boolean leaseOwnedBy(AsyncTask task, String workerId, Long leaseEpoch) {
+        return task.leaseOwnerId() != null
+                && task.leaseOwnerId().equals(blankToNull(workerId))
+                && leaseEpoch != null
+                && task.leaseEpoch() == leaseEpoch
+                && task.leaseExpiresAt() != null
+                && task.leaseExpiresAt().isAfter(Instant.now());
     }
 
     private static long leaseSeconds(AsyncTaskLeaseRequest request) {
@@ -382,6 +452,9 @@ public class AsyncTaskController {
             "dag-critique",
             "dag-replan",
             "dag-replanned");
+
+    private record EventAppendResult(AsyncTaskStreamEvent event, boolean duplicate) {
+    }
 
     @Value("${app.async-task.event.max-bytes:262144}")
     void setEventMaxBytes(int eventMaxBytes) {

@@ -24,7 +24,7 @@ class HttpIngestionTaskLifecycleTest {
     void createsStableTaskEnvelopeAndSynchronizesKnowledgeState() {
         RestTemplate http = new RestTemplateBuilder().rootUri("http://async").build();
         MockRestServiceServer server = MockRestServiceServer.bindTo(http).build();
-        HttpIngestionTaskLifecycle lifecycle = new HttpIngestionTaskLifecycle(http);
+        HttpIngestionTaskLifecycle lifecycle = new HttpIngestionTaskLifecycle(http, "knowledge-service.test");
         IngestionJob job = job();
         server.expect(once(), requestTo("http://async/async/tasks"))
                 .andExpect(method(HttpMethod.POST))
@@ -42,11 +42,22 @@ class HttpIngestionTaskLifecycleTest {
                         }
                         """))
                 .andRespond(withNoContent());
+        server.expect(once(), requestTo("http://async/async/tasks/job-1/lease"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("""
+                        {
+                          "workerId":"knowledge-service.test",
+                          "leaseSeconds":60
+                        }
+                        """))
+                .andRespond(withSuccess("{\"leaseEpoch\":1}", MediaType.APPLICATION_JSON));
         server.expect(once(), requestTo("http://async/async/tasks/job-1/status"))
                 .andExpect(method(HttpMethod.PATCH))
                 .andExpect(content().json("""
                         {
                           "status":"RUNNING",
+                          "workerId":"knowledge-service.test",
+                          "leaseEpoch":1,
                           "result":{
                             "knowledgeJobId":"job-1",
                             "knowledgeStatus":"RECEIVED",

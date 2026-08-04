@@ -1,13 +1,23 @@
 package com.lrj.platform.voice;
 
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.lrj.platform.security.PublicPayloadRedactor;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -79,6 +89,81 @@ class VoiceStreamServiceTest {
         svc.stream(new byte[]{1}, "a.mp3", "c1");
 
         verify(speech).synthesize("抱歉，我没有听清，请您再说一遍。");
-        verify(conversation, never()).chatStream(any(), any(), any(), any(), any());
+        verify(conversation, never()).chatStream(
+                any(), any(), any(VoiceStreamCancellation.class), any(), any(), any());
+    }
+
+    @Test
+    void productionExecutorLetsControllerReturnBeforeSpeechWorkStarts() {
+        SpeechService speech = mock(SpeechService.class);
+        when(speech.transcribe(any(), any())).thenReturn(" ");
+        when(speech.synthesize(anyString())).thenReturn(tts());
+        AtomicReference<Runnable> scheduled = new AtomicReference<>();
+        VoiceStreamService svc = new VoiceStreamService(
+                mock(ConversationClient.class), speech, 1, scheduled::set);
+
+        SseEmitter emitter = svc.stream(new byte[]{1}, "a.mp3", "c1");
+
+        assertThat(emitter).isNotNull();
+        verifyNoInteractions(speech);
+        scheduled.get().run();
+        verify(speech).transcribe(any(), any());
+    }
+
+    @Test
+    void streamFailureUsesStableEnvelopeWithoutProviderDetail() {
+        RecordingEmitter emitter = new RecordingEmitter();
+
+        VoiceStreamService.fail(
+                emitter,
+                new VoiceStreamCancellation(),
+                new IllegalStateException("speech-provider-key=secret"));
+
+        assertThat(emitter.data).contains(Map.of(
+                "error", "voice stream failed",
+                "code", "VOICE_STREAM_FAILED"));
+        assertThat(emitter.data.toString())
+                .doesNotContain("speech-provider-key");
+        assertThat(emitter.completed).isTrue();
+        assertThat(emitter.completedWithError).isFalse();
+    }
+
+    @Test
+    void publicStreamTextRedactorMasksTranscriptAndReplyPii() {
+        PublicPayloadRedactor redactor = new PublicPayloadRedactor(
+                JsonMapper.builder().findAndAddModules().build());
+        VoiceStreamService service = new VoiceStreamService(
+                mock(ConversationClient.class), mock(SpeechService.class), 1, Runnable::run, redactor);
+
+        String transcript = service.publicText("alice@example.com 13812345678");
+        String reply = service.publicText("身份证 11010519491231002X");
+
+        assertThat(transcript)
+                .contains("[REDACTED-email]", "[REDACTED-phone]")
+                .doesNotContain("alice@example.com", "13812345678");
+        assertThat(reply)
+                .contains("[REDACTED-id-card]")
+                .doesNotContain("11010519491231002X");
+    }
+
+    private static final class RecordingEmitter extends SseEmitter {
+        private final List<Object> data = new ArrayList<>();
+        private boolean completed;
+        private boolean completedWithError;
+
+        @Override
+        public void send(SseEventBuilder builder) throws IOException {
+            builder.build().forEach(item -> data.add(item.getData()));
+        }
+
+        @Override
+        public void complete() {
+            completed = true;
+        }
+
+        @Override
+        public void completeWithError(Throwable ex) {
+            completedWithError = true;
+        }
     }
 }

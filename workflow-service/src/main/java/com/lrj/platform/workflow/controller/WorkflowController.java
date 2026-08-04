@@ -37,7 +37,8 @@ public class WorkflowController {
     /**
      * 发起退款流程。body {@code {"message":"...","chatId":"u1","dedupeId":"...","webhookUrl":"..."}}
      * （chatId / dedupeId / webhookUrl 均可选）。
-     * 传 {@code dedupeId}（渠道消息 id）则按 {@code tenant:chatId:dedupeId} 幂等去重，重推同一诉求只起一个流程；
+     * 传 {@code dedupeId}（1～128 位安全 opaque key）则由数据库唯一约束与 Flowable 同事务强幂等；
+     * 相同键+相同请求返回原实例，相同键+不同参数返回 409，重推同一诉求只起一个流程；
      * 传 {@code webhookUrl} 则流程终态时把答复经 outbox 可靠回推（#8），否则客户端轮询 status 端点。
      */
     @PostMapping("/workflow/refund/start")

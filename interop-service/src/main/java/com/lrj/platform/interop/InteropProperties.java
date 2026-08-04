@@ -29,6 +29,11 @@ public class InteropProperties {
 
     /** live discovery 缓存 TTL；过期后下次访问触发懒刷新。 */
     private Duration capabilityTtl = Duration.ofSeconds(60);
+    /** memory（本地）或 redis（生产，多副本共享 A2A context 与 capability LKG）。 */
+    private String stateStore = "memory";
+    private String stateNamespace = "platform:interop:a2a";
+    private Duration stateTtl = Duration.ofDays(7);
+    private String capabilityRegistryKey = "platform:interop:capability-registry:v1";
 
     @NestedConfigurationProperty
     private A2a a2a = new A2a();
@@ -85,6 +90,38 @@ public class InteropProperties {
         return capabilityTtl;
     }
 
+    public String getStateStore() {
+        return stateStore;
+    }
+
+    public void setStateStore(String stateStore) {
+        this.stateStore = stateStore;
+    }
+
+    public String getStateNamespace() {
+        return stateNamespace;
+    }
+
+    public void setStateNamespace(String stateNamespace) {
+        this.stateNamespace = stateNamespace;
+    }
+
+    public Duration getStateTtl() {
+        return stateTtl;
+    }
+
+    public void setStateTtl(Duration stateTtl) {
+        this.stateTtl = stateTtl;
+    }
+
+    public String getCapabilityRegistryKey() {
+        return capabilityRegistryKey;
+    }
+
+    public void setCapabilityRegistryKey(String capabilityRegistryKey) {
+        this.capabilityRegistryKey = capabilityRegistryKey;
+    }
+
     public void setCapabilityTtl(Duration capabilityTtl) {
         this.capabilityTtl = capabilityTtl;
     }
@@ -111,8 +148,10 @@ public class InteropProperties {
 
         /** push 中继回调基址：agent 任务终态 webhook 回到 interop 自己（内网直连、不经 edge-gateway）。 */
         private String pushCallbackBaseUrl = "http://localhost:8088";
-        /** A2A push 回推客户端时的 HMAC 签名密钥；空则不签名（{@code X-Webhook-Signature} 不发）。 */
-        private String pushHmacSecret = "";
+        /** A2A push 回推客户端时的 HMAC 签名密钥。 */
+        private String pushHmacSecret = "dev-only-a2a-webhook-signing-secret-change-me-32b";
+        /** AES-256 key（base64）for encrypted notification token persistence. */
+        private String pushEncryptionKey = "";
         private Duration pushConnectTimeout = Duration.ofSeconds(2);
         private Duration pushReadTimeout = Duration.ofSeconds(10);
         private int pushMaxRetries = 2;
@@ -181,6 +220,14 @@ public class InteropProperties {
 
         public Duration getPushConnectTimeout() {
             return pushConnectTimeout;
+        }
+
+        public String getPushEncryptionKey() {
+            return pushEncryptionKey;
+        }
+
+        public void setPushEncryptionKey(String pushEncryptionKey) {
+            this.pushEncryptionKey = pushEncryptionKey;
         }
 
         public void setPushConnectTimeout(Duration pushConnectTimeout) {

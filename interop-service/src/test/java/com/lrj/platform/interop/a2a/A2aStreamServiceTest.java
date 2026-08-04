@@ -3,12 +3,12 @@ package com.lrj.platform.interop.a2a;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lrj.platform.protocol.agent.AgentTaskView;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -21,6 +21,7 @@ class A2aStreamServiceTest {
 
     private final ObjectMapper json = new ObjectMapper();
     private final A2aTaskMapper mapper = new A2aTaskMapper();
+    private final A2aPushNotificationStore stateStore = new A2aPushNotificationStore();
 
     /** 捕获型 sink：记录每一帧事件 + complete 次数。 */
     private static final class CapturingSink implements A2aStreamService.A2aFrameSink {
@@ -41,7 +42,7 @@ class A2aStreamServiceTest {
     private A2aStreamService service(StreamingConversationGateway conv,
                                      AgentTaskStreamGateway task,
                                      A2aAgentGateway agent) {
-        return new A2aStreamService(conv, task, agent, mapper, json, Runnable::run);
+        return new A2aStreamService(conv, task, agent, stateStore, mapper, json, Runnable::run);
     }
 
     @Test
@@ -49,6 +50,7 @@ class A2aStreamServiceTest {
         StreamingConversationGateway conv = new StreamingConversationGateway() {
             @Override
             public void streamChat(String chatId, String message,
+                                   StreamCancellation cancellation,
                                    Consumer<String> onToken, Runnable onDone, Consumer<Throwable> onError) {
                 assertThat(chatId).isEqualTo("anonymous:a2a:ctx-1"); // 无租户 → ANONYMOUS
                 assertThat(message).isEqualTo("hi");
@@ -59,7 +61,7 @@ class A2aStreamServiceTest {
         };
         CapturingSink sink = new CapturingSink();
 
-        service(conv, noopTaskStream(), noopAgent()).runChat(sink, new AtomicBoolean(false), "hi", "ctx-1");
+        service(conv, noopTaskStream(), noopAgent()).runChat(sink, new StreamCancellation(), "hi", "ctx-1");
 
         assertThat(sink.events).hasSize(4);
         assertThat(sink.events.get(0)).isInstanceOf(TaskStatusUpdateEvent.class);
@@ -83,24 +85,27 @@ class A2aStreamServiceTest {
 
     @Test
     void chatStreamUpstreamErrorEmitsFailedFinal() {
-        StreamingConversationGateway conv = (chatId, message, onToken, onDone, onError) ->
-                onError.accept(new RuntimeException("boom"));
+        StreamingConversationGateway conv = (chatId, message, cancellation, onToken, onDone, onError) ->
+                onError.accept(new RuntimeException("provider-secret-must-not-leak"));
         CapturingSink sink = new CapturingSink();
 
-        service(conv, noopTaskStream(), noopAgent()).runChat(sink, new AtomicBoolean(false), "hi", "ctx-1");
+        service(conv, noopTaskStream(), noopAgent()).runChat(sink, new StreamCancellation(), "hi", "ctx-1");
 
         Object last = sink.events.get(sink.events.size() - 1);
         assertThat(last).isInstanceOf(TaskStatusUpdateEvent.class);
         TaskStatusUpdateEvent failed = (TaskStatusUpdateEvent) last;
         assertThat(failed.status().state()).isEqualTo(TaskState.FAILED);
+        assertThat(failed.status().message().textContent()).isEqualTo("conversation stream failed");
+        assertThat(failed.status().message().textContent()).doesNotContain("provider-secret");
         assertThat(failed.isFinal()).isTrue();
         assertThat(sink.completed).isEqualTo(1);
     }
 
     @Test
     void chatStreamStopsForwardingWhenCancelled() {
-        AtomicBoolean cancelled = new AtomicBoolean(true); // 客户端已断开
-        StreamingConversationGateway conv = (chatId, message, onToken, onDone, onError) -> {
+        StreamCancellation cancelled = new StreamCancellation();
+        cancelled.cancel(); // 客户端已断开
+        StreamingConversationGateway conv = (chatId, message, cancellation, onToken, onDone, onError) -> {
             onToken.accept("x");
             onDone.run();
         };
@@ -119,7 +124,9 @@ class A2aStreamServiceTest {
                 new AgentTaskView("t1", "acme", "alice", "PENDING", Map.of(), null, null, null, null, null));
         AgentTaskStreamGateway task = new AgentTaskStreamGateway() {
             @Override
-            public void streamTask(String taskId, Consumer<AgentTaskView> onUpdate, Runnable onDone, Consumer<Throwable> onError) {
+            public void streamTask(String taskId, StreamCancellation cancellation,
+                                   Consumer<AgentTaskView> onUpdate, Runnable onDone,
+                                   Consumer<Throwable> onError) {
                 assertThat(taskId).isEqualTo("t1");
                 onUpdate.accept(view("t1", "RUNNING", null, null));
                 onUpdate.accept(view("t1", "SUCCEEDED", Map.of("finalAnswer", "done"), null));
@@ -128,7 +135,7 @@ class A2aStreamServiceTest {
         };
         CapturingSink sink = new CapturingSink();
 
-        service(noopConv(), task, agent).runResearch(sink, new AtomicBoolean(false), "research", "ctx-2");
+        service(noopConv(), task, agent).runResearch(sink, new StreamCancellation(), "research", "ctx-2");
 
         // 初始 SUBMITTED、RUNNING→WORKING、SUCCEEDED 的 artifact + COMPLETED(final)
         assertThat(states(sink)).containsExactly(
@@ -140,6 +147,7 @@ class A2aStreamServiceTest {
         assertThat(artifact.lastChunk()).isTrue();
         assertThat(artifact.append()).isFalse();
         assertThat(sink.completed).isEqualTo(1);
+        assertThat(stateStore.contextId("anonymous", "t1")).contains("ctx-2");
 
         // 终态帧 final=true
         TaskStatusUpdateEvent completed = sink.events.stream()
@@ -154,11 +162,63 @@ class A2aStreamServiceTest {
         A2aAgentGateway agent = new StubAgentGateway(null); // submit 返回 null
         CapturingSink sink = new CapturingSink();
 
-        service(noopConv(), noopTaskStream(), agent).runResearch(sink, new AtomicBoolean(false), "x", "ctx-3");
+        service(noopConv(), noopTaskStream(), agent).runResearch(sink, new StreamCancellation(), "x", "ctx-3");
 
         assertThat(states(sink)).containsExactly(TaskState.FAILED);
         assertThat(((TaskStatusUpdateEvent) sink.events.get(0)).isFinal()).isTrue();
         assertThat(sink.completed).isEqualTo(1);
+    }
+
+    @Test
+    void researchStreamSanitizesTerminalError() {
+        A2aAgentGateway agent = new StubAgentGateway(
+                new AgentTaskView("t1", "acme", "alice", "PENDING", Map.of(), null, null, null, null, null));
+        AgentTaskStreamGateway task = (taskId, cancellation, onUpdate, onDone, onError) -> {
+            onUpdate.accept(view(taskId, "FAILED", null, "database-password=secret"));
+            onDone.run();
+        };
+        CapturingSink sink = new CapturingSink();
+
+        service(noopConv(), task, agent)
+                .runResearch(sink, new StreamCancellation(), "research", "ctx-4");
+
+        TaskStatusUpdateEvent failed = sink.events.stream()
+                .filter(TaskStatusUpdateEvent.class::isInstance)
+                .map(TaskStatusUpdateEvent.class::cast)
+                .filter(event -> event.status().state() == TaskState.FAILED)
+                .findFirst().orElseThrow();
+        assertThat(failed.status().message().textContent()).isEqualTo("agent task failed");
+        assertThat(failed.status().message().textContent()).doesNotContain("database-password");
+    }
+
+    @Test
+    void researchDisconnectClosesStreamAndCancelsSubmittedTask() {
+        StubAgentGateway agent = new StubAgentGateway(
+                new AgentTaskView("t1", "acme", "alice", "PENDING", Map.of(), null, null, null, null, null));
+        AgentTaskStreamGateway task = (taskId, cancellation, onUpdate, onDone, onError) ->
+                cancellation.cancel();
+        CapturingSink sink = new CapturingSink();
+
+        service(noopConv(), task, agent)
+                .runResearch(sink, new StreamCancellation(), "research", "ctx-5");
+
+        assertThat(agent.cancelledTask).isEqualTo("t1");
+        assertThat(sink.completed).isEqualTo(1);
+    }
+
+    @Test
+    void executorRejectionReturnsAClosedStreamInsteadOfLeakingException() {
+        A2aStreamService service = new A2aStreamService(
+                noopConv(), noopTaskStream(), noopAgent(), stateStore, mapper, json,
+                task -> {
+                    throw new IllegalStateException("executor-secret=must-not-leak");
+                });
+        A2aMessage message = new A2aMessage(
+                "user", List.of(Part.text("hello")), "message-1", null, "context-1", null);
+
+        SseEmitter emitter = service.stream(message, A2aService.SKILL_CHAT, "rpc-1");
+
+        assertThat(emitter).isNotNull();
     }
 
     // —— helpers ——
@@ -179,11 +239,11 @@ class A2aStreamServiceTest {
     }
 
     private StreamingConversationGateway noopConv() {
-        return (chatId, message, onToken, onDone, onError) -> onDone.run();
+        return (chatId, message, cancellation, onToken, onDone, onError) -> onDone.run();
     }
 
     private AgentTaskStreamGateway noopTaskStream() {
-        return (taskId, onUpdate, onDone, onError) -> onDone.run();
+        return (taskId, cancellation, onUpdate, onDone, onError) -> onDone.run();
     }
 
     private A2aAgentGateway noopAgent() {
@@ -192,6 +252,7 @@ class A2aStreamServiceTest {
 
     private static final class StubAgentGateway implements A2aAgentGateway {
         private final AgentTaskView submitResult;
+        private String cancelledTask;
 
         StubAgentGateway(AgentTaskView submitResult) {
             this.submitResult = submitResult;
@@ -214,7 +275,8 @@ class A2aStreamServiceTest {
 
         @Override
         public boolean cancelTask(String taskId) {
-            return false;
+            cancelledTask = taskId;
+            return true;
         }
     }
 }
