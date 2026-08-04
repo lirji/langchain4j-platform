@@ -3,6 +3,8 @@ package com.lrj.platform.interop.a2a;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lrj.platform.interop.InteropProperties;
 import com.lrj.platform.protocol.agent.AgentTaskView;
+import com.lrj.platform.security.InternalSecurityProperties;
+import com.lrj.platform.security.OutboundCallbackPolicy;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -23,12 +25,20 @@ class A2aControllerTest {
 
     private A2aController controller(A2aAgentGateway gateway) {
         A2aTaskMapper mapper = new A2aTaskMapper();
+        A2aPushNotificationStore stateStore = new A2aPushNotificationStore();
         A2aService service = new A2aService(
-                gateway, mapper, new InteropProperties(), json, new A2aPushNotificationStore());
+                gateway,
+                mapper,
+                new InteropProperties(),
+                json,
+                stateStore,
+                new OutboundCallbackPolicy(
+                        new InternalSecurityProperties.Callback(),
+                        host -> new java.net.InetAddress[]{java.net.InetAddress.getByName("93.184.216.34")}));
         A2aStreamService streamService = new A2aStreamService(
-                (chatId, message, onToken, onDone, onError) -> onDone.run(),
-                (taskId, onUpdate, onDone, onError) -> onDone.run(),
-                gateway, mapper, json, Runnable::run);
+                (chatId, message, cancellation, onToken, onDone, onError) -> onDone.run(),
+                (taskId, cancellation, onUpdate, onDone, onError) -> onDone.run(),
+                gateway, stateStore, mapper, json, Runnable::run);
         return new A2aController(service, streamService, json);
     }
 

@@ -3,6 +3,7 @@ package com.lrj.platform.agent.async;
 import com.lrj.platform.security.TenantContext;
 import com.lrj.platform.observability.OutboundTraceForwarder;
 import com.lrj.platform.security.OutboundTenantForwarder;
+import com.lrj.platform.security.AsyncTaskWorkerTokenForwarder;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -51,13 +52,14 @@ public class AgentAsyncConfig {
     @ConditionalOnProperty(name = "app.agent.async.external.enabled", havingValue = "true")
     RestTemplate asyncTaskRestTemplate(RestTemplateBuilder builder,
                                        OutboundTenantForwarder tenantForwarder,
+                                       AsyncTaskWorkerTokenForwarder workerTokenForwarder,
                                        OutboundTraceForwarder traceForwarder,
                                        @Value("${app.agent.async.external.base-url:http://localhost:8086}") String baseUrl,
                                        @Value("${app.agent.http.connect-timeout:1s}") java.time.Duration connectTimeout,
                                        @Value("${app.agent.http.read-timeout:5s}") java.time.Duration readTimeout) {
         return builder
                 .rootUri(baseUrl)
-                .additionalInterceptors(tenantForwarder, traceForwarder)
+                .additionalInterceptors(workerTokenForwarder, tenantForwarder, traceForwarder)
                 .setConnectTimeout(connectTimeout)
                 .setReadTimeout(readTimeout)
                 .build();

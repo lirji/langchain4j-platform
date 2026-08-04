@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import javax.sql.DataSource;
 import java.util.HashMap;
@@ -43,9 +42,8 @@ class WorkflowTerminalOutboxAtomicityTest {
 
     @BeforeEach
     void setUp() {
-        DataSource ds = new DriverManagerDataSource(
-                "jdbc:h2:mem:atomicity-" + System.nanoTime() + ";MODE=MySQL;DB_CLOSE_DELAY=-1", "sa", "");
-        WorkflowTerminalEventOutbox outbox = new WorkflowTerminalEventOutbox(ds); // 建表（自动提交，独立于流程事务）
+        DataSource ds = WorkflowTestDatabase.migrated("atomicity-" + System.nanoTime());
+        WorkflowTerminalEventOutbox outbox = new WorkflowTerminalEventOutbox(ds);
         WorkflowProperties props = new WorkflowProperties();
         props.getTerminalNotification().setMode("kafka");
         WorkflowTerminalOutboxListener outboxListener = new WorkflowTerminalOutboxListener(outbox, props);
@@ -54,7 +52,7 @@ class WorkflowTerminalOutboxAtomicityTest {
         SpringProcessEngineConfiguration cfg = new SpringProcessEngineConfiguration();
         cfg.setDataSource(ds);
         cfg.setTransactionManager(new DataSourceTransactionManager(ds));
-        cfg.setDatabaseSchemaUpdate("true");
+        cfg.setDatabaseSchemaUpdate("false");
         // H2 用 MODE=MySQL（本仓 outbox 用 ON DUPLICATE KEY 等 MySQL 语法）；显式让 Flowable 也发 MySQL DDL，
         // 否则 Flowable 按检测到的 H2 发 IDENTITY 等 H2 DDL，被 MySQL 模式的 H2 拒绝。生产即 MySQL，故一致。
         cfg.setDatabaseType("mysql");

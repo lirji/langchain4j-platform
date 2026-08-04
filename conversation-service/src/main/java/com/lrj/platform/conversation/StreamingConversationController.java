@@ -3,6 +3,7 @@ package com.lrj.platform.conversation;
 import com.lrj.platform.conversation.grounding.GroundingChecker;
 import com.lrj.platform.conversation.grounding.GroundingResult;
 import com.lrj.platform.conversation.guardrail.ConversationGuardrail;
+import com.lrj.platform.conversation.guardrail.StreamingPiiRedactor;
 import com.lrj.platform.conversation.history.HistoryAwareQueryCompressor;
 import com.lrj.platform.conversation.prompt.ResolvedAssistantStyle;
 import com.lrj.platform.security.TenantContext;
@@ -17,6 +18,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * {@code POST /chat/stream}：token 级 SSE 流式对话（对齐单体 {@code ChatController#chatStream}）。
@@ -57,7 +59,7 @@ public class StreamingConversationController {
                                  @RequestBody Map<String, String> body) {
         TenantContext.Tenant tenant = TenantContext.current();
         String message = body.getOrDefault("message", "");
-        // 前置注入护栏：block 档命中即发一条 blocked 事件收尾，不进 LLM。（输出 PII 脱敏不挂流式：token 已逐个发出无法回收，对齐单体）
+        // 前置注入护栏：block 档命中即发一条 blocked 事件收尾，不进 LLM。
         ConversationGuardrail.InputDecision decision = guardrail.inspectInput(message);
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);
         if (decision.blocked()) {
@@ -81,42 +83,69 @@ public class StreamingConversationController {
         // 累积逐 token 答案，结束时对 RAG 来源做 grounding 校验；token 已逐个发出无法回收，
         // 故 warn 以追加式 grounding-warning 事件补发（对齐单体）。默认关时 grounded → 不发。
         StringBuilder answer = new StringBuilder();
-        TokenStream stream = streamingAssistant.chat(memoryKey, style.getLanguage(), style.getTone(),
-                style.getCitationPolicy(), style.getExtra(), effective, rag.context());
-        stream.onPartialResponse(token -> {
+        StreamingPiiRedactor pii = new StreamingPiiRedactor(guardrail);
+        StreamControl control = new StreamControl();
+        emitter.onCompletion(() -> control.clientClosed("completion"));
+        emitter.onTimeout(() -> {
+            control.clientClosed("timeout");
+            emitter.complete();
+        });
+        emitter.onError(ignored -> control.clientClosed("transport_error"));
+        try {
+            TokenStream stream = streamingAssistant.chat(memoryKey, style.getLanguage(), style.getTone(),
+                    style.getCitationPolicy(), style.getExtra(), effective, rag.context());
+            stream.onPartialResponse(token -> {
+                    if (control.closed()) {
+                        return;
+                    }
                     if (token != null) {
                         answer.append(token);
                     }
-                    safeSend(emitter, token);
+                    safeSend(emitter, pii.accept(token), control);
                 })
-                .onCompleteResponse(response -> completeWithGrounding(emitter, answer.toString(), rag))
-                .onError(error -> fail(emitter, error))
-                .start();
+                    .onCompleteResponse(response ->
+                            completeWithGrounding(emitter, answer.toString(), rag, pii, control))
+                    .onError(error -> fail(emitter, error, control))
+                    .start();
+        } catch (RuntimeException error) {
+            fail(emitter, error, control);
+        }
         return emitter;
     }
 
-    private void completeWithGrounding(SseEmitter emitter, String answer, RagPromptAugmenter.RagContext rag) {
-        GroundingResult grounded = groundingChecker.verify(answer, rag.hits());
-        if (!grounded.grounded()) {
-            try {
-                emitter.send(SseEmitter.event().name("grounding-warning")
-                        .data(String.join("；", grounded.warnings())));
-            } catch (IOException | IllegalStateException ignored) {
-                // 客户端可能已断开，忽略
-            }
+    private void completeWithGrounding(SseEmitter emitter, String answer,
+                                       RagPromptAugmenter.RagContext rag, StreamingPiiRedactor pii,
+                                       StreamControl control) {
+        if (control.closed()) {
+            return;
         }
-        complete(emitter);
+        try {
+            safeSend(emitter, pii.finish(), control);
+            GroundingResult grounded = groundingChecker.verify(answer, rag.hits());
+            if (!grounded.grounded()) {
+                emitter.send(SseEmitter.event().name("grounding-warning")
+                        .data(guardrail.redactOutput(String.join("；", grounded.warnings()))));
+            }
+            control.terminal();
+            complete(emitter);
+        } catch (IOException | IllegalStateException error) {
+            control.clientClosed("write_failed");
+            emitter.complete();
+        } catch (RuntimeException error) {
+            fail(emitter, error, control);
+        }
     }
 
-    private static void safeSend(SseEmitter emitter, String token) {
-        if (token == null || token.isEmpty()) {
+    private static void safeSend(SseEmitter emitter, String token, StreamControl control) {
+        if (control.closed() || token == null || token.isEmpty()) {
             return;
         }
         try {
             emitter.send(SseEmitter.event().data(token));
         } catch (IOException | IllegalStateException e) {
-            // 客户端已断开：终止流，避免继续向已关闭连接写。
-            emitter.completeWithError(e);
+            // TokenStream API 没有取消句柄；停止下游写并明确记录该不可取消边界。
+            control.clientClosed("write_failed");
+            emitter.complete();
         }
     }
 
@@ -129,13 +158,42 @@ public class StreamingConversationController {
         emitter.complete();
     }
 
-    private static void fail(SseEmitter emitter, Throwable error) {
-        log.warn("chat stream error: {}", error.toString());
+    static void fail(SseEmitter emitter, Throwable error) {
+        fail(emitter, error, new StreamControl());
+    }
+
+    private static void fail(SseEmitter emitter, Throwable error, StreamControl control) {
+        log.warn("chat stream failed errorType={}", error.getClass().getSimpleName());
+        if (control.closed()) {
+            return;
+        }
+        control.terminal();
         try {
-            emitter.send(SseEmitter.event().name("error").data(String.valueOf(error.getMessage())));
+            emitter.send(SseEmitter.event().name("error").data(Map.of(
+                    "error", "conversation stream failed",
+                    "code", "CONVERSATION_STREAM_FAILED")));
         } catch (IOException | IllegalStateException ignored) {
             // 已断开则直接以错误收尾
         }
-        emitter.completeWithError(error);
+        emitter.complete();
+    }
+
+    private static final class StreamControl {
+        private final AtomicBoolean closed = new AtomicBoolean(false);
+        private final AtomicBoolean terminal = new AtomicBoolean(false);
+
+        boolean closed() {
+            return closed.get();
+        }
+
+        void terminal() {
+            terminal.set(true);
+        }
+
+        void clientClosed(String reason) {
+            if (!terminal.get() && closed.compareAndSet(false, true)) {
+                log.info("chat stream downstream closed reason={} upstreamCancelSupported=false", reason);
+            }
+        }
     }
 }

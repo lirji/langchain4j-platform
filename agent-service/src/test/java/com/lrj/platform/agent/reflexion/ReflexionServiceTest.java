@@ -1,5 +1,6 @@
 package com.lrj.platform.agent.reflexion;
 
+import com.lrj.platform.agent.async.AgentTaskProgressSink;
 import com.lrj.platform.agent.dag.AgentDagCritic;
 import com.lrj.platform.protocol.agent.AgentDagCritique;
 import com.lrj.platform.protocol.agent.ReflexionReply;
@@ -10,9 +11,11 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * ReflexionServiceTest：验证 {@link ReflexionService} 反思式自改进的收敛逻辑——
@@ -97,6 +100,33 @@ class ReflexionServiceTest {
         assertThat(events).filteredOn("done"::equals).hasSize(1);
     }
 
+    @Test
+    void cancellationBeforeWorkDoesNotCallModelOrCritic() {
+        RecordingAnswerer answerer = new RecordingAnswerer("unused");
+        AtomicInteger criticCalls = new AtomicInteger();
+        AgentDagCritic critic = (q, a) -> {
+            criticCalls.incrementAndGet();
+            return new AgentDagCritique(1, 1, 1, "unused");
+        };
+        ReflexionService service = new ReflexionService(answerer, critic, props(0.75, 2));
+        AgentTaskProgressSink cancelled = new AgentTaskProgressSink() {
+            @Override
+            public void emit(String event, Object data) {
+                throw new AssertionError("cancelled work must not emit progress");
+            }
+
+            @Override
+            public boolean isCancelled() {
+                return true;
+            }
+        };
+
+        assertThatThrownBy(() -> service.reflect("问题", cancelled))
+                .isInstanceOf(CancellationException.class);
+        assertThat(answerer.answerCalls).isZero();
+        assertThat(criticCalls).hasValue(0);
+    }
+
     private static ReflexionProperties props(double threshold, int maxAttempts) {
         ReflexionProperties p = new ReflexionProperties();
         p.setThreshold(threshold);
@@ -108,6 +138,7 @@ class ReflexionServiceTest {
     private static final class RecordingAnswerer implements ReflexionAnswerer {
         private final String[] answers;
         private final AtomicInteger idx = new AtomicInteger();
+        int answerCalls;
         int improveCalls;
         String lastImproveHint;
         String lastImprovePrevious;
@@ -118,6 +149,7 @@ class ReflexionServiceTest {
 
         @Override
         public String answer(String question) {
+            answerCalls++;
             return answers[idx.getAndIncrement()];
         }
 

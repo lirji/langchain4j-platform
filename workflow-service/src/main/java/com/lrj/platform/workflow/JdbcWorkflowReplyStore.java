@@ -10,14 +10,14 @@ import javax.sql.DataSource;
 import java.util.List;
 
 /**
- * {@link WorkflowReplyStore} 的 JDBC 实现：建在 Flowable 自己的 {@code workflowDataSource} 上的
- * {@code WF_REPLY} 表（启动时自动 DDL，跟 Flowable 自动建 {@code ACT_*} 同思路）。
+ * {@link WorkflowReplyStore} 的 JDBC 实现：使用 Flowable 的 {@code workflowDataSource}
+ * 访问由独立 migration stage 预建的 {@code WF_REPLY} 表。
  *
  * <p><b>事务参与</b>：构造时拿的是 {@code workflowDataSource}，而 {@code save/delete} 用的
  * {@link JdbcTemplate} 在有活动事务时会经 {@code DataSourceUtils} 复用 Spring 绑定到该数据源的事务连接——
  * 因 Flowable 由 {@code workflowTransactionManager}（同一数据源的 {@code DataSourceTransactionManager}）
  * 驱动，ServiceTask 同步执行期间写 reply 即与流程推进同事务、原子提交（见接口 javadoc）。
- * DDL 在 {@link #init()} 走自动提交、与业务事务无关。
+ * 构造时只做 schema contract 校验，不执行 DDL。
  */
 @Component
 @ConditionalOnProperty(name = "app.workflow.enabled", havingValue = "true")
@@ -32,16 +32,10 @@ public class JdbcWorkflowReplyStore implements WorkflowReplyStore {
         init();
     }
 
-    /** 自动建表。MEDIUMTEXT 容纳长答复；INSTANCE_ID 主键 = upsert 幂等。 */
+    /** 校验独立 migration 已提供当前 schema contract。 */
     private void init() {
-        jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS WF_REPLY (
-                  INSTANCE_ID VARCHAR(64) NOT NULL PRIMARY KEY,
-                  REPLY MEDIUMTEXT,
-                  DEGRADED TINYINT(1) NOT NULL DEFAULT 0,
-                  UPDATED_AT BIGINT NOT NULL
-                )""");
-        log.info("WF_REPLY 表就绪（reply 出流程变量，#5）");
+        jdbc.queryForList("SELECT INSTANCE_ID, REPLY, DEGRADED, UPDATED_AT FROM WF_REPLY WHERE 1=0");
+        log.info("WF_REPLY schema verified");
     }
 
     @Override

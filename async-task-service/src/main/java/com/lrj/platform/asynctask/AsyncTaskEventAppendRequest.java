@@ -6,5 +6,14 @@ package com.lrj.platform.asynctask;
 public record AsyncTaskEventAppendRequest(String eventKey,
                                           String event,
                                           Object data,
-                                          String workerId) {
+                                          String workerId,
+                                          Long leaseEpoch) {
+
+    public AsyncTaskEventAppendRequest(
+            String eventKey,
+            String event,
+            Object data,
+            String workerId) {
+        this(eventKey, event, data, workerId, null);
+    }
 }

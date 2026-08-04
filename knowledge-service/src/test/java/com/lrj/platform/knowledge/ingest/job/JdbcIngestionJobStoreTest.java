@@ -1,6 +1,8 @@
 package com.lrj.platform.knowledge.ingest.job;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lrj.platform.migrations.SchemaMigrationRunner;
+import com.lrj.platform.migrations.SchemaName;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,6 +23,7 @@ class JdbcIngestionJobStoreTest {
         JdbcDataSource dataSource = new JdbcDataSource();
         dataSource.setURL("jdbc:h2:mem:ingest-" + System.nanoTime()
                 + ";MODE=MySQL;DB_CLOSE_DELAY=-1");
+        SchemaMigrationRunner.migrate(dataSource, SchemaName.KNOWLEDGE_INGESTION);
         store = new JdbcIngestionJobStore(dataSource, new ObjectMapper());
     }
 

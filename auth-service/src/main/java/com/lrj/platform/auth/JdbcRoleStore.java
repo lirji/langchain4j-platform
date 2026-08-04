@@ -17,8 +17,8 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * JDBC 角色存储（{@code AUTH_STORE=jdbc}）。表结构演进沿用项目约定：{@code CREATE TABLE IF NOT EXISTS}
- * 字面量写在类里，无 Flyway。
+ * JDBC 角色存储（{@code AUTH_STORE=jdbc}）。schema 由独立版本化 migration 管理；
+ * 业务进程启动时只校验当前 contract。
  *
  * <p>RBAC 关系化：角色→scope 的权威数据在关系表 {@code ROLE_SCOPE}（精确成员，供正确的成员判定）；
  * 旧 {@code ROLES.SCOPES} CSV 列保留一个版本作<b>影子双写</b>，便于回滚与兼容读。首次启动把 CSV 幂等
@@ -38,22 +38,8 @@ public class JdbcRoleStore implements RoleStore {
     }
 
     private void init(AuthProperties props) {
-        jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS ROLES (
-                  NAME VARCHAR(128) NOT NULL PRIMARY KEY,
-                  SCOPES VARCHAR(1024),
-                  DESCRIPTION VARCHAR(256),
-                  CREATED_AT BIGINT NOT NULL
-                )""");
-        jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS ROLE_SCOPE (
-                  ROLE_NAME VARCHAR(128) NOT NULL,
-                  SCOPE VARCHAR(128) NOT NULL,
-                  CREATED_AT BIGINT NOT NULL,
-                  PRIMARY KEY (ROLE_NAME, SCOPE)
-                )""");
-        // 乐观锁版本列（加法迁移，幂等）。旧行 DEFAULT 0；旧代码不引用可忽略，回滚安全。
-        addColumnIfMissing("VERSION", "BIGINT NOT NULL DEFAULT 0");
+        jdbc.queryForList("SELECT NAME, SCOPES, DESCRIPTION, VERSION, CREATED_AT FROM ROLES WHERE 1=0");
+        jdbc.queryForList("SELECT ROLE_NAME, SCOPE, CREATED_AT FROM ROLE_SCOPE WHERE 1=0");
         Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM ROLES", Integer.class);
         if ((count == null || count == 0) && props.getSeed().isEnabled()) {
             long now = System.currentTimeMillis();
@@ -62,27 +48,7 @@ public class JdbcRoleStore implements RoleStore {
             }
             log.info("ROLES/ROLE_SCOPE seeded with {} default roles (jdbc)", SeedRoles.defaults().size());
         }
-        backfillRoleScopeFromCsv();
-        log.info("ROLES/ROLE_SCOPE tables ready");
-    }
-
-    /** 幂等回填：把 ROLES.SCOPES CSV 拆进 ROLE_SCOPE（仅补缺失行），支持早期 CSV 库无损升级。 */
-    private void backfillRoleScopeFromCsv() {
-        List<Object[]> rows = jdbc.query("SELECT NAME, SCOPES FROM ROLES", (rs, i) ->
-                new Object[]{rs.getString("NAME"), rs.getString("SCOPES")});
-        long now = System.currentTimeMillis();
-        int migrated = 0;
-        for (Object[] row : rows) {
-            String name = (String) row[0];
-            for (String scope : parseCsv((String) row[1])) {
-                if (insertRoleScopeIfAbsent(name, scope, now)) {
-                    migrated++;
-                }
-            }
-        }
-        if (migrated > 0) {
-            log.info("backfilled {} ROLE_SCOPE rows from legacy ROLES.SCOPES CSV", migrated);
-        }
+        log.info("ROLES/ROLE_SCOPE schema verified");
     }
 
     @Override
@@ -173,26 +139,6 @@ public class JdbcRoleStore implements RoleStore {
         return true;
     }
 
-    /** 幂等加列：只吞"列已存在"，其余照抛（不掩盖真实 DDL 故障）。与 JdbcUserAccountStore 同策略。 */
-    private void addColumnIfMissing(String column, String type) {
-        try {
-            jdbc.execute("ALTER TABLE ROLES ADD COLUMN " + column + " " + type);
-            log.info("ROLES table: added column {}", column);
-        } catch (org.springframework.dao.DataAccessException e) {
-            for (Throwable t = e; t != null; t = t.getCause()) {
-                String msg = t.getMessage();
-                if (msg != null) {
-                    String m = msg.toLowerCase(Locale.ROOT);
-                    if (m.contains("duplicate column") || m.contains("already exists")
-                            || (m.contains("duplicate") && m.contains("column"))) {
-                        return;
-                    }
-                }
-            }
-            throw e;
-        }
-    }
-
     @Override
     public void delete(String name) {
         if (name != null && !name.isBlank()) {
@@ -226,17 +172,4 @@ public class JdbcRoleStore implements RoleStore {
         return new LinkedHashSet<>(scopes);
     }
 
-    private static Set<String> parseCsv(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return Set.of();
-        }
-        Set<String> out = new LinkedHashSet<>();
-        for (String s : raw.split(",")) {
-            String t = s.trim();
-            if (!t.isEmpty()) {
-                out.add(t);
-            }
-        }
-        return out;
-    }
 }

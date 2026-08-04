@@ -13,8 +13,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * JDBC 租户基础角色存储（{@code AUTH_STORE=jdbc}）。表结构演进沿用项目约定：{@code CREATE TABLE IF NOT EXISTS}
- * 字面量写在类里，无 Flyway。
+ * JDBC 租户基础角色存储（{@code AUTH_STORE=jdbc}）。schema 由独立 migration 管理。
  *
  * <p>租户不是一等实体，故只建两张轻量表：{@code TENANT_POLICY} 承载"租户 → 乐观锁版本"（因租户无实体行，
  * 版本无处可挂，需此惰性行）；{@code TENANT_ROLE} 是"租户 → 基础角色名"的权威绑定。不建外键（方言/顺序），
@@ -34,25 +33,9 @@ public class JdbcTenantPolicyStore implements TenantPolicyStore {
     }
 
     private void init() {
-        jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS TENANT_POLICY (
-                  TENANT VARCHAR(128) NOT NULL PRIMARY KEY,
-                  VERSION BIGINT NOT NULL DEFAULT 0,
-                  UPDATED_AT BIGINT NOT NULL
-                )""");
-        jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS TENANT_ROLE (
-                  TENANT VARCHAR(128) NOT NULL,
-                  ROLE_NAME VARCHAR(128) NOT NULL,
-                  CREATED_AT BIGINT NOT NULL,
-                  PRIMARY KEY (TENANT, ROLE_NAME)
-                )""");
-        try {
-            jdbc.execute("CREATE INDEX IF NOT EXISTS IDX_TENANT_ROLE_ROLE ON TENANT_ROLE (ROLE_NAME)");
-        } catch (org.springframework.dao.DataAccessException e) {
-            log.debug("TENANT_ROLE role index not created (non-fatal): {}", e.getMessage());
-        }
-        log.info("TENANT_POLICY/TENANT_ROLE tables ready");
+        jdbc.queryForList("SELECT TENANT, VERSION, UPDATED_AT FROM TENANT_POLICY WHERE 1=0");
+        jdbc.queryForList("SELECT TENANT, ROLE_NAME, CREATED_AT FROM TENANT_ROLE WHERE 1=0");
+        log.info("TENANT_POLICY/TENANT_ROLE schema verified");
     }
 
     @Override

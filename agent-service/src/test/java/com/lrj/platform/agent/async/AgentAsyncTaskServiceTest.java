@@ -133,6 +133,24 @@ class AgentAsyncTaskServiceTest {
         assertThat(workCalled).isFalse();
     }
 
+    @Test
+    void executionFailureStoresOnlyStablePublicCode() {
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("agent")));
+        AgentAsyncTaskService service = service(new ArrayList<>());
+
+        AgentAsyncTask submitted = service.submitWithProgress(
+                "TEST",
+                Map.of("goal", "goal"),
+                progress -> {
+                    throw new IllegalStateException("provider-key=must-not-leak");
+                });
+
+        AgentAsyncTask task = service.get(submitted.taskId()).orElseThrow();
+        assertThat(task.status()).isEqualTo(AgentTaskStatus.FAILED);
+        assertThat(task.error()).isEqualTo("AGENT_TASK_EXECUTION_FAILED");
+        assertThat(task.toString()).doesNotContain("provider-key");
+    }
+
     private static AgentAsyncTaskService service(List<AgentTaskEvent> events) {
         return service(events, null);
     }

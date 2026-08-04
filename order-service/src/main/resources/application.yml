@@ -7,11 +7,11 @@ spring:
   # 集中配置（可选）：Config Server 不可达时不阻断启动，各 ${ENV:default} 兜底继续生效。
   config:
     import: "optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}"
-  # 持久化 MySQL（单库，Boot 自动装配 JdbcTemplate）。createDatabaseIfNotExist=true：库不存在自动建。
+  # 持久化 MySQL（单库，Boot 自动装配 JdbcTemplate）；schema 由独立 migration stage 管理。
   datasource:
-    url: ${ORDER_DB_URL:jdbc:mysql://localhost:3306/order_service?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}
-    username: ${ORDER_DB_USER:root}
-    password: ${ORDER_DB_PASSWORD:root}
+    url: ${ORDER_DB_URL:jdbc:mysql://localhost:3306/order_service?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}
+    username: ${ORDER_DB_USER:order_app}
+    password: ${ORDER_DB_PASSWORD:order-app-dev}
 
 platform:
   # 入站内部 JWT 校验 + TenantContext 还原（jwt-secret 必须与 edge 一致）。

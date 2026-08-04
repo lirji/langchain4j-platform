@@ -1,7 +1,9 @@
 package com.lrj.platform.agent.async;
 
+import com.lrj.platform.security.PublicPayloadRedactor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -18,7 +20,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * Agent 异步任务的服务端推送（SSE）中心。按 {@code taskId} 维护 {@link SseEmitter} 订阅表，
  * {@link #subscribe(String)} 订阅时先补发当前任务快照、任务已终态则立即关闭连接；同时监听
  * {@link AgentTaskEvent}（状态变更）与 {@link AgentTaskProgressEvent}（中间进度）并转发给对应订阅方。
- * 默认随 {@code app.agent.enabled} 装配。
+ * 公开负载在序列化前递归脱敏。订阅者断开只移除观察连接，不会取消持久任务；任务取消必须走
+ * {@code DELETE /agent/tasks/{taskId}}。默认随 {@code app.agent.enabled} 装配。
  */
 @Service
 @ConditionalOnProperty(name = "app.agent.enabled", havingValue = "true", matchIfMissing = true)
@@ -28,10 +31,17 @@ public class AgentTaskSseService {
     private static final long SSE_TIMEOUT_MS = 30 * 60 * 1000L;
 
     private final AgentAsyncTaskService taskService;
+    private final PublicPayloadRedactor redactor;
     private final ConcurrentMap<String, List<SseEmitter>> emitters = new ConcurrentHashMap<>();
 
     public AgentTaskSseService(AgentAsyncTaskService taskService) {
+        this(taskService, PublicPayloadRedactor.standalone());
+    }
+
+    @Autowired
+    public AgentTaskSseService(AgentAsyncTaskService taskService, PublicPayloadRedactor redactor) {
         this.taskService = taskService;
+        this.redactor = redactor;
     }
 
     public Optional<SseEmitter> subscribe(String taskId) {
@@ -88,9 +98,11 @@ public class AgentTaskSseService {
         try {
             emitter.send(SseEmitter.event()
                     .name(task.status().name())
-                    .data(task));
-        } catch (IOException ex) {
-            log.debug("agent task sse send failed task={}: {}", task.taskId(), ex.toString());
+                    .data(redactor.redact(task)));
+        } catch (IOException | IllegalStateException ex) {
+            log.debug("agent task sse subscriber closed task={} errorType={}",
+                    task.taskId(), ex.getClass().getSimpleName());
+            emitter.complete();
         }
     }
 
@@ -98,10 +110,11 @@ public class AgentTaskSseService {
         try {
             emitter.send(SseEmitter.event()
                     .name(progress.event())
-                    .data(progress));
-        } catch (IOException ex) {
-            log.debug("agent task progress sse send failed task={} event={}: {}",
-                    progress.taskId(), progress.event(), ex.toString());
+                    .data(redactor.redact(progress)));
+        } catch (IOException | IllegalStateException ex) {
+            log.debug("agent task progress sse subscriber closed task={} event={} errorType={}",
+                    progress.taskId(), progress.event(), ex.getClass().getSimpleName());
+            emitter.complete();
         }
     }
 

@@ -6,9 +6,9 @@ package com.lrj.platform.knowledge.graph;
  */
 public class GraphDatasourceProperties {
 
-    private String url = "jdbc:mysql://localhost:3306/knowledge_graph?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true";
-    private String username = "root";
-    private String password = "";
+    private String url = "jdbc:mysql://localhost:3306/knowledge_graph?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true";
+    private String username = "knowledge_graph_app";
+    private String password = "knowledge-graph-app-dev";
     private String driverClassName = "com.mysql.cj.jdbc.Driver";
     private int maximumPoolSize = 8;
 

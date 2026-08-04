@@ -1,10 +1,13 @@
 package com.lrj.platform.workflow;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -37,6 +40,26 @@ class WorkflowServiceTest {
             assertFalse(k1.isBlank(), "key 不能为空");
             assertNotEquals(k1, k2, "无 dedupeId 时每次都应是不同的随机 key（不去重），输入=[" + blank + "]");
         }
+    }
+
+    @Test
+    void normalizeDedupeId_matchesTrustedAgentBoundary() {
+        assertEquals("refund-order_101:v1", WorkflowService.normalizeDedupeId("  refund-order_101:v1  "));
+        assertEquals(null, WorkflowService.normalizeDedupeId("   "));
+
+        for (String invalid : new String[]{"contains whitespace", "contains/slash", "x".repeat(129)}) {
+            ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                    () -> WorkflowService.normalizeDedupeId(invalid));
+            assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
+        }
+    }
+
+    @Test
+    void sha256_isStableAndLengthDelimited() {
+        String first = WorkflowService.sha256("ab", "c");
+        assertEquals(64, first.length());
+        assertEquals(first, WorkflowService.sha256("ab", "c"));
+        assertNotEquals(first, WorkflowService.sha256("a", "bc"));
     }
 
     @Test

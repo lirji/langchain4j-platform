@@ -1,6 +1,7 @@
 package com.lrj.platform.interop;
 
 import com.lrj.platform.protocol.interop.McpToolDescriptor;
+import com.lrj.platform.protocol.interop.AgentCapabilityRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -20,6 +21,15 @@ class InteropToolRegistryDiscoveryTest {
         return new McpToolDescriptor(name, name, Map.of("type", "object"));
     }
 
+    private static AgentCapabilityRegistry registry(String revision, McpToolDescriptor... tools) {
+        return new AgentCapabilityRegistry(
+                "agent-capability-registry.v1", revision, List.of(tools));
+    }
+
+    private static String revision(char value) {
+        return String.valueOf(value).repeat(64);
+    }
+
     @Test
     void exposesOnlyLocalToolsWhenNoClient() {
         InteropToolRegistry registry = new InteropToolRegistry();
@@ -31,7 +41,7 @@ class InteropToolRegistryDiscoveryTest {
     @Test
     void usesLiveToolsWhenDiscoverySucceeds() {
         InteropToolRegistry registry = new InteropToolRegistry(
-                () -> List.of(tool("platform.agent.run"), tool("platform.agent.brand_new")),
+                () -> registry(revision('a'), tool("platform.agent.run"), tool("platform.agent.brand_new")),
                 Duration.ofSeconds(60));
 
         assertThat(registry.capabilityNames())
@@ -50,7 +60,8 @@ class InteropToolRegistryDiscoveryTest {
 
     @Test
     void doesNotAdvertiseAgentToolsWhenColdStartDiscoveryReturnsEmpty() {
-        InteropToolRegistry registry = new InteropToolRegistry(List::of, Duration.ofSeconds(60));
+        InteropToolRegistry registry = new InteropToolRegistry(
+                () -> registry(revision('a')), Duration.ofSeconds(60));
 
         assertThat(registry.capabilityNames()).containsExactly(InteropToolRegistry.PING_TOOL);
     }
@@ -60,7 +71,7 @@ class InteropToolRegistryDiscoveryTest {
         AtomicInteger calls = new AtomicInteger();
         InteropToolRegistry registry = new InteropToolRegistry(() -> {
             calls.incrementAndGet();
-            return List.of(tool("platform.agent.run"));
+            return registry(revision('a'), tool("platform.agent.run"));
         }, Duration.ofMinutes(10));
 
         registry.tools();
@@ -75,7 +86,7 @@ class InteropToolRegistryDiscoveryTest {
         AtomicInteger calls = new AtomicInteger();
         InteropToolRegistry registry = new InteropToolRegistry(() -> {
             calls.incrementAndGet();
-            return List.of(tool("platform.agent.run"));
+            return registry(revision((char) ('a' + calls.get() - 1)), tool("platform.agent.run"));
         }, Duration.ofMillis(1));
 
         registry.tools();
@@ -90,7 +101,7 @@ class InteropToolRegistryDiscoveryTest {
         AtomicInteger calls = new AtomicInteger();
         InteropToolRegistry registry = new InteropToolRegistry(() -> {
             if (calls.incrementAndGet() == 1) {
-                return List.of(tool("platform.agent.run"));
+                return registry(revision('a'), tool("platform.agent.run"));
             }
             throw new RuntimeException("agent unreachable");
         }, Duration.ofMillis(1));
@@ -100,5 +111,20 @@ class InteropToolRegistryDiscoveryTest {
 
         assertThat(registry.capabilityNames()).contains("platform.agent.run");
         assertThat(calls.get()).isEqualTo(2);
+    }
+
+    @Test
+    void restoresPersistedLastKnownGoodAfterProcessRestart() {
+        InMemoryCapabilityRegistryStore store = new InMemoryCapabilityRegistryStore();
+        InteropToolRegistry first = new InteropToolRegistry(
+                () -> registry(revision('a'), tool("platform.agent.run")),
+                Duration.ofSeconds(60), store);
+        assertThat(first.capabilityNames()).contains("platform.agent.run");
+
+        InteropToolRegistry restarted = new InteropToolRegistry(() -> {
+            throw new RuntimeException("agent unavailable after restart");
+        }, Duration.ofSeconds(60), store);
+
+        assertThat(restarted.capabilityNames()).contains("platform.agent.run");
     }
 }

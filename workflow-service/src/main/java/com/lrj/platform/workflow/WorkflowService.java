@@ -3,6 +3,7 @@ package com.lrj.platform.workflow;
 import com.lrj.platform.audit.AuditEventType;
 import com.lrj.platform.audit.AuditLogger;
 import com.lrj.platform.security.InternalTokenAuthFilter;
+import com.lrj.platform.security.OutboundCallbackPolicy;
 import com.lrj.platform.security.TenantContext;
 import com.lrj.platform.observability.TraceIdFilter;
 import org.flowable.common.engine.api.FlowableObjectNotFoundException;
@@ -16,17 +17,27 @@ import org.flowable.variable.api.history.HistoricVariableInstance;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * 退款审批工作流的业务封装：启流程 / 查待办 / 完成审批 / 查实例，挡在 Flowable
@@ -48,6 +59,8 @@ public class WorkflowService {
 
     /** 对应 refund-approval.bpmn20.xml 里 process 的 id。 */
     private static final String PROCESS_KEY = "refundApproval";
+    private static final String REFUND_START_OPERATION = "refund_start";
+    private static final Pattern IDEMPOTENCY_KEY = Pattern.compile("[A-Za-z0-9._:-]{1,128}");
 
     public static final String STATUS_COMPLETED = "COMPLETED";
     public static final String STATUS_WAITING = "WAITING_APPROVAL";
@@ -63,6 +76,9 @@ public class WorkflowService {
     private final WorkflowAsyncTaskNotifier asyncTaskNotifier;
     private final WorkflowTerminalEventOutbox terminalEventOutbox;
     private final org.springframework.context.ApplicationEventPublisher events;
+    private final OutboundCallbackPolicy callbackPolicy;
+    private final WorkflowIdempotencyStore idempotencyStore;
+    private final TransactionTemplate transaction;
 
     public WorkflowService(RuntimeService workflowRuntimeService,
                            TaskService workflowTaskService,
@@ -74,7 +90,10 @@ public class WorkflowService {
                            WorkflowOutbox outbox,
                            WorkflowAsyncTaskNotifier asyncTaskNotifier,
                            WorkflowTerminalEventOutbox terminalEventOutbox,
-                           org.springframework.context.ApplicationEventPublisher events) {
+                           org.springframework.context.ApplicationEventPublisher events,
+                           OutboundCallbackPolicy callbackPolicy,
+                           WorkflowIdempotencyStore idempotencyStore,
+                           @Qualifier("workflowTransactionManager") PlatformTransactionManager transactionManager) {
         this.runtimeService = workflowRuntimeService;
         this.taskService = workflowTaskService;
         this.historyService = workflowHistoryService;
@@ -86,6 +105,10 @@ public class WorkflowService {
         this.asyncTaskNotifier = asyncTaskNotifier;
         this.terminalEventOutbox = terminalEventOutbox;
         this.events = events;
+        this.callbackPolicy = callbackPolicy;
+        this.idempotencyStore = idempotencyStore;
+        this.transaction = new TransactionTemplate(transactionManager);
+        this.transaction.setName("workflow-refund-start");
     }
 
     /**
@@ -107,29 +130,69 @@ public class WorkflowService {
     /**
      * 发起退款流程。低风险自动受理（直接 COMPLETED），高风险挂起等审批（WAITING_APPROVAL）。
      *
-     * <p><b>幂等（#2）</b>：传了 {@code dedupeId}（渠道消息 id）就用稳定 businessKey
-     * {@code tenant:chatId:dedupeId} 去重——重复 start 同一诉求只起一个流程（防飞书 ~5s ack 超时重推
-     * 起 N 个流程 + N 个审批任务）。不传 dedupeId 则用随机 UUID businessKey（仅追溯、不去重，
-     * 避免按 message 文本误并两次合法的相同提问；渠道接入后再传真 id）。
-     *
-     * <p><b>残留竞态</b>：查-建非原子，两个并发同 dedupeId 仍可能都漏检→都建。v1 接受（渠道重推秒级近似串行，
-     * query 预检挡住绝大多数）。强幂等升级点：Redis {@code SETNX}（项目已用 {@code RedisChatMemoryStore}）
-     * 或 dedup 表唯一索引。
+     * <p><b>强幂等</b>：传了 {@code dedupeId}（渠道消息 id）时，先在 {@code WF_IDEMPOTENCY} 以数据库
+     * 复合主键竞争 claim；claim、Flowable 创建和 instance 绑定由同一个事务提交。相同键与相同请求返回
+     * 原实例（{@code deduplicated=true}），相同键配不同用户/参数返回 409，创建失败则 claim 一起回滚。
+     * 不传 dedupeId 时仍用随机 businessKey，仅用于追溯，不会误合并两次合法的相同请求。
      */
     public StartResult start(String chatId, String message, String dedupeId, String webhookUrl) {
         TenantContext.Tenant t = TenantContext.current();
+        String safeWebhookUrl = null;
+        if (webhookUrl != null && !webhookUrl.isBlank()) {
+            try {
+                safeWebhookUrl = callbackPolicy.requireAllowed(webhookUrl).toString();
+            } catch (OutboundCallbackPolicy.UnsafeCallbackException exception) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "webhookUrl is not allowed");
+            }
+        }
         String cid = chatId == null ? "default" : chatId;
-        String businessKey = buildBusinessKey(t.tenantId(), cid, dedupeId);
+        String normalizedDedupeId = normalizeDedupeId(dedupeId);
+        String normalizedMessage = message == null ? "" : message;
+        String validatedWebhookUrl = safeWebhookUrl;
+        try {
+            return Objects.requireNonNull(transaction.execute(status -> startAtomically(
+                    t, cid, normalizedMessage, normalizedDedupeId, validatedWebhookUrl)));
+        } catch (WorkflowIdempotencyStore.IdempotencyConflictException conflict) {
+            log.info("workflow start idempotency conflict: tenantId={} operation={} reason={}",
+                    t.tenantId(), REFUND_START_OPERATION, conflict.getClass().getSimpleName());
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "idempotency key conflicts with another refund request");
+        }
+    }
 
-        // 仅当传了 dedupeId 才查重（无 dedupeId 时 businessKey 是随机 UUID，永远不命中）
-        if (dedupeId != null && !dedupeId.isBlank()) {
-            ProcessInstance existing = runtimeService.createProcessInstanceQuery()
-                    .processInstanceBusinessKey(businessKey)
-                    .variableValueEquals("tenantId", t.tenantId())  // 租户内去重，跨租户互不影响
-                    .singleResult();
-            if (existing != null) {
-                log.info("workflow start deduplicated: businessKey={} instanceId={}", businessKey, existing.getId());
-                return describeExisting(existing.getId(), true);
+    private StartResult startAtomically(TenantContext.Tenant t,
+                                        String cid,
+                                        String message,
+                                        String dedupeId,
+                                        String safeWebhookUrl) {
+        String businessKey = buildBusinessKey(t.tenantId(), cid, dedupeId);
+        String keyHash = null;
+        String requestHash = null;
+
+        if (dedupeId != null) {
+            keyHash = sha256(cid, dedupeId);
+            requestHash = sha256(REFUND_START_OPERATION, t.tenantId(), t.userId(), cid, message,
+                    safeWebhookUrl == null ? "" : safeWebhookUrl);
+            WorkflowIdempotencyStore.Claim claim = idempotencyStore.claim(
+                    t.tenantId(), REFUND_START_OPERATION, keyHash, requestHash, businessKey);
+            if (!claim.acquired()) {
+                log.info("workflow start deduplicated: businessKey={} instanceId={}",
+                        businessKey, claim.instanceId());
+                return describeExisting(claim.instanceId(), true);
+            }
+
+            // Expand 上线兼容：升级前已经由旧版 businessKey 创建的实例先收编到账本，避免发布瞬间重放。
+            String legacyInstanceId = findExistingInstanceId(t.tenantId(), businessKey);
+            if (legacyInstanceId != null) {
+                if (!legacyRequestMatches(legacyInstanceId, t.userId(), cid, message, safeWebhookUrl)) {
+                    throw new WorkflowIdempotencyStore.IdempotencyConflictException(
+                            "legacy workflow business key is bound to another request");
+                }
+                idempotencyStore.attachInstance(t.tenantId(), REFUND_START_OPERATION, keyHash, requestHash,
+                        legacyInstanceId);
+                log.info("workflow legacy instance adopted by idempotency ledger: businessKey={} instanceId={}",
+                        businessKey, legacyInstanceId);
+                return describeExisting(legacyInstanceId, true);
             }
         }
 
@@ -137,13 +200,13 @@ public class WorkflowService {
         vars.put("tenantId", t.tenantId());
         vars.put("userId", t.userId());
         vars.put("chatId", cid);
-        vars.put("message", message == null ? "" : message);
+        vars.put("message", message);
         // 终态结果默认 auto（自动受理时的取值）；人工 complete / 超时驳回会在 complete 时覆盖。
         // 供 WorkflowTerminalOutboxListener 在 end 事件读取，写进终态事件 outbox（kafka 档）。
         vars.put("terminalOutcome", "auto");
         // #8：发起方传了回推地址就存成流程变量，终态时入 outbox 可靠投递
-        if (webhookUrl != null && !webhookUrl.isBlank()) {
-            vars.put("webhookUrl", webhookUrl.trim());
+        if (safeWebhookUrl != null) {
+            vars.put("webhookUrl", safeWebhookUrl);
         }
         // 把当前请求的 traceId 存成流程变量，超时 sweep 时取回放进 MDC → 日志跨事件串联（计划 2.5）
         String traceId = MDC.get(TraceIdFilter.MDC_KEY);
@@ -153,6 +216,9 @@ public class WorkflowService {
 
         ProcessInstance pi = runtimeService.startProcessInstanceByKey(PROCESS_KEY, businessKey, vars);
         String instanceId = pi.getId();
+        if (dedupeId != null) {
+            idempotencyStore.attachInstance(t.tenantId(), REFUND_START_OPERATION, keyHash, requestHash, instanceId);
+        }
         String priority = str(readVariable(instanceId, "priority"));
         audit.record(AuditEventType.WORKFLOW_STARTED, Map.of(
                 "instanceId", instanceId, "chatId", cid, "priority", nz(priority)));
@@ -170,6 +236,26 @@ public class WorkflowService {
         audit.record(AuditEventType.APPROVAL_REQUESTED, Map.of(
                 "instanceId", instanceId, "taskId", nz(taskId), "priority", nz(priority)));
         return new StartResult(instanceId, STATUS_WAITING, null, taskId, priority, false);
+    }
+
+    private String findExistingInstanceId(String tenantId, String businessKey) {
+        List<HistoricProcessInstance> existing = historyService.createHistoricProcessInstanceQuery()
+                .processInstanceBusinessKey(businessKey)
+                .variableValueEquals("tenantId", tenantId)
+                .orderByProcessInstanceStartTime().asc()
+                .listPage(0, 1);
+        return existing.isEmpty() ? null : existing.get(0).getId();
+    }
+
+    private boolean legacyRequestMatches(String instanceId,
+                                         String userId,
+                                         String chatId,
+                                         String message,
+                                         String webhookUrl) {
+        return Objects.equals(nz(str(readVariable(instanceId, "userId"))), nz(userId))
+                && Objects.equals(nz(str(readVariable(instanceId, "chatId"))), nz(chatId))
+                && Objects.equals(nz(str(readVariable(instanceId, "message"))), nz(message))
+                && Objects.equals(nz(str(readVariable(instanceId, "webhookUrl"))), nz(webhookUrl));
     }
 
     /**
@@ -225,6 +311,33 @@ public class WorkflowService {
             return tenantId + ":" + chatId + ":" + dedupeId.trim();
         }
         return tenantId + ":" + chatId + ":" + UUID.randomUUID();
+    }
+
+    /** 与 AgentScope 入口相同的有限 opaque key 语法；Java 直调也不能绕过。 */
+    static String normalizeDedupeId(String dedupeId) {
+        if (dedupeId == null || dedupeId.isBlank()) {
+            return null;
+        }
+        String normalized = dedupeId.trim();
+        if (!IDEMPOTENCY_KEY.matcher(normalized).matches()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid dedupeId");
+        }
+        return normalized;
+    }
+
+    /** 长度前缀编码后做 SHA-256，避免拼接分隔符歧义；只持久化摘要，不把用户正文写入幂等表。 */
+    static String sha256(String... parts) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            for (String part : parts) {
+                byte[] bytes = (part == null ? "" : part).getBytes(StandardCharsets.UTF_8);
+                digest.update(ByteBuffer.allocate(Integer.BYTES).putInt(bytes.length).array());
+                digest.update(bytes);
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is unavailable", impossible);
+        }
     }
 
     /** 把一个既有实例（去重命中时）描述成 StartResult：已结束回 COMPLETED+reply，在跑回 WAITING+taskId。 */
@@ -429,7 +542,8 @@ public class WorkflowService {
 
     /**
      * PII 合规删除（#10）：清除本租户某 {@code chatId} 下的所有工作流持久化数据——运行中实例（强制删）、
-     * 历史实例（{@code ACT_HI_*}）、{@code WF_REPLY}、{@code WF_OUTBOX}。覆盖个保法"删除我的数据"诉求；
+     * 历史实例（{@code ACT_HI_*}）、{@code WF_REPLY}、{@code WF_OUTBOX}、{@code WF_IDEMPOTENCY}。
+     * 覆盖个保法"删除我的数据"诉求；
      * {@code message}/{@code summary}/{@code reply} 这些可能含 PII 的字段一并清掉。
      *
      * <p>按流程变量 {@code tenantId}+{@code chatId} 定位，跨租户删不到（租户隔离同 {@link #listTasks}）。
@@ -437,37 +551,39 @@ public class WorkflowService {
      */
     public int purge(String chatId) {
         String tenant = TenantContext.current().tenantId();
+        return Objects.requireNonNull(transaction.execute(status -> purgeAtomically(tenant, chatId)));
+    }
+
+    private int purgeAtomically(String tenant, String chatId) {
         java.util.LinkedHashSet<String> ids = new java.util.LinkedHashSet<>();
 
-        // 运行中实例：先强制删（带走 ACT_RU_*）
-        for (ProcessInstance pi : runtimeService.createProcessInstanceQuery()
+        List<ProcessInstance> running = runtimeService.createProcessInstanceQuery()
                 .variableValueEquals("tenantId", tenant)
                 .variableValueEquals("chatId", chatId)
-                .list()) {
+                .list();
+        List<HistoricProcessInstance> historic = historyService.createHistoricProcessInstanceQuery()
+                .variableValueEquals("tenantId", tenant)
+                .variableValueEquals("chatId", chatId)
+                .list();
+        for (ProcessInstance pi : running) {
             ids.add(pi.getId());
-            try {
-                runtimeService.deleteProcessInstance(pi.getId(), "PII purge");
-            } catch (Exception e) {
-                log.warn("purge: 删运行中实例 {} 失败：{}", pi.getId(), e.toString());
-            }
         }
-        // 历史实例：含已结束的，删 ACT_HI_*
-        for (HistoricProcessInstance hi : historyService.createHistoricProcessInstanceQuery()
-                .variableValueEquals("tenantId", tenant)
-                .variableValueEquals("chatId", chatId)
-                .list()) {
+        for (HistoricProcessInstance hi : historic) {
             ids.add(hi.getId());
-            try {
-                historyService.deleteHistoricProcessInstance(hi.getId());
-            } catch (Exception e) {
-                log.warn("purge: 删历史实例 {} 失败：{}", hi.getId(), e.toString());
-            }
         }
-        // 业务表：reply + outbox
+
+        // Flowable 与业务表共用 workflowTransactionManager：任一删除失败都会整体回滚，避免账本悬挂。
+        for (ProcessInstance pi : running) {
+            runtimeService.deleteProcessInstance(pi.getId(), "PII purge");
+        }
+        for (HistoricProcessInstance hi : historic) {
+            historyService.deleteHistoricProcessInstance(hi.getId());
+        }
         for (String id : ids) {
             replyStore.delete(id);
             outbox.delete(id);
             terminalEventOutbox.delete(id);
+            idempotencyStore.deleteByInstance(id);
         }
         audit.record(AuditEventType.WORKFLOW_DATA_PURGED, Map.of(
                 "chatId", nz(chatId), "instances", ids.size()));

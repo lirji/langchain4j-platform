@@ -5,7 +5,6 @@ import com.lrj.platform.protocol.asynctask.AsyncTask;
 import com.lrj.platform.protocol.asynctask.AsyncTaskStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import javax.sql.DataSource;
 import java.time.Duration;
@@ -37,8 +36,7 @@ class AsyncTaskEventJournalTest {
 
     @Test
     void jdbcJournalPersistsReplayAcrossInstances() {
-        DataSource dataSource = new DriverManagerDataSource(
-                "jdbc:h2:mem:async_task_events;MODE=MySQL;DB_CLOSE_DELAY=-1", "sa", "");
+        DataSource dataSource = AsyncTaskTestDatabase.migrated("async_task_events");
         ObjectMapper mapper = new ObjectMapper();
         JdbcAsyncTaskStore store = new JdbcAsyncTaskStore(
                 dataSource,

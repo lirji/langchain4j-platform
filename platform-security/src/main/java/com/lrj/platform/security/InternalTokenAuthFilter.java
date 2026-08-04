@@ -22,6 +22,9 @@ public class InternalTokenAuthFilter extends OncePerRequestFilter {
 
     public static final String MDC_TENANT = "tenantId";
     public static final String MDC_USER = "userId";
+    /** 仅供更早执行且已完成强认证的栈内 Filter 写入；HTTP 客户端无法伪造 servlet attribute。 */
+    public static final String PREAUTHENTICATED_TENANT_ATTRIBUTE =
+            InternalTokenAuthFilter.class.getName() + ".preauthenticatedTenant";
 
     private final InternalToken tokens;
     private final InternalSecurityProperties props;
@@ -74,6 +77,11 @@ public class InternalTokenAuthFilter extends OncePerRequestFilter {
     }
 
     private TenantContext.Tenant resolve(HttpServletRequest request) {
+        Object preauthenticated = request.getAttribute(PREAUTHENTICATED_TENANT_ATTRIBUTE);
+        if (preauthenticated instanceof TenantContext.Tenant tenant
+                && !TenantContext.ANONYMOUS.equals(tenant)) {
+            return tenant;
+        }
         String jwt = request.getHeader(props.getInternalHeader());
         TenantContext.Tenant t = tokens.verify(jwt);
         if (t != null) return t;

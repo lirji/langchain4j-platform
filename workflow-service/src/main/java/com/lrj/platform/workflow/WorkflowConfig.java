@@ -18,6 +18,7 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.beans.factory.annotation.Qualifier;
 import com.lrj.platform.observability.OutboundTraceForwarder;
 import com.lrj.platform.security.OutboundTenantForwarder;
+import com.lrj.platform.security.AsyncTaskWorkerTokenForwarder;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -86,10 +87,11 @@ public class WorkflowConfig {
     public RestTemplate workflowAsyncTaskRestTemplate(RestTemplateBuilder builder,
                                                       WorkflowProperties props,
                                                       OutboundTenantForwarder tenantForwarder,
+                                                      AsyncTaskWorkerTokenForwarder workerTokenForwarder,
                                                       OutboundTraceForwarder traceForwarder) {
         return builder
                 .rootUri(props.getTerminalNotification().getAsyncTaskBaseUrl())
-                .additionalInterceptors(tenantForwarder, traceForwarder)
+                .additionalInterceptors(workerTokenForwarder, tenantForwarder, traceForwarder)
                 .setConnectTimeout(props.getOutbox().getTimeout())
                 .setReadTimeout(props.getOutbox().getTimeout())
                 .build();
@@ -167,8 +169,8 @@ public class WorkflowConfig {
         SpringProcessEngineConfiguration cfg = new SpringProcessEngineConfiguration();
         cfg.setDataSource(workflowDataSource);
         cfg.setTransactionManager(workflowTransactionManager);
-        // 自动建 / 升级 ACT_* schema
-        cfg.setDatabaseSchemaUpdate(ProcessEngineConfiguration.DB_SCHEMA_UPDATE_TRUE);
+        // ACT_* schema 只能由发布前的 database-migrations Job 演进；业务启动 fail-fast 验证。
+        cfg.setDatabaseSchemaUpdate(ProcessEngineConfiguration.DB_SCHEMA_UPDATE_FALSE);
         // 坑 2：关掉 async executor —— ServiceTask 在触发线程同步跑，TenantContext 不丢
         cfg.setAsyncExecutorActivate(false);
         // #4 历史表无限增长：显式钉死 history level=audit（够留痕：实例/任务/变量历史），

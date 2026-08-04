@@ -1,8 +1,8 @@
 package com.lrj.platform.knowledge.rerank;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 import java.net.URI;
@@ -22,7 +22,8 @@ final class HttpBailianRerankClient implements BailianRerankClient {
     private final String model;
     private final String instruct;
 
-    HttpBailianRerankClient(String baseUrl,
+    HttpBailianRerankClient(RestTemplateBuilder restTemplateBuilder,
+                            String baseUrl,
                             String apiKey,
                             String model,
                             String instruct,
@@ -38,14 +39,11 @@ final class HttpBailianRerankClient implements BailianRerankClient {
         this.endpoint = URI.create(stripTrailingSlash(baseUrl) + "/reranks");
 
         Duration effectiveTimeout = timeout == null ? Duration.ofSeconds(30) : timeout;
-        int timeoutMillis = (int) Math.min(Integer.MAX_VALUE, Math.max(1, effectiveTimeout.toMillis()));
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(timeoutMillis);
-        requestFactory.setReadTimeout(timeoutMillis);
-        this.restClient = RestClient.builder()
-                .requestFactory(requestFactory)
+        this.restClient = RestClient.create(restTemplateBuilder
+                .setConnectTimeout(effectiveTimeout)
+                .setReadTimeout(effectiveTimeout)
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
-                .build();
+                .build());
     }
 
     @Override

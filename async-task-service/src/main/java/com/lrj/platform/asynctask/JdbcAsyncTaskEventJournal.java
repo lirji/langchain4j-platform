@@ -52,19 +52,9 @@ public class JdbcAsyncTaskEventJournal implements AsyncTaskEventJournal {
     }
 
     private void init() {
-        jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS ASYNC_TASK_EVENT (
-                  TASK_ID VARCHAR(128) NOT NULL,
-                  SEQUENCE BIGINT NOT NULL,
-                  EVENT_KEY VARCHAR(128) NOT NULL,
-                  EVENT_NAME VARCHAR(128) NOT NULL,
-                  DATA_JSON MEDIUMTEXT,
-                  CREATED_AT BIGINT NOT NULL,
-                  WORKER_ID VARCHAR(128),
-                  PRIMARY KEY (TASK_ID, SEQUENCE),
-                  UNIQUE KEY UK_ASYNC_TASK_EVENT_KEY (TASK_ID, EVENT_KEY),
-                  INDEX IDX_ASYNC_TASK_EVENT_CREATED (CREATED_AT)
-                )""");
+        jdbc.queryForList("""
+                SELECT TASK_ID, SEQUENCE, EVENT_KEY, EVENT_NAME, DATA_JSON, CREATED_AT, WORKER_ID
+                FROM ASYNC_TASK_EVENT WHERE 1=0""");
     }
 
     @Override

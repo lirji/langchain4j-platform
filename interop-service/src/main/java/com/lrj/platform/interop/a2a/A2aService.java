@@ -6,6 +6,7 @@ import com.lrj.platform.interop.InteropProperties;
 import com.lrj.platform.interop.a2a.MessageSendParams.PushNotificationConfig;
 import com.lrj.platform.protocol.agent.AgentTaskView;
 import com.lrj.platform.security.TenantContext;
+import com.lrj.platform.security.OutboundCallbackPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -36,17 +37,20 @@ public class A2aService {
     private final InteropProperties props;
     private final ObjectMapper json;
     private final A2aPushNotificationStore pushStore;
+    private final OutboundCallbackPolicy callbackPolicy;
 
     public A2aService(A2aAgentGateway gateway,
                       A2aTaskMapper mapper,
                       InteropProperties props,
                       ObjectMapper json,
-                      A2aPushNotificationStore pushStore) {
+                      A2aPushNotificationStore pushStore,
+                      OutboundCallbackPolicy callbackPolicy) {
         this.gateway = gateway;
         this.mapper = mapper;
         this.props = props;
         this.json = json;
         this.pushStore = pushStore;
+        this.callbackPolicy = callbackPolicy;
     }
 
     /** 非流式方法分派。 */
@@ -88,16 +92,21 @@ public class A2aService {
             // 异步：代理到 AgentScope /agent/run/async，返回 A2A Task（submitted/working）。
             // webhook 一律指向 interop 自己的 push 回调（而非客户端 URL）：终态由 A2aPushForwarder 按 A2A
             // 信封中继。这样即便 push 配置晚于 send 通过 tasks/pushNotificationConfig/set 登记，也能生效。
+            PushNotificationConfig push = validatedPushConfig(pushConfig(p));
             AgentTaskView task = gateway.submitTask(text, props.getA2a().getPushCallbackUrl());
             if (task == null) {
                 return JsonRpcResponse.error(id, JsonRpcError.of(JsonRpcError.INTERNAL_ERROR,
                         "AgentScope did not return a task"));
             }
-            PushNotificationConfig push = pushConfig(p);
-            if (push != null && push.url() != null && !push.url().isBlank()) {
-                pushStore.put(TenantContext.current().tenantId(), task.taskId(), push);
+            String contextId = nonBlank(msg.contextId(), UUID.randomUUID().toString());
+            String messageId = nonBlank(msg.messageId(), UUID.randomUUID().toString());
+            TenantContext.Tenant caller = TenantContext.current();
+            pushStore.bindTask(caller.tenantId(), caller.userId(), task.taskId(),
+                    contextId, skill, messageId);
+            if (push != null) {
+                pushStore.put(caller.tenantId(), task.taskId(), push);
             }
-            return JsonRpcResponse.success(id, mapper.toA2aTask(task));
+            return JsonRpcResponse.success(id, mapper.toA2aTask(task, contextId));
         }
 
         // 默认 chat skill：同步代理到 /agent/run
@@ -115,7 +124,9 @@ public class A2aService {
             throw new IllegalArgumentException("id is required");
         }
         Optional<AgentTaskView> task = gateway.getTask(p.id());
-        return task.map(t -> JsonRpcResponse.success(id, mapper.toA2aTask(t)))
+        String contextId = pushStore.contextId(TenantContext.current().tenantId(), p.id())
+                .orElse(p.id());
+        return task.map(t -> JsonRpcResponse.success(id, mapper.toA2aTask(t, contextId)))
                 .orElseGet(() -> JsonRpcResponse.error(id, JsonRpcError.taskNotFound(p.id())));
     }
 
@@ -139,8 +150,10 @@ public class A2aService {
             return JsonRpcResponse.error(id, JsonRpcError.of(JsonRpcError.TASK_NOT_CANCELABLE,
                     "Task could not be canceled: " + p.id()));
         }
+        String contextId = pushStore.contextId(TenantContext.current().tenantId(), p.id())
+                .orElse(p.id());
         return gateway.getTask(p.id())
-                .map(t -> JsonRpcResponse.success(id, mapper.toA2aTask(t)))
+                .map(t -> JsonRpcResponse.success(id, mapper.toA2aTask(t, contextId)))
                 .orElseGet(() -> JsonRpcResponse.error(id, JsonRpcError.taskNotFound(p.id())));
     }
 
@@ -215,11 +228,18 @@ public class A2aService {
         if (p == null || p.taskId() == null || p.taskId().isBlank()) {
             throw new IllegalArgumentException("taskId is required");
         }
-        PushNotificationConfig cfg = p.pushNotificationConfig();
+        PushNotificationConfig cfg = validatedPushConfig(p.pushNotificationConfig());
         if (cfg == null || cfg.url() == null || cfg.url().isBlank()) {
             throw new IllegalArgumentException("pushNotificationConfig.url is required");
         }
-        pushStore.put(TenantContext.current().tenantId(), p.taskId(), cfg);
+        Optional<AgentTaskView> task = gateway.getTask(p.taskId());
+        if (task.isEmpty()) {
+            return JsonRpcResponse.error(id, JsonRpcError.taskNotFound(p.taskId()));
+        }
+        TenantContext.Tenant caller = TenantContext.current();
+        pushStore.bindTask(caller.tenantId(), caller.userId(), p.taskId(), p.taskId(),
+                SKILL_RESEARCH, p.taskId());
+        pushStore.put(caller.tenantId(), p.taskId(), cfg);
         return JsonRpcResponse.success(id, p);
     }
 
@@ -240,8 +260,25 @@ public class A2aService {
         return p.configuration().pushNotificationConfig();
     }
 
+    private PushNotificationConfig validatedPushConfig(PushNotificationConfig config) {
+        if (config == null) return null;
+        if (config.url() == null || config.url().isBlank()) {
+            throw new IllegalArgumentException("pushNotificationConfig.url is required");
+        }
+        try {
+            String safeUrl = callbackPolicy.requireAllowed(config.url()).toString();
+            return new PushNotificationConfig(safeUrl, config.token(), config.id());
+        } catch (OutboundCallbackPolicy.UnsafeCallbackException exception) {
+            throw new IllegalArgumentException("pushNotificationConfig.url is not allowed");
+        }
+    }
+
     private static boolean isTerminal(String status) {
         return "SUCCEEDED".equals(status) || "FAILED".equals(status) || "CANCELLED".equals(status);
+    }
+
+    private static String nonBlank(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
     }
 
     private <T> T parse(JsonNode params, Class<T> type) {

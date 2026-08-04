@@ -20,8 +20,7 @@ import java.util.stream.Collectors;
 
 /**
  * JDBC 模式（{@code app.async-task.store=jdbc}）下的 webhook 事务性 outbox，直连裸 {@link JdbcTemplate} 管理
- * {@code ASYNC_TASK_WEBHOOK_OUTBOX} 表（表结构以 {@code CREATE TABLE IF NOT EXISTS}/{@code ALTER TABLE} 字面量在
- * {@code init()} 内演进）。提供入队、基于 claim TTL 的抢占式派发（{@link #claimDue}，支持过期重认领）、
+ * {@code ASYNC_TASK_WEBHOOK_OUTBOX} 表；schema 由独立 migration 管理。提供入队、基于 claim TTL 的抢占式派发（{@link #claimDue}，支持过期重认领）、
  * 投递成功/重试/死信标记、指数退避调度（{@link #schedule}）与死信巡检。由 {@link AsyncTaskWebhookOutboxEnqueuer}
  * 入队、{@link AsyncTaskWebhookOutboxDispatcher} 轮询派发。
  */
@@ -47,46 +46,12 @@ public class AsyncTaskWebhookOutbox {
     }
 
     private void init() {
-        jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS ASYNC_TASK_WEBHOOK_OUTBOX (
-                  OUTBOX_ID VARCHAR(128) NOT NULL PRIMARY KEY,
-                  TASK_ID VARCHAR(128) NOT NULL,
-                  TENANT_ID VARCHAR(128) NOT NULL,
-                  TARGET_URL VARCHAR(1024) NOT NULL,
-                  TASK_STATUS VARCHAR(32) NOT NULL,
-                  PAYLOAD_JSON MEDIUMTEXT NOT NULL,
-                  STATUS VARCHAR(16) NOT NULL,
-                  ATTEMPTS INT NOT NULL DEFAULT 0,
-                  NEXT_ATTEMPT_AT BIGINT NOT NULL,
-                  LAST_ERROR VARCHAR(512),
-                  CLAIMED_BY VARCHAR(128),
-                  CLAIMED_UNTIL BIGINT,
-                  CREATED_AT BIGINT NOT NULL,
-                  UPDATED_AT BIGINT NOT NULL,
-                  INDEX IDX_ASYNC_TASK_WEBHOOK_DUE (STATUS, NEXT_ATTEMPT_AT),
-                  INDEX IDX_ASYNC_TASK_WEBHOOK_CLAIM (STATUS, CLAIMED_UNTIL),
-                  INDEX IDX_ASYNC_TASK_WEBHOOK_TASK (TASK_ID)
-                )""");
-        addColumnIfMissing("CLAIMED_BY VARCHAR(128)");
-        addColumnIfMissing("CLAIMED_UNTIL BIGINT");
-        addIndexIfMissing("IDX_ASYNC_TASK_WEBHOOK_CLAIM", "STATUS, CLAIMED_UNTIL");
-        log.info("ASYNC_TASK_WEBHOOK_OUTBOX table ready");
-    }
-
-    private void addColumnIfMissing(String definition) {
-        try {
-            jdbc.execute("ALTER TABLE ASYNC_TASK_WEBHOOK_OUTBOX ADD COLUMN " + definition);
-        } catch (Exception ignored) {
-            // Duplicate-column errors are harmless across old MySQL/H2 versions.
-        }
-    }
-
-    private void addIndexIfMissing(String name, String columns) {
-        try {
-            jdbc.execute("CREATE INDEX " + name + " ON ASYNC_TASK_WEBHOOK_OUTBOX (" + columns + ")");
-        } catch (Exception ignored) {
-            // Existing-index errors are harmless here.
-        }
+        jdbc.queryForList("""
+                SELECT OUTBOX_ID, TASK_ID, TENANT_ID, TARGET_URL, TASK_STATUS, PAYLOAD_JSON,
+                       STATUS, ATTEMPTS, NEXT_ATTEMPT_AT, LAST_ERROR, CLAIMED_BY, CLAIMED_UNTIL,
+                       CREATED_AT, UPDATED_AT
+                FROM ASYNC_TASK_WEBHOOK_OUTBOX WHERE 1=0""");
+        log.info("ASYNC_TASK_WEBHOOK_OUTBOX schema verified");
     }
 
     public void enqueue(AsyncTask task, String targetUrl, long now) {
@@ -145,7 +110,8 @@ public class AsyncTaskWebhookOutbox {
         selectArgs.add(ownerId);
         selectArgs.addAll(candidateIds);
         return jdbc.query("""
-                SELECT OUTBOX_ID, TASK_ID, TENANT_ID, TARGET_URL, TASK_STATUS, PAYLOAD_JSON, ATTEMPTS
+                SELECT OUTBOX_ID, TASK_ID, TENANT_ID, TARGET_URL, TASK_STATUS, PAYLOAD_JSON,
+                       ATTEMPTS, CLAIMED_BY
                 FROM ASYNC_TASK_WEBHOOK_OUTBOX
                 WHERE STATUS='IN_PROGRESS' AND CLAIMED_BY=? AND OUTBOX_ID IN (%s)
                 ORDER BY NEXT_ATTEMPT_AT ASC LIMIT ?""".formatted(placeholders),
@@ -153,12 +119,13 @@ public class AsyncTaskWebhookOutbox {
                 selectArgsWithLimit(selectArgs, boundedLimit).toArray());
     }
 
-    public void markDelivered(String outboxId, long now) {
-        jdbc.update("""
+    public boolean markDelivered(String outboxId, String claimOwner, long now) {
+        return jdbc.update("""
                 UPDATE ASYNC_TASK_WEBHOOK_OUTBOX
                 SET STATUS='DELIVERED', CLAIMED_BY=NULL, CLAIMED_UNTIL=NULL, UPDATED_AT=?
-                WHERE OUTBOX_ID=?""",
-                now, outboxId);
+                WHERE OUTBOX_ID=? AND STATUS='IN_PROGRESS'
+                  AND CLAIMED_BY=? AND CLAIMED_UNTIL > ?""",
+                now, outboxId, claimOwner, now) == 1;
     }
 
     public int purgeDeliveredBefore(long cutoffUpdatedAt) {
@@ -171,22 +138,35 @@ public class AsyncTaskWebhookOutbox {
         return deleted;
     }
 
-    public void markRetry(String outboxId, int attempts, long nextAttemptAt, String error, long now) {
-        jdbc.update("""
+    public boolean markRetry(
+            String outboxId,
+            String claimOwner,
+            int attempts,
+            long nextAttemptAt,
+            String error,
+            long now) {
+        return jdbc.update("""
                 UPDATE ASYNC_TASK_WEBHOOK_OUTBOX
                 SET STATUS='PENDING', ATTEMPTS=?, NEXT_ATTEMPT_AT=?, LAST_ERROR=?,
                     CLAIMED_BY=NULL, CLAIMED_UNTIL=NULL, UPDATED_AT=?
-                WHERE OUTBOX_ID=?""",
-                attempts, nextAttemptAt, trunc(error), now, outboxId);
+                WHERE OUTBOX_ID=? AND STATUS='IN_PROGRESS'
+                  AND CLAIMED_BY=? AND CLAIMED_UNTIL > ?""",
+                attempts, nextAttemptAt, trunc(error), now, outboxId, claimOwner, now) == 1;
     }
 
-    public void markDead(String outboxId, int attempts, String error, long now) {
-        jdbc.update("""
+    public boolean markDead(
+            String outboxId,
+            String claimOwner,
+            int attempts,
+            String error,
+            long now) {
+        return jdbc.update("""
                 UPDATE ASYNC_TASK_WEBHOOK_OUTBOX
                 SET STATUS='DEAD', ATTEMPTS=?, LAST_ERROR=?,
                     CLAIMED_BY=NULL, CLAIMED_UNTIL=NULL, UPDATED_AT=?
-                WHERE OUTBOX_ID=?""",
-                attempts, trunc(error), now, outboxId);
+                WHERE OUTBOX_ID=? AND STATUS='IN_PROGRESS'
+                  AND CLAIMED_BY=? AND CLAIMED_UNTIL > ?""",
+                attempts, trunc(error), now, outboxId, claimOwner, now) == 1;
     }
 
     public List<InspectionRow> listDead(String tenantId, int limit) {
@@ -215,7 +195,8 @@ public class AsyncTaskWebhookOutbox {
                 rs.getString("TARGET_URL"),
                 rs.getString("TASK_STATUS"),
                 rs.getString("PAYLOAD_JSON"),
-                rs.getInt("ATTEMPTS"));
+                rs.getInt("ATTEMPTS"),
+                rs.getString("CLAIMED_BY"));
     }
 
     private InspectionRow mapInspectionRow(ResultSet rs, int rowNum) throws SQLException {
@@ -263,7 +244,8 @@ public class AsyncTaskWebhookOutbox {
                       String targetUrl,
                       String taskStatus,
                       String payloadJson,
-                      int attempts) {
+                      int attempts,
+                      String claimOwner) {
     }
 
     public record InspectionRow(String outboxId,

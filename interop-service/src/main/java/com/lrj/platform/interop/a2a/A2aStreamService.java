@@ -13,7 +13,6 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.Executor;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A2A {@code message/stream}：把上游 SSE 翻成 A2A 流式事件序列，每个 SSE 帧体是包着事件的 JSON-RPC response：
@@ -40,6 +39,7 @@ public class A2aStreamService {
     private final StreamingConversationGateway conversationGateway;
     private final AgentTaskStreamGateway taskStreamGateway;
     private final A2aAgentGateway agentGateway;
+    private final A2aPushNotificationStore stateStore;
     private final A2aTaskMapper mapper;
     private final ObjectMapper json;
     private final Executor executor;
@@ -47,12 +47,14 @@ public class A2aStreamService {
     public A2aStreamService(StreamingConversationGateway conversationGateway,
                             AgentTaskStreamGateway taskStreamGateway,
                             A2aAgentGateway agentGateway,
+                            A2aPushNotificationStore stateStore,
                             A2aTaskMapper mapper,
                             ObjectMapper json,
                             @Qualifier("interopStreamExecutor") Executor executor) {
         this.conversationGateway = conversationGateway;
         this.taskStreamGateway = taskStreamGateway;
         this.agentGateway = agentGateway;
+        this.stateStore = stateStore;
         this.mapper = mapper;
         this.json = json;
         this.executor = executor;
@@ -70,11 +72,14 @@ public class A2aStreamService {
         private final SseEmitter emitter;
         private final Object rpcId;
         private final ObjectMapper json;
+        private final StreamCancellation cancellation;
 
-        EmitterSink(SseEmitter emitter, Object rpcId, ObjectMapper json) {
+        EmitterSink(SseEmitter emitter, Object rpcId, ObjectMapper json,
+                    StreamCancellation cancellation) {
             this.emitter = emitter;
             this.rpcId = rpcId;
             this.json = json;
+            this.cancellation = cancellation;
         }
 
         @Override
@@ -82,10 +87,14 @@ public class A2aStreamService {
             try {
                 String payload = json.writeValueAsString(JsonRpcResponse.success(rpcId, event));
                 emitter.send(SseEmitter.event().data(payload));
-            } catch (IOException e) {
-                emitter.completeWithError(e);
+            } catch (IOException | IllegalStateException e) {
+                cancellation.cancel();
+                emitter.complete();
             } catch (Exception e) {
-                log.warn("A2A stream serialize/send failed: {}", e.toString());
+                log.warn("A2A stream serialize/send failed errorType={}",
+                        e.getClass().getSimpleName());
+                cancellation.cancel();
+                emitter.complete();
             }
         }
 
@@ -109,87 +118,115 @@ public class A2aStreamService {
         String text = msg.textContent();
 
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);
-        AtomicBoolean cancelled = new AtomicBoolean(false);
-        emitter.onCompletion(() -> cancelled.set(true));
-        emitter.onTimeout(() -> { cancelled.set(true); emitter.complete(); });
-        emitter.onError(e -> cancelled.set(true));
-        A2aFrameSink sink = new EmitterSink(emitter, rpcId, json);
+        StreamCancellation cancellation = new StreamCancellation();
+        emitter.onCompletion(cancellation::cancel);
+        emitter.onTimeout(() -> { cancellation.cancel(); emitter.complete(); });
+        emitter.onError(e -> cancellation.cancel());
+        A2aFrameSink sink = new EmitterSink(emitter, rpcId, json, cancellation);
 
         // executor 带租户/MDC 透传：捕获当前请求线程的租户，供后台流式线程调下游时透传内部 JWT。
-        if (A2aService.SKILL_RESEARCH.equals(skill)) {
-            executor.execute(() -> runResearch(sink, cancelled, text, contextId));
-        } else {
-            executor.execute(() -> runChat(sink, cancelled, text, contextId));
+        try {
+            if (A2aService.SKILL_RESEARCH.equals(skill)) {
+                executor.execute(() -> runResearch(sink, cancellation, text, contextId));
+            } else {
+                executor.execute(() -> runChat(sink, cancellation, text, contextId));
+            }
+        } catch (RuntimeException error) {
+            log.warn("A2A stream scheduling failed errorType={}", error.getClass().getSimpleName());
+            sink.send(new TaskStatusUpdateEvent(UUID.randomUUID().toString(), contextId,
+                    new A2aTaskStatus(TaskState.FAILED,
+                            A2aMessage.agentText("agent stream unavailable", null, contextId),
+                            Instant.now().toString()), true));
+            cancellation.finish();
+            sink.complete();
         }
         return emitter;
     }
 
     // —— chat skill：conversation /chat/stream 的 token 级流 ——
 
-    void runChat(A2aFrameSink sink, AtomicBoolean cancelled, String text, String contextId) {
+    void runChat(A2aFrameSink sink, StreamCancellation cancellation, String text, String contextId) {
         String taskId = UUID.randomUUID().toString();
         String artifactId = UUID.randomUUID().toString();
         String chatId = TenantContext.current().tenantId() + ":a2a:" + contextId;
 
+        if (cancellation.isCancelled()) {
+            sink.complete();
+            return;
+        }
         sink.send(new TaskStatusUpdateEvent(taskId, contextId,
                 A2aTaskStatus.of(TaskState.WORKING, Instant.now().toString()), false));
 
-        conversationGateway.streamChat(chatId, text,
+        conversationGateway.streamChat(chatId, text, cancellation,
                 token -> {
-                    if (cancelled.get() || token == null || token.isEmpty()) {
+                    if (cancellation.isCancelled() || token == null || token.isEmpty()) {
                         return;
                     }
                     sink.send(new TaskArtifactUpdateEvent(taskId, contextId,
                             Artifact.of(artifactId, "answer", token), true, false));
                 },
                 () -> {
-                    if (!cancelled.get()) {
+                    if (!cancellation.isCancelled()) {
                         sink.send(new TaskStatusUpdateEvent(taskId, contextId,
                                 A2aTaskStatus.of(TaskState.COMPLETED, Instant.now().toString()), true));
                     }
+                    cancellation.finish();
                     sink.complete();
                 },
                 err -> {
-                    log.warn("A2A chat stream error task={}", taskId, err);
-                    if (!cancelled.get()) {
+                    log.warn("A2A chat stream failed task={} errorType={}",
+                            taskId, err.getClass().getSimpleName());
+                    if (!cancellation.isCancelled()) {
                         sink.send(new TaskStatusUpdateEvent(taskId, contextId,
                                 new A2aTaskStatus(TaskState.FAILED,
-                                        A2aMessage.agentText(String.valueOf(err.getMessage()), taskId, contextId),
+                                        A2aMessage.agentText("conversation stream failed", taskId, contextId),
                                         Instant.now().toString()), true));
                     }
+                    cancellation.finish();
                     sink.complete();
                 });
     }
 
     // —— deep-research skill：起异步任务 + agent /agent/tasks/{id}/stream 的任务级状态流 ——
 
-    void runResearch(A2aFrameSink sink, AtomicBoolean cancelled, String text, String contextId) {
+    void runResearch(A2aFrameSink sink, StreamCancellation cancellation, String text, String contextId) {
         AgentTaskView submitted;
         try {
             submitted = agentGateway.submitTask(text, null); // 流式：客户端看流，不登记 push webhook
         } catch (Exception e) {
-            log.warn("A2A research stream submit failed", e);
+            log.warn("A2A research stream submit failed errorType={}", e.getClass().getSimpleName());
             sink.send(new TaskStatusUpdateEvent(UUID.randomUUID().toString(), contextId,
                     new A2aTaskStatus(TaskState.FAILED,
-                            A2aMessage.agentText("submit failed: " + e.getMessage(), null, contextId),
+                            A2aMessage.agentText("agent task submission failed", null, contextId),
                             Instant.now().toString()), true));
+            cancellation.finish();
             sink.complete();
             return;
         }
         if (submitted == null || submitted.taskId() == null) {
             sink.send(new TaskStatusUpdateEvent(UUID.randomUUID().toString(), contextId,
                     A2aTaskStatus.of(TaskState.FAILED, Instant.now().toString()), true));
+            cancellation.finish();
             sink.complete();
             return;
         }
         String taskId = submitted.taskId();
+        TenantContext.Tenant caller = TenantContext.current();
+        stateStore.bindTask(caller.tenantId(), caller.userId(), taskId, contextId,
+                A2aService.SKILL_RESEARCH, taskId);
+
+        if (cancellation.isCancelled()) {
+            cancelSubmittedTask(taskId);
+            sink.complete();
+            return;
+        }
 
         // 开流：先发一帧当前（submitted/working）状态。
-        emitTaskStatus(sink, cancelled, taskId, contextId, submitted, false);
+        emitTaskStatus(sink, cancellation, taskId, contextId, submitted, false);
 
-        taskStreamGateway.streamTask(taskId,
+        taskStreamGateway.streamTask(taskId, cancellation,
                 view -> {
-                    if (cancelled.get()) {
+                    if (cancellation.isCancelled()) {
                         return;
                     }
                     boolean terminal = isTerminal(view.status());
@@ -200,34 +237,53 @@ public class A2aStreamService {
                                     Artifact.of(UUID.randomUUID().toString(), "answer", answer), false, true));
                         }
                     }
-                    emitTaskStatus(sink, cancelled, taskId, contextId, view, terminal);
+                    emitTaskStatus(sink, cancellation, taskId, contextId, view, terminal);
                 },
-                sink::complete,
+                () -> {
+                    cancellation.finish();
+                    sink.complete();
+                },
                 err -> {
-                    log.warn("A2A research stream error task={}", taskId, err);
-                    if (!cancelled.get()) {
+                    log.warn("A2A research stream failed task={} errorType={}",
+                            taskId, err.getClass().getSimpleName());
+                    if (!cancellation.isCancelled()) {
                         sink.send(new TaskStatusUpdateEvent(taskId, contextId,
                                 new A2aTaskStatus(TaskState.FAILED,
-                                        A2aMessage.agentText(String.valueOf(err.getMessage()), taskId, contextId),
+                                        A2aMessage.agentText("agent task stream failed", taskId, contextId),
                                         Instant.now().toString()), true));
                     }
+                    cancellation.finish();
                     sink.complete();
                 });
+        if (cancellation.isCancelled()) {
+            cancelSubmittedTask(taskId);
+            sink.complete();
+        }
     }
 
-    private void emitTaskStatus(A2aFrameSink sink, AtomicBoolean cancelled,
+    private void emitTaskStatus(A2aFrameSink sink, StreamCancellation cancellation,
                                 String taskId, String contextId, AgentTaskView view, boolean isFinal) {
-        if (cancelled.get()) {
+        if (cancellation.isCancelled()) {
             return;
         }
         TaskState state = mapper.toTaskState(view.status());
         A2aMessage statusMsg = null;
         if ("FAILED".equals(view.status()) && view.error() != null && !view.error().isBlank()) {
-            statusMsg = A2aMessage.agentText(view.error(), taskId, contextId);
+            statusMsg = A2aMessage.agentText("agent task failed", taskId, contextId);
         }
         String ts = firstNonBlank(view.updatedAt(), view.createdAt(), Instant.now().toString());
         sink.send(new TaskStatusUpdateEvent(taskId, contextId,
                 new A2aTaskStatus(state, statusMsg, ts), isFinal));
+    }
+
+    private void cancelSubmittedTask(String taskId) {
+        try {
+            boolean cancelled = agentGateway.cancelTask(taskId);
+            log.info("A2A downstream disconnect propagated task={} cancelled={}", taskId, cancelled);
+        } catch (Exception error) {
+            log.warn("A2A downstream cancellation failed task={} errorType={}",
+                    taskId, error.getClass().getSimpleName());
+        }
     }
 
     private static boolean isTerminal(String status) {

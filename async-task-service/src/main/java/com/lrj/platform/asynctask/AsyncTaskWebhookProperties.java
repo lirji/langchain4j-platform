@@ -24,6 +24,7 @@ public class AsyncTaskWebhookProperties {
     private int batchSize = 50;
     private Duration deliveredRetention = Duration.ofDays(7);
     private Duration claimTtl = Duration.ofMinutes(2);
+    private String hmacSecret = "dev-only-async-webhook-signing-secret-change-me-32b";
 
     public boolean isEnabled() {
         return enabled;
@@ -108,5 +109,13 @@ public class AsyncTaskWebhookProperties {
 
     public void setClaimTtl(Duration claimTtl) {
         this.claimTtl = claimTtl;
+    }
+
+    public String getHmacSecret() {
+        return hmacSecret;
+    }
+
+    public void setHmacSecret(String hmacSecret) {
+        this.hmacSecret = hmacSecret;
     }
 }

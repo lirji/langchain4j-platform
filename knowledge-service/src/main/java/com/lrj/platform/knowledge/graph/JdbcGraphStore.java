@@ -21,8 +21,8 @@ import java.util.Set;
 
 /**
  * {@link GraphStore} 的 JDBC 实现（{@code app.rag.graph.store=jdbc} 时启用）：三元组持久化到
- * {@code RAG_GRAPH_TRIPLE} 表，建表/建索引 DDL 以 {@code CREATE TABLE IF NOT EXISTS} 字面量内联在
- * {@link #init()} 中（无迁移工具）。以 SHA-256 派生 GRAPH_ID 做幂等 upsert，{@link #neighbors} 在库上按
+ * {@code RAG_GRAPH_TRIPLE} 表，schema 由独立版本化 migration 管理，启动只验证 contract。
+ * 以 SHA-256 派生 GRAPH_ID 做幂等 upsert，{@link #neighbors} 在库上按
  * 归一化实体 key 逐跳查询做 BFS 邻域遍历，均按 tenantId（及可选 category）隔离。
  */
 public class JdbcGraphStore implements GraphStore {
@@ -35,31 +35,10 @@ public class JdbcGraphStore implements GraphStore {
     }
 
     private void init() {
-        jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS RAG_GRAPH_TRIPLE (
-                  GRAPH_ID VARCHAR(128) NOT NULL PRIMARY KEY,
-                  TENANT_ID VARCHAR(128) NOT NULL,
-                  CATEGORY VARCHAR(128),
-                  SUBJECT_TEXT VARCHAR(512) NOT NULL,
-                  SUBJECT_KEY VARCHAR(512) NOT NULL,
-                  RELATION_TEXT VARCHAR(256) NOT NULL,
-                  OBJECT_TEXT VARCHAR(512) NOT NULL,
-                  OBJECT_KEY VARCHAR(512) NOT NULL,
-                  SOURCE_ID VARCHAR(512),
-                  CREATED_AT BIGINT NOT NULL
-                )""");
-        createIndex("IDX_RAG_GRAPH_SUBJECT", "CREATE INDEX IDX_RAG_GRAPH_SUBJECT ON RAG_GRAPH_TRIPLE (TENANT_ID, SUBJECT_KEY)");
-        createIndex("IDX_RAG_GRAPH_OBJECT", "CREATE INDEX IDX_RAG_GRAPH_OBJECT ON RAG_GRAPH_TRIPLE (TENANT_ID, OBJECT_KEY)");
-        createIndex("IDX_RAG_GRAPH_SOURCE", "CREATE INDEX IDX_RAG_GRAPH_SOURCE ON RAG_GRAPH_TRIPLE (TENANT_ID, SOURCE_ID)");
-        createIndex("IDX_RAG_GRAPH_CATEGORY", "CREATE INDEX IDX_RAG_GRAPH_CATEGORY ON RAG_GRAPH_TRIPLE (TENANT_ID, CATEGORY)");
-    }
-
-    private void createIndex(String name, String ddl) {
-        try {
-            jdbc.execute(ddl);
-        } catch (RuntimeException ignored) {
-            // Index already exists. Different JDBC drivers report this differently.
-        }
+        jdbc.queryForList("""
+                SELECT GRAPH_ID, TENANT_ID, CATEGORY, SUBJECT_TEXT, SUBJECT_KEY, RELATION_TEXT,
+                       OBJECT_TEXT, OBJECT_KEY, SOURCE_ID, CREATED_AT
+                FROM RAG_GRAPH_TRIPLE WHERE 1=0""");
     }
 
     @Override

@@ -17,8 +17,8 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * JDBC 用户组存储（{@code AUTH_STORE=jdbc}）。表结构演进沿用项目约定：{@code CREATE TABLE IF NOT EXISTS}
- * 字面量写在类里，无 Flyway。语义精确镜像 {@link JdbcRoleStore}——组→角色的权威数据在关系表 {@code GROUP_ROLE}。
+ * JDBC 用户组存储（{@code AUTH_STORE=jdbc}）。schema 由独立 migration 管理；
+ * 组→角色的权威数据在关系表 {@code GROUP_ROLE}。
  *
  * <p>实体表命名为 {@code AUTH_GROUP}（不用 {@code GROUP}/{@code GROUPS}——二者在 H2/MySQL 均为保留字，
  * 需转义才能作表名）。不建外键，引用完整性由服务层保证。
@@ -37,26 +37,9 @@ public class JdbcGroupStore implements GroupStore {
     }
 
     private void init() {
-        jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS AUTH_GROUP (
-                  NAME VARCHAR(128) NOT NULL PRIMARY KEY,
-                  DESCRIPTION VARCHAR(256),
-                  VERSION BIGINT NOT NULL DEFAULT 0,
-                  CREATED_AT BIGINT NOT NULL
-                )""");
-        jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS GROUP_ROLE (
-                  GROUP_NAME VARCHAR(128) NOT NULL,
-                  ROLE_NAME VARCHAR(128) NOT NULL,
-                  CREATED_AT BIGINT NOT NULL,
-                  PRIMARY KEY (GROUP_NAME, ROLE_NAME)
-                )""");
-        try {
-            jdbc.execute("CREATE INDEX IF NOT EXISTS IDX_GROUP_ROLE_ROLE ON GROUP_ROLE (ROLE_NAME)");
-        } catch (org.springframework.dao.DataAccessException e) {
-            log.debug("GROUP_ROLE role index not created (non-fatal): {}", e.getMessage());
-        }
-        log.info("AUTH_GROUP/GROUP_ROLE tables ready");
+        jdbc.queryForList("SELECT NAME, DESCRIPTION, VERSION, CREATED_AT FROM AUTH_GROUP WHERE 1=0");
+        jdbc.queryForList("SELECT GROUP_NAME, ROLE_NAME, CREATED_AT FROM GROUP_ROLE WHERE 1=0");
+        log.info("AUTH_GROUP/GROUP_ROLE schema verified");
     }
 
     @Override

@@ -3,6 +3,9 @@ package com.lrj.platform.voice;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lrj.platform.observability.OutboundTraceForwarder;
 import com.lrj.platform.security.OutboundTenantForwarder;
+import com.lrj.platform.security.PublicPayloadRedactor;
+import com.lrj.platform.security.TenantContext;
+import org.slf4j.MDC;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -10,9 +13,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
+import java.util.Map;
+import java.util.concurrent.Executor;
 
 /**
  * 语音客服装配。<strong>整个 config 条件化在 {@code app.voice.enabled=true}</strong> ——
@@ -80,7 +87,37 @@ public class VoiceConfig {
 
     @Bean
     VoiceStreamService voiceStreamService(ConversationClient conversationClient, SpeechService speechService,
-                                          VoiceProperties props) {
-        return new VoiceStreamService(conversationClient, speechService, props.getStreamSentenceMinChars());
+                                          VoiceProperties props,
+                                          @Qualifier("voiceStreamExecutor") Executor executor,
+                                          PublicPayloadRedactor redactor) {
+        return new VoiceStreamService(
+                conversationClient, speechService, props.getStreamSentenceMinChars(), executor, redactor);
+    }
+
+    @Bean(name = "voiceStreamExecutor")
+    Executor voiceStreamExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(32);
+        executor.setThreadNamePrefix("voice-stream-");
+        executor.setTaskDecorator(task -> {
+            TenantContext.Tenant tenant = TenantContext.captureRaw();
+            Map<String, String> mdc = MDC.getCopyOfContextMap();
+            return () -> {
+                TenantContext.Tenant previousTenant = TenantContext.captureRaw();
+                Map<String, String> previousMdc = MDC.getCopyOfContextMap();
+                try {
+                    if (tenant != null) TenantContext.set(tenant); else TenantContext.clear();
+                    if (mdc != null) MDC.setContextMap(mdc); else MDC.clear();
+                    task.run();
+                } finally {
+                    if (previousTenant != null) TenantContext.set(previousTenant); else TenantContext.clear();
+                    if (previousMdc != null) MDC.setContextMap(previousMdc); else MDC.clear();
+                }
+            };
+        });
+        executor.initialize();
+        return executor;
     }
 }

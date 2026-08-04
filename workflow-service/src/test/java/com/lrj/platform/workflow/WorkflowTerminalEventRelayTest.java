@@ -32,7 +32,8 @@ class WorkflowTerminalEventRelayTest {
     }
 
     private WorkflowTerminalEventOutbox.Row row(int attempts) {
-        return new WorkflowTerminalEventOutbox.Row("inst-1", "acme", "u1", "granted", "http://cb/hook", attempts);
+        return new WorkflowTerminalEventOutbox.Row(
+                "inst-1", "acme", "u1", "granted", "http://cb/hook", attempts, "owner-1");
     }
 
     @Test
@@ -51,7 +52,7 @@ class WorkflowTerminalEventRelayTest {
     void dispatch_emptyDue_doesNothing() {
         WorkflowTerminalEventOutbox outbox = mock(WorkflowTerminalEventOutbox.class);
         EventPublisher publisher = mock(EventPublisher.class);
-        when(outbox.claimDue(anyLong(), anyInt())).thenReturn(List.of());
+        when(outbox.claimDue(anyLong(), anyInt(), anyString(), anyLong())).thenReturn(List.of());
 
         relay(outbox, mock(WorkflowReplyStore.class), publisher).dispatch();
 
@@ -63,13 +64,14 @@ class WorkflowTerminalEventRelayTest {
         WorkflowTerminalEventOutbox outbox = mock(WorkflowTerminalEventOutbox.class);
         EventPublisher publisher = mock(EventPublisher.class);
         WorkflowReplyStore replyStore = mock(WorkflowReplyStore.class);
-        when(outbox.claimDue(anyLong(), anyInt())).thenReturn(List.of(row(0)));
+        when(outbox.claimDue(anyLong(), anyInt(), anyString(), anyLong())).thenReturn(List.of(row(0)));
+        when(outbox.markDelivered(anyString(), anyString(), anyLong())).thenReturn(true);
         when(replyStore.find("inst-1")).thenReturn("已受理");
 
         relay(outbox, replyStore, publisher).dispatch();
 
         verify(publisher).publish(eq(EventTopics.WORKFLOW_TERMINAL), eq("acme"), any(WorkflowTerminalMessage.class));
-        verify(outbox).markDelivered(eq("inst-1"), anyLong());
+        verify(outbox).markDelivered(eq("inst-1"), eq("owner-1"), anyLong());
     }
 
     @Test
@@ -77,13 +79,16 @@ class WorkflowTerminalEventRelayTest {
         WorkflowTerminalEventOutbox outbox = mock(WorkflowTerminalEventOutbox.class);
         EventPublisher publisher = mock(EventPublisher.class);
         WorkflowReplyStore replyStore = mock(WorkflowReplyStore.class);
-        when(outbox.claimDue(anyLong(), anyInt())).thenReturn(List.of(row(0)));
+        when(outbox.claimDue(anyLong(), anyInt(), anyString(), anyLong())).thenReturn(List.of(row(0)));
+        when(outbox.markRetry(anyString(), anyString(), anyInt(), anyLong(), anyString(), anyLong()))
+                .thenReturn(true);
         doThrow(new RuntimeException("broker down")).when(publisher).publish(anyString(), anyString(), any());
 
         relay(outbox, replyStore, publisher).dispatch();
 
-        verify(outbox).markRetry(eq("inst-1"), eq(1), anyLong(), anyString(), anyLong());
-        verify(outbox, never()).markDelivered(anyString(), anyLong());
+        verify(outbox).markRetry(
+                eq("inst-1"), eq("owner-1"), eq(1), anyLong(), anyString(), anyLong());
+        verify(outbox, never()).markDelivered(anyString(), anyString(), anyLong());
     }
 
     @Test
@@ -92,13 +97,17 @@ class WorkflowTerminalEventRelayTest {
         EventPublisher publisher = mock(EventPublisher.class);
         WorkflowReplyStore replyStore = mock(WorkflowReplyStore.class);
         // 默认 maxAttempts=6：已尝试 5 次的行本次再失败 → attemptsAfter=6 → DEAD
-        when(outbox.claimDue(anyLong(), anyInt())).thenReturn(List.of(row(5)));
+        when(outbox.claimDue(anyLong(), anyInt(), anyString(), anyLong())).thenReturn(List.of(row(5)));
+        when(outbox.markDead(anyString(), anyString(), anyInt(), anyString(), anyLong()))
+                .thenReturn(true);
         doThrow(new RuntimeException("broker down")).when(publisher).publish(anyString(), anyString(), any());
 
         relay(outbox, replyStore, publisher).dispatch();
 
-        verify(outbox).markDead(eq("inst-1"), eq(6), anyString(), anyLong());
-        verify(outbox, never()).markRetry(anyString(), anyInt(), anyLong(), anyString(), anyLong());
+        verify(outbox).markDead(
+                eq("inst-1"), eq("owner-1"), eq(6), anyString(), anyLong());
+        verify(outbox, never()).markRetry(
+                anyString(), anyString(), anyInt(), anyLong(), anyString(), anyLong());
     }
 
     private WorkflowTerminalEventRelay relay(WorkflowTerminalEventOutbox outbox,

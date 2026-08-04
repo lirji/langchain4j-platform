@@ -1,5 +1,7 @@
 package com.lrj.platform.eventbus;
 
+import com.lrj.platform.migrations.SchemaMigrationRunner;
+import com.lrj.platform.migrations.SchemaName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
@@ -25,6 +27,7 @@ class ProcessedEventStoreTest {
     void jdbcMarksFirstThenDeduplicates() {
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
                 "jdbc:h2:mem:processed_event_dedup;MODE=MySQL;DB_CLOSE_DELAY=-1", "sa", "");
+        SchemaMigrationRunner.migrate(dataSource, SchemaName.CHANNEL);
         ProcessedEventStore store = new JdbcProcessedEventStore(dataSource);
 
         assertThat(store.markProcessed("evt-1")).isTrue();
@@ -35,11 +38,13 @@ class ProcessedEventStoreTest {
     @Test
     void jdbcDeduplicatesAcrossStoreInstancesOnSameDatabase() {
         String url = "jdbc:h2:mem:processed_event_restart;MODE=MySQL;DB_CLOSE_DELAY=-1";
-        ProcessedEventStore first = new JdbcProcessedEventStore(new DriverManagerDataSource(url, "sa", ""));
+        DriverManagerDataSource dataSource = new DriverManagerDataSource(url, "sa", "");
+        SchemaMigrationRunner.migrate(dataSource, SchemaName.CHANNEL);
+        ProcessedEventStore first = new JdbcProcessedEventStore(dataSource);
         assertThat(first.markProcessed("evt-1")).isTrue();
 
         // 模拟重启：新实例连同一库，仍应识别已处理
-        ProcessedEventStore second = new JdbcProcessedEventStore(new DriverManagerDataSource(url, "sa", ""));
+        ProcessedEventStore second = new JdbcProcessedEventStore(dataSource);
         assertThat(second.markProcessed("evt-1")).isFalse();
     }
 }

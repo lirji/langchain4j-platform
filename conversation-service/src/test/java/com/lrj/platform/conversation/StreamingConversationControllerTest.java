@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Answers;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -93,5 +95,41 @@ class StreamingConversationControllerTest {
         // 注入被拦截：模型/检索完全没被调用
         org.mockito.Mockito.verifyNoInteractions(assistant);
         org.mockito.Mockito.verifyNoInteractions(augmenter);
+    }
+
+    @Test
+    void streamFailureUsesStablePublicEnvelopeAndDoesNotExposeProviderMessage() {
+        RecordingEmitter emitter = new RecordingEmitter();
+
+        StreamingConversationController.fail(
+                emitter, new IllegalStateException("provider-key=secret-model-detail"));
+
+        assertThat(emitter.completed).isTrue();
+        assertThat(emitter.completedWithError).isFalse();
+        assertThat(emitter.data).contains(Map.of(
+                "error", "conversation stream failed",
+                "code", "CONVERSATION_STREAM_FAILED"));
+        assertThat(emitter.data.toString()).doesNotContain("secret-model-detail");
+    }
+
+    private static final class RecordingEmitter extends SseEmitter {
+        private final List<Object> data = new ArrayList<>();
+        private boolean completed;
+        private boolean completedWithError;
+
+        @Override
+        public void send(SseEventBuilder builder) throws IOException {
+            builder.build().forEach(item -> data.add(item.getData()));
+        }
+
+        @Override
+        public void complete() {
+            completed = true;
+        }
+
+        @Override
+        public void completeWithError(Throwable ex) {
+            completedWithError = true;
+        }
     }
 }

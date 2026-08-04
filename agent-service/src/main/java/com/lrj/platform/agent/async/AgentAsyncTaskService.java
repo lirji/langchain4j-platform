@@ -149,7 +149,7 @@ public class AgentAsyncTaskService {
                     audit.record(AuditEventType.ASYNC_TASK_CANCELLED, Map.of("taskId", taskId));
                 }
             } catch (Throwable ex) {
-                String message = ex.getClass().getSimpleName() + ": " + ex.getMessage();
+                String message = "AGENT_TASK_EXECUTION_FAILED";
                 Optional<AgentAsyncTask> finalTask = updateAndFire(taskId, current -> current.status().isTerminal()
                         ? current
                         : current.withStatus(AgentTaskStatus.FAILED, null, message));
@@ -160,7 +160,7 @@ public class AgentAsyncTaskService {
                             "status", "FAILED",
                             "error", message));
                 }
-                log.warn("agent async task {} failed", taskId, ex);
+                log.warn("agent async task {} failed errorType={}", taskId, ex.getClass().getSimpleName());
             } finally {
                 cancelledTaskIds.remove(taskId);
                 futures.remove(taskId);

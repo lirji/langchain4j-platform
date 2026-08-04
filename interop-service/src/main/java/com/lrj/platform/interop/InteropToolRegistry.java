@@ -10,6 +10,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * interop 暴露的 MCP 工具目录。
@@ -21,6 +24,7 @@ import java.util.Optional;
 public class InteropToolRegistry {
 
     private static final Logger log = LoggerFactory.getLogger(InteropToolRegistry.class);
+    private static final Pattern REVISION = Pattern.compile("[0-9a-f]{64}");
 
     public static final String PING_TOOL = "platform.ping";
     public static final String AGENT_RUN_TOOL = "platform.agent.run";
@@ -36,16 +40,24 @@ public class InteropToolRegistry {
 
     private final AgentCapabilityClient discoveryClient;
     private final Duration ttl;
+    private final CapabilityRegistryStore store;
     private volatile Cached cache;
 
     /** 无 discovery client 时只暴露 interop 本地工具。 */
     public InteropToolRegistry() {
-        this(null, Duration.ofSeconds(60));
+        this(null, Duration.ofSeconds(60), new InMemoryCapabilityRegistryStore());
     }
 
     public InteropToolRegistry(AgentCapabilityClient discoveryClient, Duration ttl) {
+        this(discoveryClient, ttl, new InMemoryCapabilityRegistryStore());
+    }
+
+    public InteropToolRegistry(AgentCapabilityClient discoveryClient,
+                               Duration ttl,
+                               CapabilityRegistryStore store) {
         this.discoveryClient = discoveryClient;
         this.ttl = (ttl == null || ttl.isNegative() || ttl.isZero()) ? Duration.ofSeconds(60) : ttl;
+        this.store = store == null ? new InMemoryCapabilityRegistryStore() : store;
     }
 
     public List<McpToolDescriptor> tools() {
@@ -76,14 +88,32 @@ public class InteropToolRegistry {
             return List.of();
         }
         Cached current = cache;
+        if (current == null) {
+            try {
+                current = store.load()
+                        .filter(InteropToolRegistry::validRegistry)
+                        .map(registry -> new Cached(Instant.now(), registry.capabilities()))
+                        .orElse(null);
+            } catch (RuntimeException exception) {
+                log.warn("persisted capability registry is unavailable; using live discovery");
+            }
+            cache = current;
+        }
         if (current != null && !current.isStale(ttl)) {
             return current.tools();
         }
         try {
-            List<McpToolDescriptor> fresh = discoveryClient.discoverTools();
+            var registry = discoveryClient.discoverRegistry();
+            List<McpToolDescriptor> fresh = validRegistry(registry)
+                    ? registry.capabilities() : List.of();
             if (fresh != null && !fresh.isEmpty()) {
                 Cached updated = new Cached(Instant.now(), List.copyOf(fresh));
                 cache = updated;
+                try {
+                    store.save(registry);
+                } catch (RuntimeException exception) {
+                    log.warn("capability LKG persistence failed; serving fresh in-memory registry");
+                }
                 return updated.tools();
             }
             log.debug("agent capability discovery returned no tools; using fallback");
@@ -91,6 +121,26 @@ public class InteropToolRegistry {
             log.debug("agent capability discovery failed ({}); using fallback", ex.toString());
         }
         return current != null ? current.tools() : List.of();
+    }
+
+    private static boolean validRegistry(
+            com.lrj.platform.protocol.interop.AgentCapabilityRegistry registry) {
+        if (registry == null
+                || !"agent-capability-registry.v1".equals(registry.schemaVersion())
+                || registry.revision() == null
+                || !REVISION.matcher(registry.revision()).matches()
+                || registry.capabilities() == null
+                || registry.capabilities().isEmpty()) {
+            return false;
+        }
+        Set<String> names = new HashSet<>();
+        for (McpToolDescriptor descriptor : registry.capabilities()) {
+            if (descriptor == null || descriptor.name() == null || descriptor.name().isBlank()
+                    || !names.add(descriptor.name())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private record Cached(Instant fetchedAt, List<McpToolDescriptor> tools) {

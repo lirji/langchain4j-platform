@@ -25,9 +25,27 @@ public class AgentScopeShadowReportReader {
     public ShadowReportSummary read(InputStream input) {
         try {
             JsonNode root = mapper.readTree(input);
+            String schemaVersion = requiredText(root, "schema_version");
+            if (!"4".equals(schemaVersion)) {
+                throw new IllegalArgumentException(
+                        "unsupported shadow report schema_version: " + schemaVersion);
+            }
             String suite = requiredText(root, "suite");
             Instant generatedAt = Instant.parse(requiredText(root, "generated_at"));
             int runs = requiredPositiveInt(root, "runs_per_case");
+            JsonNode dataset = requiredObject(root, "dataset");
+            String datasetSchema = requiredText(dataset, "schemaVersion");
+            if (!"agent-evaluation-dataset-ref.v1".equals(datasetSchema)) {
+                throw new IllegalArgumentException(
+                        "unsupported shadow report dataset schema: " + datasetSchema);
+            }
+            String datasetId = requiredText(dataset, "datasetId");
+            String datasetVersion = requiredText(dataset, "version");
+            if (!datasetVersion.matches("sha256:[0-9a-f]{64}")) {
+                throw new IllegalArgumentException(
+                        "shadow report dataset version must be a SHA-256 digest");
+            }
+            requiredText(dataset, "kind");
             JsonNode gate = requiredObject(root, "gate");
             boolean passed = requiredBoolean(gate, "passed");
             List<String> regressions = strings(gate.path("regressions"));
@@ -36,7 +54,14 @@ public class AgentScopeShadowReportReader {
                 throw new IllegalArgumentException("shadow report samples must be an array");
             }
             return new ShadowReportSummary(
-                    suite, generatedAt, runs, passed, regressions, samples.size());
+                    suite,
+                    generatedAt,
+                    runs,
+                    datasetId,
+                    datasetVersion,
+                    passed,
+                    regressions,
+                    samples.size());
         } catch (IOException exception) {
             throw new IllegalArgumentException("invalid AgentScope shadow report JSON", exception);
         }
@@ -92,6 +117,8 @@ public class AgentScopeShadowReportReader {
             String suite,
             Instant generatedAt,
             int runsPerCase,
+            String datasetId,
+            String datasetVersion,
             boolean passed,
             List<String> regressions,
             int sampleCount

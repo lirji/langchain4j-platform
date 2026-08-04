@@ -8,7 +8,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * 生命周期事件 Kafka relay（A1）。定时扫 {@link AsyncTaskLifecycleOutbox} 里到期的 PENDING 行，
@@ -29,6 +31,7 @@ public class AsyncTaskLifecycleRelay {
     private final EventPublisher eventPublisher;
     private final ObjectMapper mapper;
     private final AsyncTaskWebhookProperties props;
+    private final String ownerId = "async-task-lifecycle-" + UUID.randomUUID();
 
     public AsyncTaskLifecycleRelay(AsyncTaskLifecycleOutbox outbox,
                                    EventPublisher eventPublisher,
@@ -43,43 +46,66 @@ public class AsyncTaskLifecycleRelay {
     @Scheduled(fixedDelayString = "${app.async-task.webhook.poll-interval-ms:30000}", initialDelay = 30_000)
     public void dispatch() {
         long now = System.currentTimeMillis();
-        List<AsyncTaskLifecycleOutbox.Row> due = outbox.claimDue(now, Math.max(1, props.getBatchSize()));
+        List<AsyncTaskLifecycleOutbox.Row> due = outbox.claimDue(
+                now,
+                Math.max(1, props.getBatchSize()),
+                ownerId,
+                claimTtlMillis());
         if (due.isEmpty()) {
             return;
         }
-        int delivered = 0, dead = 0, retried = 0;
+        int delivered = 0, dead = 0, retried = 0, stale = 0;
         for (AsyncTaskLifecycleOutbox.Row row : due) {
             try {
                 switch (relayOne(row, now)) {
                     case DELIVERED -> delivered++;
                     case DEAD -> dead++;
                     case RETRY -> retried++;
+                    case STALE -> stale++;
                 }
             } catch (Exception e) {
                 log.warn("async lifecycle relay: eventId {} 发布异常：{}", row.eventId(), e.toString());
             }
         }
-        log.info("async lifecycle relay: 到期 {} 条 → delivered={} retry={} dead={}", due.size(), delivered, retried, dead);
+        log.info("async lifecycle relay: 到期 {} 条 → delivered={} retry={} dead={} stale={}",
+                due.size(), delivered, retried, dead, stale);
     }
 
     private Outcome relayOne(AsyncTaskLifecycleOutbox.Row row, long now) {
         try {
             AsyncTaskLifecycleMessage msg = mapper.readValue(row.payloadJson(), AsyncTaskLifecycleMessage.class);
             eventPublisher.publish(EventTopics.ASYNCTASK_LIFECYCLE, row.tenantId(), msg);
-            outbox.markDelivered(row.eventId(), now);
-            return Outcome.DELIVERED;
+            return outbox.markDelivered(row.eventId(), row.claimOwner(), now)
+                    ? Outcome.DELIVERED
+                    : Outcome.STALE;
         } catch (Exception e) {
             int attemptsAfter = row.attempts() + 1;
             AsyncTaskLifecycleOutbox.Decision d = AsyncTaskLifecycleOutbox.schedule(
                     attemptsAfter, Math.max(1, props.getMaxAttempts()), now, Math.max(0, props.getBackoff().toMillis()));
             if (d.dead()) {
-                outbox.markDead(row.eventId(), attemptsAfter, e.toString(), now);
-                return Outcome.DEAD;
+                return outbox.markDead(
+                        row.eventId(), row.claimOwner(), attemptsAfter, e.toString(), now)
+                        ? Outcome.DEAD
+                        : Outcome.STALE;
             }
-            outbox.markRetry(row.eventId(), attemptsAfter, d.nextAttemptAt(), e.toString(), now);
-            return Outcome.RETRY;
+            return outbox.markRetry(
+                    row.eventId(),
+                    row.claimOwner(),
+                    attemptsAfter,
+                    d.nextAttemptAt(),
+                    e.toString(),
+                    now)
+                    ? Outcome.RETRY
+                    : Outcome.STALE;
         }
     }
 
-    private enum Outcome { DELIVERED, DEAD, RETRY }
+    private long claimTtlMillis() {
+        Duration ttl = props.getClaimTtl();
+        return ttl == null || ttl.isZero() || ttl.isNegative()
+                ? 120_000L
+                : Math.max(1_000L, ttl.toMillis());
+    }
+
+    private enum Outcome { DELIVERED, DEAD, RETRY, STALE }
 }

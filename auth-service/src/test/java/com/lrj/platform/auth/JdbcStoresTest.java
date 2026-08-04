@@ -1,6 +1,10 @@
 package com.lrj.platform.auth;
 
+import com.lrj.platform.migrations.SchemaMigrationRunner;
+import com.lrj.platform.migrations.SchemaName;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import javax.sql.DataSource;
@@ -8,15 +12,16 @@ import java.time.Instant;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** JDBC 存储（H2 MySQL 模式）：建表、种子、按名查、刷新会话轮转。 */
+/** JDBC 存储（H2 MySQL 模式）：使用预迁移 schema，验证种子、查询和刷新会话轮转。 */
 class JdbcStoresTest {
 
     private final PasswordHasher hasher = new PasswordHasher();
     private final AuthProperties props = new AuthProperties();
 
     @Test
-    void userStoreCreatesTableAndSeedsDemoAccounts() {
+    void userStoreUsesMigratedSchemaAndSeedsDemoAccounts() {
         JdbcUserAccountStore store = new JdbcUserAccountStore(h2("auth_users"), hasher, props);
 
         Optional<UserAccount> alice = store.findByUsername("alice");
@@ -28,6 +33,18 @@ class JdbcStoresTest {
         // 大小写不敏感 + 未知用户
         assertThat(store.findByUsername("ALICE")).isPresent();
         assertThat(store.findByUsername("ghost")).isEmpty();
+    }
+
+    @Test
+    void missingSchemaFailsWithoutCreatingTables() {
+        DataSource dataSource = blankH2("auth_missing_schema");
+
+        assertThatThrownBy(() -> new JdbcUserAccountStore(dataSource, hasher, props))
+                .isInstanceOf(DataAccessException.class);
+        assertThat(new JdbcTemplate(dataSource).queryForObject(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES "
+                        + "WHERE TABLE_SCHEMA='PUBLIC' AND TABLE_NAME='USERS'",
+                Integer.class)).isZero();
     }
 
     @Test
@@ -58,6 +75,12 @@ class JdbcStoresTest {
     }
 
     private static DataSource h2(String dbName) {
+        DataSource dataSource = blankH2(dbName);
+        SchemaMigrationRunner.migrate(dataSource, SchemaName.AUTH);
+        return dataSource;
+    }
+
+    private static DataSource blankH2(String dbName) {
         return new DriverManagerDataSource(
                 "jdbc:h2:mem:" + dbName + ";MODE=MySQL;DB_CLOSE_DELAY=-1", "sa", "");
     }

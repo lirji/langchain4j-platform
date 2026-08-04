@@ -3,6 +3,8 @@ package com.lrj.platform.interop.a2a;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lrj.platform.interop.InteropProperties;
+import com.lrj.platform.security.InternalSecurityProperties;
+import com.lrj.platform.security.OutboundCallbackPolicy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -45,7 +47,8 @@ class A2aServiceTest {
                 new A2aTaskMapper(),
                 new InteropProperties(),
                 json,
-                pushStore);
+                pushStore,
+                callbackPolicy());
     }
 
     private JsonNode params(Object value) {
@@ -100,6 +103,36 @@ class A2aServiceTest {
     }
 
     @Test
+    void researchContextIsPreservedAcrossSendAndTaskPolling() {
+        server.expect(once(), requestTo("http://agent.local/agent/run/async"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess("""
+                        {"taskId":"task-context","tenantId":"acme","userId":"alice","status":"PENDING"}
+                        """, MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo("http://agent.local/agent/tasks/task-context"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("""
+                        {"taskId":"task-context","status":"RUNNING"}
+                        """, MediaType.APPLICATION_JSON));
+        Map<String, Object> message = new java.util.LinkedHashMap<>();
+        message.put("role", "user");
+        message.put("messageId", "message-7");
+        message.put("contextId", "conversation-7");
+        message.put("parts", List.of(Map.of("kind", "text", "text", "research")));
+        message.put("metadata", Map.of("skill", A2aService.SKILL_RESEARCH));
+
+        A2aTask submitted = (A2aTask) service.dispatch(
+                "message/send", params(Map.of("message", message)), "1").result();
+
+        A2aTask polled = (A2aTask) service.dispatch(
+                "tasks/get", params(Map.of("id", "task-context")), "2").result();
+
+        assertThat(submitted.contextId()).isEqualTo("conversation-7");
+        assertThat(polled.contextId()).isEqualTo("conversation-7");
+        server.verify();
+    }
+
+    @Test
     void messageSendResearchWithPushConfigRegistersAndRoutesWebhookToInterop() {
         server.expect(once(), requestTo("http://agent.local/agent/run/async"))
                 .andExpect(method(HttpMethod.POST))
@@ -130,6 +163,10 @@ class A2aServiceTest {
 
     @Test
     void pushConfigSetThenGetRoundTrips() {
+        server.expect(once(), requestTo("http://agent.local/agent/tasks/t9"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("{\"taskId\":\"t9\",\"status\":\"RUNNING\"}",
+                        MediaType.APPLICATION_JSON));
         JsonRpcResponse set = service.dispatch("tasks/pushNotificationConfig/set",
                 params(Map.of("taskId", "t9",
                         "pushNotificationConfig", Map.of("url", "https://c/h", "token", "tk"))), "1");
@@ -142,6 +179,34 @@ class A2aServiceTest {
         assertThat(get.result()).isInstanceOf(TaskPushNotificationConfig.class);
         TaskPushNotificationConfig cfg = (TaskPushNotificationConfig) get.result();
         assertThat(cfg.pushNotificationConfig().url()).isEqualTo("https://c/h");
+        server.verify();
+    }
+
+    @Test
+    void pushConfigSetRejectsUnknownTask() {
+        server.expect(once(), requestTo("http://agent.local/agent/tasks/missing"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        JsonRpcResponse set = service.dispatch("tasks/pushNotificationConfig/set",
+                params(Map.of("taskId", "missing",
+                        "pushNotificationConfig", Map.of("url", "https://c/h"))), "1");
+
+        assertThat(set.result()).isNull();
+        assertThat(set.error().code()).isEqualTo(JsonRpcError.TASK_NOT_FOUND);
+        assertThat(pushStore.get("anonymous", "missing")).isEmpty();
+        server.verify();
+    }
+
+    @Test
+    void pushConfigRejectsPrivateTarget() {
+        JsonRpcResponse response = service.dispatch("tasks/pushNotificationConfig/set",
+                params(Map.of("taskId", "t9",
+                        "pushNotificationConfig", Map.of("url", "http://127.0.0.1/admin"))), "1");
+
+        assertThat(response.result()).isNull();
+        assertThat(response.error().code()).isEqualTo(JsonRpcError.INVALID_PARAMS);
+        assertThat(pushStore.get("anonymous", "t9")).isEmpty();
     }
 
     @Test
@@ -242,5 +307,12 @@ class A2aServiceTest {
         assertThat(card.securitySchemes().get("bearerAuth").type()).isEqualTo("http");
         assertThat(card.securitySchemes().get("bearerAuth").scheme()).isEqualTo("bearer");
         assertThat(card.security()).containsExactly(Map.of("bearerAuth", List.of()));
+    }
+
+    private static OutboundCallbackPolicy callbackPolicy() {
+        return new OutboundCallbackPolicy(
+                new InternalSecurityProperties.Callback(),
+                host -> new java.net.InetAddress[]{java.net.InetAddress.getByName(
+                        host.equals("127.0.0.1") ? host : "93.184.216.34")});
     }
 }

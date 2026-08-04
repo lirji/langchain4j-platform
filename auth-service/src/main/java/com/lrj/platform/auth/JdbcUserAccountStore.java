@@ -17,12 +17,12 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * JDBC 账号存储（{@code AUTH_STORE=jdbc}）。表结构演进沿用项目约定：{@code CREATE TABLE IF NOT EXISTS}
- * 字面量写在类里，无 Flyway/Liquibase。
+ * JDBC 账号存储（{@code AUTH_STORE=jdbc}）。版本化 schema 由独立 {@code database-migrations}
+ * Job 在发布前演进；业务进程启动时只验证必需表/列，绝不执行 DDL。
  *
  * <p>RBAC 关系化：用户→角色的权威数据在关系表 {@code USER_ROLE}（供正确的按角色反查——CSV LIKE 会误命中
  * 子串）；旧 {@code USERS.ROLES} CSV 列保留作<b>影子双写</b>便于回滚/兼容读。直配 {@code SCOPES} 仍存
- * USERS.SCOPES（正向读，无需关系化）。首启把 CSV 幂等回填进 USER_ROLE。不建外键（方言/顺序风险），
+ * USERS.SCOPES（正向读，无需关系化）。旧 CSV 的幂等回填由 auth migration 完成。不建外键（方言/顺序风险），
  * 引用完整性由服务层保证。复合写（用户+角色+refresh）的原子性由 {@code RbacMutationExecutor} 事务提供。
  */
 @Component
@@ -39,28 +39,10 @@ public class JdbcUserAccountStore implements UserAccountStore {
     }
 
     private void init(PasswordHasher hasher, AuthProperties props) {
-        jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS USERS (
-                  USERNAME VARCHAR(128) NOT NULL PRIMARY KEY,
-                  PASSWORD_HASH VARCHAR(256) NOT NULL,
-                  TENANT VARCHAR(128) NOT NULL,
-                  USER_ID VARCHAR(128) NOT NULL,
-                  SCOPES VARCHAR(1024),
-                  ENABLED BOOLEAN NOT NULL,
-                  CREATED_AT BIGINT NOT NULL
-                )""");
-        // 对 main 基线 USERS 表补 RBAC 的 ROLES 影子列（幂等——列已存在则忽略）。
-        addColumnIfMissing("ROLES", "VARCHAR(1024)");
-        // 乐观锁版本列（加法迁移，幂等）。旧行 DEFAULT 0；旧代码不引用该列可忽略，回滚安全。
-        addColumnIfMissing("VERSION", "BIGINT NOT NULL DEFAULT 0");
-        jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS USER_ROLE (
-                  USERNAME VARCHAR(128) NOT NULL,
-                  ROLE_NAME VARCHAR(128) NOT NULL,
-                  CREATED_AT BIGINT NOT NULL,
-                  PRIMARY KEY (USERNAME, ROLE_NAME)
-                )""");
-        createIndexIfPossible();
+        jdbc.queryForList("""
+                SELECT USERNAME, PASSWORD_HASH, TENANT, USER_ID, SCOPES, ROLES, ENABLED, VERSION, CREATED_AT
+                FROM USERS WHERE 1=0""");
+        jdbc.queryForList("SELECT USERNAME, ROLE_NAME, CREATED_AT FROM USER_ROLE WHERE 1=0");
         Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM USERS", Integer.class);
         if ((count == null || count == 0) && props.getSeed().isEnabled()) {
             for (UserAccount u : SeedUsers.defaults(hasher, props.getDemoPassword())) {
@@ -68,63 +50,7 @@ public class JdbcUserAccountStore implements UserAccountStore {
             }
             log.info("USERS/USER_ROLE seeded with demo accounts (jdbc)");
         }
-        backfillUserRoleFromCsv();
-        log.info("USERS/USER_ROLE tables ready");
-    }
-
-    /** USER_ROLE 反查索引（H2/MySQL 均支持 CREATE INDEX IF NOT EXISTS）。失败不致命，仅影响反查性能。 */
-    private void createIndexIfPossible() {
-        try {
-            jdbc.execute("CREATE INDEX IF NOT EXISTS IDX_USER_ROLE_ROLE ON USER_ROLE (ROLE_NAME)");
-        } catch (org.springframework.dao.DataAccessException e) {
-            log.debug("USER_ROLE role index not created (non-fatal): {}", e.getMessage());
-        }
-    }
-
-    /** 幂等加列：不同数据库对重复加列报错各异（MySQL/H2），只吞"列已存在"，其余照抛（不掩盖真实 DDL 故障）。 */
-    private void addColumnIfMissing(String column, String type) {
-        try {
-            jdbc.execute("ALTER TABLE USERS ADD COLUMN " + column + " " + type);
-            log.info("USERS table: added column {}", column);
-        } catch (org.springframework.dao.DataAccessException e) {
-            if (!isDuplicateColumn(e)) {
-                throw e;
-            }
-        }
-    }
-
-    /** 遍历 cause 链判断是否"列已存在"——Spring 包装后 getMessage() 不含底层 duplicate 字样，必须看 cause。 */
-    private static boolean isDuplicateColumn(org.springframework.dao.DataAccessException e) {
-        for (Throwable t = e; t != null; t = t.getCause()) {
-            String msg = t.getMessage();
-            if (msg != null) {
-                String m = msg.toLowerCase(Locale.ROOT);
-                if (m.contains("duplicate column") || m.contains("already exists")
-                        || (m.contains("duplicate") && m.contains("column"))) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    /** 幂等回填：把 USERS.ROLES CSV 拆进 USER_ROLE（仅补缺失行），支持早期 CSV 库无损升级。 */
-    private void backfillUserRoleFromCsv() {
-        List<Object[]> rows = jdbc.query("SELECT USERNAME, ROLES FROM USERS", (rs, i) ->
-                new Object[]{rs.getString("USERNAME"), rs.getString("ROLES")});
-        long now = System.currentTimeMillis();
-        int migrated = 0;
-        for (Object[] row : rows) {
-            String username = (String) row[0];
-            for (String role : parseCsv((String) row[1])) {
-                if (insertUserRoleIfAbsent(username, role, now)) {
-                    migrated++;
-                }
-            }
-        }
-        if (migrated > 0) {
-            log.info("backfilled {} USER_ROLE rows from legacy USERS.ROLES CSV", migrated);
-        }
+        log.info("USERS/USER_ROLE schema verified");
     }
 
     @Override

@@ -5,5 +5,10 @@ package com.lrj.platform.protocol.asynctask;
  * 指定租约时长（到期未续则任务可被其它 worker 重新领取）。
  */
 public record AsyncTaskLeaseRequest(String workerId,
-                                    Long leaseSeconds) {
+                                    Long leaseSeconds,
+                                    Long leaseEpoch) {
+
+    public AsyncTaskLeaseRequest(String workerId, Long leaseSeconds) {
+        this(workerId, leaseSeconds, null);
+    }
 }

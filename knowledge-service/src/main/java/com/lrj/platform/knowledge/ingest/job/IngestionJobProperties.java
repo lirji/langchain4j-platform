@@ -77,10 +77,10 @@ public class IngestionJobProperties {
     public static class Datasource {
 
         private String url = "jdbc:mysql://localhost:3306/knowledge_ingestion"
-                + "?createDatabaseIfNotExist=true&useSSL=false"
+                + "?useSSL=false"
                 + "&allowPublicKeyRetrieval=true&serverTimezone=UTC";
-        private String username = "root";
-        private String password = "";
+        private String username = "knowledge_ingestion_app";
+        private String password = "knowledge-ingestion-app-dev";
         private String driverClassName = "com.mysql.cj.jdbc.Driver";
         private int maximumPoolSize = 8;
 

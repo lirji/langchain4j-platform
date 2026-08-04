@@ -1,5 +1,7 @@
 package com.lrj.platform.auth;
 
+import com.lrj.platform.migrations.SchemaMigrationRunner;
+import com.lrj.platform.migrations.SchemaName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -17,6 +19,12 @@ class JdbcRbacMigrationTest {
     private final PasswordHasher hasher = new PasswordHasher();
 
     private static DataSource h2(String db) {
+        DataSource dataSource = rawH2(db);
+        SchemaMigrationRunner.migrate(dataSource, SchemaName.AUTH);
+        return dataSource;
+    }
+
+    private static DataSource rawH2(String db) {
         return new DriverManagerDataSource(
                 "jdbc:h2:mem:" + db + ";MODE=MySQL;DB_CLOSE_DELAY=-1", "sa", "");
     }
@@ -41,7 +49,7 @@ class JdbcRbacMigrationTest {
 
     @Test
     void earlyCsvSchema_backfillsUserRoleFromCsv() {
-        DataSource ds = h2("mig_csv");
+        DataSource ds = rawH2("mig_csv");
         JdbcTemplate jdbc = new JdbcTemplate(ds);
         // 早期实现：USERS 已有 ROLES CSV 列且有数据，但无 USER_ROLE 关系表。
         jdbc.execute("""
@@ -50,6 +58,7 @@ class JdbcRbacMigrationTest {
                   TENANT VARCHAR(128) NOT NULL, USER_ID VARCHAR(128) NOT NULL, SCOPES VARCHAR(1024),
                   ROLES VARCHAR(1024), ENABLED BOOLEAN NOT NULL, CREATED_AT BIGINT NOT NULL)""");
         jdbc.update("INSERT INTO USERS VALUES ('carol','h','acme','carol','chat','editor,viewer',TRUE,1)");
+        SchemaMigrationRunner.migrate(ds, SchemaName.AUTH);
 
         JdbcUserAccountStore store = new JdbcUserAccountStore(ds, hasher, noSeed());
         UserAccount carol = store.findByUsername("carol").orElseThrow();
@@ -62,7 +71,7 @@ class JdbcRbacMigrationTest {
 
     @Test
     void mainBaselineSchema_withoutRolesColumn_upgradesCleanly() {
-        DataSource ds = h2("mig_baseline");
+        DataSource ds = rawH2("mig_baseline");
         JdbcTemplate jdbc = new JdbcTemplate(ds);
         // main 基线：USERS 无 ROLES 列、无 USER_ROLE 表。
         jdbc.execute("""
@@ -71,6 +80,7 @@ class JdbcRbacMigrationTest {
                   TENANT VARCHAR(128) NOT NULL, USER_ID VARCHAR(128) NOT NULL, SCOPES VARCHAR(1024),
                   ENABLED BOOLEAN NOT NULL, CREATED_AT BIGINT NOT NULL)""");
         jdbc.update("INSERT INTO USERS VALUES ('dave','h','globex','dave','chat',TRUE,1)");
+        SchemaMigrationRunner.migrate(ds, SchemaName.AUTH);
 
         JdbcUserAccountStore store = new JdbcUserAccountStore(ds, hasher, noSeed());
         UserAccount dave = store.findByUsername("dave").orElseThrow();
@@ -82,12 +92,13 @@ class JdbcRbacMigrationTest {
 
     @Test
     void roleStore_backfillsRoleScopeFromCsv() {
-        DataSource ds = h2("mig_rolescope");
+        DataSource ds = rawH2("mig_rolescope");
         JdbcTemplate jdbc = new JdbcTemplate(ds);
         jdbc.execute("""
                 CREATE TABLE ROLES (NAME VARCHAR(128) NOT NULL PRIMARY KEY, SCOPES VARCHAR(1024),
                   DESCRIPTION VARCHAR(256), CREATED_AT BIGINT NOT NULL)""");
         jdbc.update("INSERT INTO ROLES VALUES ('custom','chat,ingest','自定义',1)");
+        SchemaMigrationRunner.migrate(ds, SchemaName.AUTH);
 
         JdbcRoleStore store = new JdbcRoleStore(ds, noSeed());
         assertThat(store.findByName("custom").orElseThrow().scopes()).containsExactlyInAnyOrder("chat", "ingest");

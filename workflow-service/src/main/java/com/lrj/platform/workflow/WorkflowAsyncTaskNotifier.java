@@ -2,6 +2,7 @@ package com.lrj.platform.workflow;
 
 import com.lrj.platform.protocol.asynctask.AsyncTask;
 import com.lrj.platform.protocol.asynctask.AsyncTaskCreateRequest;
+import com.lrj.platform.protocol.asynctask.AsyncTaskLeaseRequest;
 import com.lrj.platform.protocol.asynctask.AsyncTaskStatus;
 import com.lrj.platform.protocol.asynctask.AsyncTaskStatusUpdateRequest;
 import org.slf4j.Logger;
@@ -18,6 +19,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * 工作流终态回推到 async-task-service 的通知器：审批流程走到 COMPLETED 时，先以 {@code workflow-<instanceId>}
@@ -31,9 +33,11 @@ import java.util.Map;
 public class WorkflowAsyncTaskNotifier {
 
     private static final Logger log = LoggerFactory.getLogger(WorkflowAsyncTaskNotifier.class);
+    private static final String WORKER_ID = "workflow-service";
 
     private final RestTemplate restTemplate;
     private final WorkflowProperties properties;
+    private final String workerId = WORKER_ID + "." + UUID.randomUUID();
 
     public WorkflowAsyncTaskNotifier(@Qualifier("workflowAsyncTaskRestTemplate") RestTemplate restTemplate,
                                      WorkflowProperties properties) {
@@ -45,12 +49,25 @@ public class WorkflowAsyncTaskNotifier {
         String taskId = taskId(instanceId);
         try {
             create(taskId, instanceId, tenantId, webhookUrl);
-            return markSucceeded(taskId, instanceId, tenantId, reply);
-        } catch (RestClientException ex) {
+            AsyncTask leased = lease(taskId);
+            return markSucceeded(taskId, instanceId, tenantId, reply, leased.leaseEpoch());
+        } catch (RuntimeException ex) {
             log.warn("workflow terminal async-task notification failed instanceId={} taskId={}: {}",
                     instanceId, taskId, ex.toString());
             return false;
         }
+    }
+
+    private AsyncTask lease(String taskId) {
+        AsyncTask leased = restTemplate.postForEntity(
+                "/async/tasks/{taskId}/lease",
+                new AsyncTaskLeaseRequest(workerId, 60L),
+                AsyncTask.class,
+                taskId).getBody();
+        if (leased == null || leased.leaseEpoch() <= 0) {
+            throw new IllegalStateException("async task lease response is invalid");
+        }
+        return leased;
     }
 
     private void create(String taskId, String instanceId, String tenantId, String webhookUrl) {
@@ -65,14 +82,21 @@ public class WorkflowAsyncTaskNotifier {
         }
     }
 
-    private boolean markSucceeded(String taskId, String instanceId, String tenantId, Object reply) {
+    private boolean markSucceeded(
+            String taskId,
+            String instanceId,
+            String tenantId,
+            Object reply,
+            long leaseEpoch) {
         ResponseEntity<Void> response = restTemplate.exchange(
                 "/async/tasks/{taskId}/status",
                 HttpMethod.PATCH,
                 new HttpEntity<>(new AsyncTaskStatusUpdateRequest(
                         AsyncTaskStatus.SUCCEEDED,
                         result(instanceId, tenantId, reply),
-                        null)),
+                        null,
+                        workerId,
+                        leaseEpoch)),
                 Void.class,
                 taskId);
         return response.getStatusCode().is2xxSuccessful();

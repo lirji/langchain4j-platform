@@ -52,31 +52,38 @@ public class ReflexionService {
         String q = question == null ? "" : question.trim();
         List<ReflexionAttempt> attempts = new ArrayList<>();
 
+        progress.throwIfCancelled();
         progress.emit("attempt-start", Map.of("n", 1));
         String answer = safe(answerer.answer(q));
+        progress.throwIfCancelled();
         progress.emit("answer", Map.of("n", 1, "answer", answer));
         AgentDagCritique c = critic.critique(q, answer);
+        progress.throwIfCancelled();
         double agg = aggregate(c);
         ReflexionAttempt attempt = toAttempt(1, answer, c, agg);
         attempts.add(attempt);
         progress.emit("critique", attempt);
-        log.info("reflexion attempt 1 agg={} corr={} comp={} clar={} issue={}",
-                agg, c.correctness(), c.completeness(), c.clarity(), c.mainIssue());
+        log.info("reflexion attempt 1 agg={} corr={} comp={} clar={}",
+                agg, c.correctness(), c.completeness(), c.clarity());
 
         int n = 1;
         while (agg < props.getThreshold() && n < props.getMaxAttempts() + 1) {
+            progress.throwIfCancelled();
             n++;
             progress.emit("attempt-start", Map.of("n", n));
             answer = safe(answerer.improve(q, answer, buildImproveHint(c)));
+            progress.throwIfCancelled();
             progress.emit("answer", Map.of("n", n, "answer", answer));
             c = critic.critique(q, answer);
+            progress.throwIfCancelled();
             agg = aggregate(c);
             attempt = toAttempt(n, answer, c, agg);
             attempts.add(attempt);
             progress.emit("critique", attempt);
-            log.info("reflexion attempt {} agg={} issue={}", n, agg, c.mainIssue());
+            log.info("reflexion attempt {} agg={}", n, agg);
         }
 
+        progress.throwIfCancelled();
         ReflexionReply reply = new ReflexionReply(
                 q, answer, attempts, agg >= props.getThreshold(), TenantContext.current().tenantId());
         progress.emit("done", reply);
