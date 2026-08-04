@@ -82,7 +82,7 @@ L1 语义缓存单篇 → `semantic-cache.md`；检索召回评测（Recall@k / 
 **入口**：`POST /chat/sql`（别名 `/analytics/sql`，analytics :8083），body `{"message":"..."}` → 返回 `{question, sql, rowCount, rows, answer, ...}`。
 
 **状态**：**默认开**。整套 NL2SQL 装配是 `@ConditionalOnProperty(app.nl2sql.enabled)`，默认 `NL2SQL_ENABLED=true`（置 `false` 时端点不注册、零开销）。
-端到端需：一个可达的只读业务库（`NL2SQL_DB_URL` / `NL2SQL_DB_READONLY_URL` / `NL2SQL_SEED_SCRIPT`）+ 支持 tool-calling 的 chat 模型。
+端到端需：一个已迁移、可达的只读业务库（`NL2SQL_DB_URL` / `NL2SQL_DB_READONLY_URL`）+ 支持 tool-calling 的 chat 模型。本地 demo 数据由 `analytics-demo` migration 提供。
 
 **深入看** → `nl2sql-guide.md`（护栏细节、Schema 注入、few-shot、启用 curl）。
 
@@ -185,7 +185,7 @@ worker 调 `refund_start` / `workflow_status` / `workflow_tasks` 驱动 workflow
 `POST /agent/process/run/async`（可选 `webhookUrl`）→ `202` + `AgentAsyncTask`。
 
 **状态**：**默认开（有副作用·人在环）**——双门控 `AGENT_WORKFLOW_ENABLED` + `WORKFLOW_ENABLED` 均默认开、需 workflow-service 可达：agent 侧 `AGENT_WORKFLOW_ENABLED=true`、
-workflow 侧 `WORKFLOW_ENABLED=true`（其 assess/resolve 还调 conversation-service）+ 一个可登录 MySQL（Flowable 自管表）。
+workflow 侧 `WORKFLOW_ENABLED=true`（其 assess/resolve 还调 conversation-service）+ 一个已执行 `workflow` migration 的 MySQL。
 
 **深入看** → `agent-guide.md`（业务流程智能体 / `refund_start`·`workflow_status`·`workflow_tasks` 动作）；底层退款审批引擎 → `workflow-guide.md`。
 
@@ -258,7 +258,7 @@ live discovery（`INTEROP_DISCOVERY_ENABLED`）**默认开**，从下游动态�
 | ① 公共/共享知识库 | `RAG_PUBLIC_ENABLED` | `true` | 查询并入 `__public__` 分区；写需 `public-ingest` scope |
 | ① L1 语义缓存 | `CONVERSATION_SEMANTIC_CACHE_ENABLED` | `true` | 命中即短路 RAG+LLM |
 | ② NL2SQL 整装配 | `NL2SQL_ENABLED`（`app.nl2sql.enabled`） | `true` | 默认注册 `/chat/sql`；端到端需只读 DB + tool-calling 模型（置 `false` 则端点不注册） |
-| ② 工作流审批 | 端点常开 | — | 需可登录 MySQL（Flowable 自管表） |
+| ② 工作流审批 | 端点常开 | — | 需可登录且已迁移的 MySQL（运行时 schema update 关闭） |
 | ② 工作流终态通知 | `WORKFLOW_TERMINAL_NOTIFICATION_MODE` | 本地 | 可切 `async-task`（中心 outbox） |
 | ② 飞书入站事件桥 | `FEISHU_*`（app id/secret/verification/encrypt） | 关 | `/channel/feishu/events` 生效 |
 | ② 钉钉入站事件桥 | `DINGTALK_*` | 关 | `/channel/dingtalk/events` 生效 |

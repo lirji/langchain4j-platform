@@ -49,10 +49,13 @@
 - [钉钉知识库客服接入指南](互操作渠道/dingtalk-guide.md)：钉钉群 @机器人 → 查知识库 → 机器人回复；镜像飞书事件桥、机器人发消息 API 回复、无命中转人工兜底。
 
 **平台工程（横切）**
+- [软件供应链与可信发布](平台工程/software-supply-chain.md)：完整 Reactor/17 镜像矩阵、CycloneDX、Trivy、OIDC Cosign、SLSA provenance、发布后验证与 digest 回滚。
+- [版本化数据库迁移与回滚](平台工程/database-migrations.md)：8 个关系 schema 的 Flyway/Flowable 独立迁移阶段、expand-contract、最小权限账号、Compose/Helm 前置任务和故障回滚手册。
 - [登录、RBAC 与公共知识库指南](平台工程/rbac-and-public-kb.md)：auth-service 账号密码登录 → 会话令牌 + 刷新 cookie、边缘 `SessionBearerAuthFilter` 换发内部 JWT、角色→scope 展开、`role-admin`/`public-ingest` 平台 scope、后端 `/auth/admin/**` 管理面（If-Match 乐观锁；前端随包 RBAC 控制台已移除）、`__public__` 公共/共享知识库；另含**外接 auth-platform 的文档级 ReBAC / 部门层级隔离与 Casdoor 多租户 SSO 登录**（Casdoor SSO 整栈默认开、`only` 严格模式；文档级 ReBAC `app.rag.authz.mode` 默认 `disabled`，见文中授权章节）。
 - [公网化 OIDC 改造方案](平台工程/公网化-OIDC-改造方案.md)：外部 IdP（Casdoor）SSO 落地方案——**已落地并成为默认**：edge `CasdoorTokenExchangeFilter` 验 Casdoor JWT 换发内部 JWT（`edge.casdoor.enabled` **默认开**、`mode` **默认 `only`** 严格，`dual` 作灰度回滚窗口）+ 前端方案 C 多租户登录（Shared Application + 选组织）+ 接 SpiceDB 文档级 ReBAC；与 auth-service 自建会话登录、api-key 并存（切 `dual` 时回退）。
 - [事件总线与终态可靠投递(EOS)指南](平台工程/eventbus-guide.md)：事务性 outbox + relay + 消费侧去重 = effective exactly-once（workflow/async-task 两侧）。
 - [长任务处理指南](平台工程/长任务处理指南.md)：async-task-service 租约式任务中心（提交/lease/回报、SSE 断点续传、webhook outbox、Kafka 生命周期事件）、各服务接入现状、通用长任务模式对照与当前限制。
+- [Webhook / Callback 安全接入](平台工程/webhook-security.md)：async-task、Workflow、A2A push 的 SSRF allowlist、DNS 重校验、禁止重定向、统一 v1 HMAC、接收方去重及生产回滚规则。
 - [可观测性指南](平台工程/observability-guide.md)：跨服务 traceId 透传、OTel GenAI span（Spring Boot 原生 tracing 开关）、Prometheus 指标、`/actuator/{tokenbudget,cost}`。
 - [LiteLLM 网关能力指南](平台工程/litellm-gateway-guide.md)：spend 记账 + 管理 UI（自带 Postgres）、租户归因三档（`platform.gateway.tenant-attribution`=none/user/virtual-key，默认 none）、per-tenant virtual key 预算/TPM/RPM 硬保底、Redis 响应缓存、正式 fallback（chat-default→ollama）、LiteLLM↔Java 同 trace 的 OTel；含签发/轮换/备份/回滚 runbook 与 8 步冒烟。
 - [成本归因与配额指南](平台工程/cost-attribution.md)：per-tenant USD 成本归因 + token 预算，redis 默认的分布式计数（水平扩容正确性）、`/actuator/{tokenbudget,cost}`；与 LiteLLM spend 双轨分工见 LiteLLM 网关能力指南。

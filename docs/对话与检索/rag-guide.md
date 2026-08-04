@@ -406,10 +406,10 @@ RAG_GRAPH_ASYNC=false
 ### 图存储：jdbc（默认）/ in-memory
 
 ```bash
-RAG_GRAPH_STORE=jdbc        # 默认，持久化到 MySQL（表结构由 JdbcGraphStore 内 CREATE TABLE IF NOT EXISTS 维护）
-RAG_GRAPH_DB_URL='jdbc:mysql://mysql:3306/knowledge_graph?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true'
-RAG_GRAPH_DB_USER=root
-RAG_GRAPH_DB_PASSWORD=root
+RAG_GRAPH_STORE=jdbc        # 默认，持久化到 MySQL（表结构由 knowledge-graph migration 预建）
+RAG_GRAPH_DB_URL='jdbc:mysql://mysql:3306/knowledge_graph?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true'
+RAG_GRAPH_DB_USER=knowledge_graph_app
+RAG_GRAPH_DB_PASSWORD=knowledge-graph-app-dev
 # 或退回进程内（不持久化）
 RAG_GRAPH_STORE=in-memory
 ```

@@ -553,7 +553,7 @@ mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install
 按订单号做**确定性、参数化、只读**的单条订单查询：`actionInput`=订单号（如 `101`），经带租户/trace 透传的 `orderRestTemplate` 调独立 **order-service（`:8093`）** 的 `GET /orders/{orderNo}`，返回状态/金额/客户/下单日期。与 `analytics_sql` 的分工：本动作是精确单查（快、天然防注入），统计/聚合（总额/趋势/top-N）走 `analytics_sql`。
 
 - 动作本身只门控 `app.agent.enabled`（只读无副作用，默认挂载）；真正是否可用取决于注入的 `OrderClient`：`app.agent.order.enabled=true` 且 order-service 可达时用 `HttpOrderClient`，否则 `NoopOrderClient` 兜底降级为「order lookup disabled」（Http/Noop 用 `@ConditionalOnExpression` 互补，回归测 `OrderClientWiringTest`）。
-- **下游 order-service**：裸 `JdbcTemplate` 直连持久化 MySQL（独立 schema `order_service`，`CREATE TABLE IF NOT EXISTS` + 首启种子），`WHERE id=? AND tenant_id=?` 参数化按租户隔离（别的租户查同一订单号得 404），只读接口无 scope 门禁（401 由 edge 兜）。详见 [让 Agent 主动调接口](让Agent主动调接口.md)。
+- **下游 order-service**：裸 `JdbcTemplate` 直连持久化 MySQL（独立 schema `order_service`，migration 预建表 + 可选 demo 种子），`WHERE id=? AND tenant_id=?` 参数化按租户隔离（别的租户查同一订单号得 404），只读接口无 scope 门禁（401 由 edge 兜）。详见 [让 Agent 主动调接口](让Agent主动调接口.md)。
 
 | 属性（`app.agent.order.*`） | 环境变量 | 默认 |
 |---|---|---|

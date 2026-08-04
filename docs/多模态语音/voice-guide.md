@@ -168,7 +168,10 @@ data:
 底层是**真 token 流式**：`voice-service` 消费 `conversation` `/chat/stream` 的 SSE，token 一到就喂
 `SentenceChunker` 攒句，凑够一整句立即 TTS 发一个 `audio-chunk`——首句延迟随生成推进，而非等整段回复。
 `audio-chunk` 的 `text` 保留引用标记（文字侧用），`audioBase64` 合成前已剥掉。客户端断连（`onCompletion`/
-`onTimeout`/`onError`）会置 `cancelled`、停止后续 TTS 省算力；上游 SSE 无中断句柄，仍会读完（与 `/chat/stream` 同）。
+`onTimeout`/`onError`）会置 `cancelled`、关闭 voice→conversation 的活动 HTTP 响应并停止后续 TTS。
+conversation 会感知下游关闭并停止写出，但 langchain4j `TokenStream` 没有当前 provider 调用的取消句柄；
+已经发出的模型调用只能等 provider 完成或超时。流式失败固定返回
+`VOICE_STREAM_FAILED`，不会把 ASR/TTS/provider 异常文本发给客户端。
 
 **分句规则**（`SentenceChunker`）：遇句末标点（`。！？!?…` 或换行）且当前累计字数 ≥ `VOICE_STREAM_MIN_CHARS`（默认 8）
 才切一句。`min-chars` 阈值防止「好。」这种过短句各自单独 TTS——既费调用又听感碎。不足一句的尾巴在收口时并成最后一段。
@@ -269,8 +272,10 @@ Helm 生产启用时把 `VOICE_ENABLED` 置 `true`，`VOICE_API_KEY` 走 Secret 
 **坑：**
 - **ASR 错字会放大下游**：口音/噪声把关键词转错（「退款」听成「推广」）会误导对话。可配 `VOICE_LANGUAGE=zh` 给语言提示提准；进一步的置信度阈值 + 复述确认是未来项。
 - **`route` 只有 CHAT/NONE**：别指望语音端直接触发工作流转人工——那是文本渠道（钉钉/飞书）+ `workflow-service` 的活，见第 1 节。
-- **半流式上游不可中断**：客户端断连只停下游 TTS，`conversation` 的 SSE 仍会读完（token 已在生成）。
-- **多租户 / PII**：音频也是用户数据，走同一鉴权链；审计会落 ASR 文字，敏感场景按需脱敏（下游 `conversation` 侧已有 PII/注入护栏）。
+- **取消边界**：客户端断连会关闭 voice→conversation SSE 并停止 TTS；conversation 可停止下游写出，
+  但 langchain4j 当前没有 provider 级取消句柄，已发出的模型调用仍由 provider 超时收敛。
+- **多租户 / PII**：音频也是用户数据，走同一鉴权链；日志只记录转写/回复长度，不记录 ASR 原文。
+  流式 transcript 与回复文字会遮蔽邮箱、中国手机号和身份证；conversation 侧仍执行同一套 PII/注入护栏。
 
 **故意不做：**
 

@@ -194,7 +194,7 @@ curl -s 'http://localhost:8080/interop/agent-card' -H "Authorization: Bearer $AC
 
 - **文本来源**：`message.parts` 里所有 `kind == "text"` 的 `text` 拼接。本实现只支持 `text` part（`Part.kind` 判别字段）。文本为空 → `-32602 Invalid params`。
 - **skill 选择**：`message.metadata.skill` 决定走哪个技能——`"deep-research"` 走异步 Task，其它（含缺省）都按 `chat` 同步处理。
-- **push 回调**：`configuration.pushNotificationConfig`（`url` / `token` / `id`）仅 `deep-research` 路径用得上。**不再原样透传客户端 URL**：interop 把 agent 任务的 webhook 指向自己的 `/interop/a2a/push-callback`，任务终态时由 `A2aPushForwarder` 拉取任务、组成 **A2A Task 信封**回推你的 `url`，带 `X-A2A-Notification-Token`（回带你的 `token`）与可选 `X-Webhook-Signature`（HMAC，`INTEROP_A2A_PUSH_HMAC_SECRET` 配了才发）。详见 §5.4。
+- **push 回调**：`configuration.pushNotificationConfig`（`url` / `token` / `id`）仅 `deep-research` 路径用得上。**不再原样透传客户端 URL**：interop 把 agent 任务的 webhook 指向自己的 `/interop/a2a/push-callback`，任务终态时由 `A2aPushForwarder` 拉取任务、组成 **A2A Task 信封**回推你的 `url`，带 `X-A2A-Notification-Token`（回带你的 `token`）与强制的统一 v1 HMAC 信封。详见 §5.4。
 - 其余字段（`blocking`、`acceptedOutputModes`、外层 `metadata`、`token`/`id` 等）当前被忽略。
 
 ### 4.2 chat（同步）
@@ -270,7 +270,7 @@ curl -s -X POST 'http://localhost:8080/interop/a2a' \
   "id": "req-2",
   "result": {
     "id": "<taskId>",
-    "contextId": "<taskId>",
+    "contextId": "<入参 contextId；缺省为服务端 UUID>",
     "status": { "state": "submitted", "timestamp": "2026-07-07T..." },
     "kind": "task"
   }
@@ -314,7 +314,10 @@ data: {"jsonrpc":"2.0","id":"s-1","result":{"taskId":"<id>","contextId":"<id>","
 data: {"jsonrpc":"2.0","id":"s-1","result":{"taskId":"<id>","contextId":"<id>","status":{"state":"completed","timestamp":"..."},"final":true,"kind":"status-update"}}
 ```
 
-> 客户端断开连接后，interop 停止转发（上游 token 流无取消句柄，与 conversation `/chat/stream` 同语义）。SSE 读超时由 `INTEROP_STREAM_READ_TIMEOUT`（默认 120s）控制。
+> 客户端断开后，chat 流会关闭 interop→conversation 的活动 HTTP 响应；deep-research 流除关闭
+> interop→agent SSE 外，还会调用任务取消 API。conversation 会停止向已关闭连接写出，但
+> langchain4j 当前没有 provider 级取消句柄，已发出的模型调用只能等完成或超时。SSE 读超时由
+> `INTEROP_STREAM_READ_TIMEOUT`（默认 120s）控制。
 
 ---
 
@@ -341,8 +344,10 @@ A2A `TaskState`（wire value 用连字符形式）与 `agent-service` 内部状�
 
 - `timestamp` 取 agent 的 `updatedAt` → `createdAt` → 当前时间（首个非空）。
 - 任务 `SUCCEEDED`：把结果（`AgentRunReply.finalAnswer`，或结果 `toString` 兜底）摊成一个文本 **artifact**（`name = "answer"`）挂到 `artifacts`。
-- 任务 `FAILED`：把 `error` 文本挂到 `status.message`（一条 agent Message），方便看失败原因。
-- `contextId` 复用 `taskId`（当前无独立会话归并）。
+- 任务 `FAILED`：`status.message` 只返回稳定的 `agent task failed`，不透传任务/provider 错误文本。
+- `contextId` 取原始 A2A message，并以 `a2a-task-context.v1` 记录按 tenant/task 持久化；
+  `message/send`、research stream、`tasks/get`、`tasks/cancel` 与 push 信封始终返回同一 context。
+  仅迁移前创建、没有 context 记录的旧任务兼容回退为 `taskId`。
 
 ### 5.2 `tasks/get`
 
@@ -395,10 +400,14 @@ curl -s -X POST 'http://localhost:8080/interop/a2a' \
 
 1. `message/send`（research）时 interop 把 agent 任务的 webhook 设成自己的 `/interop/a2a/push-callback`（内网直连，不经 edge-gateway），并按 `(tenantId, taskId)` 记下你的 push 配置；也可在 send 之后用 `tasks/pushNotificationConfig/set` 补登记。
 2. 任务终态 → agent 回调 interop → `A2aPushForwarder` 拉取任务、映射成 **A2A Task 信封**（`kind=task` + `artifacts`）POST 到你的 `url`。
-3. 请求头：`X-A2A-Notification-Token`（回带你 config 里的 `token`，供你校验回调真伪）、`X-Webhook-Event: a2a.task.finished`、`X-Webhook-Delivery: <uuid>`；配了 `INTEROP_A2A_PUSH_HMAC_SECRET` 时再带 `X-Webhook-Signature`（对 body 的 HMAC-SHA256 hex）。
-4. 投递失败按 `push-max-retries`（默认 2）线性退避重试；4xx 不重试。
+3. 请求头：`X-A2A-Notification-Token`（回带你 config 里的 `token`）、`X-Webhook-Event: a2a.task.finished`、`X-Webhook-Delivery`、`X-Webhook-Timestamp`、`X-Webhook-Signature: v1=...`。签名绑定 timestamp、delivery、event 与原始 body；接收方须校验时间窗并按 delivery 去重。
+4. URL 必须命中预登记的 HTTPS origin，注册与每次投递都会重做 DNS/SSRF 校验；3xx 不跟随也不重试，普通 4xx 不重试，5xx/网络错误按 `push-max-retries`（默认 2）线性退避。
 
-> 中继存储 `A2aPushNotificationStore` 默认内存、单副本、重启即丢（与 rate-limit / token-budget 同款演进：多副本换 Redis/JDBC，接口不变）。生产建议配 `INTEROP_A2A_PUSH_HMAC_SECRET` 让客户端能校验回调真伪。
+> 本地默认内存；生产设置 `INTEROP_STATE_STORE=redis`，Compose/Helm 默认 2 副本共享 Redis。
+> push token 只以 AES-256-GCM 密文落库，`INTEROP_A2A_PUSH_ENCRYPTION_KEY` 必须是独立
+> 32-byte base64 key，不得复用 `INTEROP_A2A_PUSH_HMAC_SECRET`。`set` 会先用 owner-scoped
+> `tasks/get` 验证任务存在，不能为任意 taskId 植入回调。投递成功只清除 push 配置，保留 context。
+> 完整协议见 [Webhook / Callback 安全接入](../平台工程/webhook-security.md)。
 
 ---
 
@@ -409,9 +418,10 @@ live discovery 影响的是 **MCP 工具目录**（`/interop/mcp/tools`、平台
 机制（`InteropToolRegistry` + `AgentCapabilityClient`）：
 
 - 默认**开启**（`app.interop.discovery-enabled=true`）：懒加载 + TTL 缓存，从 AgentScope
-  `GET /agent/capabilities` 拉取当前能力（返回 `List<McpToolDescriptor>`）；下游不可达 /
-  返回空时**确定性回退**到 last-known-good 或静态默认，永不因发现失败抛错或阻塞。
-- 置 `false` 关闭：走静态回退工具集 `STATIC_AGENT_TOOLS`，零下游依赖，dev/test 行为不变。
+  `GET /agent/capabilities/registry` 拉取 `agent-capability-registry.v1`。只有 schema、64 位
+  SHA-256 revision、非空且无重名 descriptor 全部通过才更新缓存；生产 LKG 持久化到 Redis，
+  因而进程重启且 AgentScope 暂不可达时仍可恢复。
+- 置 `false` 关闭：只暴露 interop 本地 `platform.ping`，不复制 Java 静态 Agent 工具目录。
 
 内建工具 `platform.ping` 恒在；agent 工具（静态默认）：`platform.agent.run`、`platform.agent.run_async`、`platform.agent.dag.plan_run`、`platform.agent.dag.plan_run_async`。
 
@@ -421,15 +431,20 @@ live discovery 影响的是 **MCP 工具目录**（`/interop/mcp/tools`、平台
 |---|---|---|---|
 | `app.interop.discovery-enabled` | `INTEROP_DISCOVERY_ENABLED` | `true` | live discovery 总开关（**默认开**） |
 | `app.interop.capability-ttl` | `INTEROP_CAPABILITY_TTL` | `60s` | discovery 缓存 TTL，过期触发懒刷新 |
+| `app.interop.state-store` | `INTEROP_STATE_STORE` | `memory` | 本地 memory；生产必须为 redis |
+| `app.interop.state-namespace` | `INTEROP_STATE_NAMESPACE` | `platform:interop:a2a` | A2A context Redis namespace |
+| `app.interop.capability-registry-key` | `INTEROP_CAPABILITY_REGISTRY_KEY` | `platform:interop:capability-registry:v1` | capability LKG Redis key |
 | `app.interop.agent-base-url` | `AGENT_BASE_URL` | `http://localhost:18085` | 代理到的 AgentScope 基址 |
 | `app.interop.conversation-base-url` | `CONVERSATION_BASE_URL` | `http://localhost:8081` | `message/stream`（chat）代理的 conversation 基址 |
 | `app.interop.connect-timeout` | `INTEROP_CONNECT_TIMEOUT` | `1s` | 出站连接超时 |
 | `app.interop.read-timeout` | `INTEROP_READ_TIMEOUT` | `30s` | 出站读超时 |
 | `app.interop.stream-read-timeout` | `INTEROP_STREAM_READ_TIMEOUT` | `120s` | `message/stream` 代理 SSE 的读超时 |
 | `app.interop.a2a.push-callback-base-url` | `INTEROP_A2A_PUSH_CALLBACK_BASE_URL` | `http://localhost:8088` | push 中继回调基址（agent 任务 webhook 回到 interop 自己） |
-| `app.interop.a2a.push-hmac-secret` | `INTEROP_A2A_PUSH_HMAC_SECRET` | 空 | push 回推客户端时的 HMAC 签名密钥；空则不签名 |
+| `app.interop.a2a.push-hmac-secret` | `INTEROP_A2A_PUSH_HMAC_SECRET` | 强开发占位值 | push 回推客户端的 v1 HMAC 密钥；至少 32 字节，否则启动失败 |
+| `app.interop.a2a.push-encryption-key` | `INTEROP_A2A_PUSH_ENCRYPTION_KEY` | 空 | Redis 模式必填；独立 base64 AES-256 key |
+| `spring.data.redis.url` | `SPRING_DATA_REDIS_URL` | `redis://localhost:6379/0` | 共享 A2A context 与 capability LKG |
 
-> `GET /agent/capabilities` 端点在 agent-service 侧仅当 agent 装配（`DeepAgentService` 存在）时才挂载（`@ConditionalOnBean(DeepAgentService.class)`），其声明的工具集与 interop 静态回退对齐。
+> 旧 `GET /agent/capabilities` 仍保留原四项 JSON 供旧消费者；interop 只消费新 registry。
 
 ---
 
@@ -482,6 +497,9 @@ live discovery 影响的是 **MCP 工具目录**（`/interop/mcp/tools`、平台
 | `INTEROP_A2A_VERSION` | agent-card `version` | `0.1.0` |
 | `INTEROP_A2A_AUTH_MODE` | agent-card 安全声明：`only`/`dual`/`legacy` | `only` |
 | `INTEROP_DISCOVERY_ENABLED` | live capability discovery（从 agent-service 动态拉能力） | `true` |
+| `INTEROP_STATE_STORE` | A2A context/capability LKG store；生产为 `redis` | `memory` |
+| `SPRING_DATA_REDIS_URL` | interop Redis URL | `redis://localhost:6379/0` |
+| `INTEROP_A2A_PUSH_ENCRYPTION_KEY` | push token AES-256-GCM base64 key | Redis 模式必填 |
 | `AGENT_BASE_URL` | interop→agent 内网地址 | `http://localhost:8085` |
 
 鉴权：`/.well-known/agent-card.json` **免鉴权对外**（A2A 发现惯例，已在 edge-gateway 白名单）；`/interop/a2a` JSON-RPC 端点需 agent-card 声明的凭据。默认 Casdoor-only 使用 Bearer；`dual` 灰度模式可兼容专用 API key。

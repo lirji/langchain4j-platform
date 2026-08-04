@@ -104,7 +104,7 @@
 - **Flowable**（`flowable-spring`，BPMN 2.0）—— `workflow-service` 退款审批流，自管其数据库表（同一 MySQL 数据源）。
 
 ### 数据与存储
-- **MySQL 8.4**（`mysql-connector-j`）：Flowable / async-task / knowledge 图谱 / channel 去重 / **auth 账号·角色·刷新会话** / NL2SQL demo 等。**裸 `JdbcTemplate` 直连**，表结构靠 `Jdbc*Store` 里的 `CREATE TABLE IF NOT EXISTS` / `ALTER TABLE` 演进（无迁移工具），连接池 HikariCP（Spring Boot 默认）。JDBC 存储多为可选开启（compose 默认多切 JDBC）、application.yml 默认内存。
+- **MySQL 8.4**（`mysql-connector-j`）：Flowable / async-task / knowledge 图谱与入库任务 / channel 去重 / **auth 账号·角色·刷新会话** / order / NL2SQL demo 等。业务仍以裸 `JdbcTemplate` 访问，schema 则由独立 `database-migrations` 以 Flyway/Flowable 版本在部署前迁移；业务启动不执行 DDL。连接池 HikariCP（Spring Boot 默认）。
 - **Redis 7**（`spring-boot-starter-data-redis`）：语义缓存 store、knowledge 文档 registry（默认）、事件去重、限流/token 预算/成本计数等后端。
 - **Qdrant**：向量持久化（yml/compose 默认向量库）。
 - **Elasticsearch 8.15.x + Kibana**（自研 `EsGateway`，非 Spring Data ES）：RAG 全文 BM25 混排索引 `knowledge_segments_text`，自建镜像装 `analysis-smartcn` 中文分析器（compose 默认开启，knowledge-service 待其健康探针就绪再启动）。
@@ -274,7 +274,7 @@ Java-only `refund_start`、code、browser、MCP-client 和 vision 工具尚未�
 - `GET /async/tasks/{taskId}/stream` SSE，支持 `Last-Event-ID` header 或 `lastEventId` query 断点续订。
 - `POST /async/tasks/{taskId}/lease` worker 认领（`PENDING`→`RUNNING`），未过期 lease 只允许 owner worker 更新。
 - 终态（`SUCCEEDED`/`FAILED`/`CANCELLED`）webhook 投递（头带 `X-Async-Task-Id`/`X-Async-Task-Status`/`X-Tenant-Id`）。
-- 存储 `ASYNC_TASK_STORE=in-memory`（默认）| `jdbc`（MySQL，自动建 `ASYNC_TASK` + `ASYNC_TASK_WEBHOOK_OUTBOX`）。投递耗尽进 `DEAD`，`GET /async/webhook-outbox/dead` 按租户查询。已投递 outbox 默认保留 7 天（`ASYNC_TASK_WEBHOOK_DELIVERED_RETENTION`）。
+- 存储 `ASYNC_TASK_STORE=in-memory`（默认）| `jdbc`（MySQL；表由 `async-task` migration 预建，缺表 fail-fast）。投递耗尽进 `DEAD`，`GET /async/webhook-outbox/dead` 按租户查询。已投递 outbox 默认保留 7 天（`ASYNC_TASK_WEBHOOK_DELIVERED_RETENTION`）。
 - kafka 档下终态在 `store.update` 同事务写生命周期 outbox 行，由 relay 投 Kafka（与 workflow 对称，避免两段式丢失）。
 
 ### 5. 工作流审批
@@ -345,7 +345,7 @@ Java-only `refund_start`、code、browser、MCP-client 和 vision 工具尚未�
 - **会话与内部 JWT 两级 TTL**：会话 accessToken 默认 60min（`SESSION_ACCESS_TTL`）、刷新令牌默认 7d（`SESSION_REFRESH_TTL`，服务端只存 SHA-256 哈希）；边缘换发的内部 JWT 仍是 5min。降权/禁用/删号即时撤销刷新会话，已签发 access 最长延迟一个 access TTL 生效。
 - **RBAC 管理面** `/auth/admin/**`（整类 `@ConditionalOnProperty(app.auth.rbac.enabled)`，`role-admin` scope 门禁）：用户 CRUD（`GET/POST /auth/admin/users`、`GET/PATCH/DELETE /auth/admin/users/{username}`、`PUT /auth/admin/users/{username}/roles`）、角色 CRUD（`GET/POST /auth/admin/roles`、`GET/PUT/DELETE /auth/admin/roles/{name}`）。写端点二级门 `admin-writes-enabled`（关→503）+ `If-Match` 乐观锁（缺失 428 / 版本冲突 412）；护栏禁止移除最后一个 role-admin、删被引用角色（409）。列表响应 `X-Total-Count`，单查回 `ETag` 作 If-Match 基线。
 - **角色/scope 模型**：种子角色 `viewer[chat]`/`editor[chat,ingest]`/`analyst[chat,analytics]`/`approver[chat,approve]`/`admin[全量 + role-admin + public-ingest]`；有效 scopes = 角色展开 ∪ 直配，签发令牌时展开。`role-admin`/`public-ingest` 只经 admin 角色获得。
-- **默认与存储**：application.yml 默认 `AUTH_STORE=in-memory` + RBAC/写全关；compose demo 默认 `jdbc`（表 `USERS`/`USER_ROLE`/`ROLES`/`ROLE_SCOPE`/`AUTH_SESSION`，`CREATE TABLE IF NOT EXISTS` 自建）+ `AUTH_RBAC_ENABLED=true` + 写开放 + `AUTH_RBAC_BOOTSTRAP_ADMIN_USERS=alice`。密码 BCrypt，登录按 username+IP、注册按 IP 节流。生产应分阶段灰度并显式配置 bootstrap-admin 名单。
+- **默认与存储**：application.yml 默认 `AUTH_STORE=in-memory` + RBAC/写全关；compose demo 默认 `jdbc`（表由 `migrate-auth` 前置任务创建）+ `AUTH_RBAC_ENABLED=true` + 写开放 + `AUTH_RBAC_BOOTSTRAP_ADMIN_USERS=alice`。密码 BCrypt，登录按 username+IP、注册按 IP 节流。生产应分阶段灰度并显式配置 bootstrap-admin 名单。
 
 ## 当前限制
 

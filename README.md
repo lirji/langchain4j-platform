@@ -75,7 +75,7 @@ client ──X-Api-Key/Bearer──▶ edge-gateway (Spring Cloud Gateway)
 - Agent 与编排：[Agent](docs/Agent编排/agent-guide.md) · [工作流](docs/Agent编排/workflow-guide.md) · [Code Interpreter](docs/Agent编排/code-exec.md)
 - 多模态与语音：[视觉](docs/多模态语音/vision-guide.md) · [语音](docs/多模态语音/voice-guide.md)
 - 互操作与渠道：[A2A](docs/互操作渠道/a2a-guide.md) · [MCP](docs/互操作渠道/mcp-guide.md) · [钉钉桥](docs/互操作渠道/dingtalk-guide.md)
-- 平台工程：[RBAC与登录](docs/平台工程/rbac-and-public-kb.md) · [Casdoor SSO/OIDC 接入](docs/平台工程/公网化-OIDC-改造方案.md) · [事件总线](docs/平台工程/eventbus-guide.md) · [可观测性](docs/平台工程/observability-guide.md) · [成本归因](docs/平台工程/cost-attribution.md) · [评测](docs/平台工程/eval-guide.md)
+- 平台工程：[可信发布](docs/平台工程/software-supply-chain.md) · [RBAC与登录](docs/平台工程/rbac-and-public-kb.md) · [Casdoor SSO/OIDC 接入](docs/平台工程/公网化-OIDC-改造方案.md) · [事件总线](docs/平台工程/eventbus-guide.md) · [可观测性](docs/平台工程/observability-guide.md) · [成本归因](docs/平台工程/cost-attribution.md) · [评测](docs/平台工程/eval-guide.md)
 - [迁移路线图](docs/迁移/migration-roadmap.md)
 
 ## 本地跑（Phase 0）
@@ -217,9 +217,9 @@ RAG_GRAPH_ALIASES=张三经理=张三
 
 ```bash
 RAG_GRAPH_STORE=jdbc
-RAG_GRAPH_DB_URL='jdbc:mysql://mysql:3306/knowledge_graph?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true'
-RAG_GRAPH_DB_USER=root
-RAG_GRAPH_DB_PASSWORD=root
+RAG_GRAPH_DB_URL='jdbc:mysql://mysql:3306/knowledge_graph?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true'
+RAG_GRAPH_DB_USER=knowledge_graph_app
+RAG_GRAPH_DB_PASSWORD=knowledge-graph-app-dev
 ```
 
 当前图谱抽取支持受控文本三元组格式：`subject|relation|object`，多条可用换行或分号分隔。上传文档后可查实体邻居：
@@ -527,7 +527,7 @@ curl -s -X POST 'http://localhost:8080/async/tasks' \
   -d '{
     "kind": "agent.run",
     "input": {"goal": "查一下知识库里的退款审批规则"},
-    "webhookUrl": "http://host.docker.internal:9000/async-task-callback"
+    "webhookUrl": "https://callbacks.example.com/async-task-callback"
   }'
 
 curl -s 'http://localhost:8080/async/tasks/{taskId}' \
@@ -562,19 +562,20 @@ SSE 事件使用 JDBC `ASYNC_TASK_EVENT` 的 task-scoped sequence 作为可恢�
 断线或服务重启后可通过标准 `Last-Event-ID` header 或 `lastEventId` query 参数恢复。
 分布式 worker 可先调用 `/lease` 把任务从 `PENDING` claim 到 `RUNNING`；未过期 lease 只允许 owner worker 更新状态，过期后其他 worker 可重新 claim。
 
-任务进入 `SUCCEEDED` / `FAILED` / `CANCELLED` 后，`async-task-service` 会投递任务快照到 `webhookUrl`，请求头包含 `X-Async-Task-Id`、`X-Async-Task-Status`、`X-Tenant-Id`；五种新 Agent kind 额外提供旧十字段 payload 与 `X-Agent-Task-*` alias。JDBC outbox 中投递耗尽的记录会进入 `DEAD` 状态，可通过 `/async/webhook-outbox/dead` 按当前租户查询。重复终态事件不会把 `DELIVERED/DEAD` 重新置为待投递。
+任务进入 `SUCCEEDED` / `FAILED` / `CANCELLED` 后，`async-task-service` 会投递任务快照到 `webhookUrl`，请求头包含 `X-Async-Task-Id`、`X-Async-Task-Status`、`X-Tenant-Id`；五种新 Agent kind 额外提供旧十字段 payload 与 `X-Agent-Task-*` alias。所有 HTTP callback 还带统一的 `X-Webhook-Event/Delivery/Timestamp/Signature` v1 HMAC 信封；目标必须命中 HTTPS origin allowlist，发送端每次投递前重做 DNS/SSRF 校验且不跟随重定向。JDBC outbox 中投递耗尽的记录会进入 `DEAD` 状态，可通过 `/async/webhook-outbox/dead` 按当前租户查询。重复终态事件不会把 `DELIVERED/DEAD` 重新置为待投递。完整接收与验签协议见 [Webhook / Callback 安全接入](docs/平台工程/webhook-security.md)。
 
 需要让任务表和 webhook outbox 持久化到 MySQL 时，开启 JDBC store：
 
 ```bash
 ASYNC_TASK_STORE=jdbc
-ASYNC_TASK_DB_URL='jdbc:mysql://mysql:3306/async_task?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true'
-ASYNC_TASK_DB_USER=root
-ASYNC_TASK_DB_PASSWORD=root
+ASYNC_TASK_DB_URL='jdbc:mysql://mysql:3306/async_task?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true'
+ASYNC_TASK_DB_USER=async_task_app
+ASYNC_TASK_DB_PASSWORD=async-task-app-dev
 ```
 
-JDBC 模式下会自动创建 `ASYNC_TASK`、`ASYNC_TASK_EVENT` 和
-`ASYNC_TASK_WEBHOOK_OUTBOX` 表；终态、lifecycle event 与 HTTP/Kafka outbox 在同一事务
+JDBC 模式启动前必须先运行 `async-task` migration；业务进程只校验
+`ASYNC_TASK`、`ASYNC_TASK_EVENT` 和 `ASYNC_TASK_WEBHOOK_OUTBOX` 等表，不执行 DDL。终态、
+lifecycle event 与 HTTP/Kafka outbox 在同一事务
 提交。定向 orphan reaper 默认关闭；只允许
 `agent.run/agent.dag/agent.dag-plan/agent.analyst/agent.process`，开启前配置
 `ASYNC_TASK_ORPHAN_ENABLED=true` 并先验证 pending timeout/lease grace。

@@ -35,7 +35,7 @@
 ### 存储（关系化）
 
 - `AUTH_STORE=in-memory`（默认，种子角色/账号，重启回种子态）或 `jdbc`。
-- JDBC 下角色以**关系表为权威**：`USER_ROLE`（用户→角色，供正确的按角色反查）、`ROLE_SCOPE`（角色→scope）；旧 `USERS.ROLES` / `ROLES.SCOPES` CSV 列保留一个版本作**影子双写**（便于回滚/兼容读）。首启把 CSV 幂等回填进关系表，支持 main 基线库 / 早期 CSV 库 / 空库三种无损升级。`CREATE TABLE IF NOT EXISTS` 幂等演进，无 Flyway，无外键（引用完整性由服务层保证）。复合写（用户+角色+refresh）经 `RbacMutationExecutor` 原子执行（JDBC 事务 / 内存全局锁）。
+- JDBC 下角色以**关系表为权威**：`USER_ROLE`（用户→角色，供正确的按角色反查）、`ROLE_SCOPE`（角色→scope）；旧 `USERS.ROLES` / `ROLES.SCOPES` CSV 列保留一个版本作**影子双写**（便于回滚/兼容读）。独立 `auth` migration 幂等创建关系表并回填旧 CSV，支持基线库、早期 CSV 库和空库无损纳管；业务进程不执行 DDL。无外键（引用完整性由服务层保证）。复合写（用户+角色+refresh）经 `RbacMutationExecutor` 原子执行（JDBC 事务 / 内存全局锁）。
 - 继承层新增表（同样惰性建、无外键、VERSION 乐观锁）：`TENANT_POLICY`（租户→版本）+ `TENANT_ROLE`（租户→基础角色，租户仍是隐式字符串、非一等实体，故只做策略覆盖不建 TENANTS 表）；`AUTH_GROUP`（用 `AUTH_GROUP` 而非保留字 `GROUP`）+ `GROUP_ROLE`（组→角色）；`USER_GROUP`（用户↔组成员）。无策略/无组 == 与"未引入继承"逐字节等价。
 
 ### 继承式 RBAC（租户基础角色 + 用户组）

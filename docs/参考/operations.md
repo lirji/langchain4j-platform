@@ -44,6 +44,9 @@ docker compose -f deploy/docker-compose.yml up --build
 # 校验 compose 展开后的最终配置
 docker compose -f deploy/docker-compose.yml config
 
+# 验证 Compose/Helm 的 non-root、只读根文件系统、Secret 最小注入、NetworkPolicy、PDB/HPA
+bash deploy/test-runtime-hardening-config.sh
+
 # —— 推荐用一键脚本（自动本机端口重映射避开 apollo 占用的 8080/8090/3306）——
 bash deploy/start-all.sh      # 全 docker（后端 + 基础设施 + 前端 nginx :8093）；网关落 :18080
 bash deploy/start-dev.sh      # 后端 docker + 前端 vite dev(:5173, HMR)；日常改前端用
@@ -165,7 +168,7 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 - **会话令牌**：`SESSION_JWT_SECRET`（auth 签发 / edge 验签共用，≥32 字节，与内部密钥分离）。会话 accessToken 默认 60min（`SESSION_ACCESS_TTL`），刷新令牌默认 7d（`SESSION_REFRESH_TTL`，仅哈希存库，经 httpOnly cookie 收发）。
 - **刷新/登出**：`POST /auth/refresh`（用刷新 cookie 一次性轮转）、`POST /auth/logout`（撤销会话）。跨域直调网关时刷新 cookie 需 `AUTH_COOKIE_SAME_SITE=None` + `AUTH_COOKIE_SECURE=true`（同源 nginx 反代可用默认 Lax/false）。
 - **RBAC**：`AUTH_RBAC_ENABLED`（yml 默认 false / compose demo true）开启后 `/auth/admin/**` 管理面可用，需 `role-admin` scope；写端点再受 `AUTH_RBAC_ADMIN_WRITES_ENABLED`（关→503）与 `If-Match` 乐观锁（缺失 428 / 冲突 412）约束。`AUTH_RBAC_BOOTSTRAP_ADMIN_USERS`（默认 `alice`）指定初始 admin。
-- **存储**：`AUTH_STORE`（yml `in-memory` / compose `jdbc`）；jdbc 档自动建 `USERS`/`USER_ROLE`/`ROLES`/`ROLE_SCOPE`/`AUTH_SESSION`（`AUTH_DB_URL`/`_USER`/`_PASSWORD`）。种子 `AUTH_SEED_ENABLED`（默认 true，生产建议 false）。自助注册 `AUTH_REGISTRATION_ENABLED`（默认 false，须与 RBAC 同开）。
+- **存储**：`AUTH_STORE`（yml `in-memory` / compose `jdbc`）；jdbc 档使用独立迁移阶段预建的 `USERS`/`USER_ROLE`/`ROLES`/`ROLE_SCOPE`/`AUTH_SESSION`（`AUTH_DB_URL`/`_USER`/`_PASSWORD`），缺 schema 会启动失败。种子 `AUTH_SEED_ENABLED`（默认 true，生产建议 false）。自助注册 `AUTH_REGISTRATION_ENABLED`（默认 false，须与 RBAC 同开）。
 
 ### 4.2 Casdoor SSO Bearer（边缘身份切换，`edge.casdoor.*`，**默认开 + `only`**）
 
@@ -194,11 +197,52 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 | `platform.security.jwt.algorithm` | `HS256` | `HS256`（对称，用上面的 secret）或 `RS256`（非对称） |
 | `platform.security.jwt.private-key` | 空 | `RS256` 时 edge-gateway 用它签发；PEM（含头尾）或纯 base64，PKCS#8 |
 | `platform.security.jwt.public-key` | 空 | `RS256` 时下游用它验签；PEM 或纯 base64，X.509 |
+| `platform.security.jwt.issuer` | `langchain4j-platform` | 必须与所有签发/验签节点一致 |
+| `platform.security.jwt.audience` | `platform-internal` | 内部 token 只允许这一项 audience，混合 audience 拒绝 |
+| `platform.security.jwt.key-id` | `platform-internal-v1` | JOSE `kid`，用于显式轮换和拒绝退休 key |
+| `platform.security.jwt.clock-skew` | `5s` | 允许的最大时钟偏差，配置上限 30 秒 |
 | `platform.security.jwt-ttl` | `5m` | 内部 JWT 有效期（仅覆盖一次调用链） |
 | `platform.security.internal-header` | `X-Internal-Token` | 内部 JWT 承载头名 |
 | `platform.security.api-key-header` | `X-Api-Key` | 外部 api-key 头名（仅边缘识别） |
 
-> `jwt.*` 三项在 application.yml 中未做 `${ENV}` 包装，需经 config-server 下发或 JVM 参数 `-Dplatform.security.jwt.algorithm=RS256` 等设置。切 RS256 时须同时给 edge-gateway 配 `private-key`、给所有下游配 `public-key`。
+> Helm 通过 `PLATFORM_SECURITY_JWT_*` 统一注入上述非敏感安全上下文。轮换或切 RS256 时须先
+> 升级全部 edge 签发副本，等待至少一个 `jwt-ttl`，再升级严格验签下游；同时给 edge 配
+> `private-key`、给所有下游配 `public-key`。错 issuer/audience/kid/token-use、缺 jti/iat 或超长 TTL
+> 均返回 401，不提供生产兼容降级。
+
+### async-task worker JWT（`platform.security.async-worker.*`）
+
+`POST .../lease`、`PATCH .../status` 与 `POST .../events` 不接受普通内部 JWT，只接受
+`X-Async-Worker-Token`。令牌使用独立 HS256 key，严格绑定 service/tenant/actor/worker/task/action，
+TTL 30～120 秒；状态和事件写入还要求当前未过期租约。用户侧 list/get/stream/cancel 则按
+`tenant + owner user` 授权，同租户其他用户返回 404。
+
+生产密钥 `ASYNC_TASK_WORKER_JWT_SECRET` 只能挂载到 `async-task-service` verifier 和实际 worker
+（AgentScope、workflow、knowledge-ingest-worker；legacy agent 仅在回滚 profile），不得复用内部、
+confirmation 或 downstream key。issuer/audience/kid/header/TTL 由 Compose/Helm 显式统一；轮换时
+先同时兼容 signer/verifier，再排空旧 TTL。回滚不得重新开放普通 JWT 访问 worker API。
+
+### 出站 HTTP 连接池、deadline 与故障隔离
+
+`platform-security` 为 Spring `RestTemplateBuilder` 统一启用 Apache HttpClient 5 持久连接池，并给
+每个由 Boot builder 创建的 `RestTemplate` 装配同一个 `OutboundHttpResilienceInterceptor`。
+入站 `X-Request-Deadline-Ms` 是 Unix epoch 毫秒：服务会拒绝非法/已过期值，并把过远的 deadline
+截到 `max-inbound-deadline`；出站再取父 deadline 与本地默认 deadline 的较小值传播。
+
+| 属性 / 变量 | 默认值 | 说明 |
+|---|---:|---|
+| `PLATFORM_SECURITY_HTTP_RESILIENCE_ENABLED` | `true` | 全局出站隔离与 deadline filter；只用于紧急镜像兼容回滚 |
+| `PLATFORM_SECURITY_HTTP_RESILIENCE_DEADLINE_HEADER` | `X-Request-Deadline-Ms` | 绝对 deadline header |
+| `PLATFORM_SECURITY_HTTP_RESILIENCE_DEFAULT_DEADLINE` | `30s` | 无更短父 deadline 时的单跳上限 |
+| `PLATFORM_SECURITY_HTTP_RESILIENCE_MAX_INBOUND_DEADLINE` | `5m` | 入站可声明的最大剩余时限 |
+| `PLATFORM_SECURITY_HTTP_RESILIENCE_MAX_CONCURRENT_PER_ORIGIN` | `64` | 每个 `scheme://host:port` 的非阻塞 bulkhead；满时立即拒绝 |
+| `PLATFORM_SECURITY_HTTP_RESILIENCE_CIRCUIT_FAILURE_THRESHOLD` | `5` | 连续传输异常/5xx 后开启熔断 |
+| `PLATFORM_SECURITY_HTTP_RESILIENCE_CIRCUIT_RECOVERY` | `15s` | open 窗口；到期只允许一个 half-open 探针 |
+
+调用方仍必须配置比业务 deadline 更紧的 connect/read timeout；拦截器不重试请求。4xx 不计入熔断，
+传输异常与 5xx 计入。读取能力可返回明确 unavailable 或使用已有的空结果/原顺序降级（例如 rerank
+失败保留初始检索顺序）；退款、审批、回调等副作用不得因网络错误自动重放，也不得伪造成功。
+生产关闭此保护只允许作为短时兼容回滚，并应同时停止扩量；不得通过关闭 deadline 来掩盖慢依赖。
 
 ### 网关限流（`edge-gateway` 的 `app.rate-limit`）
 
@@ -481,7 +525,7 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 | `RAG_GRAPH_ASYNC` | `false` | 抽取是否异步 |
 | `RAG_GRAPH_DB_URL` / `_USER` / `_PASSWORD` | MySQL `knowledge_graph` 库 / `root` / 空 | `jdbc` 档数据源 |
 
-> 无 Flyway/Liquibase：JDBC store 靠 `Jdbc*Store` 类里的 `CREATE TABLE IF NOT EXISTS` 自建表。
+> 关系表由 `database-migrations` 的 Flyway 版本在发布前创建/升级；JDBC store 只验证 schema 并执行业务 DML。见 `docs/平台工程/database-migrations.md`。
 
 ### 图片多模态 embedding（`RAG_MULTIMODAL_*`，源码默认关）
 
@@ -587,11 +631,12 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `ASYNC_TASK_STORE` | `in-memory` | `in-memory` 或 `jdbc`（自动建 `ASYNC_TASK` / `ASYNC_TASK_WEBHOOK_OUTBOX` 表） |
+| `ASYNC_TASK_STORE` | `in-memory` | `in-memory` 或 `jdbc`（JDBC 所需表由 `async-task` migration 预建） |
 | `ASYNC_TASK_DB_URL` / `_USER` / `_PASSWORD` | MySQL `async_task` 库 / `root` / 空 | `jdbc` 档数据源 |
 | `ASYNC_TASK_TTL` | `PT24H` | 任务保留时长 |
 | `app.async-task.webhook.transport` | `http`（属性） | `http`（HTTP outbox 直投）或 `kafka`（改发 `platform.asynctask.lifecycle` 事件，由 channel-service 消费回推；HTTP 通道自动让位） |
 | `ASYNC_TASK_WEBHOOK_ENABLED` | `true` | 终态 webhook |
+| `ASYNC_TASK_WEBHOOK_HMAC_SECRET` | 独立开发占位值 | v1 HMAC 密钥，至少 32 字节，只注入 async-task-service |
 | `ASYNC_TASK_WEBHOOK_MAX_ATTEMPTS` / `_BACKOFF` | `3` / `250ms` | 重投参数 |
 | `ASYNC_TASK_WEBHOOK_POLL_INTERVAL_MS` / `_BATCH_SIZE` | `30000` / `50` | outbox 调度 |
 | `ASYNC_TASK_WEBHOOK_DELIVERED_RETENTION` | `P7D` | delivered outbox 保留期，0 或负值关闭清理 |
@@ -614,7 +659,14 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 | `WORKFLOW_TERMINAL_ASYNC_TASK_KIND` | `workflow.terminal` | async-task 档任务 kind |
 | `WORKFLOW_TERMINAL_FALLBACK_LOCAL` | `true` | 非 local 档失败时是否回退本地 outbox |
 | `ASYNC_TASK_BASE_URL` | `http://localhost:8086` | async-task 档目标地址 |
-| `WORKFLOW_OUTBOX_HMAC_SECRET` | compose 中 `dev-secret-change-me` | outbox 投递签名密钥 |
+| `WORKFLOW_OUTBOX_HMAC_SECRET` | 独立开发占位值 | v1 HMAC 密钥，至少 32 字节，只注入 workflow-service |
+| `WORKFLOW_OUTBOX_CLAIM_TTL` | `2m` | HTTP/Kafka relay 多副本 claim TTL；必须大于单次投递超时，过期后允许其它副本恢复 |
+
+### 统一 callback 安全策略
+
+async-task、Workflow 与 A2A push 均设置 `PLATFORM_SECURITY_CALLBACK_REQUIRE_ALLOWED_ORIGIN=true`、`PLATFORM_SECURITY_CALLBACK_ALLOW_HTTP=false`。Compose 分别用 `ASYNC_TASK_CALLBACK_ALLOWED_ORIGINS`、`WORKFLOW_CALLBACK_ALLOWED_ORIGINS`、`INTEROP_CALLBACK_ALLOWED_ORIGINS` 提供逗号分隔的精确 HTTPS origin；Helm 对应 `config.*_CALLBACK_ALLOWED_ORIGINS`。只有 async-task-service 额外持有完整 URL `PLATFORM_SECURITY_CALLBACK_TRUSTED_INTERNAL_URLS=http://interop-service:8088/interop/a2a/push-callback`。
+
+A2A push 的独立签名密钥是 `INTEROP_A2A_PUSH_HMAC_SECRET`。三个 HMAC key 均需至少 32 字节、互不复用，且不得复用 JWT/confirmation/downstream key。协议与 egress 网络隔离要求见 [Webhook / Callback 安全接入](../平台工程/webhook-security.md)。
 
 ### Analytics / NL2SQL（`app.nl2sql.*`）
 
@@ -622,9 +674,9 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 |---|---|---|
 | `NL2SQL_ENABLED` | `true` | NL2SQL 开关（默认开；需可达 MySQL demo 库） |
 | `NL2SQL_DB_URL` / `NL2SQL_DB_READONLY_URL` | MySQL `nl2sql_demo` 库 | admin / 只读数据源 |
-| `NL2SQL_DB_ADMIN_USER` / `_PASSWORD` | `root` / `root` | admin 账号（建库/种子） |
+| `NL2SQL_DB_READONLY_USER` / `_PASSWORD` | `nl2sql_ro` / `nl2sql-readonly-dev` | schema 内省与 SQL 执行的只读账号；建库/种子由 migration stage 负责 |
 | `NL2SQL_DB_READONLY_USER` / `_PASSWORD` | `nl2sql_ro` / `nl2sql_ro` | 执行 NL2SQL 的只读账号 |
-| `NL2SQL_SEED_SCRIPT` | `db/nl2sql-demo.sql` | 种子脚本 |
+| `NL2SQL_DB_READONLY_USER/PASSWORD` | `nl2sql_ro` / `nl2sql_ro` | schema 内省与查询都使用的只读账号；demo schema/数据由独立 `analytics-demo` migration 提供 |
 
 ---
 
@@ -766,6 +818,7 @@ curl -s http://localhost:8086/actuator/health   # async-task
 
 - `webhookUrl` 是否传入；`AGENT_TASK_WEBHOOK_ENABLED` / `ASYNC_TASK_WEBHOOK_ENABLED` 是否开。
 - authoritative 档下若期望中心投递，需 `AGENT_ASYNC_EXTERNAL_MIRROR_WEBHOOK=true`，否则 agent 本地 notifier 跳过、中心也不投。
+- URL 是否命中对应 `*_CALLBACK_ALLOWED_ORIGINS`；DNS 任一答案为私网/保留地址、使用 HTTP、返回 3xx 都会被策略拒绝。查看 outbox 的 `callback_policy` 死信。
 
 ### Kafka 事件不流转（channel 收不到 / 终态事件不发）
 

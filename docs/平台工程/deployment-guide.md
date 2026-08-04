@@ -115,7 +115,7 @@ helm install platform deploy/helm/platform -n platform --create-namespace \
 默认各服务单副本 + 内存态。多副本前必须切持久化，否则副本分裂丢状态：
 - **async-task**：多副本 → `--set config.ASYNC_TASK_STORE=jdbc`（任务/租约/webhook 落 MySQL）。
 - **agent**：多副本 → `--set config.AGENT_ASYNC_EXTERNAL_ENABLED=true --set config.AGENT_ASYNC_EXTERNAL_AUTHORITATIVE=true`（async-task 成异步任务权威，避免各副本重复领取）。
-- **workflow**：Flowable 共享 MySQL 自管表，多副本安全。
+- **workflow**：Flowable 共享 MySQL，多副本安全；schema update 在运行时关闭，由发布前 migration Job 管理。
 - **eval**：回归客户端非常驻，默认 `replicaCount=0`，按需触发或改 Job/CronJob。
 - HPA 默认全关：`--set services.knowledge-service.hpa.enabled=true`。
 

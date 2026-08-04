@@ -3,6 +3,10 @@
 本文定义生产切流前必须逐环境执行的门禁。localhost 结果只能证明实现和操作流程，不替代
 目标云账号、目标集群和真实流量验证。
 
+跨两仓的发布角色、默认停止条件、RPO/RTO、Redis/MySQL 恢复、机器可读证据模板和最终
+GO/NO-GO 命令以 AgentScope 仓
+`docs/operations/production-release-runbook.md` 为统一入口；本文保留 Java/Knowledge 专属操作。
+
 ## 放行条件
 
 1. **IAM**：Knowledge ingest 只持有 `documents/*` 写入、multipart 和失败清理权限；
