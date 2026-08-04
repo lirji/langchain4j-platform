@@ -83,9 +83,9 @@ services:
     environment: &knowledge-ingest-environment
       RAG_RUNTIME_ROLE: ingest-api
       RAG_INGESTION_STORE: jdbc
-      RAG_INGESTION_DB_URL: jdbc:mysql://mysql:3306/knowledge_ingestion?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-      RAG_INGESTION_DB_USER: root
-      RAG_INGESTION_DB_PASSWORD: root
+      RAG_INGESTION_DB_URL: jdbc:mysql://mysql:3306/knowledge_ingestion?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      RAG_INGESTION_DB_USER: knowledge_ingestion_app
+      RAG_INGESTION_DB_PASSWORD: knowledge-ingestion-app-dev
       RAG_SOURCE_STORE: s3
       RAG_SOURCE_S3_ENDPOINT: http://minio:9000
       RAG_SOURCE_S3_REGION: us-east-1
@@ -103,8 +103,8 @@ services:
       RAG_EMBEDDING_PROVIDER: hash
       RAG_REGISTRY_STORE: ${RAG_REGISTRY_STORE:-redis}
     depends_on: !override
-      mysql:
-        condition: service_started
+      migrate-knowledge-ingestion:
+        condition: service_completed_successfully
       redis:
         condition: service_started
       minio-init:
@@ -134,14 +134,23 @@ services:
       RAG_REGISTRY_STORE: ${RAG_REGISTRY_STORE:-redis}
       RAG_INGESTION_ASYNC_TASK_ENABLED: "true"
       RAG_INGESTION_ASYNC_TASK_BASE_URL: http://async-task-service:8086
+      ASYNC_TASK_WORKER_JWT_HEADER: ${ASYNC_TASK_WORKER_JWT_HEADER:-X-Async-Worker-Token}
+      ASYNC_TASK_WORKER_JWT_SECRET: ${ASYNC_TASK_WORKER_JWT_SECRET:-dev-only-async-worker-secret-change-me-32b}
+      ASYNC_TASK_WORKER_JWT_ISSUER: ${ASYNC_TASK_WORKER_JWT_ISSUER:-platform-services}
+      ASYNC_TASK_WORKER_JWT_AUDIENCE: ${ASYNC_TASK_WORKER_JWT_AUDIENCE:-async-task-worker}
+      ASYNC_TASK_WORKER_JWT_KEY_ID: ${ASYNC_TASK_WORKER_JWT_KEY_ID:-async-task-worker-v1}
+      ASYNC_TASK_WORKER_JWT_TTL_SECONDS: ${ASYNC_TASK_WORKER_JWT_TTL_SECONDS:-60}
+      ASYNC_TASK_WORKER_JWT_CLOCK_SKEW_SECONDS: ${ASYNC_TASK_WORKER_JWT_CLOCK_SKEW_SECONDS:-5}
       RAG_INGESTION_WORKER_POLL_DELAY: ${RAG_INGESTION_WORKER_POLL_DELAY:-1000}
       RAG_INGESTION_WORKER_INITIAL_DELAY: ${RAG_INGESTION_WORKER_INITIAL_DELAY:-1000}
       RAG_INGESTION_VERSION_GC_ENABLED: ${RAG_INGESTION_VERSION_GC_ENABLED:-false}
       RAG_INGESTION_VERSION_GC_RETAIN_VERSIONS: ${RAG_INGESTION_VERSION_GC_RETAIN_VERSIONS:-2}
       RAG_INGESTION_VERSION_GC_GRACE_PERIOD: ${RAG_INGESTION_VERSION_GC_GRACE_PERIOD:-P7D}
     depends_on:
-      mysql:
-        condition: service_started
+      migrate-knowledge-ingestion:
+        condition: service_completed_successfully
+      migrate-knowledge-graph:
+        condition: service_completed_successfully
       redis:
         condition: service_started
       qdrant:

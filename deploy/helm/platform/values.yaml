@@ -2,7 +2,7 @@
 # langchain4j-platform 伞状 chart values
 # =============================================================================
 # 结构：
-#   global.*        —— 所有服务共享的镜像/探针/资源/envFrom 默认
+#   global.*        —— 所有服务共享的镜像/探针/资源与非敏感 envFrom 默认
 #   config.*        —— 非敏感 base-url / feature flag（渲染进 ConfigMap platform-config）
 #   secrets.*       —— 敏感项占位值（渲染进 Secret；生产用 External Secrets Operator/Vault 覆盖）
 #   externalInfra.* —— 外部托管基础设施（ExternalName Service，不自建 StatefulSet）
@@ -21,14 +21,45 @@ global:
     pullPolicy: IfNotPresent
   imagePullSecrets: []
 
-  # 所有服务默认 envFrom：共享 ConfigMap（非敏感）+ 共享 Secret（敏感）。
-  # edge-gateway 额外挂 gateway 私钥 Secret（见 services.edge-gateway.envFrom）。
+  # 所有服务只批量读取非敏感 ConfigMap；Secret 必须在 services.<name>.env 中按 key 引用。
   envFrom:
     - configMap: platform-config
-    - secret: platform-secrets
 
-  # 追加给所有服务的明文 env（此处留空；私钥/公钥等走 Secret）。
-  sharedEnv: []
+  # RS256 验签公钥虽不敏感，仍从 ESO 管理的 Secret 按单 key 注入；不再 envFrom 整个共享 Secret。
+  sharedEnv:
+    - name: PLATFORM_SECURITY_JWT_PUBLIC_KEY
+      secret: PLATFORM_SECURITY_JWT_PUBLIC_KEY
+
+  revisionHistoryLimit: 3
+  progressDeadlineSeconds: 600
+  rollingUpdate:
+    maxUnavailable: 0
+    maxSurge: 1
+  runtimeTmpSizeLimit: 256Mi
+
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+  topologySpread:
+    enabled: true
+    constraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: ScheduleAnyway
 
   # 探针复用 Spring Boot actuator health group（各服务 application.yml 已 probes.enabled=true）。
   probes:
@@ -66,6 +97,46 @@ config:
   # --- 内部 JWT：RS256（algorithm 非敏感入 ConfigMap；公钥/私钥入 Secret） ---
   # edge-gateway 用私钥签发、下游用公钥验签 → 缩小密钥轮转爆炸半径。
   PLATFORM_SECURITY_JWT_ALGORITHM: "RS256"
+  PLATFORM_SECURITY_JWT_ISSUER: "langchain4j-platform"
+  PLATFORM_SECURITY_JWT_AUDIENCE: "platform-internal"
+  PLATFORM_SECURITY_JWT_KEY_ID: "platform-internal-v1"
+  PLATFORM_SECURITY_JWT_CLOCK_SKEW: "5s"
+  # Python AgentScope 使用等价名称；静态门禁保证两边不会漂移。
+  INTERNAL_JWT_ISSUER: "langchain4j-platform"
+  INTERNAL_JWT_AUDIENCE: "platform-internal"
+  INTERNAL_JWT_KEY_ID: "platform-internal-v1"
+  INTERNAL_JWT_TOKEN_USE: "internal_access"
+  INTERNAL_JWT_CLOCK_SKEW_SECONDS: "5"
+  INTERNAL_JWT_MAX_TTL_SECONDS: "300"
+
+  # --- 出站 HTTP 可靠性：绝对 deadline、按 origin 并发隔离与熔断 ---
+  PLATFORM_SECURITY_HTTP_RESILIENCE_ENABLED: "true"
+  PLATFORM_SECURITY_HTTP_RESILIENCE_DEADLINE_HEADER: "X-Request-Deadline-Ms"
+  PLATFORM_SECURITY_HTTP_RESILIENCE_DEFAULT_DEADLINE: "30s"
+  PLATFORM_SECURITY_HTTP_RESILIENCE_MAX_INBOUND_DEADLINE: "5m"
+  PLATFORM_SECURITY_HTTP_RESILIENCE_MAX_CONCURRENT_PER_ORIGIN: "64"
+  PLATFORM_SECURITY_HTTP_RESILIENCE_CIRCUIT_FAILURE_THRESHOLD: "5"
+  PLATFORM_SECURITY_HTTP_RESILIENCE_CIRCUIT_RECOVERY: "15s"
+  # AgentScope 使用等价的 async httpx 池与每依赖隔离配置。
+  HTTP_MAX_CONNECTIONS: "100"
+  HTTP_MAX_KEEPALIVE_CONNECTIONS: "20"
+  HTTP_KEEPALIVE_EXPIRY_SECONDS: "30"
+  HTTP_DEPENDENCY_MAX_CONCURRENT: "32"
+  HTTP_CIRCUIT_FAILURE_THRESHOLD: "5"
+  HTTP_CIRCUIT_RECOVERY_SECONDS: "15"
+  READINESS_PROBE_TIMEOUT_SECONDS: "2"
+  AGENT_INPUT_COST_USD_PER_MILLION_TOKENS: "0"
+  AGENT_OUTPUT_COST_USD_PER_MILLION_TOKENS: "0"
+  ASYNC_TASK_STREAM_IDLE_TIMEOUT_SECONDS: "30"
+  ASYNC_TASK_DRAIN_TIMEOUT_SECONDS: "30"
+
+  # --- async-task worker 数据面：Java/Python 共用同一非敏感 JWT 上下文 ---
+  ASYNC_TASK_WORKER_JWT_HEADER: "X-Async-Worker-Token"
+  ASYNC_TASK_WORKER_JWT_ISSUER: "platform-services"
+  ASYNC_TASK_WORKER_JWT_AUDIENCE: "async-task-worker"
+  ASYNC_TASK_WORKER_JWT_KEY_ID: "async-task-worker-v1"
+  ASYNC_TASK_WORKER_JWT_TTL_SECONDS: "60"
+  ASYNC_TASK_WORKER_JWT_CLOCK_SKEW_SECONDS: "5"
 
   # --- 集中配置中心（Spring Cloud Config Server，集群内 Service） ---
   CONFIG_SERVER_URI: "http://config-server:8888"
@@ -96,8 +167,8 @@ config:
   AUTH_URI: "http://auth-service:8092"
   # 订单查询服务（edge-gateway 路由 /orders/** 到此；agent order_query 直连）。
   ORDER_URI: "http://order-service:8093"
-  ORDER_DB_URL: "jdbc:mysql://mysql:3306/order_service?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true"
-  ORDER_DB_USER: "root"
+  ORDER_DB_URL: "jdbc:mysql://mysql:3306/order_service?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true"
+  ORDER_DB_USER: "order_app"
 
   # --- eval 客户端目标（打自己的边缘网关） ---
   EVAL_TARGET_BASE_URL: "http://edge-gateway:8080"
@@ -110,15 +181,21 @@ config:
 
   # --- workflow（Flowable BPMN） ---
   WORKFLOW_ENABLED: "true"
-  WORKFLOW_DB_URL: "jdbc:mysql://mysql:3306/flowable?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
-  WORKFLOW_DB_USER: "root"
+  WORKFLOW_OUTBOX_CLAIM_TTL: "2m"
+  WORKFLOW_DB_URL: "jdbc:mysql://mysql:3306/flowable?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+  WORKFLOW_DB_USER: "workflow_app"
   WORKFLOW_TERMINAL_NOTIFICATION_MODE: "async-task"
 
   # --- analytics（NL2SQL） ---
   NL2SQL_ENABLED: "true"
-  NL2SQL_DB_URL: "jdbc:mysql://mysql:3306/nl2sql_demo?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useInformationSchema=true"
+  NL2SQL_DB_URL: "jdbc:mysql://mysql:3306/nl2sql_demo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useInformationSchema=true"
   NL2SQL_DB_READONLY_URL: "jdbc:mysql://mysql:3306/nl2sql_demo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useInformationSchema=true"
-  NL2SQL_DB_ADMIN_USER: "root"
+  NL2SQL_DB_READONLY_USER: "nl2sql_ro"
+
+  # --- channel JDBC dedup（默认 memory；切 jdbc 时同时开启 channel migration） ---
+  CHANNEL_DEDUP_STORE: "memory"
+  CHANNEL_DEDUP_DB_URL: "jdbc:mysql://mysql:3306/channel?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&nullCatalogMeansCurrent=true"
+  CHANNEL_DEDUP_DB_USER: "channel_app"
 
   # --- knowledge（RAG / 向量库 / GraphRAG） ---
   # 百炼 embedding 走业务空间 OpenAI-compatible 入口；安装时必须替换 WorkspaceId。
@@ -138,8 +215,8 @@ config:
   RAG_GRAPH_STORE: "in-memory"
   RAG_GRAPH_INCLUDE_IN_QUERY: "false"
   RAG_GRAPH_QUERY_TOP_K: "20"
-  RAG_GRAPH_DB_URL: "jdbc:mysql://mysql:3306/knowledge_graph?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true"
-  RAG_GRAPH_DB_USER: "root"
+  RAG_GRAPH_DB_URL: "jdbc:mysql://mysql:3306/knowledge_graph?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true"
+  RAG_GRAPH_DB_USER: "knowledge_graph_app"
   # 百炼 qwen3-rerank 使用 compatible-api（与 embedding 的 compatible-mode 不同）。
   RAG_RERANK_ENABLED: "true"
   RAG_RERANK_TYPE: "bailian"
@@ -205,8 +282,8 @@ config:
   # --- async-task ---
   # Phase 3 Agent 异步流量要求任务、事件与 outbox 共享持久化；生产 chart 明确使用 JDBC。
   ASYNC_TASK_STORE: "jdbc"
-  ASYNC_TASK_DB_URL: "jdbc:mysql://mysql:3306/async_task?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true"
-  ASYNC_TASK_DB_USER: "root"
+  ASYNC_TASK_DB_URL: "jdbc:mysql://mysql:3306/async_task?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true"
+  ASYNC_TASK_DB_USER: "async_task_app"
   ASYNC_TASK_WEBHOOK_ENABLED: "true"
   ASYNC_TASK_WEBHOOK_MAX_ATTEMPTS: "3"
   ASYNC_TASK_WEBHOOK_BACKOFF: "250ms"
@@ -218,6 +295,11 @@ config:
   ASYNC_TASK_ORPHAN_LEASE_GRACE: "PT30S"
   ASYNC_TASK_ORPHAN_BATCH_SIZE: "100"
   ASYNC_TASK_ORPHAN_KINDS: "agent.run,agent.dag,agent.dag-plan,agent.analyst,agent.process"
+
+  # --- 用户可控 callback/webhook（每个发送服务显式映射，避免栈内 URL 例外扩散） ---
+  ASYNC_TASK_CALLBACK_ALLOWED_ORIGINS: "https://callbacks.example.com"
+  WORKFLOW_CALLBACK_ALLOWED_ORIGINS: "https://callbacks.example.com"
+  INTEROP_CALLBACK_ALLOWED_ORIGINS: "https://callbacks.example.com"
 
   # --- channel（出站投递 + Kafka 事件） ---
   CHANNEL_OUTBOUND_ENABLED: "false"
@@ -238,6 +320,81 @@ config:
   VOICE_TTS_MODEL: "tts-1"
   VOICE_TTS_VOICE: "alloy"
   VOICE_TTS_FORMAT: "mp3"
+
+# -----------------------------------------------------------------------------
+# 版本化数据库迁移。Job 作为 pre-install/pre-upgrade hook 先于业务 Deployment 执行。
+# migration 账号必须与业务 DML 账号分离；数据库本身由 IaC/DBA 预建，Job 不建库。
+# knowledge/channel/analytics-demo 只在启用对应 JDBC/demo 能力时由环境 values 显式打开。
+# -----------------------------------------------------------------------------
+migrations:
+  enabled: true
+  # pre-install Hook 只能读取发布前已经存在的 Secret。生产由 ESO/IaC 先创建；
+  # secrets.create=true 的本地演示模式会渲染仅含 change-me 的 Hook Secret。
+  secretName: platform-migration-secrets
+  image:
+    repository: ghcr.io/your-org/langchain4j-platform/database-migrations
+    tag: latest
+    pullPolicy: IfNotPresent
+  backoffLimit: 1
+  activeDeadlineSeconds: 600
+  ttlSecondsAfterFinished: 3600
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  placeholderPasswords:
+    AUTH_MIGRATION_DB_PASSWORD: "change-me"
+    ASYNC_TASK_MIGRATION_DB_PASSWORD: "change-me"
+    WORKFLOW_MIGRATION_DB_PASSWORD: "change-me"
+    ORDER_MIGRATION_DB_PASSWORD: "change-me"
+    RAG_INGESTION_MIGRATION_DB_PASSWORD: "change-me"
+    RAG_GRAPH_MIGRATION_DB_PASSWORD: "change-me"
+    CHANNEL_MIGRATION_DB_PASSWORD: "change-me"
+    NL2SQL_MIGRATION_DB_PASSWORD: "change-me"
+  schemas:
+    auth:
+      enabled: true
+      url: "jdbc:mysql://mysql:3306/auth?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&nullCatalogMeansCurrent=true"
+      user: auth_migrator
+      passwordKey: AUTH_MIGRATION_DB_PASSWORD
+    async-task:
+      enabled: true
+      url: "jdbc:mysql://mysql:3306/async_task?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&nullCatalogMeansCurrent=true"
+      user: async_task_migrator
+      passwordKey: ASYNC_TASK_MIGRATION_DB_PASSWORD
+    workflow:
+      enabled: true
+      url: "jdbc:mysql://mysql:3306/flowable?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&nullCatalogMeansCurrent=true"
+      user: workflow_migrator
+      passwordKey: WORKFLOW_MIGRATION_DB_PASSWORD
+    order:
+      enabled: true
+      url: "jdbc:mysql://mysql:3306/order_service?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&nullCatalogMeansCurrent=true"
+      user: order_migrator
+      passwordKey: ORDER_MIGRATION_DB_PASSWORD
+    knowledge-ingestion:
+      enabled: false
+      url: "jdbc:mysql://mysql:3306/knowledge_ingestion?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&nullCatalogMeansCurrent=true"
+      user: knowledge_ingestion_migrator
+      passwordKey: RAG_INGESTION_MIGRATION_DB_PASSWORD
+    knowledge-graph:
+      enabled: false
+      url: "jdbc:mysql://mysql:3306/knowledge_graph?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&nullCatalogMeansCurrent=true"
+      user: knowledge_graph_migrator
+      passwordKey: RAG_GRAPH_MIGRATION_DB_PASSWORD
+    channel:
+      enabled: false
+      url: "jdbc:mysql://mysql:3306/channel?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&nullCatalogMeansCurrent=true"
+      user: channel_migrator
+      passwordKey: CHANNEL_MIGRATION_DB_PASSWORD
+    analytics-demo:
+      enabled: false
+      url: "jdbc:mysql://mysql:3306/nl2sql_demo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&nullCatalogMeansCurrent=true"
+      user: analytics_demo_migrator
+      passwordKey: NL2SQL_MIGRATION_DB_PASSWORD
 
 # -----------------------------------------------------------------------------
 # 敏感配置 → Secret（占位值；生产切勿提交真值）
@@ -265,15 +422,14 @@ secrets:
     RAG_RERANK_BAILIAN_API_KEY: "REPLACE_WITH_BAILIAN_API_KEY"
     # 各数据库口令。
     WORKFLOW_DB_PASSWORD: "change-me"
-    NL2SQL_DB_ADMIN_PASSWORD: "change-me"
+    NL2SQL_DB_READONLY_PASSWORD: "change-me"
     ASYNC_TASK_DB_PASSWORD: "change-me"
     RAG_GRAPH_DB_PASSWORD: "change-me"
     RAG_INGESTION_DB_PASSWORD: "change-me"
     ORDER_DB_PASSWORD: "change-me"
     # auth-service 账号库口令（AUTH_STORE=jdbc 时）。
     AUTH_DB_PASSWORD: "change-me"
-    # workflow outbox HMAC 签名密钥。
-    WORKFLOW_OUTBOX_HMAC_SECRET: "dev-secret-change-me"
+    CHANNEL_DEDUP_DB_PASSWORD: "change-me"
     # channel 出站签名密钥（CHANNEL_OUTBOUND_SIGNATURE_ENABLED=true 时用）。
     CHANNEL_OUTBOUND_SIGNATURE_SECRET: ""
     # eval 客户端打边缘网关用的 api-key。
@@ -290,6 +446,29 @@ secrets:
       -----BEGIN PRIVATE KEY-----
       REPLACE_WITH_RS256_PRIVATE_KEY_VIA_EXTERNAL_SECRETS
       -----END PRIVATE KEY-----
+
+  # --- AgentScope 专属 Secret：写工具参数绑定确认签名；不得注入其它服务 ---
+  agentscopeConfirmation:
+    AGENT_CONFIRMATION_SECRET: "dev-only-confirmation-secret-change-me-32b"
+
+  # --- AgentScope 专属 Secret：外部 MCP/Sandbox 短时委托；不得复用 caller/confirmation key ---
+  agentscopeDownstream:
+    AGENT_DOWNSTREAM_JWT_SECRET: "dev-only-downstream-secret-change-me-32b"
+
+  # --- async-task worker 数据面专属 key：仅 verifier 与实际 worker 工作负载挂载 ---
+  asyncTaskWorker:
+    ASYNC_TASK_WORKER_JWT_SECRET: "dev-only-async-worker-secret-change-me-32b"
+
+  # --- 三条 callback 出站链路各用独立 HMAC key，仅注入对应发送服务 ---
+  asyncTaskCallback:
+    ASYNC_TASK_WEBHOOK_HMAC_SECRET: "dev-only-async-webhook-hmac-change-me-32b"
+  workflowCallback:
+    WORKFLOW_OUTBOX_HMAC_SECRET: "dev-only-workflow-webhook-hmac-change-me-32b"
+  interopCallback:
+    INTEROP_A2A_PUSH_HMAC_SECRET: "dev-only-a2a-push-hmac-change-me-32b"
+  # A2A push token 静态加密 key（base64 AES-256），与 callback HMAC 分 Secret 轮换。
+  interopState:
+    INTEROP_A2A_PUSH_ENCRYPTION_KEY: "ZGV2LW9ubHktaW50ZXJvcC1zdGF0ZS1rZXktMzJiISE="
 
   # --- 会话 JWT 密钥：auth-session-jwt（仅 auth-service 与 edge-gateway envFrom） ---
   # auth 用它签发登录会话 JWT、edge 用它验签后换发内部 JWT。**绝不注入其它下游**（下游只认内部 JWT）。
@@ -335,6 +514,29 @@ externalSecrets:
   secretStoreRef:
     name: vault-backend
     kind: ClusterSecretStore
+
+# 默认拒绝工作负载 ingress/egress，只开放同 namespace、集群 DNS、指定 ingress namespace 与公网。
+# RFC1918、loopback、link-local、metadata 和保留地址保持阻断；私网托管依赖必须显式加入 allowedEgressCidrs。
+networkPolicy:
+  enabled: true
+  ingressNamespaces:
+    - kubernetes.io/metadata.name: ingress-nginx
+  allowPublicEgress: true
+  allowedEgressCidrs: []
+  deniedIpv4Cidrs:
+    - 10.0.0.0/8
+    - 100.64.0.0/10
+    - 127.0.0.0/8
+    - 169.254.0.0/16
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 224.0.0.0/4
+    - 240.0.0.0/4
+  deniedIpv6Cidrs:
+    - ::1/128
+    - fc00::/7
+    - fe80::/10
+    - ff00::/8
 
 # -----------------------------------------------------------------------------
 # 外部托管基础设施 → ExternalName Service（不自建 StatefulSet）
@@ -418,15 +620,21 @@ services:
         secret:
           secretName: edge-gateway-apikeys
     hpa:
-      enabled: false
+      enabled: true
       minReplicas: 2
       maxReplicas: 5
       targetCPUUtilizationPercentage: 70
+    pdb:
+      enabled: true
+      minAvailable: 1
 
   # -------- 业务服务 --------
   conversation-service:
     port: 8081
     replicaCount: 1
+    env:
+      - name: GATEWAY_API_KEY
+        secret: GATEWAY_API_KEY
     hpa:
       enabled: false
       minReplicas: 1
@@ -436,7 +644,21 @@ services:
   workflow-service:
     port: 8082
     replicaCount: 1
-    # Flowable 在共享 MySQL 上自管表，多副本安全；如需扩容开 hpa。
+    envFrom:
+      - secret: async-task-worker
+      - secret: workflow-callback
+    env:
+      - name: GATEWAY_API_KEY
+        secret: GATEWAY_API_KEY
+      - name: WORKFLOW_DB_PASSWORD
+        secret: WORKFLOW_DB_PASSWORD
+      - name: PLATFORM_SECURITY_CALLBACK_REQUIRE_ALLOWED_ORIGIN
+        value: "true"
+      - name: PLATFORM_SECURITY_CALLBACK_ALLOW_HTTP
+        value: "false"
+      - name: PLATFORM_SECURITY_CALLBACK_ALLOWED_ORIGINS
+        config: WORKFLOW_CALLBACK_ALLOWED_ORIGINS
+    # Flowable 在共享 MySQL 上运行；表结构由发布前 migration Hook 管理。多副本需共享该库。
     hpa:
       enabled: false
       minReplicas: 1
@@ -445,10 +667,28 @@ services:
   analytics-service:
     port: 8083
     replicaCount: 1
+    env:
+      - name: GATEWAY_API_KEY
+        secret: GATEWAY_API_KEY
+      - name: NL2SQL_DB_READONLY_PASSWORD
+        secret: NL2SQL_DB_READONLY_PASSWORD
 
   knowledge-service:
     port: 8084
     replicaCount: 1
+    env:
+      - name: GATEWAY_API_KEY
+        secret: GATEWAY_API_KEY
+      - name: RAG_EMBEDDING_API_KEY
+        secret: RAG_EMBEDDING_API_KEY
+      - name: RAG_RERANK_BAILIAN_API_KEY
+        secret: RAG_RERANK_BAILIAN_API_KEY
+      - name: RAG_INGESTION_DB_PASSWORD
+        secret: RAG_INGESTION_DB_PASSWORD
+      - name: RAG_GRAPH_DB_PASSWORD
+        secret: RAG_GRAPH_DB_PASSWORD
+      - name: AUTHZ_SERVER_TOKEN
+        secret: AUTHZ_SERVER_TOKEN
     hpa:
       enabled: false
       minReplicas: 1
@@ -463,6 +703,16 @@ services:
     image:
       repository: ghcr.io/your-org/langchain4j-platform/knowledge-service
     env:
+      - name: GATEWAY_API_KEY
+        secret: GATEWAY_API_KEY
+      - name: RAG_EMBEDDING_API_KEY
+        secret: RAG_EMBEDDING_API_KEY
+      - name: RAG_RERANK_BAILIAN_API_KEY
+        secret: RAG_RERANK_BAILIAN_API_KEY
+      - name: RAG_GRAPH_DB_PASSWORD
+        secret: RAG_GRAPH_DB_PASSWORD
+      - name: AUTHZ_SERVER_TOKEN
+        secret: AUTHZ_SERVER_TOKEN
       - name: RAG_RUNTIME_ROLE
         value: query
       - name: RAG_VECTOR_STORE_PROVIDER
@@ -494,9 +744,9 @@ services:
       - name: RAG_INGESTION_STORE
         value: jdbc
       - name: RAG_INGESTION_DB_URL
-        value: "jdbc:mysql://mysql:3306/knowledge_ingestion?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+        value: "jdbc:mysql://mysql:3306/knowledge_ingestion?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
       - name: RAG_INGESTION_DB_USER
-        value: root
+        value: knowledge_ingestion_app
       - name: RAG_INGESTION_DB_PASSWORD
         secret: RAG_INGESTION_DB_PASSWORD
       - name: RAG_SOURCE_STORE
@@ -532,17 +782,27 @@ services:
     replicaCount: 1
     image:
       repository: ghcr.io/your-org/langchain4j-platform/knowledge-service
+    envFrom:
+      - secret: async-task-worker
     service:
       enabled: false
     env:
+      - name: GATEWAY_API_KEY
+        secret: GATEWAY_API_KEY
+      - name: RAG_EMBEDDING_API_KEY
+        secret: RAG_EMBEDDING_API_KEY
+      - name: RAG_RERANK_BAILIAN_API_KEY
+        secret: RAG_RERANK_BAILIAN_API_KEY
+      - name: RAG_GRAPH_DB_PASSWORD
+        secret: RAG_GRAPH_DB_PASSWORD
       - name: RAG_RUNTIME_ROLE
         value: ingest-worker
       - name: RAG_INGESTION_STORE
         value: jdbc
       - name: RAG_INGESTION_DB_URL
-        value: "jdbc:mysql://mysql:3306/knowledge_ingestion?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+        value: "jdbc:mysql://mysql:3306/knowledge_ingestion?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
       - name: RAG_INGESTION_DB_USER
-        value: root
+        value: knowledge_ingestion_app
       - name: RAG_INGESTION_DB_PASSWORD
         secret: RAG_INGESTION_DB_PASSWORD
       - name: RAG_SOURCE_STORE
@@ -586,6 +846,11 @@ services:
     enabled: false
     port: 8085
     replicaCount: 1
+    envFrom:
+      - secret: async-task-worker
+    env:
+      - name: GATEWAY_API_KEY
+        secret: GATEWAY_API_KEY
     # 旧 Java Agent 只作为显式整服务回滚目标，不接收默认 edge/interop 流量；
     # 回滚时需显式 enabled=true，并同步切换 AGENT_URI/AGENT_BASE_URL 与 backend 标识。
     # 水平扩展提醒：agent 副本 >1 时，异步任务须以 async-task-service 为权威，
@@ -598,14 +863,41 @@ services:
 
   agentscope-orchestrator:
     port: 8085
-    replicaCount: 1
+    replicaCount: 2
+    terminationGracePeriodSeconds: 45
     image:
       repository: ghcr.io/your-org/agentscope-platform
+    envFrom:
+      - secret: async-task-worker
     env:
+      - name: GATEWAY_API_KEY
+        secret: GATEWAY_API_KEY
       - name: APP_ENV
         value: "production"
       - name: APP_PORT
         value: "8085"
+      - name: AGENT_MAX_TOKENS
+        value: "24000"
+      - name: AGENT_TIMEOUT_SECONDS
+        value: "120"
+      - name: AGENT_MODEL_MAX_OUTPUT_TOKENS
+        value: "4096"
+      - name: AGENT_MODEL_MAX_RETRIES
+        value: "0"
+      - name: AGENT_CONFIRMATION_SECRET
+        secret: AGENT_CONFIRMATION_SECRET
+        secretName: agentscope-confirmation
+      - name: AGENT_CONFIRMATION_REPLAY_STORE
+        value: "redis"
+      - name: AGENT_CONFIRMATION_REDIS_URL
+        value: "redis://redis:6379/0"
+      - name: AGENT_SESSION_STORE
+        value: "redis"
+      - name: AGENT_SESSION_REDIS_URL
+        value: "redis://redis:6379/0"
+      - name: AGENT_DOWNSTREAM_JWT_SECRET
+        secret: AGENT_DOWNSTREAM_JWT_SECRET
+        secretName: agentscope-downstream
       - name: AGENT_V2_ENABLED
         value: "false"
       - name: ASYNC_TASK_ENABLED
@@ -633,31 +925,78 @@ services:
         timeoutSeconds: 3
         failureThreshold: 6
     hpa:
-      enabled: false
-      minReplicas: 1
-      maxReplicas: 4
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 8
+      targetCPUUtilizationPercentage: 70
+    pdb:
+      enabled: true
+      minAvailable: 1
 
   async-task-service:
     port: 8086
-    replicaCount: 1
-    # 水平扩展提醒：async-task 副本 >1 时，须设 config.ASYNC_TASK_STORE=jdbc（持久化到 MySQL），
-    # 否则内存存储各副本不共享，任务/租约/webhook 状态会分裂。默认单副本 + 内存。
+    replicaCount: 2
+    envFrom:
+      - secret: async-task-worker
+      - secret: async-task-callback
+    env:
+      - name: ASYNC_TASK_DB_PASSWORD
+        secret: ASYNC_TASK_DB_PASSWORD
+      - name: PLATFORM_SECURITY_CALLBACK_REQUIRE_ALLOWED_ORIGIN
+        value: "true"
+      - name: PLATFORM_SECURITY_CALLBACK_ALLOW_HTTP
+        value: "false"
+      - name: PLATFORM_SECURITY_CALLBACK_ALLOWED_ORIGINS
+        config: ASYNC_TASK_CALLBACK_ALLOWED_ORIGINS
+      - name: PLATFORM_SECURITY_CALLBACK_TRUSTED_INTERNAL_URLS
+        value: "http://interop-service:8088/interop/a2a/push-callback"
+    # 中央 JDBC store + lease/outbox fencing 已支持多副本；HPA 下限保持 2。
     hpa:
-      enabled: false
-      minReplicas: 1
-      maxReplicas: 4
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 70
+    pdb:
+      enabled: true
+      minAvailable: 1
 
   channel-service:
     port: 8087
     replicaCount: 1
+    env:
+      - name: CHANNEL_OUTBOUND_SIGNATURE_SECRET
+        secret: CHANNEL_OUTBOUND_SIGNATURE_SECRET
+      - name: CHANNEL_DEDUP_DB_PASSWORD
+        secret: CHANNEL_DEDUP_DB_PASSWORD
 
   interop-service:
     port: 8088
-    replicaCount: 1
+    replicaCount: 2
+    envFrom:
+      - secret: interop-callback
+      - secret: interop-state
+    env:
+      - name: INTEROP_STATE_STORE
+        value: "redis"
+      - name: INTEROP_STATE_NAMESPACE
+        value: "platform:interop:a2a"
+      - name: INTEROP_CAPABILITY_REGISTRY_KEY
+        value: "platform:interop:capability-registry:v1"
+      - name: SPRING_DATA_REDIS_URL
+        value: "redis://redis:6379/0"
+      - name: PLATFORM_SECURITY_CALLBACK_REQUIRE_ALLOWED_ORIGIN
+        value: "true"
+      - name: PLATFORM_SECURITY_CALLBACK_ALLOW_HTTP
+        value: "false"
+      - name: PLATFORM_SECURITY_CALLBACK_ALLOWED_ORIGINS
+        config: INTEROP_CALLBACK_ALLOWED_ORIGINS
 
   vision-service:
     port: 8090
     replicaCount: 1
+    env:
+      - name: GATEWAY_API_KEY
+        secret: GATEWAY_API_KEY
 
   voice-service:
     port: 8091
@@ -667,6 +1006,9 @@ services:
   order-service:
     port: 8093
     replicaCount: 1
+    env:
+      - name: ORDER_DB_PASSWORD
+        secret: ORDER_DB_PASSWORD
 
   # -------- 登录 / RBAC --------
   auth-service:
@@ -676,12 +1018,14 @@ services:
     envFrom:
       - secret: auth-session-jwt
     env:
+      - name: AUTH_DB_PASSWORD
+        secret: AUTH_DB_PASSWORD
       - name: AUTH_STORE
         value: "jdbc"
       - name: AUTH_DB_URL
-        value: "jdbc:mysql://mysql:3306/auth?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&nullCatalogMeansCurrent=true"
+        value: "jdbc:mysql://mysql:3306/auth?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&nullCatalogMeansCurrent=true"
       - name: AUTH_DB_USER
-        value: "root"
+        value: "auth_app"
       # RBAC 默认关（生产分阶段灰度）：先 expand 部署建表/迁移，稳定后再开 enabled、再开 admin-writes。
       # 开启前必须设置真实 bootstrap-admin 名单并确认迁移 COMPLETE。
       - name: AUTH_RBAC_ENABLED
@@ -703,3 +1047,8 @@ services:
     enabled: false
     port: 8089
     replicaCount: 1
+    env:
+      - name: EVAL_API_KEY
+        secret: EVAL_API_KEY
+      - name: GATEWAY_API_KEY
+        secret: GATEWAY_API_KEY
