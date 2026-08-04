@@ -74,7 +74,7 @@ void publish(String topic, String key, Object payload); // key 约定为 tenantI
 | 实现 | 装配条件 | 存储 |
 |---|---|---|
 | `InMemoryProcessedEventStore` | **默认** | 进程内，重启失忆 |
-| `JdbcProcessedEventStore` | `platform.eventbus.processed-event-store=jdbc` 且 classpath 有 `JdbcTemplate` | MySQL `PROCESSED_EVENT` 表（`CREATE TABLE IF NOT EXISTS` 自建，靠 PK 冲突判重）；**跨重启去重** |
+| `JdbcProcessedEventStore` | `platform.eventbus.processed-event-store=jdbc` 且 classpath 有 `JdbcTemplate` | MySQL `PROCESSED_EVENT` 表（由 `channel` migration 预建，靠 PK 冲突判重）；**跨重启去重** |
 
 ### 2.3 Kafka 生产/消费基础设施（仅 `enabled=true` 时装配）
 

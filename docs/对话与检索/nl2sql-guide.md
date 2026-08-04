@@ -40,7 +40,7 @@ NL2SQL 相关 bean 与端点（访问 `/chat/sql` 返回 404）。
 | --- | --- | --- |
 | **生成方式** | LLM function calling（`AiServices` + `@Tool`），不自己解析 NL | 复用现有装配链，模型自己决定调不调、传什么 SQL |
 | **执行安全** | **独立只读账号 + 语句白名单 + 强制 LIMIT + 超时**，多层兜底 | SQL 注入 / 全表扫描是这个场景唯一的真风险，宁可层层冗余 |
-| **dev 数据库** | **MySQL + demo 种子**（订单/客户/退款），`createDatabaseIfNotExist` 自动建库 | 接生产真实只读库只改 `NL2SQL_DB_*` + 把 seed-script 置空 |
+| **dev 数据库** | **MySQL + 版本化 demo migration**（订单/客户/退款） | 生产真实只读库关闭 `analytics-demo` migration，只配置只读 `NL2SQL_DB_*` |
 | **表暴露范围** | **白名单**，不 dump 整库 | 控制 prompt 长度 + 缩小攻击面 + schema 精准 |
 | **租户隔离** | prompt 注入 `tenant_id` + 护栏强制核对（缺则拒答） | 对齐现有 `TenantContext` 语义 |
 
@@ -89,7 +89,8 @@ NlToSqlService：读 SqlExecutionContext.lastSuccessful() 取本轮 sql + rows
 **方式 A — 整套本地栈（推荐，自带 MySQL + LiteLLM）**
 
 `deploy/docker-compose.yml` 里 `analytics-service` 已默认 `NL2SQL_ENABLED=true`，并把数据源指向栈内
-`mysql`。起栈后种子脚本自动建 `nl2sql_demo` 库、三张表与只读账号：
+`mysql`。首次本地 MySQL 初始化会创建 `nl2sql_demo` 库与只读账号，`migrate-analytics-demo`
+再以 Flyway 版本创建三张表并灌入幂等 demo 数据：
 
 ```bash
 docker compose -f deploy/docker-compose.yml up --build
@@ -104,12 +105,13 @@ bash deploy/smoke-nl2sql.sh
 ```bash
 mvn -DskipTests -pl platform-security,platform-protocol,platform-audit,platform-gateway-client install
 NL2SQL_ENABLED=true \
-NL2SQL_DB_ADMIN_USER=root NL2SQL_DB_ADMIN_PASSWORD=root \
+NL2SQL_DB_READONLY_USER=nl2sql_ro NL2SQL_DB_READONLY_PASSWORD=nl2sql-readonly-dev \
 mvn -pl analytics-service spring-boot:run     # :8083
 ```
 
-默认数据源指向 `jdbc:mysql://localhost:3306/nl2sql_demo?createDatabaseIfNotExist=true...`，
-admin 账号首启会建库、跑 `db/nl2sql-demo.sql` 种子、创建只读账号 `nl2sql_ro`。
+默认数据源指向 `jdbc:mysql://localhost:3306/nl2sql_demo?...`。analytics-service 的 schema 内省与
+SQL 执行都使用 `nl2sql_ro`，不会建库或执行种子。单独运行服务前必须先执行
+`database-migrations` 的 `analytics-demo` migration；生产真实分析库不运行该 demo migration。
 NL2SQL 走**函数调用**，因此 LiteLLM 背后 `chat-default` 映射的模型**必须支持 tool-calling**（见 §11 坑 1）。
 
 > 单独起网关做端到端：`mvn -pl edge-gateway spring-boot:run`（:8080）。
@@ -285,7 +287,7 @@ Table orders
 
 ## 11. 端到端用例（对齐种子数据）
 
-种子 `db/nl2sql-demo.sql` 建 `customers`/`orders`/`refunds` 三表（均带 `tenant_id`）。
+`analytics-demo` migration 创建并填充 `customers`/`orders`/`refunds` 三表（均带 `tenant_id`）。
 下列用例用 `dev-key-tenantA-admin`，可直接复跑（结果值随模型生成的 SQL 略有出入）：
 
 | 用例 | 问题 | 期望行为 |
@@ -300,12 +302,12 @@ Table orders
 
 ## 12. 接生产真实只读库
 
-demo 种子只为本地跑通；接真实库时：
+demo 数据只为本地跑通；接真实库时：
 
-1. 把 `NL2SQL_SEED_SCRIPT` 置空（`NL2SQL_SEED_SCRIPT=`）——不建 demo 库、不跑种子。
-2. `NL2SQL_DB_URL`（admin，用于内省 schema）与 `NL2SQL_DB_READONLY_URL`（执行）指向真库；
-   只读 URL **别带** `createDatabaseIfNotExist`（只读账号无建库权限）。
-3. `NL2SQL_DB_READONLY_USER/_PASSWORD` 用一个**只 `GRANT SELECT`** 的账号（L1 的根基）。
+1. 保持 Helm `migrations.schemas.analytics-demo.enabled=false`，不对真实库运行 demo migration。
+2. `NL2SQL_DB_URL` 与 `NL2SQL_DB_READONLY_URL` 都指向真库，且都不带自动建库参数。
+3. `NL2SQL_DB_READONLY_USER/_PASSWORD` 用一个**只 `GRANT SELECT`** 的账号（L1 的根基）；schema
+   内省也复用这个账号。业务进程不接受或持有管理员数据库凭据。
 4. 通过 `app.nl2sql.allow-tables` / `tenant-scoped-tables` / `enum-columns` 圈定暴露范围与租户表
    （这些没有独立 `NL2SQL_*` 短名，用 config-server 或 `--app.nl2sql.allow-tables=...` 配，或 Spring
    relaxed-binding 环境变量 `APP_NL2SQL_ALLOW_TABLES` 等）。
@@ -361,11 +363,9 @@ demo 种子只为本地跑通；接真实库时：
 | 环境变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `NL2SQL_ENABLED` | `true` | NL2SQL 总开关；关时端点/bean 不注册 |
-| `NL2SQL_DB_URL` | `jdbc:mysql://localhost:3306/nl2sql_demo?createDatabaseIfNotExist=true&...` | admin 数据源（建库/种子/内省 schema） |
-| `NL2SQL_DB_READONLY_URL` | 同库但不带 `createDatabaseIfNotExist` | 只读执行数据源；留空则与 admin 共用 |
-| `NL2SQL_DB_ADMIN_USER` / `NL2SQL_DB_ADMIN_PASSWORD` | `root` / `root` | admin 账号 |
-| `NL2SQL_DB_READONLY_USER` / `NL2SQL_DB_READONLY_PASSWORD` | `nl2sql_ro` / `nl2sql_ro` | 只读执行账号（L1） |
-| `NL2SQL_SEED_SCRIPT` | `db/nl2sql-demo.sql`（classpath） | demo 种子脚本；**接真实库时置空** |
+| `NL2SQL_DB_URL` | `jdbc:mysql://localhost:3306/nl2sql_demo?...` | 兼容 URL；只读 URL 留空时用于 schema 内省与查询，不建库 |
+| `NL2SQL_DB_READONLY_URL` | 同库 URL | 只读 schema 内省与执行数据源 |
+| `NL2SQL_DB_READONLY_USER` / `NL2SQL_DB_READONLY_PASSWORD` | `nl2sql_ro` / `nl2sql-readonly-dev` | 只读 schema 内省与执行账号（L1） |
 
 无独立短名、走 `app.nl2sql.*` 属性的（config-server / `--app.nl2sql.x=y` / relaxed-binding 环境变量如 `APP_NL2SQL_MAX_ROWS`）：
 

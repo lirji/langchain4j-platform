@@ -189,7 +189,7 @@ app:
 
 真实下游是独立微服务 **order-service（:8093）**，用裸 `JdbcTemplate` 直连**持久化 MySQL**（共用平台 `mysql` 容器 + 独立 schema `order_service`）。关键点：
 
-- **表结构在代码里演进**（无 Flyway/JPA）：`JdbcOrderStore.init()` 里 `CREATE TABLE IF NOT EXISTS orders/customers`，首启表空时插一批演示订单（tenantA 101–109 / tenantB 2001–2002，与 analytics 的 nl2sql-demo 对齐）。`ORDER_SEED_DEMO=false` 关种子（接真库时）。
+- **表结构发布前迁移**：`migrate-order` 用版本化 migration 创建 `orders/customers`；`JdbcOrderStore` 只验证 schema，可在表空时插一批演示订单（tenantA 101–109 / tenantB 2001–2002，与 analytics demo 对齐）。`ORDER_SEED_DEMO=false` 关种子（接真库时）。
 - **租户隔离在 SQL 层**：`GET /orders/{orderNo}` 用参数化 `WHERE id = ? AND tenant_id = ?`，tenant 取自过滤器链还原的 `TenantContext`。别的租户就算知道订单号也查不到（0 行 → 404）——绑定参数的 PreparedStatement 天然防注入，不需要 analytics 那套给「LLM 生成 SQL」兜底的 `SqlGuard`。
 - **零 Java 接线的鉴权**：只依赖 `platform-security`，`InternalTokenAuthFilter` 经 `AutoConfiguration.imports` 自注册，自动校验内部 JWT 并还原 `TenantContext`。controller/store 只读 `TenantContext.current().tenantId()`。
 - **只读接口不设 scope 门禁**（对齐 vision/analytics 只读风格）：任何过了边缘鉴权的合法租户即可查。401 由 edge-gateway 兜（`/orders` 不在 open path）。
@@ -269,9 +269,9 @@ void reportsErrorText() {
 ## 6. 跑起来验证
 
 ```bash
-# 1) 起 MySQL（或用已有的），起 order-service（首启自动建表+种子）
+# 1) 起 MySQL（或用已有的），先执行 order migration，再起 order-service
 docker compose -f deploy/docker-compose.yml up -d mysql
-ORDER_DB_URL='jdbc:mysql://localhost:3306/order_service?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true' \
+ORDER_DB_URL='jdbc:mysql://localhost:3306/order_service?useSSL=false&allowPublicKeyRetrieval=true' \
   mvn -pl order-service spring-boot:run    # :8093
 
 # 2) 直连 order-service 冒烟（api-key 兜底 → 租户 tenantA）

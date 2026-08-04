@@ -57,7 +57,7 @@ Ollama `llama3.1` 仅作文本故障回退。
 
 ### 持久化陷阱
 
-没有 JPA/Hibernate/MyBatis，也没有 Flyway/Liquibase。持久化用裸 `JdbcTemplate` 直连 MySQL，而且 **表结构演进靠 `Jdbc*Store` 类里的 `CREATE TABLE IF NOT EXISTS` / `ALTER TABLE ADD COLUMN` 字符串字面量**（如 `async-task-service/.../JdbcAsyncTaskStore.java`）—— 改表要编辑这些代码块，而不是加迁移文件。JDBC 存储是可选开启（`ASYNC_TASK_STORE=jdbc`、`RAG_GRAPH_STORE=jdbc`），默认内存。Flowable 在同一数据源上自行管理其表。
+没有 JPA/Hibernate/MyBatis；业务持久化用裸 `JdbcTemplate` 直连 MySQL。关系 schema 统一由 `database-migrations` 的版本化 Flyway/Flowable 迁移在发布前管理，业务进程启动只验证必需表/列，禁止执行 DDL。改表必须新增 migration 并遵守 expand-contract，不得把建表逻辑放回 `Jdbc*Store`。JDBC 存储仍可按能力开启；运行与回滚见 `docs/平台工程/database-migrations.md`。
 
 ## 测试
 

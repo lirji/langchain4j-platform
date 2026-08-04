@@ -20,7 +20,7 @@
 
 # A. 业务流程引擎（Flowable / 退款审批）
 
-**一句话定位**：`workflow-service`（:8082）用 Flowable 7.1.0 BPMN 引擎跑退款审批长流程，整套由 `WORKFLOW_ENABLED` 开关（默认开，需可达 MySQL；置 `false` 则零开销、不装配任何 Bean）；端点 `/workflow/**`，首次自动建 `flowable` 库 + ~25 张 `ACT_*` 表。
+**一句话定位**：`workflow-service`（:8082）用 Flowable 7.1.0 BPMN 引擎跑退款审批长流程，整套由 `WORKFLOW_ENABLED` 开关（默认开，需可达且已迁移的 MySQL；置 `false` 则零开销、不装配任何 Bean）；端点 `/workflow/**`，`flowable` 库与 `ACT_*` 表由独立 `workflow` migration 在发布前创建。
 
 ## A.1 为什么是 Flowable，而不是扩现有 async 状态机
 
@@ -79,7 +79,7 @@ End
 | `POST` | `/workflow/tasks/{taskId}/unclaim` | `approve` | 取消认领，放回待领池 |
 | `POST` | `/workflow/tasks/{taskId}/complete` | `approve` | body `{approved, comment}` → 同步跑 resolve/reject → `{reply}`。并发双重审批 → **409** |
 | `GET` | `/workflow/instances/{instanceId}` | 已认证（本租户） | 实例状态 + reply；跨租户 → 404 |
-| `DELETE` | `/workflow/data?chatId=` | `approve` | PII 合规删除：清本租户该 chatId 的运行/历史实例 + `WF_REPLY` + outbox |
+| `DELETE` | `/workflow/data?chatId=` | `approve` | PII 合规删除：同事务清本租户该 chatId 的运行/历史实例 + `WF_REPLY` + outbox + `WF_IDEMPOTENCY` |
 
 ### 全流程 curl（三条分支）
 
@@ -129,7 +129,12 @@ curl -X POST http://localhost:8080/workflow/refund/start \
   -d '{"chatId":"feishu:ou_x","message":"...","dedupeId":"feishu-msg-abc","webhookUrl":"https://example.com/hooks/wf"}'
 ```
 
-- 传 `dedupeId`（渠道消息 id）→ businessKey `tenant:chatId:dedupeId`，重推同一诉求只起一个流程（防飞书 ~3s ack 超时重推起 N 个流程 + N 个审批任务）；返回同一 `instanceId` + `deduplicated:true`。
+- 传 `dedupeId`（1～128 位 `[A-Za-z0-9._:-]` opaque key）→ `WF_IDEMPOTENCY` 的数据库复合主键
+  `tenant + refund_start + SHA-256(chatId,dedupeId)` 串行化竞争者；claim、Flowable 创建与 instance 绑定
+  在同一个 `workflowTransactionManager` 事务提交。相同键+相同规范化请求返回同一 `instanceId` +
+  `deduplicated:true`；同一键改用户、正文或 webhook 返回 **409**；流程创建失败则 claim 一起回滚，可安全重试。
+- 升级后的首次请求会按旧 businessKey `tenant:chatId:dedupeId` 收编升级前实例，避免滚动发布窗口重复创建。
+  不传 `dedupeId` 仍使用随机 UUID，明确不提供幂等保证。
 - 传 `webhookUrl` → 流程终态时把答复经 outbox **可靠回推**（见 A.6），否则客户端轮询 status 端点。
 
 ### PII 合规删除
@@ -146,15 +151,15 @@ curl happy path 测不出这些——全是"挂起期间出意外 / 渠道重试
 | # | 问题 | 触发信号 | 对策 |
 |---|---|---|---|
 | 1 | **审批超时 / 永久挂起** | 审批人漏看 → UserTask 永挂，用户永远收不到回复 | `ApprovalTimeoutSweeper` `@Scheduled` 扫挂起超 `approval-timeout`（默 PT24H）的任务 → `expireTask` 自动驳回 + 审计 `approval.timeout`。走**调度扫描**而非 BPMN boundary timer（timer 需 async executor，撞坑 2） |
-| 2 | **幂等 / 重复启动** | 飞书重推同一条消息 → 一个诉求起 N 个流程 | `dedupeId` → 稳定 businessKey 查重复用既有实例；无 dedupeId 走随机 UUID（不去重） |
+| 2 | **幂等 / 重复启动** | 飞书重推或两个副本并发先查后建 → 一个诉求起 N 个流程 | `WF_IDEMPOTENCY` 复合主键 + Flowable 同数据源事务原子 claim/创建/绑定；同键改参数 409，失败自动回滚，跨租户独立；无 dedupeId 走随机 UUID（不去重） |
 | 3 | **complete 内同步跑 LLM 的事务边界 / 失败补偿** | 审批人点"通过"后 LLM 挂 → 事务回滚、**人工审批决定一并丢失**、任务退回 active、审批人吃 500 | `ServiceTaskDelegates.withRetry` 有界重试（`llm-max-attempts`，默 2）+ **降级兜底、绝不向 Flowable 抛异常**。事务边界 = 「人工决定 + 一定有终态 reply」原子提交，LLM 是事务内 best-effort |
-| 4 | **历史表无限增长** | `ACT_HI_*` 无 TTL，跑几个月几千万行拖垮查询/备份 | `WorkflowConfig.setHistory("audit")`（不用 `full`）+ `WorkflowHistoryCleaner` `@Scheduled` 删超 `history-retention`（默 P30D）的已结束实例 + `WF_REPLY` 行 |
+| 4 | **历史表无限增长** | `ACT_HI_*` 无 TTL，跑几个月几千万行拖垮查询/备份 | `WorkflowConfig.setHistory("audit")`（不用 `full`）+ `WorkflowHistoryCleaner` `@Scheduled` 同事务删超 `history-retention`（默 P30D）的已结束实例、`WF_REPLY` 与对应幂等绑定 |
 | 5 | **大文本进流程变量** | `reply` 长答复灌 `ACT_RU/HI_VARIABLE`，放大 #4 | `reply` 挪出流程变量到业务表 `WF_REPLY`（`WorkflowReplyStore`，建在 workflow 数据源、写 join 同事务 → 原子 + 重启不丢） |
 | 6 | **流程定义版本化 / in-flight 实例** | 改 BPMN 重部署，旧实例仍按旧定义跑；结构性改动跨版本不兼容 | 续旧版是 Flowable 原生默认；`logVersionTopology` 启动打印各版本在途实例数（旧版有在途则 WARN）。策略：微调直接重部署，结构性改动换 `process id`（新 key） |
 | 7 | **任务分配粒度 + 并发双重审批** | 两人同点同一 task → 第二次 complete 抛 `FlowableObjectNotFoundException`(500) | `claim`/`unclaim` 端点（已被他人领 → 409）；`complete`/`expireTask` 把竞态异常翻成友好 **409**；`TaskView` 加 `assignee` |
 | 8 | **回推"最后一公里"可靠性** | 流程 COMPLETED 但回推失败 → 系统以为办完、用户在干等 | 持久化 **outbox**（`WF_OUTBOX` 表）+ `WorkflowOutboxDispatcher` `@Scheduled` 指数退避重投，4xx/超阈 → DEAD DLQ，重启后接着投。补内存重试"进程一挂就丢"的缺口。见 A.6 |
 | 9 | **工作流可观测性** | LLM 指标不含工作流维度：挂起数 / 审批时长 / 超时率 / 分支占比 | `WorkflowMetrics`（Micrometer）：`workflow.tasks.pending`(gauge) / `workflow.approval.duration`(timer) / `workflow.completed`(counter, tag=outcome) / `workflow.started`(tag=priority) / `workflow.approval.timeout`(counter)，走 `/actuator/prometheus` |
-| 10 | **PII 合规删除** | `message`/`summary`/`reply` 含 PII 进了持久化表 | `WorkflowService.purge(chatId)` 删运行/历史实例 + `WF_REPLY` + `WF_OUTBOX`；`DELETE /workflow/data`；审计 `workflow.data_purged` |
+| 10 | **PII 合规删除** | `message`/`summary`/`reply` 含 PII 进了持久化表 | `WorkflowService.purge(chatId)` 用 workflow 事务原子删除运行/历史实例 + `WF_REPLY` + 两类 outbox + `WF_IDEMPOTENCY`；`DELETE /workflow/data`；审计 `workflow.data_purged` |
 
 **#3 的降级取向**（关键权衡）：`assess`（抽工单）降级 = **强制 `priority=HIGH` 转人工**，不是默认 LOW——抽取失败时风险未知，宁可多一道人工审，绝不默认放过潜在高风险退款；`resolve`/`reject` 降级 = 写兜底话术。降级时审计 `reply.degraded`。
 
@@ -186,7 +191,7 @@ ServiceTask 里"抽工单 / 生成答复"的 LLM 能力由 `app.workflow.ai-clie
 ## A.9 启动与本地验证
 
 ```bash
-# 前置：本机 MySQL（首次自动建 flowable 库 + ACT_* 表）；ServiceTask AI 走 conversation（默认 http 模式）或 local 兜底
+# 前置：本机 MySQL 已运行 workflow migration；ServiceTask AI 走 conversation（默认 http 模式）或 local 兜底
 WORKFLOW_ENABLED=true WORKFLOW_DB_PASSWORD=root \
   mvn -pl workflow-service -am spring-boot:run     # :8082
 
@@ -208,8 +213,8 @@ WORKFLOW_ENABLED=true WORKFLOW_DB_PASSWORD=root \
 |---|---|---|
 | `app.workflow.enabled` / `WORKFLOW_ENABLED` | `true` | 总开关（需可达 MySQL），置 `false` 时整套 Bean 不装配 |
 | `app.workflow.datasource.url` / `WORKFLOW_DB_URL` | `jdbc:mysql://localhost:3306/flowable?...` | Flowable 引擎数据源（独立 Hikari 池） |
-| `app.workflow.datasource.username` / `WORKFLOW_DB_USER` | `root` | 数据源用户 |
-| `app.workflow.datasource.password` / `WORKFLOW_DB_PASSWORD` | `root`(yml)/空(默认) | 数据源密码 |
+| `app.workflow.datasource.username` / `WORKFLOW_DB_USER` | `workflow_app` | 最小权限业务数据源用户 |
+| `app.workflow.datasource.password` / `WORKFLOW_DB_PASSWORD` | `workflow-app-dev` | 本地开发密码；生产由 Secret 提供 |
 | `app.workflow.approval-timeout` / `APP_WORKFLOW_APPROVAL_TIMEOUT` | `PT24H` | 审批超时自动驳回阈值（#1） |
 | `app.workflow.timeout-sweep-interval-ms` | `60000` | 超时扫描间隔 |
 | `app.workflow.llm-max-attempts` | `2` | ServiceTask LLM 有界重试次数（#3） |
@@ -401,7 +406,7 @@ curl -N -X POST http://localhost:8080/agent/reflexive/stream \
 | 环境变量 | 默认 | 作用 |
 |---|---|---|
 | `WORKFLOW_ENABLED` | `true` | 总开关（需可达 MySQL） |
-| `WORKFLOW_DB_URL` / `WORKFLOW_DB_USER` / `WORKFLOW_DB_PASSWORD` | localhost:3306/flowable / root / root | Flowable 引擎数据源 |
+| `WORKFLOW_DB_URL` / `WORKFLOW_DB_USER` / `WORKFLOW_DB_PASSWORD` | localhost:3306/flowable / workflow_app / workflow-app-dev | Flowable 运行数据源；表结构由发布前 migration 管理 |
 | `WORKFLOW_AI_CLIENT_MODE` | `http` | ServiceTask AI 来源：`http`/`local` |
 | `CONVERSATION_BASE_URL` | `http://localhost:8081` | http 模式下 conversation 基址 |
 | `WORKFLOW_TERMINAL_NOTIFICATION_MODE` | `local` | 终态回推：`local`/`async-task`/`kafka` |

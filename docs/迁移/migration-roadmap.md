@@ -122,8 +122,8 @@ mvn -DskipTests package
 - `/async/tasks/{taskId}/lease`：worker 租约 claim/renew 接口，包含 `workerId`、有界 TTL、租约有效期间仅 owner 可更新状态，以及过期租约可重新 claim。
 - `/async/tasks/{taskId}` `DELETE`：pending/running task 的取消 API。
 - 终态 webhook 投递，支持重试、审计日志，以及 header `X-Async-Task-Id`、`X-Async-Task-Status`、`X-Tenant-Id`。
-- 位于 `ASYNC_TASK_STORE=jdbc` 之后的可选 JDBC task store，自动创建 `ASYNC_TASK` 表，并通过原子条件 lease update 支持多副本 worker。
-- JDBC 模式下的可选 JDBC webhook outbox，自动创建 `ASYNC_TASK_WEBHOOK_OUTBOX`，支持重启安全的重试状态、DLQ 状态、指数退避、已投递行保留、通过 `/async/webhook-outbox/dead` 进行租户级 DLQ 查询，以及通过 `IN_PROGRESS` claim owner/TTL 字段实现多副本行 claim。
+- 位于 `ASYNC_TASK_STORE=jdbc` 之后的可选 JDBC task store，使用发布前 migration 预建的 `ASYNC_TASK` 表，并通过原子条件 lease update 支持多副本 worker。
+- JDBC 模式下的可选 JDBC webhook outbox 使用 migration 预建的 `ASYNC_TASK_WEBHOOK_OUTBOX`，支持重启安全的重试状态、DLQ 状态、指数退避、已投递行保留、通过 `/async/webhook-outbox/dead` 进行租户级 DLQ 查询，以及通过 `IN_PROGRESS` claim owner/TTL 字段实现多副本行 claim。
 - Edge gateway 路由、docker-compose 服务接入，以及聚焦 controller/webhook 的测试。
 
 暂缓的 async-task 项：

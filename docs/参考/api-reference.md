@@ -119,7 +119,7 @@ curl -s -X POST 'http://localhost:8080/auth/login' \
 
 - 用途：token 级 SSE 流式对话（与同步 `/chat` 同一套记忆键 `<tenantId>::<chatId>`、RAG 增强、注入护栏）。流式不挂语义缓存。
 - 请求：`{ "message": "..." }`，可选 `category`；可选 query `chatId=u1`。
-- 响应：`text/event-stream`。逐 token 以默认 `data:` 事件下发；注入护栏 block 命中 → 发 `event: blocked` 后 `event: done` 收尾（不进 LLM）；grounding 校验不通过 → 追加 `event: grounding-warning`；正常结束 `event: done`；出错 `event: error`。
+- 响应：`text/event-stream`。逐 token 以默认 `data:` 事件下发；注入护栏 block 命中 → 发 `event: blocked` 后 `event: done` 收尾（不进 LLM）；grounding 校验不通过 → 追加 `event: grounding-warning`；正常结束 `event: done`；出错固定为 `{"error":"conversation stream failed","code":"CONVERSATION_STREAM_FAILED"}`。token 跨帧缓冲后再遮蔽邮箱、中国手机号和身份证号，避免拆 token 绕过脱敏。
 - 经网关：是。默认开启（底层流式受 `GATEWAY_STREAMING_ENABLED=true`，默认开）。限流分类 `stream`（20/min）。
 
 ```bash
@@ -350,7 +350,11 @@ JSON 示例：
 ### POST `/workflow/refund/start`
 
 - 用途：发起退款审批流程。发起方普通用户即可。
-- 请求：`{ message, chatId?, dedupeId?, webhookUrl? }`（均 `Map<String,String>`；`chatId` 默认 `default`）。传 `dedupeId` 按 `tenant:chatId:dedupeId` 幂等去重；传 `webhookUrl` 则终态经 outbox 可靠回推。
+- 请求：`{ message, chatId?, dedupeId?, webhookUrl? }`（均 `Map<String,String>`；`chatId` 默认 `default`）。
+  `dedupeId` 限 1～128 位 `[A-Za-z0-9._:-]`；传入后由 `WF_IDEMPOTENCY` 唯一约束与 Flowable
+  同事务保证强幂等：同键同请求返回原实例并标记 `deduplicated=true`，同键不同参数返回 409，创建失败
+  不占用键；租户间互不影响。不传则明确不去重。传 `webhookUrl` 则终态经 outbox 可靠回推；生产
+  callback 必须命中预登记的 HTTPS origin，并使用统一 v1 HMAC 信封。
 - 响应：`StartResult`。经网关：是。
 
 ### GET `/workflow/tasks`
@@ -410,7 +414,8 @@ HTTP/JSON/SSE 契约和内部 JWT。当前工具面只读；旧 Java 高风险/�
 
 ### GET `/agent/tasks/{taskId}/stream`
 
-- 用途：SSE 订阅任务状态 + DAG 阶段事件（`text/event-stream`）。经网关：是。默认开启。
+- 用途：SSE 订阅任务状态 + DAG 阶段事件（`text/event-stream`）。公开负载递归脱敏，FAILED
+  只保留稳定错误码。断开只取消订阅，不取消持久任务；停止任务须显式 DELETE。经网关：是。默认开启。
 
 ### POST `/agent/dag/run`
 
@@ -448,7 +453,9 @@ HTTP/JSON/SSE 契约和内部 JWT。当前工具面只读；旧 Java 高风险/�
 
 ### POST `/agent/reflexive/stream`
 
-- 用途：Reflexion SSE，分阶段推 `attempt-start`/`answer`/`critique`/`done` 事件。请求同上。
+- 用途：Reflexion SSE，分阶段推 `attempt-start`/`answer`/`critique`/`done` 事件。错误固定为
+  `AGENT_REFLEXION_STREAM_FAILED`，不透传底层异常。断开后在同步模型调用之间协作式停止；当前
+  provider 调用没有取消句柄。请求同上。
 - 经网关：是。默认开启（同上）。
 
 ### POST `/agent/vote`
@@ -498,7 +505,7 @@ HTTP/JSON/SSE 契约和内部 JWT。当前工具面只读；旧 Java 高风险/�
 {
   "kind": "agent.run",
   "input": {"goal": "..."},
-  "webhookUrl": "http://host.docker.internal:9000/async-task-callback"
+  "webhookUrl": "https://callbacks.example.com/async-task-callback"
 }
 ```
 
@@ -528,11 +535,14 @@ HTTP/JSON/SSE 契约和内部 JWT。当前工具面只读；旧 Java 高风险/�
 
 ### GET `/async/tasks/{taskId}/stream`
 
-- 用途：SSE 状态流（`text/event-stream`），支持 `Last-Event-ID` header 或 `lastEventId` query 断点续订。经网关：是。
+- 用途：SSE 状态流（`text/event-stream`），支持 `Last-Event-ID` header 或 `lastEventId` query
+  断点续订。负载递归脱敏，FAILED 原始详情替换为稳定错误码；断开订阅不取消权威任务。经网关：是。
 
 ### GET `/async/webhook-outbox/dead`
 
 - 用途：查询当前租户投递耗尽（`DEAD`）的 webhook outbox 记录。可选 query `limit`（默认 50，上限 200）。经网关：是。
+
+HTTP callback 的目标校验、禁止重定向、`X-Webhook-*` v1 HMAC 与接收方去重合同见 [Webhook / Callback 安全接入](../平台工程/webhook-security.md)。
 
 ---
 

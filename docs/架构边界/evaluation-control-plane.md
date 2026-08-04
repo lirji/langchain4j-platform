@@ -14,7 +14,9 @@
 
 Java `eval-service` 可以只读解析 Python `shadow-report` 的摘要，用于统一发布门禁或归档展示；
 它不得重新执行 Agent shadow，也不得定义另一套 Agent 评测 schema。跨语言字段以 Python
-仓库导出的 JSON Schema 为准，当前使用 snake_case。
+仓库导出的 JSON Schema 为准。当前只接受 Shadow report v4，必须包含版本化 dataset ID 与
+`sha256:` 内容版本；v3、缺 dataset 或非法 digest 均 fail closed。根报告字段使用 snake_case，
+嵌套的语言中立契约按各自 JSON Schema alias（例如 `datasetId`）解析。
 
 ## 默认部署边界
 
@@ -45,6 +47,9 @@ helm upgrade --install platform deploy/helm/platform \
 AgentScope candidate 只有在报告同时满足质量、完成率、错误率和延迟阈值后，才可以进入下一
 级 shadow/canary。报告读取失败、字段缺失、schema 不兼容或 gate 未通过都必须 fail closed。
 门禁通过只代表可以讨论下一阶段，不自动授权生产切流。
+
+发布归档还必须保存 dataset version、报告 digest 与 prompt/model/toolset 版本。相同 dataset 的
+回放如出现版本头缺失或批内版本漂移，应由 Python 权威 runner 拒绝，Java 不重新解释样本逻辑。
 
 ## 回滚
 
