@@ -1,0 +1,14 @@
+CREATE TABLE IF NOT EXISTS orders (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  tenant_id VARCHAR(64) NOT NULL,
+  customer_id VARCHAR(64),
+  amount DECIMAL(12,2) NOT NULL,
+  status VARCHAR(16) NOT NULL,
+  created_at DATE NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS customers (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  tenant_id VARCHAR(64) NOT NULL,
+  name VARCHAR(128) NOT NULL
+);

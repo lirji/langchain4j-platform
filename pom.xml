@@ -31,6 +31,7 @@
         <module>platform-audit</module>
         <module>platform-metering</module>
         <module>platform-eventbus</module>
+        <module>database-migrations</module>
         <!-- 服务 -->
         <module>config-server</module>
         <module>auth-service</module>
@@ -174,4 +175,5 @@
             </plugins>
         </pluginManagement>
     </build>
+
 </project>

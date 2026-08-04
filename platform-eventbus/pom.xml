@@ -57,6 +57,12 @@
             <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>com.lrj.platform</groupId>
+            <artifactId>database-migrations</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <!-- EmbeddedKafka 端到端集成测试用（@Tag("kafka-it")，默认套件不加载，见下 surefire 配置） -->
         <dependency>
             <groupId>org.springframework.kafka</groupId>
