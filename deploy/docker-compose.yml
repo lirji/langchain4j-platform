@@ -4,6 +4,27 @@
 #       凭据由 start-*.sh 从 BAILIAN_CREDENTIAL_CSV 指向的本地 CSV 注入，不写入本文件或 Git。
 name: langchain4j-platform
 
+x-app-security: &app-security
+  user: "10001:10001"
+  read_only: true
+  init: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:rw,nosuid,nodev,size=256m,mode=1777
+
+x-schema-migration: &schema-migration
+  <<: *app-security
+  image: ${DATABASE_MIGRATIONS_IMAGE:-platform-database-migrations:local}
+  build:
+    context: ../database-migrations
+  restart: "no"
+  depends_on:
+    mysql:
+      condition: service_healthy
+
 services:
   litellm:
     # 固定 tag（不再用浮动 main-stable）：spend 记账/virtual key/UI 依赖其自带 Prisma schema，
@@ -86,6 +107,77 @@ services:
       - "${MYSQL_HOST_PORT:-3306}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
+
+  migrate-auth:
+    <<: *schema-migration
+    environment:
+      MIGRATION_SCHEMA: auth
+      MIGRATION_DB_URL: jdbc:mysql://mysql:3306/auth?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
+      MIGRATION_DB_USER: auth_migrator
+      MIGRATION_DB_PASSWORD: auth-migration-dev
+
+  migrate-async-task:
+    <<: *schema-migration
+    environment:
+      MIGRATION_SCHEMA: async-task
+      MIGRATION_DB_URL: jdbc:mysql://mysql:3306/async_task?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
+      MIGRATION_DB_USER: async_task_migrator
+      MIGRATION_DB_PASSWORD: async-task-migration-dev
+
+  migrate-workflow:
+    <<: *schema-migration
+    environment:
+      MIGRATION_SCHEMA: workflow
+      MIGRATION_DB_URL: jdbc:mysql://mysql:3306/flowable?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      MIGRATION_DB_USER: workflow_migrator
+      MIGRATION_DB_PASSWORD: workflow-migration-dev
+
+  migrate-knowledge-graph:
+    <<: *schema-migration
+    environment:
+      MIGRATION_SCHEMA: knowledge-graph
+      MIGRATION_DB_URL: jdbc:mysql://mysql:3306/knowledge_graph?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
+      MIGRATION_DB_USER: knowledge_graph_migrator
+      MIGRATION_DB_PASSWORD: knowledge-graph-migration-dev
+
+  migrate-knowledge-ingestion:
+    <<: *schema-migration
+    environment:
+      MIGRATION_SCHEMA: knowledge-ingestion
+      MIGRATION_DB_URL: jdbc:mysql://mysql:3306/knowledge_ingestion?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      MIGRATION_DB_USER: knowledge_ingestion_migrator
+      MIGRATION_DB_PASSWORD: knowledge-ingestion-migration-dev
+
+  migrate-order:
+    <<: *schema-migration
+    environment:
+      MIGRATION_SCHEMA: order
+      MIGRATION_DB_URL: jdbc:mysql://mysql:3306/order_service?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
+      MIGRATION_DB_USER: order_migrator
+      MIGRATION_DB_PASSWORD: order-migration-dev
+
+  migrate-channel:
+    <<: *schema-migration
+    environment:
+      MIGRATION_SCHEMA: channel
+      MIGRATION_DB_URL: jdbc:mysql://mysql:3306/channel?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
+      MIGRATION_DB_USER: channel_migrator
+      MIGRATION_DB_PASSWORD: channel-migration-dev
+
+  migrate-analytics-demo:
+    <<: *schema-migration
+    environment:
+      MIGRATION_SCHEMA: analytics-demo
+      MIGRATION_DB_URL: jdbc:mysql://mysql:3306/nl2sql_demo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useInformationSchema=true
+      MIGRATION_DB_USER: analytics_demo_migrator
+      MIGRATION_DB_PASSWORD: analytics-demo-migration-dev
 
   kafka:
     image: apache/kafka:3.8.0
@@ -144,6 +236,7 @@ services:
   # 集中配置分发（可选）。默认 native 后端（读打包进 jar 的 config/ 目录），无需 git。
   # 刻意不作为其它服务的 depends_on 阻塞条件：各服务用 optional import，server 不在也照常启动。
   config-server:
+    <<: *app-security
     build:
       context: ../config-server
     environment:
@@ -155,6 +248,7 @@ services:
       - "8888:8888"
 
   conversation-service:
+    <<: *app-security
     build:
       context: ../conversation-service
     environment:
@@ -204,13 +298,14 @@ services:
       - "8081:8081"
 
   workflow-service:
+    <<: *app-security
     build:
       context: ../workflow-service
     environment:
       WORKFLOW_ENABLED: "true"
-      WORKFLOW_DB_URL: jdbc:mysql://mysql:3306/flowable?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-      WORKFLOW_DB_USER: root
-      WORKFLOW_DB_PASSWORD: root
+      WORKFLOW_DB_URL: jdbc:mysql://mysql:3306/flowable?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      WORKFLOW_DB_USER: workflow_app
+      WORKFLOW_DB_PASSWORD: workflow-app-dev
       GATEWAY_BASE_URL: http://litellm:4000/v1
       GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
       GATEWAY_MODEL: chat-default
@@ -223,26 +318,42 @@ services:
       CONVERSATION_BASE_URL: http://conversation-service:8081
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
-      WORKFLOW_OUTBOX_HMAC_SECRET: ${WORKFLOW_OUTBOX_HMAC_SECRET:-dev-secret-change-me}
+      WORKFLOW_OUTBOX_HMAC_SECRET: ${WORKFLOW_OUTBOX_HMAC_SECRET:-dev-only-workflow-webhook-hmac-change-me-32b}
+      WORKFLOW_OUTBOX_CLAIM_TTL: ${WORKFLOW_OUTBOX_CLAIM_TTL:-2m}
+      PLATFORM_SECURITY_CALLBACK_REQUIRE_ALLOWED_ORIGIN: ${WORKFLOW_CALLBACK_REQUIRE_ALLOWED_ORIGIN:-true}
+      PLATFORM_SECURITY_CALLBACK_ALLOW_HTTP: ${WORKFLOW_CALLBACK_ALLOW_HTTP:-false}
+      PLATFORM_SECURITY_CALLBACK_ALLOWED_ORIGINS: ${WORKFLOW_CALLBACK_ALLOWED_ORIGINS:-https://callbacks.example.com}
       WORKFLOW_TERMINAL_NOTIFICATION_MODE: async-task
       ASYNC_TASK_BASE_URL: http://async-task-service:8086
+      ASYNC_TASK_WORKER_JWT_HEADER: ${ASYNC_TASK_WORKER_JWT_HEADER:-X-Async-Worker-Token}
+      ASYNC_TASK_WORKER_JWT_SECRET: ${ASYNC_TASK_WORKER_JWT_SECRET:-dev-only-async-worker-secret-change-me-32b}
+      ASYNC_TASK_WORKER_JWT_ISSUER: ${ASYNC_TASK_WORKER_JWT_ISSUER:-platform-services}
+      ASYNC_TASK_WORKER_JWT_AUDIENCE: ${ASYNC_TASK_WORKER_JWT_AUDIENCE:-async-task-worker}
+      ASYNC_TASK_WORKER_JWT_KEY_ID: ${ASYNC_TASK_WORKER_JWT_KEY_ID:-async-task-worker-v1}
+      ASYNC_TASK_WORKER_JWT_TTL_SECONDS: ${ASYNC_TASK_WORKER_JWT_TTL_SECONDS:-60}
+      ASYNC_TASK_WORKER_JWT_CLOCK_SKEW_SECONDS: ${ASYNC_TASK_WORKER_JWT_CLOCK_SKEW_SECONDS:-5}
     depends_on:
-      - mysql
-      - litellm
-      - async-task-service
-      - conversation-service
+      migrate-workflow:
+        condition: service_completed_successfully
+      litellm:
+        condition: service_started
+      async-task-service:
+        condition: service_started
+      conversation-service:
+        condition: service_started
     ports:
       - "8082:8082"
 
   analytics-service:
+    <<: *app-security
     build:
       context: ../analytics-service
     environment:
       NL2SQL_ENABLED: "true"
-      NL2SQL_DB_URL: jdbc:mysql://mysql:3306/nl2sql_demo?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useInformationSchema=true
+      NL2SQL_DB_URL: jdbc:mysql://mysql:3306/nl2sql_demo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useInformationSchema=true
       NL2SQL_DB_READONLY_URL: jdbc:mysql://mysql:3306/nl2sql_demo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useInformationSchema=true
-      NL2SQL_DB_ADMIN_USER: root
-      NL2SQL_DB_ADMIN_PASSWORD: root
+      NL2SQL_DB_READONLY_USER: nl2sql_ro
+      NL2SQL_DB_READONLY_PASSWORD: nl2sql-readonly-dev
       GATEWAY_BASE_URL: http://litellm:4000/v1
       GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
       GATEWAY_MODEL: chat-default
@@ -255,12 +366,15 @@ services:
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:
-      - mysql
-      - litellm
+      migrate-analytics-demo:
+        condition: service_completed_successfully
+      litellm:
+        condition: service_started
     ports:
       - "8083:8083"
 
   knowledge-service:
+    <<: *app-security
     build:
       context: ../knowledge-service
     extra_hosts:
@@ -342,9 +456,9 @@ services:
       RAG_GRAPH_QUERY_TOP_K: ${RAG_GRAPH_QUERY_TOP_K:-20}
       RAG_GRAPH_RELATION_WHITELIST: ${RAG_GRAPH_RELATION_WHITELIST:-}
       RAG_GRAPH_ALIASES: ${RAG_GRAPH_ALIASES:-}
-      RAG_GRAPH_DB_URL: jdbc:mysql://mysql:3306/knowledge_graph?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
-      RAG_GRAPH_DB_USER: root
-      RAG_GRAPH_DB_PASSWORD: root
+      RAG_GRAPH_DB_URL: jdbc:mysql://mysql:3306/knowledge_graph?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
+      RAG_GRAPH_DB_USER: knowledge_graph_app
+      RAG_GRAPH_DB_PASSWORD: knowledge-graph-app-dev
       # 图片 RAG：标准启动脚本注入百炼 qwen3-vl-embedding；仍可切回 OpenAI-compatible CLIP/jina。
       RAG_MULTIMODAL_ENABLED: ${RAG_MULTIMODAL_ENABLED:-false}
       RAG_MULTIMODAL_PROVIDER: ${RAG_MULTIMODAL_PROVIDER:-bailian}
@@ -360,8 +474,8 @@ services:
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:
-      mysql:
-        condition: service_started
+      migrate-knowledge-graph:
+        condition: service_completed_successfully
       redis:
         condition: service_started
       qdrant:
@@ -372,6 +486,7 @@ services:
       - "8084:8084"
 
   agent-service:
+    <<: *app-security
     # 旧 Java Agent 仅作为整服务回滚目标；默认栈不启动。
     profiles: ["legacy-agent"]
     build:
@@ -413,6 +528,13 @@ services:
       AGENT_ASYNC_LEASE_SECONDS: ${AGENT_ASYNC_LEASE_SECONDS:-300}
       ASYNC_TASK_BASE_URL: http://async-task-service:8086
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      ASYNC_TASK_WORKER_JWT_HEADER: ${ASYNC_TASK_WORKER_JWT_HEADER:-X-Async-Worker-Token}
+      ASYNC_TASK_WORKER_JWT_SECRET: ${ASYNC_TASK_WORKER_JWT_SECRET:-dev-only-async-worker-secret-change-me-32b}
+      ASYNC_TASK_WORKER_JWT_ISSUER: ${ASYNC_TASK_WORKER_JWT_ISSUER:-platform-services}
+      ASYNC_TASK_WORKER_JWT_AUDIENCE: ${ASYNC_TASK_WORKER_JWT_AUDIENCE:-async-task-worker}
+      ASYNC_TASK_WORKER_JWT_KEY_ID: ${ASYNC_TASK_WORKER_JWT_KEY_ID:-async-task-worker-v1}
+      ASYNC_TASK_WORKER_JWT_TTL_SECONDS: ${ASYNC_TASK_WORKER_JWT_TTL_SECONDS:-60}
+      ASYNC_TASK_WORKER_JWT_CLOCK_SKEW_SECONDS: ${ASYNC_TASK_WORKER_JWT_CLOCK_SKEW_SECONDS:-5}
       INTERNAL_AUTH_REQUIRED: "true"
       INTERNAL_API_KEY_FALLBACK: "false"
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
@@ -428,6 +550,7 @@ services:
 
   # Agent 编排权威服务。旧 Java agent-service 仅保留为显式整服务回滚目标，不接收默认流量。
   agentscope-orchestrator:
+    <<: *app-security
     image: ${AGENTSCOPE_IMAGE:-agentscope-platform:local}
     environment:
       APP_HOST: 0.0.0.0
@@ -436,7 +559,17 @@ services:
       GATEWAY_BASE_URL: http://litellm:4000/v1
       GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
       GATEWAY_MODEL: ${AGENTSCOPE_GATEWAY_MODEL:-chat-default}
+      INTERNAL_JWT_ISSUER: langchain4j-platform
+      INTERNAL_JWT_AUDIENCE: platform-internal
+      INTERNAL_JWT_KEY_ID: platform-internal-v1
+      INTERNAL_JWT_TOKEN_USE: internal_access
+      INTERNAL_JWT_CLOCK_SKEW_SECONDS: "5"
+      INTERNAL_JWT_MAX_TTL_SECONDS: "300"
       AGENT_MAX_STEPS: ${AGENT_MAX_STEPS:-8}
+      AGENT_MAX_TOKENS: ${AGENT_MAX_TOKENS:-24000}
+      AGENT_TIMEOUT_SECONDS: ${AGENT_TIMEOUT_SECONDS:-120}
+      AGENT_MODEL_MAX_OUTPUT_TOKENS: ${AGENT_MODEL_MAX_OUTPUT_TOKENS:-4096}
+      AGENT_MODEL_MAX_RETRIES: ${AGENT_MODEL_MAX_RETRIES:-0}
       AGENT_RAG_TOP_K: ${AGENT_RAG_TOP_K:-5}
       AGENT_RAG_CATEGORY: ${AGENT_RAG_CATEGORY:-}
       AGENT_V2_ENABLED: ${AGENT_V2_ENABLED:-false}
@@ -447,6 +580,30 @@ services:
       ASYNC_TASK_ENABLED: "true"
       ASYNC_TASK_BASE_URL: http://async-task-service:8086
       ASYNC_TASK_WORKER_ID: ${AGENTSCOPE_ASYNC_TASK_WORKER_ID:-agentscope-orchestrator}
+      ASYNC_TASK_WORKER_JWT_HEADER: ${ASYNC_TASK_WORKER_JWT_HEADER:-X-Async-Worker-Token}
+      ASYNC_TASK_WORKER_JWT_SECRET: ${ASYNC_TASK_WORKER_JWT_SECRET:-dev-only-async-worker-secret-change-me-32b}
+      ASYNC_TASK_WORKER_JWT_ISSUER: ${ASYNC_TASK_WORKER_JWT_ISSUER:-platform-services}
+      ASYNC_TASK_WORKER_JWT_AUDIENCE: ${ASYNC_TASK_WORKER_JWT_AUDIENCE:-async-task-worker}
+      ASYNC_TASK_WORKER_JWT_KEY_ID: ${ASYNC_TASK_WORKER_JWT_KEY_ID:-async-task-worker-v1}
+      ASYNC_TASK_WORKER_JWT_TTL_SECONDS: ${ASYNC_TASK_WORKER_JWT_TTL_SECONDS:-60}
+      ASYNC_TASK_WORKER_JWT_CLOCK_SKEW_SECONDS: ${ASYNC_TASK_WORKER_JWT_CLOCK_SKEW_SECONDS:-5}
+      HTTP_MAX_CONNECTIONS: ${HTTP_MAX_CONNECTIONS:-100}
+      HTTP_MAX_KEEPALIVE_CONNECTIONS: ${HTTP_MAX_KEEPALIVE_CONNECTIONS:-20}
+      HTTP_KEEPALIVE_EXPIRY_SECONDS: ${HTTP_KEEPALIVE_EXPIRY_SECONDS:-30}
+      HTTP_DEPENDENCY_MAX_CONCURRENT: ${HTTP_DEPENDENCY_MAX_CONCURRENT:-32}
+      HTTP_CIRCUIT_FAILURE_THRESHOLD: ${HTTP_CIRCUIT_FAILURE_THRESHOLD:-5}
+      HTTP_CIRCUIT_RECOVERY_SECONDS: ${HTTP_CIRCUIT_RECOVERY_SECONDS:-15}
+      READINESS_PROBE_TIMEOUT_SECONDS: ${READINESS_PROBE_TIMEOUT_SECONDS:-2}
+      AGENT_INPUT_COST_USD_PER_MILLION_TOKENS: ${AGENT_INPUT_COST_USD_PER_MILLION_TOKENS:-0}
+      AGENT_OUTPUT_COST_USD_PER_MILLION_TOKENS: ${AGENT_OUTPUT_COST_USD_PER_MILLION_TOKENS:-0}
+      ASYNC_TASK_STREAM_IDLE_TIMEOUT_SECONDS: ${ASYNC_TASK_STREAM_IDLE_TIMEOUT_SECONDS:-30}
+      ASYNC_TASK_DRAIN_TIMEOUT_SECONDS: ${ASYNC_TASK_DRAIN_TIMEOUT_SECONDS:-30}
+      AGENT_CONFIRMATION_SECRET: ${AGENT_CONFIRMATION_SECRET:-dev-only-confirmation-secret-change-me-32b}
+      AGENT_CONFIRMATION_REPLAY_STORE: redis
+      AGENT_CONFIRMATION_REDIS_URL: redis://redis:6379/0
+      AGENT_SESSION_STORE: redis
+      AGENT_SESSION_REDIS_URL: redis://redis:6379/0
+      AGENT_DOWNSTREAM_JWT_SECRET: ${AGENT_DOWNSTREAM_JWT_SECRET:-dev-only-downstream-secret-change-me-32b}
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
       INTERNAL_AUTH_REQUIRED: "true"
       OTEL_ENABLED: ${OTEL_ENABLED:-false}
@@ -459,8 +616,10 @@ services:
       - workflow-service
       - order-service
       - async-task-service
+      - redis
     ports:
       - "${AGENTSCOPE_HOST_PORT:-18085}:8085"
+    stop_grace_period: ${AGENTSCOPE_STOP_GRACE_PERIOD:-45s}
     healthcheck:
       test:
         [
@@ -476,19 +635,28 @@ services:
     restart: unless-stopped
 
   async-task-service:
+    <<: *app-security
     build:
       context: ../async-task-service
     environment:
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      ASYNC_TASK_WORKER_JWT_HEADER: ${ASYNC_TASK_WORKER_JWT_HEADER:-X-Async-Worker-Token}
+      ASYNC_TASK_WORKER_JWT_SECRET: ${ASYNC_TASK_WORKER_JWT_SECRET:-dev-only-async-worker-secret-change-me-32b}
+      ASYNC_TASK_WORKER_JWT_ISSUER: ${ASYNC_TASK_WORKER_JWT_ISSUER:-platform-services}
+      ASYNC_TASK_WORKER_JWT_AUDIENCE: ${ASYNC_TASK_WORKER_JWT_AUDIENCE:-async-task-worker}
+      ASYNC_TASK_WORKER_JWT_KEY_ID: ${ASYNC_TASK_WORKER_JWT_KEY_ID:-async-task-worker-v1}
+      ASYNC_TASK_WORKER_JWT_TTL_SECONDS: ${ASYNC_TASK_WORKER_JWT_TTL_SECONDS:-60}
+      ASYNC_TASK_WORKER_JWT_CLOCK_SKEW_SECONDS: ${ASYNC_TASK_WORKER_JWT_CLOCK_SKEW_SECONDS:-5}
       INTERNAL_AUTH_REQUIRED: "true"
       INTERNAL_API_KEY_FALLBACK: "false"
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
       ASYNC_TASK_STORE: ${ASYNC_TASK_STORE:-jdbc}
-      ASYNC_TASK_DB_URL: jdbc:mysql://mysql:3306/async_task?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
-      ASYNC_TASK_DB_USER: root
-      ASYNC_TASK_DB_PASSWORD: root
+      ASYNC_TASK_DB_URL: jdbc:mysql://mysql:3306/async_task?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
+      ASYNC_TASK_DB_USER: async_task_app
+      ASYNC_TASK_DB_PASSWORD: async-task-app-dev
       ASYNC_TASK_WEBHOOK_ENABLED: ${ASYNC_TASK_WEBHOOK_ENABLED:-true}
+      ASYNC_TASK_WEBHOOK_HMAC_SECRET: ${ASYNC_TASK_WEBHOOK_HMAC_SECRET:-dev-only-async-webhook-hmac-change-me-32b}
       ASYNC_TASK_WEBHOOK_MAX_ATTEMPTS: ${ASYNC_TASK_WEBHOOK_MAX_ATTEMPTS:-3}
       ASYNC_TASK_WEBHOOK_BACKOFF: ${ASYNC_TASK_WEBHOOK_BACKOFF:-250ms}
       ASYNC_TASK_WEBHOOK_DELIVERED_RETENTION: ${ASYNC_TASK_WEBHOOK_DELIVERED_RETENTION:-P7D}
@@ -501,12 +669,19 @@ services:
       ASYNC_TASK_ORPHAN_LEASE_GRACE: ${ASYNC_TASK_ORPHAN_LEASE_GRACE:-PT30S}
       ASYNC_TASK_ORPHAN_BATCH_SIZE: ${ASYNC_TASK_ORPHAN_BATCH_SIZE:-100}
       ASYNC_TASK_ORPHAN_KINDS: ${ASYNC_TASK_ORPHAN_KINDS:-agent.task,agent.run,agent.dag,agent.dag-plan,agent.analyst,agent.process}
+      PLATFORM_SECURITY_CALLBACK_REQUIRE_ALLOWED_ORIGIN: ${ASYNC_TASK_CALLBACK_REQUIRE_ALLOWED_ORIGIN:-true}
+      PLATFORM_SECURITY_CALLBACK_ALLOW_HTTP: ${ASYNC_TASK_CALLBACK_ALLOW_HTTP:-false}
+      PLATFORM_SECURITY_CALLBACK_ALLOWED_ORIGINS: ${ASYNC_TASK_CALLBACK_ALLOWED_ORIGINS:-https://callbacks.example.com}
+      # A2A relay is the sole private callback exception; this is an exact URL, not an origin wildcard.
+      PLATFORM_SECURITY_CALLBACK_TRUSTED_INTERNAL_URLS: ${ASYNC_TASK_CALLBACK_TRUSTED_INTERNAL_URLS:-http://interop-service:8088/interop/a2a/push-callback}
     depends_on:
-      - mysql
+      migrate-async-task:
+        condition: service_completed_successfully
     ports:
       - "8086:8086"
 
   auth-service:
+    <<: *app-security
     build:
       context: ../auth-service
     environment:
@@ -517,9 +692,9 @@ services:
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
       AUTH_STORE: ${AUTH_STORE:-jdbc}
-      AUTH_DB_URL: jdbc:mysql://mysql:3306/auth?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
-      AUTH_DB_USER: root
-      AUTH_DB_PASSWORD: root
+      AUTH_DB_URL: jdbc:mysql://mysql:3306/auth?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
+      AUTH_DB_USER: auth_app
+      AUTH_DB_PASSWORD: auth-app-dev
       AUTH_DEMO_PASSWORD: ${AUTH_DEMO_PASSWORD:-demo12345}
       # RBAC（demo 直接开：登录展开角色 scopes、管理写开放）。alice 挂 admin 角色 → 含 role-admin。
       # 生产应默认 false 分阶段灰度，并显式配置真实 bootstrap-admin 名单。
@@ -533,12 +708,15 @@ services:
       AUTH_COOKIE_SAME_SITE: ${AUTH_COOKIE_SAME_SITE:-Lax}
       AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
     depends_on:
-      - mysql
-      - redis
+      migrate-auth:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
     ports:
       - "8092:8092"
 
   channel-service:
+    <<: *app-security
     build:
       context: ../channel-service
     environment:
@@ -555,11 +733,15 @@ services:
       CHANNEL_VOICE_PROVIDER_URL: ${CHANNEL_VOICE_PROVIDER_URL:-}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     depends_on:
-      - kafka
+      migrate-channel:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_started
     ports:
       - "8087:8087"
 
   interop-service:
+    <<: *app-security
     build:
       context: ../interop-service
     environment:
@@ -568,17 +750,28 @@ services:
       INTERNAL_API_KEY_FALLBACK: "false"
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
+      SPRING_DATA_REDIS_URL: redis://redis:6379/0
+      INTEROP_STATE_STORE: redis
+      INTEROP_STATE_NAMESPACE: platform:interop:a2a
+      INTEROP_CAPABILITY_REGISTRY_KEY: platform:interop:capability-registry:v1
       AGENT_BASE_URL: ${AGENT_BASE_URL:-http://agentscope-orchestrator:8085}
       CONVERSATION_BASE_URL: http://conversation-service:8081
       # A2A push 中继回调回到自身（容器内服务名）；agent 任务终态 webhook 打到这里再转发 A2A 客户端
       INTEROP_A2A_PUSH_CALLBACK_BASE_URL: http://interop-service:8088
+      INTEROP_A2A_PUSH_HMAC_SECRET: ${INTEROP_A2A_PUSH_HMAC_SECRET:-dev-only-a2a-push-hmac-change-me-32b}
+      INTEROP_A2A_PUSH_ENCRYPTION_KEY: ${INTEROP_A2A_PUSH_ENCRYPTION_KEY:-ZGV2LW9ubHktaW50ZXJvcC1zdGF0ZS1rZXktMzJiISE=}
+      PLATFORM_SECURITY_CALLBACK_REQUIRE_ALLOWED_ORIGIN: ${INTEROP_CALLBACK_REQUIRE_ALLOWED_ORIGIN:-true}
+      PLATFORM_SECURITY_CALLBACK_ALLOW_HTTP: ${INTEROP_CALLBACK_ALLOW_HTTP:-false}
+      PLATFORM_SECURITY_CALLBACK_ALLOWED_ORIGINS: ${INTEROP_CALLBACK_ALLOWED_ORIGINS:-https://callbacks.example.com}
       INTEROP_A2A_AUTH_MODE: ${EDGE_CASDOOR_MODE:-only}
     depends_on:
       - agentscope-orchestrator
+      - redis
     ports:
       - "8088:8088"
 
   eval-service:
+    <<: *app-security
     profiles: ["evaluation"]
     build:
       context: ../eval-service
@@ -601,6 +794,7 @@ services:
       - "8089:8089"
 
   vision-service:
+    <<: *app-security
     build:
       context: ../vision-service
     environment:
@@ -626,6 +820,7 @@ services:
       - "${VISION_HOST_PORT:-8090}:8090"
 
   voice-service:
+    <<: *app-security
     build:
       context: ../voice-service
     environment:
@@ -689,30 +884,34 @@ services:
       - "8093:80"
 
   # order-service：按订单号只读查订单，供深度 Agent 的 order_query 动作调用。
-  # 共用 mysql 容器 + 独立 schema order_service（createDatabaseIfNotExist=true 自建）。
+  # 共用 mysql 容器 + 独立 schema order_service；schema 由 migrate-order 前置任务创建/升级。
   # 宿主机 8093 已被 capability-showcase-frontend 占用，故容器内 8093 映射到宿主机 8094。
   order-service:
+    <<: *app-security
     build:
       context: ../order-service
     environment:
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
       INTERNAL_AUTH_REQUIRED: "true"
       INTERNAL_API_KEY_FALLBACK: "false"
-      ORDER_DB_URL: jdbc:mysql://mysql:3306/order_service?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
-      ORDER_DB_USER: root
-      ORDER_DB_PASSWORD: root
+      ORDER_DB_URL: jdbc:mysql://mysql:3306/order_service?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
+      ORDER_DB_USER: order_app
+      ORDER_DB_PASSWORD: order-app-dev
       ORDER_SEED_DEMO: ${ORDER_SEED_DEMO:-true}
       # platform-security 的限流默认落 Redis（与其它服务一致）——指向栈内 redis，否则回退 localhost 连不上、
       # RedisReactiveHealthIndicator 拖挂 /actuator/health（liveness/readiness 仍 UP）。order 自身逻辑不用 Redis。
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:
-      - mysql
-      - redis
+      migrate-order:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
     ports:
       - "8094:8093"
 
   edge-gateway:
+    <<: *app-security
     build:
       context: ../edge-gateway
     environment:

@@ -1,0 +1,86 @@
+{{- if .Values.migrations.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: platform-schema-migrator
+  labels:
+    app.kubernetes.io/name: platform-schema-migrator
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/part-of: langchain4j-platform
+    app.kubernetes.io/component: schema-migration
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-20"
+    helm.sh/hook-delete-policy: before-hook-creation
+automountServiceAccountToken: false
+{{- $root := . }}
+{{- range $name, $schema := .Values.migrations.schemas }}
+{{- if $schema.enabled }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "schema-migration-%s" $name | trunc 63 | trimSuffix "-" }}
+  labels:
+    app.kubernetes.io/name: {{ printf "schema-migration-%s" $name | trunc 63 | trimSuffix "-" }}
+    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    app.kubernetes.io/part-of: langchain4j-platform
+    app.kubernetes.io/component: schema-migration
+    platform.lrj.com/database-schema: {{ $name | quote }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: {{ $root.Values.migrations.backoffLimit }}
+  activeDeadlineSeconds: {{ $root.Values.migrations.activeDeadlineSeconds }}
+  ttlSecondsAfterFinished: {{ $root.Values.migrations.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ printf "schema-migration-%s" $name | trunc 63 | trimSuffix "-" }}
+        app.kubernetes.io/instance: {{ $root.Release.Name }}
+        app.kubernetes.io/part-of: langchain4j-platform
+        app.kubernetes.io/component: schema-migration
+        platform.lrj.com/database-schema: {{ $name | quote }}
+    spec:
+      serviceAccountName: platform-schema-migrator
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      restartPolicy: Never
+      securityContext:
+        {{- toYaml $root.Values.global.podSecurityContext | nindent 8 }}
+      {{- with $root.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          image: "{{ $root.Values.migrations.image.repository }}:{{ $root.Values.migrations.image.tag }}"
+          imagePullPolicy: {{ $root.Values.migrations.image.pullPolicy }}
+          securityContext:
+            {{- toYaml $root.Values.global.securityContext | nindent 12 }}
+          env:
+            - name: MIGRATION_SCHEMA
+              value: {{ $name | quote }}
+            - name: MIGRATION_DB_URL
+              value: {{ required (printf "migrations.schemas.%s.url is required" $name) $schema.url | quote }}
+            - name: MIGRATION_DB_USER
+              value: {{ required (printf "migrations.schemas.%s.user is required" $name) $schema.user | quote }}
+            - name: MIGRATION_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "migrations.secretName is required" $root.Values.migrations.secretName }}
+                  key: {{ required (printf "migrations.schemas.%s.passwordKey is required" $name) $schema.passwordKey }}
+          resources:
+            {{- toYaml $root.Values.migrations.resources | nindent 12 }}
+          volumeMounts:
+            - name: runtime-tmp
+              mountPath: /tmp
+      volumes:
+        - name: runtime-tmp
+          emptyDir:
+            sizeLimit: {{ $root.Values.global.runtimeTmpSizeLimit | default "256Mi" }}
+{{- end }}
+{{- end }}
+{{- end }}

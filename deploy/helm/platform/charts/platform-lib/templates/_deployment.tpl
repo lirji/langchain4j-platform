@@ -16,6 +16,13 @@ metadata:
   labels:
     {{- include "platform-lib.labels" (dict "name" $name "root" $root) | nindent 4 }}
 spec:
+  revisionHistoryLimit: {{ $g.revisionHistoryLimit | default 3 }}
+  progressDeadlineSeconds: {{ $g.progressDeadlineSeconds | default 600 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: {{ $g.rollingUpdate.maxUnavailable | default 0 }}
+      maxSurge: {{ $g.rollingUpdate.maxSurge | default 1 }}
   replicas: {{ $svc.replicaCount | default 1 }}
   selector:
     matchLabels:
@@ -25,6 +32,26 @@ spec:
       labels:
         {{- include "platform-lib.selectorLabels" (dict "name" $name "root" $root) | nindent 8 }}
     spec:
+      serviceAccountName: {{ $svc.serviceAccountName | default $name }}
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        {{- toYaml ($svc.podSecurityContext | default $g.podSecurityContext) | nindent 8 }}
+      {{- $topology := $svc.topologySpread | default $g.topologySpread }}
+      {{- if $topology.enabled }}
+      topologySpreadConstraints:
+        {{- range $topology.constraints }}
+        - maxSkew: {{ .maxSkew }}
+          topologyKey: {{ .topologyKey }}
+          whenUnsatisfiable: {{ .whenUnsatisfiable }}
+          labelSelector:
+            matchLabels:
+              {{- include "platform-lib.selectorLabels" (dict "name" $name "root" $root) | nindent 14 }}
+        {{- end }}
+      {{- end }}
+      {{- with $svc.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ . }}
+      {{- end }}
       {{- with $g.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -34,6 +61,8 @@ spec:
           {{- $img := default (dict) $svc.image }}
           image: "{{ $img.repository | default (printf "%s/%s" $g.image.registry $name) }}:{{ $img.tag | default $g.image.tag }}"
           imagePullPolicy: {{ $img.pullPolicy | default $g.image.pullPolicy }}
+          securityContext:
+            {{- toYaml ($svc.securityContext | default $g.securityContext) | nindent 12 }}
           ports:
             - name: http
               containerPort: {{ $svc.port }}
@@ -67,12 +96,17 @@ spec:
           {{- end }}
           resources:
             {{- toYaml ($svc.resources | default $g.resources) | nindent 12 }}
-          {{- with $svc.volumeMounts }}
           volumeMounts:
+            - name: runtime-tmp
+              mountPath: /tmp
+          {{- with $svc.volumeMounts }}
             {{- toYaml . | nindent 12 }}
           {{- end }}
-      {{- with $svc.volumes }}
       volumes:
+        - name: runtime-tmp
+          emptyDir:
+            sizeLimit: {{ $g.runtimeTmpSizeLimit | default "256Mi" }}
+      {{- with $svc.volumes }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
 {{- end -}}

@@ -12,14 +12,20 @@ deploy/helm/platform/
 │       ├── _helpers.tpl             # labels / env / envFrom 渲染
 │       ├── _deployment.tpl          # 可复用 Deployment 模板
 │       ├── _service.tpl             # 可复用 Service 模板
+│       ├── _serviceaccount.tpl      # 独立且不挂 token 的 ServiceAccount
+│       ├── _pdb.tpl                 # 可复用 PDB 模板
 │       └── _hpa.tpl                 # 可复用 HPA 模板
 └── templates/
-    ├── workloads.yaml               # 遍历 values.services，渲染 Deployment/Service/HPA
+    ├── workloads.yaml               # 遍历 values.services，渲染 SA/Deployment/Service/HPA/PDB
+    ├── networkpolicy.yaml           # 默认拒绝 + 必要 ingress/egress
+    ├── migration-secret.yaml        # 仅本地占位迁移 Secret Hook
+    ├── migrations.yaml              # 发布前版本化迁移 Hook Job
     ├── external-services.yaml       # 外部基础设施 ExternalName Service
     ├── configmap.yaml               # 非敏感 base-url/flag → platform-config
-    ├── secret.yaml                  # 敏感项占位 Secret（platform-secrets / edge-gateway-jwt / edge-gateway-apikeys）
+    ├── secret.yaml                  # 敏感项占位 Secret（含 edge、AgentScope 与最小权限业务 Secret）
     ├── externalsecret-sample.yaml   # External Secrets Operator 样例 CRD（默认关）
     └── ingress.yaml                 # edge-gateway 对外 Ingress（默认关）
+deploy/helm/platform-migration-externalsecret.example.yaml # 生产迁移 Secret 预置样例（chart 外）
 ```
 
 ## 快速开始
@@ -61,12 +67,15 @@ API Key 放 `platform-secrets`；启用 ESO 时，模板会从
 | 顶层键 | 作用 |
 | --- | --- |
 | `global.image` | 镜像仓库前缀 / tag / 拉取策略。单服务镜像 = `<registry>/<服务名>:<tag>`，可在 `services.<svc>.image` 覆盖。 |
-| `global.envFrom` | 所有服务默认注入的 ConfigMap/Secret（`platform-config` + `platform-secrets`）。 |
+| `global.envFrom` | 所有服务只注入非敏感 `platform-config`；Secret 禁止整包 envFrom。 |
+| `global.podSecurityContext` / `global.securityContext` | 非 root、seccomp、只读根文件系统、drop capabilities 等默认限制。 |
+| `global.topologySpread` | hostname/zone 拓扑分散。 |
 | `global.probes` | 存活/就绪探针，复用 actuator health group（liveness/readiness 路径与阈值）。 |
 | `global.resources` | 默认 requests/limits，可被 `services.<svc>.resources` 覆盖。 |
 | `config.*` | **非敏感** base-url / feature flag → ConfigMap `platform-config`。 |
 | `secrets.*` | **敏感项**占位值 → Secret；生产用 ESO 覆盖（见下）。 |
 | `externalSecrets.*` | External Secrets Operator 对接开关与 Vault 路径。 |
+| `networkPolicy.*` | 默认拒绝、ingress namespace 和显式 egress CIDR。 |
 | `externalInfra.*` | 外部托管基础设施的 ExternalName 目标 FQDN。 |
 | `services.*` | 每个业务服务的 `port` / `replicaCount` / `hpa` / 覆盖项。 |
 | `ingress.*` | edge-gateway 对外暴露。 |
@@ -131,13 +140,26 @@ chart 只为 MySQL/Redis/Kafka/Qdrant/LiteLLM 建 **ExternalName** Service 指�
 
 对应 `platform.security.jwt.*`（`InternalSecurityProperties`）。密钥拆两个 Secret 以缩小轮转爆炸半径：
 
-- `platform-config` 携带 `PLATFORM_SECURITY_JWT_ALGORITHM=RS256`（非敏感）。
-- `platform-secrets` 携带 `PLATFORM_SECURITY_JWT_PUBLIC_KEY`（验签公钥）→ envFrom 注入**所有**服务，下游只验签。
+- `platform-config` 携带 algorithm、issuer、唯一 audience、key-id、clock-skew（非敏感）；
+  AgentScope 的等价 `INTERNAL_JWT_*` 值必须一致。
+- `platform-secrets` 携带 `PLATFORM_SECURITY_JWT_PUBLIC_KEY`（验签公钥）→ 每个 workload 只通过
+  `secretKeyRef` 注入这一项；禁止 envFrom 整个 Secret。
 - `edge-gateway-jwt` 携带 `PLATFORM_SECURITY_JWT_PRIVATE_KEY`（签发私钥）→ **仅 edge-gateway** envFrom。
   下游 Deployment 渲染结果不含私钥，验证：
   ```bash
   helm template platform deploy/helm/platform -s templates/workloads.yaml | grep -c PRIVATE_KEY   # 私钥只出现在 gateway 引用处
   ```
+
+token 还必须包含 `token_use=internal_access`、`jti/iat/exp`，有效期不得超过配置的 `jwt-ttl`；
+service callback token 不能直接进入业务服务。升级既有集群时，先只升级全部 edge signer，等待至少
+一个旧 token TTL，再升级 AgentScope 和 Java reader，避免滚动窗口内旧形态 token 被严格 reader 拒绝。
+
+## async-task worker 凭据隔离
+
+`async-task-worker` Secret 只挂载到 `async-task-service` 和实际调用 lease/status/events 的 worker。
+非敏感的 header/issuer/audience/kid/TTL/skew 由 `platform-config` 统一注入 Java 与 Python，
+`deploy/test-production-cutover-config.sh` 会同时检查值一致性、密钥长度/不复用和 Deployment
+挂载白名单。轮换或回滚时必须把 signer/verifier 视为一个兼容单元；禁止回退为普通内部 JWT。
 
 生成一对密钥（示例）：
 
@@ -145,6 +167,16 @@ chart 只为 MySQL/Redis/Kafka/Qdrant/LiteLLM 建 **ExternalName** Service 指�
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out jwt-private.pem
 openssl pkey -in jwt-private.pem -pubout -out jwt-public.pem
 ```
+
+AgentScope 另外使用两个只注入 `agentscope-orchestrator` 的 Secret：`agentscope-confirmation`
+负责参数绑定确认，`agentscope-downstream` 负责 MCP/Browser/Code 的 audience/action 绑定短时委托。
+两把 key 不得互相复用，也不得复用内部 JWT key；`deploy/test-production-cutover-config.sh` 会检查引用隔离。
+
+## callback allowlist 与签名密钥隔离
+
+async-task、workflow、interop 三个 HTTP callback 发送端均显式启用 HTTPS origin allowlist、DNS/SSRF 重校验和禁止重定向。允许的公网 origin 分别配置在 `config.ASYNC_TASK_CALLBACK_ALLOWED_ORIGINS`、`config.WORKFLOW_CALLBACK_ALLOWED_ORIGINS`、`config.INTEROP_CALLBACK_ALLOWED_ORIGINS`。只有 async-task-service 注入精确内网 URL `http://interop-service:8088/interop/a2a/push-callback`，不得扩大为整个 origin。
+
+签名 key 分别位于 `async-task-callback`、`workflow-callback`、`interop-callback` Secret，并只挂对应 Deployment；ESO 模板从三个独立 Vault 路径读取。三把 key 至少 32 字节且互不复用。应用层 DNS 检查不能消除解析与连接间的 TOCTOU，生产还必须配置 egress NetworkPolicy/防火墙，禁止访问 metadata、控制面和非必要私网。接收协议与安全回滚见 [webhook-security.md](../../docs/平台工程/webhook-security.md)。
 
 ## 会话 JWT 与 auth-service（登录 / RBAC）
 
@@ -187,19 +219,77 @@ helm upgrade platform deploy/helm/platform \
 百炼凭据应存为 `<vaultPath>/bailian.api-key`，模板会同时映射
 `RAG_EMBEDDING_API_KEY` 和 `RAG_RERANK_BAILIAN_API_KEY`。
 
+## 数据库迁移阶段
+
+`database-migrations` 镜像以 `pre-install,pre-upgrade` Hook Job 在业务 Deployment 前迁移 schema。
+生产先由 IaC/DBA 建库和创建独立 migrator/app 用户；迁移密码只写入各
+`platform-migration-secrets` 的 `*_MIGRATION_DB_PASSWORD` key，不会写入 `platform-secrets`，也不会
+注入业务容器。默认迁移 auth、async-task、workflow、
+order；Knowledge/channel 按持久化能力显式开启，`analytics-demo` 不用于生产库。
+
+迁移 Job 是 pre-install Hook，所以不能依赖同一次 Helm release 才创建的普通 Secret 或
+ExternalSecret。生产必须设置 `secrets.create=false`，并在 `helm install/upgrade` **之前**通过
+ESO/IaC 预置 `platform-migration-secrets`。可复制 chart 外的样例并替换 Vault 路径：
+
+```bash
+kubectl apply -n platform \
+  -f deploy/helm/platform-migration-externalsecret.example.yaml
+kubectl wait -n platform --for=condition=Ready \
+  externalsecret/platform-migration-secrets --timeout=120s
+kubectl get -n platform secret platform-migration-secrets
+
+helm upgrade --install platform deploy/helm/platform -n platform \
+  --set secrets.create=false \
+  --set externalSecrets.enabled=true
+```
+
+默认 `secrets.create=true` 只为本地模板演示创建含 `change-me` 的 Hook Secret；它不是生产凭据，
+且 Hook 资源可能在卸载 release 后保留，应由本地环境自行清理或轮换。不要给业务 app 用户 DDL 权限。
+
+```bash
+mvn -pl database-migrations -am test
+bash deploy/test-database-migration-config.sh
+helm template platform deploy/helm/platform | grep 'name: schema-migration-'
+```
+
+迁移失败时 Hook 阻止 rollout。应用回滚保留兼容的扩展结构，不执行 down migration；完整的
+expand-contract、已有库 baseline 和恢复流程见
+[`docs/平台工程/database-migrations.md`](../../docs/平台工程/database-migrations.md)。
+
+## 运行时安全、网络与高可用
+
+每个 Deployment 使用自己的 ServiceAccount，不创建 RoleBinding，并同时在 ServiceAccount 和 Pod
+关闭 token 自动挂载。Pod 固定非 root UID/GID 10001、`RuntimeDefault` seccomp；容器禁止提权、
+根文件系统只读、删除全部 Linux capabilities，仅 `/tmp` 使用 256Mi `emptyDir`。Compose 的应用服务
+使用等价的 numeric user、read-only、drop ALL、no-new-privileges 和受限 tmpfs。
+
+`platform-default-deny` 默认拒绝所有业务 Pod ingress/egress；`platform-allow-required` 仅开放同
+namespace、kube-dns、配置的 ingress namespace 和公网目标。公网规则排除 RFC1918、CGNAT、loopback、
+link-local/metadata、multicast 和保留地址。若 MySQL/Redis/Kafka/Qdrant/LiteLLM 等 ExternalName
+解析到私网，必须在环境 values 的 `networkPolicy.allowedEgressCidrs` 精确加入其网段；不要用
+`0.0.0.0/0` 绕过。需要不同 ingress controller 时修改 `networkPolicy.ingressNamespaces`。
+
+edge、AgentScope 和 async-task 默认 2 副本、HPA 最小 2，并用 PDB 保留至少 1 个可用副本；所有
+workload 同时按 hostname/zone 尽力分散。AgentScope/async-task 的多副本安全依赖 AC-09 的唯一
+owner、lease epoch 与 outbox claim fencing。静态验收运行：
+
+```bash
+bash deploy/test-runtime-hardening-config.sh
+```
+
 ## 有状态语义与水平扩展
 
-- **async-task-service**：多副本必须 `--set config.ASYNC_TASK_STORE=jdbc`（持久化到 MySQL），
-  否则内存态各副本分裂（任务/租约/webhook 状态不共享）。默认 `replicaCount=1` + in-memory。
-- **agentscope-orchestrator**：默认以 async-task-service 为异步任务权威；多副本共享任务态，
-  worker lease 防止重复领取。使用独立 `ghcr.io/your-org/agentscope-platform` 镜像仓库。
+- **async-task-service**：默认 `replicaCount=2`、HPA min=2，且固定 JDBC store；任务租约与 outbox
+  claim 都有 owner/TTL fencing。不得在多副本环境回退到 in-memory。
+- **agentscope-orchestrator**：默认 `replicaCount=2`、HPA min=2，以 async-task-service 为任务权威；
+  每进程唯一 worker owner + lease epoch 防止迟到写入。使用独立 AgentScope 镜像仓库。
 - **agent-service**：只作回滚；若回滚后扩成多副本，仍须开启 Java 的 external authoritative
   模式避免重复领取。
-- **workflow-service**：Flowable 在共享 MySQL 自管表，多副本安全。
+- **workflow-service**：Flowable 在共享 MySQL 运行，多副本安全；表结构由发布前 migration Hook 管理。
 - **eval-service**：回归测试客户端，非常驻。默认 `replicaCount=0`；按需
   `--set services.eval-service.replicaCount=1` 触发，或改造成 Job/CronJob。
 
-HPA 默认全部关闭；开启示例：`--set services.knowledge-service.hpa.enabled=true`。
+edge、AgentScope、async-task 的 HPA/PDB 默认开启；其它服务仍按其持久化/迁移能力显式开启。
 
 ## edge-gateway 对外暴露
 
