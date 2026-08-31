@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "image-caption-ocr",
+  "kind": "feature",
+  "tier": "extended",
+  "difficulty": "hard",
+  "sourceCommitSubject": "feat(knowledge): ingest image documents with caption OCR text",
+  "title": "ingest image documents with caption OCR text",
+  "baseRef": "fffa859e671e7bd528b83d99bc0aec891edb2752",
+  "oracleRef": "ce04c5681061a8818383c0159693a09025f192be",
+  "prompt": "在保持现有公开契约的前提下完成“ingest image documents with caption OCR text”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "feature",
+    "hard"
+  ],
+  "allowedPaths": [
+    "README.md",
+    "docs/**",
+    "knowledge-service/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "fffa859e671e7bd528b83d99bc0aec891edb2752",
+        "--"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "README.md",
+          "docs/**",
+          "knowledge-service/**"
+        ]
+      }
+    ]
+  }
+}

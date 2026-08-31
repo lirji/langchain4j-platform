@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "knowledge-runtime-split",
+  "kind": "legacy",
+  "tier": "extended",
+  "difficulty": "medium",
+  "sourceCommitSubject": "feat(knowledge): split durable ingestion and query runtimes",
+  "title": "拆分知识库持久化摄取与查询运行时",
+  "baseRef": "006efeb9d5dbe512fb25adf4eb727c9c2a2ac937",
+  "oracleRef": "8a6ae7fcec79d174197c35cd31ab01f2260ac3f8",
+  "prompt": "在保持知识库 API 和租户隔离兼容的前提下拆分摄取与查询运行时，补齐跨服务协议、部署与迁移证据。",
+  "riskTags": ["migration", "tenant-isolation", "compatibility"],
+  "allowedPaths": ["knowledge-service/**", "platform-protocol/**", "deploy/**", "docs/**"],
+  "forbiddenPaths": [".env", ".git/**", "deploy/secrets/**"],
+  "verification": [
+    {"name": "diff-whitespace", "command": ["git", "diff", "--check", "006efeb9d5dbe512fb25adf4eb727c9c2a2ac937", "--"]},
+    {"name": "knowledge-tests", "command": ["mvn", "-B", "-pl", "knowledge-service", "-am", "test"]}
+  ],
+  "scoring": {"pathScope": 30, "verification": 50, "rubric": 20, "passThreshold": 80, "rubricItems": [{"id": "runtime-boundary", "description": "知识库运行时边界有实现证据", "weight": 20, "evidencePaths": ["knowledge-service/**"]}]}
+}

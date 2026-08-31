@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "knowledge-visibility-contract",
+  "kind": "bug",
+  "tier": "core",
+  "difficulty": "easy",
+  "sourceCommitSubject": "test(protocol): KnowledgeHit.visibility 跨模块 fixture 对齐",
+  "title": "KnowledgeHit.visibility 跨模块 fixture 对齐",
+  "baseRef": "6d44114bd434a3555744545834c5be15ed97fff8",
+  "oracleRef": "82f63c2c90393797f0c05765fb9f9decdda392e0",
+  "prompt": "在保持现有公开契约的前提下完成“KnowledgeHit.visibility 跨模块 fixture 对齐”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "bug",
+    "easy"
+  ],
+  "allowedPaths": [
+    "agent-service/**",
+    "channel-service/**",
+    "conversation-service/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "6d44114bd434a3555744545834c5be15ed97fff8",
+        "--"
+      ]
+    },
+    {
+      "name": "platform-protocol-compile",
+      "command": [
+        "mvn",
+        "-pl",
+        "platform-protocol",
+        "-am",
+        "-Dmaven.test.skip=true",
+        "package"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "agent-service/**",
+          "channel-service/**",
+          "conversation-service/**"
+        ]
+      }
+    ]
+  }
+}

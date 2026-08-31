@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "conversation-cache-invalidation",
+  "kind": "feature",
+  "tier": "core",
+  "difficulty": "medium",
+  "sourceCommitSubject": "feat(conversation): 语义缓存失效端点 DELETE /chat/cache",
+  "title": "语义缓存失效端点 DELETE /chat/cache",
+  "baseRef": "27786e1ff9e2729df5d7179a7dabfdc6728fdb2f",
+  "oracleRef": "75e68e29425297c734b497e68515f75c963cd773",
+  "prompt": "在保持现有公开契约的前提下完成“语义缓存失效端点 DELETE /chat/cache”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "feature",
+    "medium"
+  ],
+  "allowedPaths": [
+    "conversation-service/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "27786e1ff9e2729df5d7179a7dabfdc6728fdb2f",
+        "--"
+      ]
+    },
+    {
+      "name": "conversation-service-compile",
+      "command": [
+        "mvn",
+        "-pl",
+        "conversation-service",
+        "-am",
+        "-Dmaven.test.skip=true",
+        "package"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "conversation-service/**"
+        ]
+      }
+    ]
+  }
+}

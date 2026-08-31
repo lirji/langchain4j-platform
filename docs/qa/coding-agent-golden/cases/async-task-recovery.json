@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "async-task-recovery",
+  "kind": "feature",
+  "tier": "extended",
+  "difficulty": "medium",
+  "sourceCommitSubject": "feat(async-task): add durable lifecycle and recovery",
+  "title": "实现异步任务持久生命周期与恢复",
+  "baseRef": "f4b8f14ea2334da1f1c7c3ddea7eeb571116713c",
+  "oracleRef": "a6b3f164541dd7d5c395a872f829683e30d4fac4",
+  "prompt": "为 async-task-service 增加可恢复的持久任务生命周期，覆盖租约、孤儿回收和状态迁移，并同步设计与 QA 文档。",
+  "riskTags": ["state-machine", "recovery", "idempotency"],
+  "allowedPaths": ["async-task-service/**", "docs/**"],
+  "forbiddenPaths": [".env", ".git/**", "deploy/secrets/**"],
+  "verification": [
+    {"name": "diff-whitespace", "command": ["git", "diff", "--check", "f4b8f14ea2334da1f1c7c3ddea7eeb571116713c", "--"]},
+    {"name": "async-task-tests", "command": ["mvn", "-B", "-pl", "async-task-service", "-am", "test"]}
+  ],
+  "scoring": {"pathScope": 30, "verification": 50, "rubric": 20, "passThreshold": 80, "rubricItems": [{"id": "lifecycle", "description": "任务生命周期实现或测试发生变化", "weight": 20, "evidencePaths": ["async-task-service/**"]}]}
+}

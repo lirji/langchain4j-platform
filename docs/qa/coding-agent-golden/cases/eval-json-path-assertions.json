@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "eval-json-path-assertions",
+  "kind": "feature",
+  "tier": "core",
+  "difficulty": "medium",
+  "sourceCommitSubject": "feat(eval): assert JSON path responses",
+  "title": "assert JSON path responses",
+  "baseRef": "1437a04e5645b193bc8cfcfc46e1a862a840d5e5",
+  "oracleRef": "bf33984ba468067485ce6b708db1b12a9b8105f6",
+  "prompt": "在保持现有公开契约的前提下完成“assert JSON path responses”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "feature",
+    "medium"
+  ],
+  "allowedPaths": [
+    "docs/**",
+    "eval-service/**",
+    "platform-protocol/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "1437a04e5645b193bc8cfcfc46e1a862a840d5e5",
+        "--"
+      ]
+    },
+    {
+      "name": "eval-service-compile",
+      "command": [
+        "mvn",
+        "-pl",
+        "eval-service",
+        "-am",
+        "-Dmaven.test.skip=true",
+        "package"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "docs/**",
+          "eval-service/**",
+          "platform-protocol/**"
+        ]
+      }
+    ]
+  }
+}

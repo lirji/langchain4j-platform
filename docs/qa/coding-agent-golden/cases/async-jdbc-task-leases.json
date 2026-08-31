@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "async-jdbc-task-leases",
+  "kind": "feature",
+  "tier": "core",
+  "difficulty": "hard",
+  "sourceCommitSubject": "feat(async-task): atomically claim jdbc task leases",
+  "title": "atomically claim jdbc task leases",
+  "baseRef": "7ba60b431daa0e5fbc263b4bb69f30c817588f3b",
+  "oracleRef": "c733b7cdd129570ccf3a4f97bfbec3a66a5d25fe",
+  "prompt": "在保持现有公开契约的前提下完成“atomically claim jdbc task leases”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "feature",
+    "hard"
+  ],
+  "allowedPaths": [
+    "async-task-service/**",
+    "docs/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "7ba60b431daa0e5fbc263b4bb69f30c817588f3b",
+        "--"
+      ]
+    },
+    {
+      "name": "async-task-service-compile",
+      "command": [
+        "mvn",
+        "-pl",
+        "async-task-service",
+        "-am",
+        "-Dmaven.test.skip=true",
+        "package"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "async-task-service/**",
+          "docs/**"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "release-topology",
+  "kind": "security",
+  "tier": "extended",
+  "difficulty": "medium",
+  "sourceCommitSubject": "chore(deploy): add hardened release topology",
+  "title": "建立加固后的发布拓扑与供应链门禁",
+  "baseRef": "a01ef0bb911e548140f9b87a58f84fcc13d1a0cf",
+  "oracleRef": "ffc304f675b53fa75c880f1297d1922deca70fad",
+  "prompt": "完善 Compose、Helm 和供应链工作流，使用最小权限、固定 action、External Secret 和可验证回滚。",
+  "riskTags": ["supply-chain", "secrets", "deployment"],
+  "allowedPaths": [".github/**", "deploy/**"],
+  "forbiddenPaths": [".env", ".git/**", "deploy/secrets/**"],
+  "verification": [
+    {"name": "diff-whitespace", "command": ["git", "diff", "--check", "a01ef0bb911e548140f9b87a58f84fcc13d1a0cf", "--"]},
+    {"name": "supply-chain-config", "command": ["bash", "deploy/test-supply-chain-config.sh"]}
+  ],
+  "scoring": {"pathScope": 30, "verification": 50, "rubric": 20, "passThreshold": 80, "rubricItems": [{"id": "release-controls", "description": "发布或供应链控制有实现证据", "weight": 20, "evidencePaths": [".github/**", "deploy/helm/**"]}]}
+}

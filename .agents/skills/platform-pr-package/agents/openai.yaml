@@ -1,0 +1,4 @@
+interface:
+  display_name: "Platform PR Package"
+  short_description: "把已验证变更整理成可评审的 PR 交付包"
+  default_prompt: "Use $platform-pr-package to package this verified change for review without pushing it."

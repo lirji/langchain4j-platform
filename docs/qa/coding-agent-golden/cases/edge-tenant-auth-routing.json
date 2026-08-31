@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "edge-tenant-auth-routing",
+  "kind": "security",
+  "tier": "extended",
+  "difficulty": "hard",
+  "sourceCommitSubject": "feat(edge): add API gateway routing and tenant auth",
+  "title": "add API gateway routing and tenant auth",
+  "baseRef": "b86d518a70bdfe0c1ac46ffa6d3619ef734b7bfa",
+  "oracleRef": "efb5e3077fd7819acde375d8e118d799b3c98feb",
+  "prompt": "在保持现有公开契约的前提下完成“add API gateway routing and tenant auth”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "security",
+    "hard",
+    "tenant-isolation"
+  ],
+  "allowedPaths": [
+    "edge-gateway/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "b86d518a70bdfe0c1ac46ffa6d3619ef734b7bfa",
+        "--"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "edge-gateway/**"
+        ]
+      }
+    ]
+  }
+}

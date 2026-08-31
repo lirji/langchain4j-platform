@@ -1,0 +1,4 @@
+interface:
+  display_name: "Platform Java Feature"
+  short_description: "实现带聚焦测试的 Java 平台纵向功能切片"
+  default_prompt: "Use $platform-java-feature to implement this Java platform requirement with focused tests."

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "frontend-mobile-tests",
+  "kind": "review",
+  "tier": "extended",
+  "difficulty": "easy",
+  "sourceCommitSubject": "test(frontend): 移动端适配 Phase5 — 移动分支测试补齐",
+  "title": "补齐移动端关键交互回归测试",
+  "baseRef": "32a914e9068297c0ce7ab94a7bef7f04c6e63b1b",
+  "oracleRef": "0ddbf26204b5f92b730c9862ed0ce374e97a9aa1",
+  "prompt": "为移动端能力执行、顶栏和聊天交互补充聚焦测试，覆盖移动分支而非只测静态文本。",
+  "riskTags": ["mobile", "interaction", "regression"],
+  "allowedPaths": ["capability-showcase-frontend/**"],
+  "forbiddenPaths": [".env", ".git/**", "deploy/secrets/**"],
+  "verification": [
+    {"name": "diff-whitespace", "command": ["git", "diff", "--check", "32a914e9068297c0ce7ab94a7bef7f04c6e63b1b", "--"]},
+    {"name": "frontend-tests", "command": ["npm", "test"], "cwd": "capability-showcase-frontend"}
+  ],
+  "scoring": {"pathScope": 30, "verification": 50, "rubric": 20, "passThreshold": 80, "rubricItems": [{"id": "interaction-tests", "description": "移动交互测试有证据", "weight": 20, "evidencePaths": ["capability-showcase-frontend/src/**"]}]}
+}

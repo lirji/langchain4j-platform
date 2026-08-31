@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "ai-adapter-shadows",
+  "kind": "feature",
+  "tier": "extended",
+  "difficulty": "medium",
+  "sourceCommitSubject": "feat(ai-adapters): isolate planning and conversation shadows",
+  "title": "隔离规划与对话影子适配器",
+  "baseRef": "a6b3f164541dd7d5c395a872f829683e30d4fac4",
+  "oracleRef": "006efeb9d5dbe512fb25adf4eb727c9c2a2ac937",
+  "prompt": "增加规划与对话 shadow adapter，保持跨服务 DTO 唯一来源、开关兼容和可 mock 测试边界。",
+  "riskTags": ["shadow-traffic", "dto", "feature-flag"],
+  "allowedPaths": ["analytics-service/**", "conversation-service/**", "platform-protocol/**", "workflow-service/**", "docs/**"],
+  "forbiddenPaths": [".env", ".git/**", "deploy/secrets/**"],
+  "verification": [
+    {"name": "diff-whitespace", "command": ["git", "diff", "--check", "a6b3f164541dd7d5c395a872f829683e30d4fac4", "--"]},
+    {"name": "adapter-tests", "command": ["mvn", "-B", "-pl", "analytics-service,conversation-service,workflow-service", "-am", "test"]}
+  ],
+  "scoring": {"pathScope": 30, "verification": 50, "rubric": 20, "passThreshold": 80, "rubricItems": [{"id": "adapter-boundary", "description": "适配器与共享协议均有变更证据", "weight": 20, "evidencePaths": ["platform-protocol/**", "conversation-service/**"]}]}
+}

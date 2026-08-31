@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "eval-constructor-wiring",
+  "kind": "bug",
+  "tier": "core",
+  "difficulty": "easy",
+  "sourceCommitSubject": "fix(eval): EvalRunner 生产构造器补 @Autowired 修复启动失败",
+  "title": "EvalRunner 生产构造器补 @Autowired 修复启动失败",
+  "baseRef": "0c8080b686f908540162227b48a11c26eb510d60",
+  "oracleRef": "abafac1dc033ec75402c89850ff6c4043c744d41",
+  "prompt": "在保持现有公开契约的前提下完成“EvalRunner 生产构造器补 @Autowired 修复启动失败”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "bug",
+    "easy"
+  ],
+  "allowedPaths": [
+    "eval-service/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "0c8080b686f908540162227b48a11c26eb510d60",
+        "--"
+      ]
+    },
+    {
+      "name": "eval-service-compile",
+      "command": [
+        "mvn",
+        "-pl",
+        "eval-service",
+        "-am",
+        "-Dmaven.test.skip=true",
+        "package"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "eval-service/**"
+        ]
+      }
+    ]
+  }
+}

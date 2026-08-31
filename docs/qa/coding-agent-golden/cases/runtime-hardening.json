@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "runtime-hardening",
+  "kind": "legacy",
+  "tier": "extended",
+  "difficulty": "hard",
+  "sourceCommitSubject": "feat(runtime): harden agent platform operations",
+  "title": "加固多服务 Agent 平台运行时",
+  "baseRef": "e4461c5967b1dd68c9ff307e4623a3379d561328",
+  "oracleRef": "43a56af4686a7439f1cb19eff725c7132f597ccb",
+  "prompt": "对平台运行时做兼容性加固，覆盖事件、状态、租户传播和各服务恢复测试，不改变公开契约。",
+  "riskTags": ["runtime", "compatibility", "multi-service"],
+  "allowedPaths": ["agent-service/**", "analytics-service/**", "async-task-service/**", "auth-service/**", "channel-service/**", "conversation-service/**", "eval-service/**", "interop-service/**", "knowledge-service/**", "order-service/**", "platform-eventbus/**", "platform-protocol/**", "platform-security/**", "voice-service/**", "workflow-service/**"],
+  "forbiddenPaths": [".env", ".git/**", "deploy/secrets/**"],
+  "verification": [
+    {"name": "diff-whitespace", "command": ["git", "diff", "--check", "e4461c5967b1dd68c9ff307e4623a3379d561328", "--"]},
+    {"name": "reactor-tests", "command": ["mvn", "-B", "test"]}
+  ],
+  "scoring": {"pathScope": 30, "verification": 50, "rubric": 20, "passThreshold": 80, "rubricItems": [{"id": "runtime-tests", "description": "运行时模块及其测试有变更证据", "weight": 20, "evidencePaths": ["async-task-service/**", "platform-security/**", "workflow-service/**"]}]}
+}

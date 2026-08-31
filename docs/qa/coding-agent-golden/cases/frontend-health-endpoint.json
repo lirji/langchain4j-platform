@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "frontend-health-endpoint",
+  "kind": "bug",
+  "tier": "extended",
+  "difficulty": "medium",
+  "sourceCommitSubject": "fix(frontend): 增加门户健康检查端点",
+  "title": "补充前端门户健康检查端点",
+  "baseRef": "68454edaf39c4459ce529872b29a9774bbd14aba",
+  "oracleRef": "f4b8f14ea2334da1f1c7c3ddea7eeb571116713c",
+  "prompt": "为静态前端 Nginx 增加适合容器探针的健康端点，不改变 SPA 路由回退。",
+  "riskTags": ["nginx", "healthcheck", "routing"],
+  "allowedPaths": ["capability-showcase-frontend/**"],
+  "forbiddenPaths": [".env", ".git/**", "deploy/secrets/**"],
+  "verification": [{"name": "diff-whitespace", "command": ["git", "diff", "--check", "68454edaf39c4459ce529872b29a9774bbd14aba", "--"]}],
+  "scoring": {"pathScope": 30, "verification": 50, "rubric": 20, "passThreshold": 80, "rubricItems": [{"id": "nginx-health", "description": "Nginx 健康端点配置有证据", "weight": 20, "evidencePaths": ["capability-showcase-frontend/nginx.conf"]}]}
+}

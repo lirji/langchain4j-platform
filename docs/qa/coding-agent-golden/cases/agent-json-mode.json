@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "agent-json-mode",
+  "kind": "bug",
+  "tier": "extended",
+  "difficulty": "medium",
+  "sourceCommitSubject": "fix(agent): ReAct 决策改走 json_object 模式，修复 thought 裸引号打断解析",
+  "title": "修复 ReAct thought 中裸引号破坏 JSON 解析",
+  "baseRef": "b971d82532ef5329a04a24159f7e02edc92d8e5a",
+  "oracleRef": "2ebf09c5db69c2591def7fa01add1b2e5548d123",
+  "prompt": "让 ReAct 决策通过 JSON object 模式返回，保留现有模型网关抽象，并补充能复现裸引号问题的契约测试。",
+  "riskTags": ["llm-contract", "regression"],
+  "allowedPaths": ["agent-service/**", "platform-gateway-client/**"],
+  "forbiddenPaths": [".env", ".git/**", "deploy/secrets/**"],
+  "verification": [
+    {"name": "diff-whitespace", "command": ["git", "diff", "--check", "b971d82532ef5329a04a24159f7e02edc92d8e5a", "--"]},
+    {"name": "agent-tests", "command": ["mvn", "-B", "-pl", "agent-service,platform-gateway-client", "-am", "test"]}
+  ],
+  "scoring": {"pathScope": 30, "verification": 50, "rubric": 20, "passThreshold": 80, "rubricItems": [{"id": "contract-test", "description": "模型 JSON 契约与 Agent 调用均有实现证据", "weight": 20, "evidencePaths": ["agent-service/**", "platform-gateway-client/**"]}]}
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Platform QA"
+  short_description: "按验收标准执行可复现的平台质量验证"
+  default_prompt: "Use $platform-qa to build and execute an evidence-based QA matrix for this change."

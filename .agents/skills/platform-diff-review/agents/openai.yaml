@@ -1,0 +1,4 @@
+interface:
+  display_name: "Platform Diff Review"
+  short_description: "审查平台变更中的真实缺陷、安全与兼容风险"
+  default_prompt: "Use $platform-diff-review to review this diff and report only evidence-backed findings."

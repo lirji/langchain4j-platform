@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "coding-agent-sandbox-profiles/v1",
+  "profiles": {
+    "smoke": {
+      "image": "coding-agent-sandbox-smoke:local",
+      "executables": ["test", "sh"]
+    },
+    "java-maven": {
+      "image": "eclipse-temurin:21-jdk",
+      "executables": ["mvn", "bash"]
+    },
+    "node": {
+      "image": "coding-agent-node:local",
+      "executables": ["node", "npm"]
+    }
+  }
+}

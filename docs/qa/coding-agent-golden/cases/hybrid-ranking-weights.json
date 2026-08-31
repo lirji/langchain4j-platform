@@ -1,0 +1,69 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "hybrid-ranking-weights",
+  "kind": "feature",
+  "tier": "core",
+  "difficulty": "medium",
+  "sourceCommitSubject": "feat(knowledge): configure hybrid RAG ranking weights",
+  "title": "configure hybrid RAG ranking weights",
+  "baseRef": "9795d9c8419b024dcc2993509b207c673ecab950",
+  "oracleRef": "fffa859e671e7bd528b83d99bc0aec891edb2752",
+  "prompt": "在保持现有公开契约的前提下完成“configure hybrid RAG ranking weights”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "feature",
+    "medium"
+  ],
+  "allowedPaths": [
+    "README.md",
+    "deploy/**",
+    "docs/**",
+    "knowledge-service/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "9795d9c8419b024dcc2993509b207c673ecab950",
+        "--"
+      ]
+    },
+    {
+      "name": "knowledge-service-compile",
+      "command": [
+        "mvn",
+        "-pl",
+        "knowledge-service",
+        "-am",
+        "-Dmaven.test.skip=true",
+        "package"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "README.md",
+          "deploy/**",
+          "docs/**",
+          "knowledge-service/**"
+        ]
+      }
+    ]
+  }
+}

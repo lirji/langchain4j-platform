@@ -1,0 +1,4 @@
+interface:
+  display_name: "Platform Legacy Maintenance"
+  short_description: "用特征测试保护遗留 Java 代码的兼容性改造"
+  default_prompt: "Use $platform-legacy-maintenance to change this existing code without unintended behavior drift."

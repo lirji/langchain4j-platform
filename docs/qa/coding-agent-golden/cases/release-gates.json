@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "release-gates",
+  "kind": "review",
+  "tier": "extended",
+  "difficulty": "easy",
+  "sourceCommitSubject": "test(release): capture end-to-end cutover gates",
+  "title": "形成端到端发布验收门禁",
+  "baseRef": "23271014054bbc4da1a68ca8da543a6802fdf559",
+  "oracleRef": "d83607d7d8d12e74a3bdd3fa1abce2182b63a2a2",
+  "prompt": "根据发布风险建立可复现 QA 门禁，区分产品缺陷、环境阻塞和浏览器证据。",
+  "riskTags": ["release", "qa", "evidence"],
+  "allowedPaths": ["docs/**"],
+  "forbiddenPaths": [".env", ".git/**", "deploy/secrets/**"],
+  "verification": [{"name": "diff-whitespace", "command": ["git", "diff", "--check", "23271014054bbc4da1a68ca8da543a6802fdf559", "--"]}],
+  "scoring": {"pathScope": 30, "verification": 50, "rubric": 20, "passThreshold": 80, "rubricItems": [{"id": "release-qa", "description": "发布门禁或 QA 报告有证据", "weight": 20, "evidencePaths": ["docs/qa/**", "docs/平台工程/**"]}]}
+}

@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "webhook-retention",
+  "kind": "feature",
+  "tier": "extended",
+  "difficulty": "hard",
+  "sourceCommitSubject": "feat(async-task): retain delivered webhook outbox rows",
+  "title": "retain delivered webhook outbox rows",
+  "baseRef": "a123eb434fa114783acaeca52ee58a54c5f937fe",
+  "oracleRef": "a5b55531430051a3b0fb4b6d6458e777b2933e79",
+  "prompt": "在保持现有公开契约的前提下完成“retain delivered webhook outbox rows”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "feature",
+    "hard"
+  ],
+  "allowedPaths": [
+    "README.md",
+    "async-task-service/**",
+    "deploy/**",
+    "docs/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "a123eb434fa114783acaeca52ee58a54c5f937fe",
+        "--"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "README.md",
+          "async-task-service/**",
+          "deploy/**",
+          "docs/**"
+        ]
+      }
+    ]
+  }
+}

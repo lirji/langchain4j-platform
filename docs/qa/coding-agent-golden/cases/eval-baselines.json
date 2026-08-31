@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "eval-baselines",
+  "kind": "doc",
+  "tier": "extended",
+  "difficulty": "easy",
+  "sourceCommitSubject": "test(eval): record platform benchmark baselines",
+  "title": "记录平台评测基线与可复现数据",
+  "baseRef": "b3318b22ab3deaa43275f6a1650ed028d593f807",
+  "oracleRef": "23271014054bbc4da1a68ca8da543a6802fdf559",
+  "prompt": "从真实评测结果生成可追踪的基线数据和 QA 报告，明确版本、指标、原始证据与限制。",
+  "riskTags": ["evaluation", "evidence", "documentation"],
+  "allowedPaths": ["docs/**"],
+  "forbiddenPaths": [".env", ".git/**", "deploy/secrets/**"],
+  "verification": [{"name": "diff-whitespace", "command": ["git", "diff", "--check", "b3318b22ab3deaa43275f6a1650ed028d593f807", "--"]}],
+  "scoring": {"pathScope": 30, "verification": 50, "rubric": 20, "passThreshold": 80, "rubricItems": [{"id": "qa-evidence", "description": "QA 数据或报告有变更证据", "weight": 20, "evidencePaths": ["docs/qa/**"]}]}
+}

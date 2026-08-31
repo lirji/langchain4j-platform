@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "frontend-shared-components",
+  "kind": "legacy",
+  "tier": "extended",
+  "difficulty": "medium",
+  "sourceCommitSubject": "feat(frontend): 移动端适配 Phase3 — 高杠杆共享组件",
+  "title": "统一共享组件的移动端行为",
+  "baseRef": "f4ba58ec52845908203b12c23372da3c5d0f59d4",
+  "oracleRef": "f3e514f8b17911528941883a89e1cd461d3b5944",
+  "prompt": "在不改变桌面行为的前提下改造共享能力、表单、历史和快捷组件的移动端交互。",
+  "riskTags": ["shared-components", "compatibility", "mobile"],
+  "allowedPaths": ["capability-showcase-frontend/**"],
+  "forbiddenPaths": [".env", ".git/**", "deploy/secrets/**"],
+  "verification": [{"name": "frontend-tests", "command": ["npm", "test"], "cwd": "capability-showcase-frontend"}],
+  "scoring": {"pathScope": 30, "verification": 50, "rubric": 20, "passThreshold": 80, "rubricItems": [{"id": "shared-components", "description": "共享组件有变更证据", "weight": 20, "evidencePaths": ["capability-showcase-frontend/src/components/**"]}]}
+}

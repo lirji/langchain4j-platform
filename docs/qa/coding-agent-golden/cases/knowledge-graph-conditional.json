@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "knowledge-graph-conditional",
+  "kind": "bug",
+  "tier": "core",
+  "difficulty": "easy",
+  "sourceCommitSubject": "fix(knowledge): Graph 组件改 @ConditionalOnProperty 消除装配竞态",
+  "title": "Graph 组件改 @ConditionalOnProperty 消除装配竞态",
+  "baseRef": "a8854ed138d158efd6aa97481f3e9cc288c3d690",
+  "oracleRef": "0ede7e44128fd5757bcf8fec130b49e9856272d5",
+  "prompt": "在保持现有公开契约的前提下完成“Graph 组件改 @ConditionalOnProperty 消除装配竞态”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "bug",
+    "easy"
+  ],
+  "allowedPaths": [
+    "knowledge-service/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "a8854ed138d158efd6aa97481f3e9cc288c3d690",
+        "--"
+      ]
+    },
+    {
+      "name": "knowledge-service-compile",
+      "command": [
+        "mvn",
+        "-pl",
+        "knowledge-service",
+        "-am",
+        "-Dmaven.test.skip=true",
+        "package"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "knowledge-service/**"
+        ]
+      }
+    ]
+  }
+}

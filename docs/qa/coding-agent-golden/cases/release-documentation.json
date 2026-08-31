@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "release-documentation",
+  "kind": "security",
+  "tier": "extended",
+  "difficulty": "medium",
+  "sourceCommitSubject": "docs(release): document production hardening",
+  "title": "同步生产加固与安全运维文档",
+  "baseRef": "bc312d7b94214960cdc46a8c6f22f8a7cabc38b8",
+  "oracleRef": "acd9f76f7eef03f9a5b3efcbd8a430a6985cbf1b",
+  "prompt": "把真实生产加固行为同步到开发、迁移、安全和回滚文档，避免凭据示例和默认值失真。",
+  "riskTags": ["security-docs", "operations", "rollback"],
+  "allowedPaths": ["CLAUDE.md", "README.md", "docs/**"],
+  "forbiddenPaths": [".env", ".git/**", "deploy/secrets/**"],
+  "verification": [{"name": "diff-whitespace", "command": ["git", "diff", "--check", "bc312d7b94214960cdc46a8c6f22f8a7cabc38b8", "--"]}],
+  "scoring": {"pathScope": 30, "verification": 50, "rubric": 20, "passThreshold": 80, "rubricItems": [{"id": "operator-docs", "description": "平台工程或运维文档有证据", "weight": 20, "evidencePaths": ["docs/平台工程/**", "docs/参考/**"]}]}
+}

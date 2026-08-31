@@ -1,0 +1,4 @@
+interface:
+  display_name: "Platform Production Debug"
+  short_description: "基于调用链证据定位平台故障并验证修复"
+  default_prompt: "Use $platform-prod-debug to diagnose this incident and separate evidence from hypotheses."

@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "conversation-component-conditional",
+  "kind": "bug",
+  "tier": "core",
+  "difficulty": "easy",
+  "sourceCommitSubject": "fix(conversation): 组件类改确定性 @ConditionalOnProperty 消除随机启动失败",
+  "title": "组件类改确定性 @ConditionalOnProperty 消除随机启动失败",
+  "baseRef": "abafac1dc033ec75402c89850ff6c4043c744d41",
+  "oracleRef": "90fea9e4bf5482baa03f1d2b69e47520ed3b856d",
+  "prompt": "在保持现有公开契约的前提下完成“组件类改确定性 @ConditionalOnProperty 消除随机启动失败”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "bug",
+    "easy"
+  ],
+  "allowedPaths": [
+    "conversation-service/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "abafac1dc033ec75402c89850ff6c4043c744d41",
+        "--"
+      ]
+    },
+    {
+      "name": "conversation-service-compile",
+      "command": [
+        "mvn",
+        "-pl",
+        "conversation-service",
+        "-am",
+        "-Dmaven.test.skip=true",
+        "package"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "conversation-service/**"
+        ]
+      }
+    ]
+  }
+}

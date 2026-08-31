@@ -1,0 +1,367 @@
+{
+  "schemaVersion": "coding-agent-benchmark-summary/v1",
+  "generatedAt": "2026-08-31T07:16:28.744Z",
+  "runId": "codex-v2-benchmark",
+  "planDigest": "sha256:7fccb4dfb1836a7993b3ba7e45f24e0cdb753d0bed96ec5ad030c5e9668a5abd",
+  "eventDigest": "sha256:ae2a4e4d85b5e794cefc0689b7ea30751ed1cc9385ee92434967f838764fffa1",
+  "dataset": {
+    "id": "langchain4j-platform-history",
+    "version": "2.0.0",
+    "digest": "sha256:00a0c9553b95b75e53c355ce0aa81928f78885665eeb5a653de3af4019096840"
+  },
+  "candidate": "codex",
+  "model": null,
+  "workflowVersion": "p1-p2-v2",
+  "isolation": "docker",
+  "overallStatus": "complete",
+  "totalCases": 20,
+  "counts": {
+    "planned": 0,
+    "running": 0,
+    "pass": 19,
+    "fail": 0,
+    "blocked": 0,
+    "timeout": 1,
+    "infra_error": 0
+  },
+  "metrics": {
+    "completionRate": 100,
+    "passRate": 95,
+    "firstPassRate": 95,
+    "outOfScopeRate": 0,
+    "scoreReportCoverageRate": 95,
+    "averageScore": 100,
+    "durationP50Ms": 138617,
+    "durationP95Ms": 358170,
+    "tokenCoverageRate": 95,
+    "inputTokens": 18669629,
+    "outputTokens": 152481,
+    "cost": null,
+    "verificationIsolation": {
+      "host-readonly": 19,
+      "docker": 19
+    }
+  },
+  "cases": [
+    {
+      "caseId": "rag-rerank-min-score",
+      "status": "pass",
+      "attempts": 1,
+      "startedAt": "2026-08-31T06:09:40.616Z",
+      "finishedAt": "2026-08-31T06:11:58.340Z",
+      "durationMs": 137724,
+      "score": 100,
+      "isolation": "docker",
+      "tokens": {
+        "inputTokens": 598115,
+        "outputTokens": 5786
+      },
+      "cost": null,
+      "errorSummary": null
+    },
+    {
+      "caseId": "agent-order-query-action",
+      "status": "pass",
+      "attempts": 1,
+      "startedAt": "2026-08-31T06:11:58.341Z",
+      "finishedAt": "2026-08-31T06:15:25.079Z",
+      "durationMs": 206738,
+      "score": 100,
+      "isolation": "docker",
+      "tokens": {
+        "inputTokens": 988911,
+        "outputTokens": 10408
+      },
+      "cost": null,
+      "errorSummary": null
+    },
+    {
+      "caseId": "tenant-order-service",
+      "status": "pass",
+      "attempts": 1,
+      "startedAt": "2026-08-31T06:15:25.080Z",
+      "finishedAt": "2026-08-31T06:20:08.110Z",
+      "durationMs": 283030,
+      "score": 100,
+      "isolation": "docker",
+      "tokens": {
+        "inputTokens": 1622925,
+        "outputTokens": 14107
+      },
+      "cost": null,
+      "errorSummary": null
+    },
+    {
+      "caseId": "edge-public-config-cors",
+      "status": "pass",
+      "attempts": 1,
+      "startedAt": "2026-08-31T06:20:16.945Z",
+      "finishedAt": "2026-08-31T06:21:49.576Z",
+      "durationMs": 92631,
+      "score": 100,
+      "isolation": "docker",
+      "tokens": {
+        "inputTokens": 222364,
+        "outputTokens": 3506
+      },
+      "cost": null,
+      "errorSummary": null
+    },
+    {
+      "caseId": "knowledge-visibility-contract",
+      "status": "pass",
+      "attempts": 1,
+      "startedAt": "2026-08-31T06:21:49.577Z",
+      "finishedAt": "2026-08-31T06:23:08.778Z",
+      "durationMs": 79201,
+      "score": 100,
+      "isolation": "docker",
+      "tokens": {
+        "inputTokens": 274502,
+        "outputTokens": 2616
+      },
+      "cost": null,
+      "errorSummary": null
+    },
+    {
+      "caseId": "conversation-cache-invalidation",
+      "status": "pass",
+      "attempts": 1,
+      "startedAt": "2026-08-31T06:23:08.783Z",
+      "finishedAt": "2026-08-31T06:24:49.411Z",
+      "durationMs": 100628,
+      "score": 100,
+      "isolation": "docker",
+      "tokens": {
+        "inputTokens": 373633,
+        "outputTokens": 4357
+      },
+      "cost": null,
+      "errorSummary": null
+    },
+    {
+      "caseId": "knowledge-datasource-startup",
+      "status": "pass",
+      "attempts": 1,
+      "startedAt": "2026-08-31T06:24:49.412Z",
+      "finishedAt": "2026-08-31T06:27:01.243Z",
+      "durationMs": 131831,
+      "score": 100,
+      "isolation": "docker",
+      "tokens": {
+        "inputTokens": 531385,
+        "outputTokens": 4495
+      },
+      "cost": null,
+      "errorSummary": null
+    },
+    {
+      "caseId": "knowledge-graph-conditional",
+      "status": "pass",
+      "attempts": 1,
+      "startedAt": "2026-08-31T06:27:01.245Z",
+      "finishedAt": "2026-08-31T06:29:19.862Z",
+      "durationMs": 138617,
+      "score": 100,
+      "isolation": "docker",
+      "tokens": {
+        "inputTokens": 693418,
+        "outputTokens": 5524
+      },
+      "cost": null,
+      "errorSummary": null
+    },
+    {
+      "caseId": "channel-publisher-conditional",
+      "status": "pass",
+      "attempts": 1,
+      "startedAt": "2026-08-31T06:29:19.863Z",
+      "finishedAt": "2026-08-31T06:32:01.222Z",
+      "durationMs": 161359,
+      "score": 100,
+      "isolation": "docker",
+      "tokens": {
+        "inputTokens": 655992,
+        "outputTokens": 5680
+      },
+      "cost": null,
+      "errorSummary": null
+    },
+    {
+      "caseId": "conversation-component-conditional",
+      "status": "pass",
+      "attempts": 1,
+      "startedAt": "2026-08-31T06:32:01.224Z",
+      "finishedAt": "2026-08-31T06:33:52.818Z",
+      "durationMs": 111594,
+      "score": 100,
+      "isolation": "docker",
+      "tokens": {
+        "inputTokens": 444427,
+        "outputTokens": 4864
+      },
+      "cost": null,
+      "errorSummary": null
+    },
+    {
+      "caseId": "eval-constructor-wiring",
+      "status": "pass",
+      "attempts": 1,
+      "startedAt": "2026-08-31T06:33:52.820Z",
+      "finishedAt": "2026-08-31T06:35:32.383Z",
+      "durationMs": 99563,
+      "score": 100,
+      "isolation": "docker",
+      "tokens": {
+        "inputTokens": 421023,
+        "outputTokens": 3461
+      },
+      "cost": null,
+      "errorSummary": null
+    },
+    {
+      "caseId": "workflow-terminal-outbox",
+      "status": "timeout",
+      "attempts": 1,
+      "startedAt": "2026-08-31T06:35:32.385Z",
+      "finishedAt": "2026-08-31T06:43:32.727Z",
+      "durationMs": 480342,
+      "score": null,
+      "isolation": "docker",
+      "tokens": {
+        "inputTokens": null,
+        "outputTokens": null
+      },
+      "cost": null,
+      "errorSummary": "candidate exceeded configured timeout"
+    },
+    {
+      "caseId": "jwt-rs256-flaky-test",
+      "status": "pass",
+      "attempts": 1,
+      "startedAt": "2026-08-31T06:43:32.728Z",
+      "finishedAt": "2026-08-31T06:45:26.949Z",
+      "durationMs": 114221,
+      "score": 100,
+      "isolation": "docker",
+      "tokens": {
+        "inputTokens": 370208,
+        "outputTokens": 3114
+      },
+      "cost": null,
+      "errorSummary": null
+    },
+    {
+      "caseId": "channel-workflow-callback",
+      "status": "pass",
+      "attempts": 1,
+      "startedAt": "2026-08-31T06:45:26.951Z",
+      "finishedAt": "2026-08-31T06:50:00.702Z",
+      "durationMs": 273751,
+      "score": 100,
+      "isolation": "docker",
+      "tokens": {
+        "inputTokens": 2160849,
+        "outputTokens": 13022
+      },
+      "cost": null,
+      "errorSummary": null
+    },
+    {
+      "caseId": "eval-semantic-assertions",
+      "status": "pass",
+      "attempts": 1,
+      "startedAt": "2026-08-31T06:50:00.704Z",
+      "finishedAt": "2026-08-31T06:55:14.159Z",
+      "durationMs": 313455,
+      "score": 100,
+      "isolation": "docker",
+      "tokens": {
+        "inputTokens": 1497431,
+        "outputTokens": 15373
+      },
+      "cost": null,
+      "errorSummary": null
+    },
+    {
+      "caseId": "knowledge-image-text-provider",
+      "status": "pass",
+      "attempts": 1,
+      "startedAt": "2026-08-31T06:55:14.161Z",
+      "finishedAt": "2026-08-31T07:01:12.331Z",
+      "durationMs": 358170,
+      "score": 100,
+      "isolation": "docker",
+      "tokens": {
+        "inputTokens": 2097397,
+        "outputTokens": 14417
+      },
+      "cost": null,
+      "errorSummary": null
+    },
+    {
+      "caseId": "interop-card-capabilities",
+      "status": "pass",
+      "attempts": 1,
+      "startedAt": "2026-08-31T07:01:12.332Z",
+      "finishedAt": "2026-08-31T07:02:27.897Z",
+      "durationMs": 75565,
+      "score": 100,
+      "isolation": "docker",
+      "tokens": {
+        "inputTokens": 263180,
+        "outputTokens": 3153
+      },
+      "cost": null,
+      "errorSummary": null
+    },
+    {
+      "caseId": "eval-json-path-assertions",
+      "status": "pass",
+      "attempts": 1,
+      "startedAt": "2026-08-31T07:02:27.899Z",
+      "finishedAt": "2026-08-31T07:06:25.029Z",
+      "durationMs": 237130,
+      "score": 100,
+      "isolation": "docker",
+      "tokens": {
+        "inputTokens": 1124343,
+        "outputTokens": 11046
+      },
+      "cost": null,
+      "errorSummary": null
+    },
+    {
+      "caseId": "async-jdbc-task-leases",
+      "status": "pass",
+      "attempts": 1,
+      "startedAt": "2026-08-31T07:06:25.031Z",
+      "finishedAt": "2026-08-31T07:11:31.926Z",
+      "durationMs": 306895,
+      "score": 100,
+      "isolation": "docker",
+      "tokens": {
+        "inputTokens": 2692674,
+        "outputTokens": 14756
+      },
+      "cost": null,
+      "errorSummary": null
+    },
+    {
+      "caseId": "hybrid-ranking-weights",
+      "status": "pass",
+      "attempts": 1,
+      "startedAt": "2026-08-31T07:11:31.928Z",
+      "finishedAt": "2026-08-31T07:15:35.022Z",
+      "durationMs": 243094,
+      "score": 100,
+      "isolation": "docker",
+      "tokens": {
+        "inputTokens": 1636852,
+        "outputTokens": 12796
+      },
+      "cost": null,
+      "errorSummary": null
+    }
+  ]
+}

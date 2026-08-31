@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "tenant-order-service",
+  "kind": "security",
+  "tier": "core",
+  "difficulty": "hard",
+  "sourceCommitSubject": "feat(order): 新增 order-service 按订单号只读查询（:8093，租户隔离）",
+  "title": "新增 order-service 按订单号只读查询（:8093，租户隔离）",
+  "baseRef": "61be88d1b7d07a016a45249c697723e6fdea6ac3",
+  "oracleRef": "84ae928d7a79be19477c287f2566a6207b6797ce",
+  "prompt": "在保持现有公开契约的前提下完成“新增 order-service 按订单号只读查询（:8093，租户隔离）”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "security",
+    "hard",
+    "tenant-isolation"
+  ],
+  "allowedPaths": [
+    "AGENTS.md",
+    "CLAUDE.md",
+    "README.md",
+    "deploy/**",
+    "edge-gateway/**",
+    "order-service/**",
+    "platform-protocol/**",
+    "pom.xml"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "61be88d1b7d07a016a45249c697723e6fdea6ac3",
+        "--"
+      ]
+    },
+    {
+      "name": "order-service-compile",
+      "command": [
+        "mvn",
+        "-pl",
+        "order-service",
+        "-am",
+        "-Dmaven.test.skip=true",
+        "package"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "AGENTS.md",
+          "CLAUDE.md",
+          "README.md",
+          "deploy/**",
+          "edge-gateway/**",
+          "order-service/**",
+          "platform-protocol/**",
+          "pom.xml"
+        ]
+      }
+    ]
+  }
+}

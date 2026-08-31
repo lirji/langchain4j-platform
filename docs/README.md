@@ -49,6 +49,10 @@
 - [钉钉知识库客服接入指南](互操作渠道/dingtalk-guide.md)：钉钉群 @机器人 → 查知识库 → 机器人回复；镜像飞书事件桥、机器人发消息 API 回复、无命中转人工兜底。
 
 **平台工程（横切）**
+- [Coding Agent 工程工作手册](平台工程/coding-agent-playbook.md)：6 个仓库级 Skill、4 个只读研发 Agent、需求到 PR 的交接合同、风险审批、GoldenCase 回放与评分、团队指标和 Case 扩展方法。
+- [Coding Agent 评测沙箱](平台工程/coding-agent-sandbox.md)：Codex worktree 与 Docker 评分的双层边界、断网/只读/非 root/资源限制、镜像准备与故障分类。
+- [Java Code Graph](平台工程/java-codegraph.md)：JDK 21 离线源码图谱、符号/文件影响查询、证据强度与已知限制。
+- [AI Coding 团队培训提纲](平台工程/ai-coding-training-outline.md)：60～90 分钟课程、演示脚本、对抗练习与分阶段推广方式。
 - [软件供应链与可信发布](平台工程/software-supply-chain.md)：完整 Reactor/17 镜像矩阵、CycloneDX、Trivy、OIDC Cosign、SLSA provenance、发布后验证与 digest 回滚。
 - [版本化数据库迁移与回滚](平台工程/database-migrations.md)：8 个关系 schema 的 Flyway/Flowable 独立迁移阶段、expand-contract、最小权限账号、Compose/Helm 前置任务和故障回滚手册。
 - [登录、RBAC 与公共知识库指南](平台工程/rbac-and-public-kb.md)：auth-service 账号密码登录 → 会话令牌 + 刷新 cookie、边缘 `SessionBearerAuthFilter` 换发内部 JWT、角色→scope 展开、`role-admin`/`public-ingest` 平台 scope、后端 `/auth/admin/**` 管理面（If-Match 乐观锁；前端随包 RBAC 控制台已移除）、`__public__` 公共/共享知识库；另含**外接 auth-platform 的文档级 ReBAC / 部门层级隔离与 Casdoor 多租户 SSO 登录**（Casdoor SSO 整栈默认开、`only` 严格模式；文档级 ReBAC `app.rag.authz.mode` 默认 `disabled`，见文中授权章节）。

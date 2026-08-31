@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "workflow-terminal-outbox",
+  "kind": "legacy",
+  "tier": "core",
+  "difficulty": "hard",
+  "sourceCommitSubject": "fix(workflow): B1b 收口 - 终态事件写入并进 Flowable 事务(事务性 outbox + 幂等 relay)",
+  "title": "B1b 收口 - 终态事件写入并进 Flowable 事务(事务性 outbox + 幂等 relay)",
+  "baseRef": "b7eaad7fdd34ed23a874c7b4836e42b61e662005",
+  "oracleRef": "ab47ab3154d07c1dc15241a5e5ca87bae19d1f90",
+  "prompt": "在保持现有公开契约的前提下完成“B1b 收口 - 终态事件写入并进 Flowable 事务(事务性 outbox + 幂等 relay)”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "legacy",
+    "hard"
+  ],
+  "allowedPaths": [
+    "docs/**",
+    "workflow-service/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "b7eaad7fdd34ed23a874c7b4836e42b61e662005",
+        "--"
+      ]
+    },
+    {
+      "name": "workflow-service-compile",
+      "command": [
+        "mvn",
+        "-pl",
+        "workflow-service",
+        "-am",
+        "-Dmaven.test.skip=true",
+        "package"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "docs/**",
+          "workflow-service/**"
+        ]
+      }
+    ]
+  }
+}

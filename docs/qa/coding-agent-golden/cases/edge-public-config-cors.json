@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "edge-public-config-cors",
+  "kind": "bug",
+  "tier": "core",
+  "difficulty": "easy",
+  "sourceCommitSubject": "feat(edge): 放行 /auth/public-config + CORS 放行 If-Match/暴露 X-Total-Count,ETag",
+  "title": "放行 /auth/public-config + CORS 放行 If-Match/暴露 X-Total-Count,ETag",
+  "baseRef": "8f169e3b4b23a72f489df06149620a3fb6b6a3c6",
+  "oracleRef": "6d44114bd434a3555744545834c5be15ed97fff8",
+  "prompt": "在保持现有公开契约的前提下完成“放行 /auth/public-config + CORS 放行 If-Match/暴露 X-Total-Count,ETag”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "bug",
+    "easy"
+  ],
+  "allowedPaths": [
+    "edge-gateway/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "8f169e3b4b23a72f489df06149620a3fb6b6a3c6",
+        "--"
+      ]
+    },
+    {
+      "name": "edge-gateway-compile",
+      "command": [
+        "mvn",
+        "-pl",
+        "edge-gateway",
+        "-am",
+        "-Dmaven.test.skip=true",
+        "package"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "edge-gateway/**"
+        ]
+      }
+    ]
+  }
+}

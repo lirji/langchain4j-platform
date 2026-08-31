@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "jwt-rs256-flaky-test",
+  "kind": "bug",
+  "tier": "core",
+  "difficulty": "easy",
+  "sourceCommitSubject": "fix(security): 修复 RS256 篡改 token 测试的 flaky 断言",
+  "title": "修复 RS256 篡改 token 测试的 flaky 断言",
+  "baseRef": "0e82c4dbc808268fd4ea452a41674c451c6c251a",
+  "oracleRef": "1f33a5b274309138096ee27cd6e81d0d44ea6d72",
+  "prompt": "在保持现有公开契约的前提下完成“修复 RS256 篡改 token 测试的 flaky 断言”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "bug",
+    "easy"
+  ],
+  "allowedPaths": [
+    "platform-security/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "0e82c4dbc808268fd4ea452a41674c451c6c251a",
+        "--"
+      ]
+    },
+    {
+      "name": "platform-security-compile",
+      "command": [
+        "mvn",
+        "-pl",
+        "platform-security",
+        "-am",
+        "-Dmaven.test.skip=true",
+        "package"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "platform-security/**"
+        ]
+      }
+    ]
+  }
+}

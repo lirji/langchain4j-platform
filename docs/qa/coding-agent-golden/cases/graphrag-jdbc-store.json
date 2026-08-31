@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "graphrag-jdbc-store",
+  "kind": "feature",
+  "tier": "extended",
+  "difficulty": "hard",
+  "sourceCommitSubject": "feat(knowledge): persist GraphRAG triples with JDBC",
+  "title": "persist GraphRAG triples with JDBC",
+  "baseRef": "6ac6428d7bd9f301d39165737ab7ff13432e017e",
+  "oracleRef": "9795d9c8419b024dcc2993509b207c673ecab950",
+  "prompt": "在保持现有公开契约的前提下完成“persist GraphRAG triples with JDBC”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "feature",
+    "hard"
+  ],
+  "allowedPaths": [
+    "README.md",
+    "deploy/**",
+    "docs/**",
+    "knowledge-service/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "6ac6428d7bd9f301d39165737ab7ff13432e017e",
+        "--"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "README.md",
+          "deploy/**",
+          "docs/**",
+          "knowledge-service/**"
+        ]
+      }
+    ]
+  }
+}

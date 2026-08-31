@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "agent-async-cancellation",
+  "kind": "feature",
+  "tier": "extended",
+  "difficulty": "medium",
+  "sourceCommitSubject": "feat(agent): propagate async task cancellation",
+  "title": "propagate async task cancellation",
+  "baseRef": "a5b55531430051a3b0fb4b6d6458e777b2933e79",
+  "oracleRef": "9ea9b7ab8b4bdd0ea17ab218acf08b658b9b9b99",
+  "prompt": "在保持现有公开契约的前提下完成“propagate async task cancellation”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "feature",
+    "medium"
+  ],
+  "allowedPaths": [
+    "README.md",
+    "agent-service/**",
+    "docs/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "a5b55531430051a3b0fb4b6d6458e777b2933e79",
+        "--"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "README.md",
+          "agent-service/**",
+          "docs/**"
+        ]
+      }
+    ]
+  }
+}

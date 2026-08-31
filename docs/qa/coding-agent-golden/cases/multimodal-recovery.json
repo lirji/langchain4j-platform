@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "multimodal-recovery",
+  "kind": "feature",
+  "tier": "extended",
+  "difficulty": "medium",
+  "sourceCommitSubject": "feat(multimodal): harden media services and capability UI",
+  "title": "加固多模态服务与能力控制台",
+  "baseRef": "68922fa9801890416c28522f1947b527685dc02d",
+  "oracleRef": "9f71a39ac71b08618d4996db175ef20888b61a74",
+  "prompt": "完善视觉、语音和能力控制台的失败恢复与配置，补齐 provider 验证和交付证据。",
+  "riskTags": ["multimodal", "provider", "recovery"],
+  "allowedPaths": ["vision-service/**", "voice-service/**", "capability-showcase-frontend/**", "deploy/**", "docs/**"],
+  "forbiddenPaths": [".env", ".git/**", "deploy/secrets/**"],
+  "verification": [
+    {"name": "diff-whitespace", "command": ["git", "diff", "--check", "68922fa9801890416c28522f1947b527685dc02d", "--"]},
+    {"name": "media-tests", "command": ["mvn", "-B", "-pl", "vision-service,voice-service", "-am", "test"]}
+  ],
+  "scoring": {"pathScope": 30, "verification": 50, "rubric": 20, "passThreshold": 80, "rubricItems": [{"id": "media-service", "description": "视觉或语音运行时有实现与测试证据", "weight": 20, "evidencePaths": ["vision-service/**", "voice-service/**"]}]}
+}

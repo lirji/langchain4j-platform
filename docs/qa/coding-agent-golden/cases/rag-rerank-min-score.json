@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "rag-rerank-min-score",
+  "kind": "feature",
+  "tier": "core",
+  "difficulty": "medium",
+  "sourceCommitSubject": "feat(knowledge): RAG 重排相关性阈值 app.rag.rerank.min-score",
+  "title": "RAG 重排相关性阈值 app.rag.rerank.min-score",
+  "baseRef": "2124fd00088446945f808e2b035075f7c15a534c",
+  "oracleRef": "daa69804a31e82b0966c0b4376a089651b6e5f3f",
+  "prompt": "在保持现有公开契约的前提下完成“RAG 重排相关性阈值 app.rag.rerank.min-score”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "feature",
+    "medium"
+  ],
+  "allowedPaths": [
+    "knowledge-service/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "2124fd00088446945f808e2b035075f7c15a534c",
+        "--"
+      ]
+    },
+    {
+      "name": "knowledge-service-compile",
+      "command": [
+        "mvn",
+        "-pl",
+        "knowledge-service",
+        "-am",
+        "-Dmaven.test.skip=true",
+        "package"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "knowledge-service/**"
+        ]
+      }
+    ]
+  }
+}

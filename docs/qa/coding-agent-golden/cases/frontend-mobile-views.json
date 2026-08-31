@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "frontend-mobile-views",
+  "kind": "feature",
+  "tier": "extended",
+  "difficulty": "medium",
+  "sourceCommitSubject": "feat(frontend): 移动端适配 Phase4 — 9 模块视图长尾精修",
+  "title": "精修九个能力视图的移动布局",
+  "baseRef": "f3e514f8b17911528941883a89e1cd461d3b5944",
+  "oracleRef": "32a914e9068297c0ce7ab94a7bef7f04c6e63b1b",
+  "prompt": "完善九个业务视图的小屏布局和内容滚动，复用现有断点与组件规范。",
+  "riskTags": ["responsive", "views", "accessibility"],
+  "allowedPaths": ["capability-showcase-frontend/**"],
+  "forbiddenPaths": [".env", ".git/**", "deploy/secrets/**"],
+  "verification": [{"name": "frontend-tests", "command": ["npm", "test"], "cwd": "capability-showcase-frontend"}],
+  "scoring": {"pathScope": 30, "verification": 50, "rubric": 20, "passThreshold": 80, "rubricItems": [{"id": "module-views", "description": "业务视图有响应式变更证据", "weight": 20, "evidencePaths": ["capability-showcase-frontend/src/modules/**"]}]}
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "frontend-breakpoint-foundation",
+  "kind": "feature",
+  "tier": "extended",
+  "difficulty": "medium",
+  "sourceCommitSubject": "feat(frontend): 移动端适配 Phase0 — useBreakpoint 断点真源 + safe-area token",
+  "title": "建立响应式断点真源与安全区 token",
+  "baseRef": "684b7857d04f2ff29538a03439305be35685a800",
+  "oracleRef": "c826799457fb3896c4778a5b95d856e2cebfa4ea",
+  "prompt": "建立 useBreakpoint 单一断点真源、安全区域 token 和视口测试工具，并迁移旧桌面判断。",
+  "riskTags": ["responsive", "composition-api", "testing"],
+  "allowedPaths": ["capability-showcase-frontend/**"],
+  "forbiddenPaths": [".env", ".git/**", "deploy/secrets/**"],
+  "verification": [{"name": "frontend-tests", "command": ["npm", "test"], "cwd": "capability-showcase-frontend"}],
+  "scoring": {"pathScope": 30, "verification": 50, "rubric": 20, "passThreshold": 80, "rubricItems": [{"id": "breakpoint", "description": "断点实现和测试有证据", "weight": 20, "evidencePaths": ["capability-showcase-frontend/src/composables/**", "capability-showcase-frontend/src/test/**"]}]}
+}

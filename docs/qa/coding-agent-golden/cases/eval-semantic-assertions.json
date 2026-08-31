@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "eval-semantic-assertions",
+  "kind": "feature",
+  "tier": "core",
+  "difficulty": "medium",
+  "sourceCommitSubject": "feat(eval): add semantic tolerance assertions",
+  "title": "add semantic tolerance assertions",
+  "baseRef": "2eeb78ffccfc7f8714e7176e54de9009b1aebbd9",
+  "oracleRef": "48f461c0e99d26c9788061eed0572f7860c96e90",
+  "prompt": "在保持现有公开契约的前提下完成“add semantic tolerance assertions”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "feature",
+    "medium"
+  ],
+  "allowedPaths": [
+    "docs/**",
+    "eval-service/**",
+    "platform-protocol/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "2eeb78ffccfc7f8714e7176e54de9009b1aebbd9",
+        "--"
+      ]
+    },
+    {
+      "name": "eval-service-compile",
+      "command": [
+        "mvn",
+        "-pl",
+        "eval-service",
+        "-am",
+        "-Dmaven.test.skip=true",
+        "package"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "docs/**",
+          "eval-service/**",
+          "platform-protocol/**"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,4 @@
+FROM busybox:latest
+COPY entrypoint.sh /usr/local/bin/coding-agent-entrypoint
+RUN chmod 0555 /usr/local/bin/coding-agent-entrypoint
+ENTRYPOINT ["/usr/local/bin/coding-agent-entrypoint"]

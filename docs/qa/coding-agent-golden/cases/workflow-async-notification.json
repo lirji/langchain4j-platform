@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "workflow-async-notification",
+  "kind": "feature",
+  "tier": "extended",
+  "difficulty": "hard",
+  "sourceCommitSubject": "feat(workflow): delegate terminal notifications to async tasks",
+  "title": "delegate terminal notifications to async tasks",
+  "baseRef": "c733b7cdd129570ccf3a4f97bfbec3a66a5d25fe",
+  "oracleRef": "e050af6a9a278bd7c02cba1df5dc08aa9a1bbf00",
+  "prompt": "在保持现有公开契约的前提下完成“delegate terminal notifications to async tasks”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "feature",
+    "hard"
+  ],
+  "allowedPaths": [
+    "README.md",
+    "deploy/**",
+    "docs/**",
+    "workflow-service/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "c733b7cdd129570ccf3a4f97bfbec3a66a5d25fe",
+        "--"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "README.md",
+          "deploy/**",
+          "docs/**",
+          "workflow-service/**"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "webhook-outbox-claim",
+  "kind": "feature",
+  "tier": "extended",
+  "difficulty": "hard",
+  "sourceCommitSubject": "feat(async-task): claim webhook outbox rows",
+  "title": "claim webhook outbox rows",
+  "baseRef": "9ea9b7ab8b4bdd0ea17ab218acf08b658b9b9b99",
+  "oracleRef": "7ba60b431daa0e5fbc263b4bb69f30c817588f3b",
+  "prompt": "在保持现有公开契约的前提下完成“claim webhook outbox rows”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "feature",
+    "hard"
+  ],
+  "allowedPaths": [
+    "README.md",
+    "async-task-service/**",
+    "docs/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "9ea9b7ab8b4bdd0ea17ab218acf08b658b9b9b99",
+        "--"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "README.md",
+          "async-task-service/**",
+          "docs/**"
+        ]
+      }
+    ]
+  }
+}

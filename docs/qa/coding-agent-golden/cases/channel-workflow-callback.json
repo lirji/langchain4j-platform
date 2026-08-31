@@ -1,0 +1,69 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "channel-workflow-callback",
+  "kind": "feature",
+  "tier": "core",
+  "difficulty": "medium",
+  "sourceCommitSubject": "feat(channel): route workflow callbacks to channels",
+  "title": "route workflow callbacks to channels",
+  "baseRef": "be9868491b751a2ba8ae1c3b48f94fddf4654b09",
+  "oracleRef": "d552818f06c79a5302f092e5a7dfcd480a168c04",
+  "prompt": "在保持现有公开契约的前提下完成“route workflow callbacks to channels”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "feature",
+    "medium"
+  ],
+  "allowedPaths": [
+    "README.md",
+    "channel-service/**",
+    "docs/**",
+    "platform-protocol/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "be9868491b751a2ba8ae1c3b48f94fddf4654b09",
+        "--"
+      ]
+    },
+    {
+      "name": "channel-service-compile",
+      "command": [
+        "mvn",
+        "-pl",
+        "channel-service",
+        "-am",
+        "-Dmaven.test.skip=true",
+        "package"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "README.md",
+          "channel-service/**",
+          "docs/**",
+          "platform-protocol/**"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "interop-a2a-mcp-tools",
+  "kind": "feature",
+  "tier": "extended",
+  "difficulty": "hard",
+  "sourceCommitSubject": "feat(interop): expose A2A and MCP-style agent tools",
+  "title": "expose A2A and MCP-style agent tools",
+  "baseRef": "d2e6006ab55eda38982d2546f4e1de308015ffff",
+  "oracleRef": "43c9f68c1b362a55cadab2b982edeaacadad03ad",
+  "prompt": "在保持现有公开契约的前提下完成“expose A2A and MCP-style agent tools”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "feature",
+    "hard"
+  ],
+  "allowedPaths": [
+    "interop-service/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "d2e6006ab55eda38982d2546f4e1de308015ffff",
+        "--"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "interop-service/**"
+        ]
+      }
+    ]
+  }
+}

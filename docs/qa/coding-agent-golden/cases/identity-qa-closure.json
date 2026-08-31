@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "identity-qa-closure",
+  "kind": "bug",
+  "tier": "extended",
+  "difficulty": "hard",
+  "sourceCommitSubject": "fix(platform): 收口全能力 QA 与身份链路问题",
+  "title": "收口全能力 QA 与身份传播缺陷",
+  "baseRef": "7dda7f7b18c1a642a9b564b9a74f880050e437e7",
+  "oracleRef": "6bb34e5fabe2a5bf3f0270f74ce6127472d33676",
+  "prompt": "修复全能力 QA 暴露的身份、租户传播和服务集成问题，并补充回归证据。",
+  "riskTags": ["identity", "tenant", "regression"],
+  "allowedPaths": [".github/**", "README.md", "agent-service/**", "analytics-service/**", "async-task-service/**", "auth-service/**", "capability-showcase-frontend/**", "channel-service/**", "conversation-service/**", "deploy/**", "docs/**", "edge-gateway/**", "eval-service/**", "interop-service/**", "knowledge-service/**", "order-service/**", "platform-security/**", "vision-service/**", "voice-service/**", "workflow-service/**"],
+  "forbiddenPaths": [".env", ".git/**", "deploy/secrets/**"],
+  "verification": [
+    {"name": "diff-whitespace", "command": ["git", "diff", "--check", "7dda7f7b18c1a642a9b564b9a74f880050e437e7", "--"]},
+    {"name": "security-edge-tests", "command": ["mvn", "-B", "-pl", "platform-security,edge-gateway", "-am", "test"]}
+  ],
+  "scoring": {"pathScope": 30, "verification": 50, "rubric": 20, "passThreshold": 80, "rubricItems": [{"id": "identity-chain", "description": "身份传播实现与测试有证据", "weight": 20, "evidencePaths": ["platform-security/**", "edge-gateway/**"]}]}
+}

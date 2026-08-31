@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "channel-feishu-webhook",
+  "kind": "feature",
+  "tier": "extended",
+  "difficulty": "medium",
+  "sourceCommitSubject": "feat(channel): deliver Feishu webhook messages",
+  "title": "deliver Feishu webhook messages",
+  "baseRef": "e050af6a9a278bd7c02cba1df5dc08aa9a1bbf00",
+  "oracleRef": "1437a04e5645b193bc8cfcfc46e1a862a840d5e5",
+  "prompt": "在保持现有公开契约的前提下完成“deliver Feishu webhook messages”，补充或更新聚焦验证，并避免无关改动。",
+  "riskTags": [
+    "feature",
+    "medium"
+  ],
+  "allowedPaths": [
+    "README.md",
+    "channel-service/**",
+    "docs/**"
+  ],
+  "forbiddenPaths": [
+    ".env",
+    "secrets/**",
+    ".git/**"
+  ],
+  "verification": [
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "e050af6a9a278bd7c02cba1df5dc08aa9a1bbf00",
+        "--"
+      ]
+    }
+  ],
+  "scoring": {
+    "pathScope": 30,
+    "verification": 50,
+    "rubric": 20,
+    "passThreshold": 80,
+    "rubricItems": [
+      {
+        "id": "intended-scope",
+        "description": "Changes include the intended historical component scope.",
+        "weight": 20,
+        "evidencePaths": [
+          "README.md",
+          "channel-service/**",
+          "docs/**"
+        ]
+      }
+    ]
+  }
+}

@@ -38,3 +38,21 @@ Pull Request 应包含简洁的变更摘要、受影响模块、已执行的测�
 * **Casdoor OIDC SSO**（多租户方案 C，与自建账号登录/api-key 并存）：`EDGE_CASDOOR_ENABLED`（**默认 `true`**）、`EDGE_CASDOOR_MODE`（**默认 `only`**——严格 Casdoor-only，非 open-path 无有效 token→401；`dual` 为灰度回滚，验不过透传 legacy）、`CASDOOR_AUDIENCES`（默认 `ragshared0client00000001`，按 `<base>-org-*` audience 家族 + `(owner,aud)` 绑定校验）。
 * 内部 JWT 新增**附加 `dept` claim**（部门层级隔离；旧 token 无该字段 → 向后兼容，见 `platform-security` `InternalToken`）。
 * 知识库文档级细粒度授权：`RAG_AUTHZ_MODE`（`disabled`（默认）| `shadow` | `enforce`）+ `AUTHZ_SERVER_URL` / `AUTHZ_SERVER_TOKEN`（接 auth-platform-server）。`AUTHZ_SERVER_TOKEN` 属服务凭据，走 secrets、勿提交。
+
+## Coding Agent 工程规范
+
+仓库级研发 Skill 位于 `.agents/skills/platform-*`，分别用于 Java 新功能、遗留维护、故障诊断、Diff 评审、QA 和 PR 打包。项目级只读角色位于 `.codex/agents/`；探索、架构、评审和 QA 可并行读，修改同一文件集合时必须由主 Agent 或单一 worker 写入。
+
+完整流程与权限边界见 `docs/平台工程/coding-agent-playbook.md`。修改 Skill、Agent、评测工具或 GoldenCase 后必须运行：
+
+```bash
+node tools/coding-agent-eval/cli.mjs validate-kit
+node tools/coding-agent-eval/cli.mjs validate
+node tools/coding-agent-eval/cli.mjs audit --repo .
+node --test tools/coding-agent-eval/test/*.test.mjs
+bash tools/java-codegraph/test/run-tests.sh
+```
+
+CI 不运行真实模型或 Docker pull。只有得到明确授权后，才能执行 `benchmark run --allow-model-execution` 或 `sandbox-smoke.sh`；运行参数、隔离边界和报告口径见 `docs/平台工程/coding-agent-sandbox.md`。
+
+GoldenCase 只在隔离临时 worktree 中回放，不在含用户未提交修改的主工作树评分。工具不得自动 fetch、commit、push、创建 PR 或部署；缺失历史 ref 时应明确报告并停止。

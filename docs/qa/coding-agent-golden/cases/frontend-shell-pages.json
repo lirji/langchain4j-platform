@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "coding-agent-golden/v1",
+  "id": "frontend-shell-pages",
+  "kind": "feature",
+  "tier": "extended",
+  "difficulty": "medium",
+  "sourceCommitSubject": "feat(frontend): 移动端适配 Phase2 — 壳层与公开页",
+  "title": "适配移动端壳层与公开页面",
+  "baseRef": "0488867cbb8a6a4bd48d79afd9364930e8cf701e",
+  "oracleRef": "f4ba58ec52845908203b12c23372da3c5d0f59d4",
+  "prompt": "调整应用壳层、认证控制和公开登录注册页以适配小屏、触控和安全区域。",
+  "riskTags": ["shell", "authentication-ui", "mobile"],
+  "allowedPaths": ["capability-showcase-frontend/**"],
+  "forbiddenPaths": [".env", ".git/**", "deploy/secrets/**"],
+  "verification": [{"name": "frontend-tests", "command": ["npm", "test"], "cwd": "capability-showcase-frontend"}],
+  "scoring": {"pathScope": 30, "verification": 50, "rubric": 20, "passThreshold": 80, "rubricItems": [{"id": "shell-pages", "description": "壳层或公开认证页有变更证据", "weight": 20, "evidencePaths": ["capability-showcase-frontend/src/App.vue", "capability-showcase-frontend/src/modules/auth/**", "capability-showcase-frontend/src/components/layout/**"]}]}
+}
