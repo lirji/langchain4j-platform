@@ -4,7 +4,7 @@
 #
 # 背景 / 为什么需要这个脚本：
 #   1) 本机 apollo 容器占用了 8080(configservice) / 8090(adminservice) / 13306(apollo-db)，宿主 3306 也曾被占。
-#      故 edge-gateway→18080、vision→18090、mysql→13307（compose 用 ${*_HOST_PORT} 变量，
+#      故 edge-gateway→18080、vision→18091、mysql→13307（compose 用 ${*_HOST_PORT} 变量，
 #      这些端口由脚本显式导出，避免依赖各开发者本地、未提交的 deploy/.env。
 #      注意：Docker Desktop 重启后 apollo/blog-postgres/open-webui 等 restart-policy 容器会自动复活抢端口。
 #   2) compose 里的展示能力开关（意图路由 / 级联 / 长期画像 / RAG 等）默认 true，
@@ -21,15 +21,18 @@
 # 百炼凭据通过 deploy/.env 的 BAILIAN_CREDENTIAL_CSV 指向本地 CSV。
 # 要退回无模型 embedding：export RAG_EMBEDDING_PROVIDER=hash 后再跑。
 #
-# 可用环境变量覆盖端口：EDGE_HOST_PORT / VISION_HOST_PORT / MYSQL_HOST_PORT
+# 可用环境变量覆盖端口：EDGE_HOST_PORT / VISION_HOST_PORT / MYSQL_HOST_PORT /
+# REDIS_HOST_PORT / INTEROP_HOST_PORT
 #
 set -euo pipefail
 cd "$(dirname "$0")"   # 切到 deploy/（compose 与本机端口变量的工作目录）
 
 # ── 本机端口重映射（可被外部环境变量覆盖）──
 export EDGE_HOST_PORT="${EDGE_HOST_PORT:-18080}"
-export VISION_HOST_PORT="${VISION_HOST_PORT:-18090}"
+export VISION_HOST_PORT="${VISION_HOST_PORT:-18091}"
 export MYSQL_HOST_PORT="${MYSQL_HOST_PORT:-13307}"
+export REDIS_HOST_PORT="${REDIS_HOST_PORT:-16379}"
+export INTEROP_HOST_PORT="${INTEROP_HOST_PORT:-18089}"
 export AGENTSCOPE_IMAGE="${AGENTSCOPE_IMAGE:-agentscope-platform:local}"
 AGENTSCOPE_REPO="${AGENTSCOPE_REPO:-../../agentscope-platform}"
 
@@ -85,7 +88,7 @@ else
   echo "▶ 重启【后端应用服务】（基础设施 ${INFRA//|/ } 保持运行）。加 --all 连基础设施一起重启"
 fi
 TARGET_LINE="$(echo "$TARGET" | tr '\n' ' ')"
-echo "  端口: gateway=${EDGE_HOST_PORT} vision=${VISION_HOST_PORT} mysql=${MYSQL_HOST_PORT}"
+echo "  端口: gateway=${EDGE_HOST_PORT} vision=${VISION_HOST_PORT} mysql=${MYSQL_HOST_PORT} redis=${REDIS_HOST_PORT} interop=${INTEROP_HOST_PORT}"
 echo "  目标: ${TARGET_LINE}"
 echo
 

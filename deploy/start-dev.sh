@@ -8,18 +8,19 @@
 #   前端保留 vite 热更新（HMR），改前端代码即时生效；后端仍是容器，改后端需重跑本脚本。
 #
 # 与 start-all.sh 的区别：
-#   start-dev.sh —— 前端 = vite dev(:5173, 有 HMR)，日常改前端时用。
-#   start-all.sh —— 前端 = nginx 生产镜像(:8093, 无 HMR)，全 docker，验收/接近生产时用。
+#   start-dev.sh —— 前端 = vite dev(中央注册端口, 有 HMR)，日常改前端时用。
+#   start-all.sh —— 前端 = nginx 生产镜像(同一中央注册端口, 无 HMR)，全 docker，验收/接近生产时用。
 #
 # 用法：
-#   ./start-dev.sh              # 起后端 docker(应用服务) + 前端 dev(:5173)  —— 日常最常用
+#   ./start-dev.sh              # 起后端 docker(应用服务) + 前端 dev(默认 :8093) —— 日常最常用
 #   ./start-dev.sh --all        # 连基础设施一起重启后端，再起前端 dev
 #   ./start-dev.sh --build      # 先 mvn package 再重建后端镜像后起，再起前端 dev
 #   ./start-dev.sh --es         # (已弃用) ES 全文混排现为后端默认；本开关保留为兼容 no-op
 #   ./start-dev.sh --front-only # 后端已在跑，只起前端 dev
 #   ./start-dev.sh --back-only  # 只起/重启后端 docker（等价于 start-local.sh）
 #
-# 可用环境变量覆盖端口：EDGE_HOST_PORT(默认 18080) / VISION_HOST_PORT / MYSQL_HOST_PORT
+# 可用环境变量覆盖端口：EDGE_HOST_PORT(默认 18080) / VISION_HOST_PORT / MYSQL_HOST_PORT /
+# REDIS_HOST_PORT / INTEROP_HOST_PORT
 #   —— EDGE_HOST_PORT 会同时传给 start-local.sh 和前端 vite 代理目标，保持一致。
 #
 set -euo pipefail
@@ -27,10 +28,19 @@ cd "$(dirname "$0")"   # 切到 deploy/
 
 FRONTEND_DIR="../capability-showcase-frontend"
 
+PLATFORM_PORTS_LOADER="${PLATFORM_PORTS_LOADER:-../../auth-platform/deploy/load-platform-ports.sh}"
+if [ -r "${PLATFORM_PORTS_LOADER}" ]; then
+  # shellcheck source=/dev/null
+  . "${PLATFORM_PORTS_LOADER}"
+fi
+export LANGCHAIN4J_UI_PORT="${LANGCHAIN4J_UI_PORT:-8093}"
+
 # ── 端口：与 start-local.sh 一致的本机重映射（避开 apollo 占用的 8080/8090 与 13306=apollo-db）──
 export EDGE_HOST_PORT="${EDGE_HOST_PORT:-18080}"
-export VISION_HOST_PORT="${VISION_HOST_PORT:-18090}"
+export VISION_HOST_PORT="${VISION_HOST_PORT:-18091}"
 export MYSQL_HOST_PORT="${MYSQL_HOST_PORT:-13307}"
+export REDIS_HOST_PORT="${REDIS_HOST_PORT:-16379}"
+export INTEROP_HOST_PORT="${INTEROP_HOST_PORT:-18089}"
 # 前端 vite 的代理目标 / direct 基址，跟随 EDGE_HOST_PORT（覆盖 .env.local 的默认 :18080）。
 export VITE_EDGE_BASE_URL="${VITE_EDGE_BASE_URL:-http://localhost:${EDGE_HOST_PORT}}"
 
@@ -74,7 +84,7 @@ cat <<EOF
 
 ════════════════════════════════════════════════════════════
   启动前端 dev（vite, 热更新）
-  • 前端            http://localhost:5173
+  • 前端            http://localhost:${LANGCHAIN4J_UI_PORT}   (中央注册端口)
   • 后端网关        http://localhost:${EDGE_HOST_PORT}   (vite 已代理 /chat、/auth 等到此)
   • 登录(默认)      Casdoor OIDC（edge 默认 ONLY 模式，authz-casdoor :8000 须在跑；
                     未跑先: docker start authz-postgres && sleep 5 && docker start authz-spicedb authz-casdoor）
@@ -86,4 +96,4 @@ cat <<EOF
 EOF
 
 cd "${FRONTEND_DIR}"
-exec npm run dev
+exec npm run dev -- --port "${LANGCHAIN4J_UI_PORT}" --strictPort

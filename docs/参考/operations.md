@@ -94,9 +94,9 @@ mvn -pl platform-security -Dtest=InternalTokenTest test   # 单类（务必带 -
 | agent-service | 8085 | 默认不路由 | 旧 Java 整服务回滚目标 |
 | async-task-service | 8086 | `/async`、`/async/**` | 通用任务中心、SSE、webhook outbox |
 | channel-service | 8087 | `/channel`、`/channel/**` | 渠道出站/回调 + 可选 Kafka 事件 |
-| interop-service | 8088 | `/interop`、`/interop/**`、`/.well-known/agent-card.json` | A2A + MCP surface |
+| interop-service | 8088（启动脚本宿主重映射 18089） | `/interop`、`/interop/**`、`/.well-known/agent-card.json` | A2A + MCP surface |
 | eval-service | 8089 | `/eval`、`/eval/**` | 回归测试客户端 |
-| vision-service | 8090（`start-all.sh` 宿主重映射 18090） | `/vision`、`/vision/**` | 多模态图像描述（caption/describe） |
+| vision-service | 8090（`start-all.sh` 宿主重映射 18091） | `/vision`、`/vision/**` | 多模态图像描述（caption/describe） |
 | voice-service | 8091 | `/voice`、`/voice/**` | ASR + 对话 + TTS 语音闭环 |
 | auth-service | 8092 | `/auth`、`/auth/**` | 账号登录 / 注册 / 刷新 / RBAC 管理 |
 | order-service | 8093（宿主 8094） | `/orders`、`/orders/**` | 按订单号只读查订单（agent order_query 下游）；持久化 MySQL、按租户隔离。宿主机 8093 被展示前端占用，compose 映射 8094 |
@@ -104,7 +104,7 @@ mvn -pl platform-security -Dtest=InternalTokenTest test   # 单类（务必带 -
 | capability-showcase-frontend | 8093 | 不经网关（浏览器跨域直调） | 能力展示前端（Vue3 静态 SPA / nginx） |
 | LiteLLM | 4000 | 不经网关 | LLM 网关 |
 | MySQL | 3306（脚本重映射 13307） | — | 本地数据库（含 auth 库） |
-| Redis | 6379 | — | RAG registry / metering / 限流 / 语义缓存 存储 |
+| Redis | 6379（启动脚本宿主重映射 16379） | — | RAG registry / metering / 限流 / 语义缓存 存储 |
 | Qdrant | 6333(HTTP) / 6334(gRPC) | — | 向量库（默认向量后端） |
 | Elasticsearch | 9200 | — | RAG 全文 BM25 混排索引（smartcn，默认开启） |
 | Kibana | 5601 | — | ES 查询 UI（Dev Tools） |

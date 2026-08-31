@@ -92,8 +92,8 @@ cp deploy/.env.example deploy/.env
 # 编辑 deploy/.env 的 BAILIAN_CREDENTIAL_CSV=/绝对路径/凭据.csv
 
 # 3. 起整网（推荐脚本会构建 AgentScope、加载凭据并完成 Compose 注入）
-bash deploy/start-all.sh       # 全 docker 含前端 nginx :8093
-# 或 bash deploy/start-dev.sh  # 后端 docker + 前端 vite HMR :5173
+bash deploy/start-all.sh       # 全 docker，前端端口来自 auth-platform 中央注册表
+# 或 bash deploy/start-dev.sh  # 后端 docker + 前端 vite HMR，复用同一入口端口
 
 # 4. 打一条 /chat（走边缘网关，用 api-key，网关内部换 JWT 转发给 conversation-service）
 curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \

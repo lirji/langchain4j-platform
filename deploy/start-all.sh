@@ -13,8 +13,8 @@
 #   且前端构建期需把网关地址(SHOWCASE_EDGE_BASE_URL)烘焙进去。本脚本把这些变量补齐后一键拉起。
 #
 # 与 start-dev.sh 的区别：
-#   start-all.sh —— 前端 = nginx 生产镜像(:8093, 无热更新)，全 docker，验收/接近生产时用。
-#   start-dev.sh —— 前端 = vite dev(:5173, 有 HMR)，日常改前端时用。
+#   start-all.sh —— 前端 = nginx 生产镜像(中央注册端口, 无热更新)，全 docker，验收/接近生产时用。
+#   start-dev.sh —— 前端 = vite dev(同一中央注册端口, 有 HMR)，日常改前端时用。
 #
 # 用法：
 #   ./start-all.sh            # mvn package + 构建并起【全部服务(含前端 nginx + 基础设施)】—— 首次/改动后用
@@ -25,15 +25,26 @@
 # 默认栈已含 Elasticsearch(smartcn)+Kibana，并使用百炼 embedding/rerank/vision。
 # 百炼凭据通过 deploy/.env 的 BAILIAN_CREDENTIAL_CSV 指向本地 CSV；零模型依赖回退可设 RAG_EMBEDDING_PROVIDER=hash。
 #
-# 可用环境变量覆盖端口：EDGE_HOST_PORT(默认 18080) / VISION_HOST_PORT / MYSQL_HOST_PORT
+# 可用环境变量覆盖端口：EDGE_HOST_PORT(默认 18080) / VISION_HOST_PORT / MYSQL_HOST_PORT /
+# REDIS_HOST_PORT / INTEROP_HOST_PORT
 #
 set -euo pipefail
 cd "$(dirname "$0")"   # 切到 deploy/
 
+# 统一门户可见端口由同级 auth-platform 中央注册表提供；独立 checkout 时保留兼容默认值。
+PLATFORM_PORTS_LOADER="${PLATFORM_PORTS_LOADER:-../../auth-platform/deploy/load-platform-ports.sh}"
+if [ -r "${PLATFORM_PORTS_LOADER}" ]; then
+  # shellcheck source=/dev/null
+  . "${PLATFORM_PORTS_LOADER}"
+fi
+export LANGCHAIN4J_UI_PORT="${LANGCHAIN4J_UI_PORT:-8093}"
+
 # ── 本机端口重映射（避开 apollo 占用的 8080/8090/3306）──
 export EDGE_HOST_PORT="${EDGE_HOST_PORT:-18080}"
-export VISION_HOST_PORT="${VISION_HOST_PORT:-18090}"
+export VISION_HOST_PORT="${VISION_HOST_PORT:-18091}"
 export MYSQL_HOST_PORT="${MYSQL_HOST_PORT:-13307}"
+export REDIS_HOST_PORT="${REDIS_HOST_PORT:-16379}"
+export INTEROP_HOST_PORT="${INTEROP_HOST_PORT:-18089}"
 export AGENTSCOPE_IMAGE="${AGENTSCOPE_IMAGE:-agentscope-platform:local}"
 AGENTSCOPE_REPO="${AGENTSCOPE_REPO:-../../agentscope-platform}"
 # 前端容器构建期烘焙的网关基址：浏览器从宿主直调网关，必须指向宿主端口 EDGE_HOST_PORT。
@@ -77,7 +88,7 @@ if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
 fi
 
 echo "▶ 全 docker 拉起【前端 nginx + 后端 + 基础设施】"
-echo "  端口: gateway=${EDGE_HOST_PORT} vision=${VISION_HOST_PORT} mysql=${MYSQL_HOST_PORT} frontend=8093"
+echo "  端口: gateway=${EDGE_HOST_PORT} vision=${VISION_HOST_PORT} mysql=${MYSQL_HOST_PORT} redis=${REDIS_HOST_PORT} interop=${INTEROP_HOST_PORT} frontend=${LANGCHAIN4J_UI_PORT}"
 echo "  前端网关基址(构建期): ${SHOWCASE_EDGE_BASE_URL}"
 echo
 
@@ -117,10 +128,10 @@ if command -v curl >/dev/null 2>&1; then
   done
   [ -z "$ready" ] && echo " ⚠ 超时未就绪，用 'docker compose logs -f edge-gateway conversation-service' 排查"
 
-  echo -n "⏳ 等待前端 nginx :8093 就绪 "
+  echo -n "⏳ 等待前端 nginx :${LANGCHAIN4J_UI_PORT} 就绪 "
   fready=""
   for _ in $(seq 1 20); do
-    fcode="$(curl -s -o /dev/null -w '%{http_code}' -m 3 "http://localhost:8093/" 2>/dev/null || echo 000)"
+    fcode="$(curl -s -o /dev/null -w '%{http_code}' -m 3 "http://localhost:${LANGCHAIN4J_UI_PORT}/" 2>/dev/null || echo 000)"
     if [ "$fcode" = "200" ]; then fready=1; echo " ✓ 就绪"; break; fi
     printf '.'; sleep 2
   done
@@ -145,7 +156,7 @@ cat <<EOF
 
 ════════════════════════════════════════════════════════════
   前后端就绪（全 docker）
-  • 前端(nginx)    http://localhost:8093   （改过 SHOWCASE_* 烘焙参数后记得浏览器硬刷新）
+  • 前端(nginx)    http://localhost:${LANGCHAIN4J_UI_PORT}   （端口来自 auth-platform 中央注册表）
   • 后端网关       http://localhost:${EDGE_HOST_PORT}
   • 鉴权(默认)     前端 Casdoor OIDC 登录（edge 默认 ONLY 模式，Casdoor :8000 须在跑）
                    ${CASDOOR_HINT:-✓ authz-casdoor 在运行}

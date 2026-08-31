@@ -96,7 +96,7 @@ services:
     volumes:
       - redis-data:/data
     ports:
-      - "6379:6379"
+      - "${REDIS_HOST_PORT:-6379}:6379"
 
   mysql:
     image: mysql:8.4
@@ -768,7 +768,7 @@ services:
       - agentscope-orchestrator
       - redis
     ports:
-      - "8088:8088"
+      - "${INTEROP_HOST_PORT:-8088}:8088"
 
   eval-service:
     <<: *app-security
@@ -881,7 +881,7 @@ services:
       CSP_CASDOOR_ORIGIN: ${SHOWCASE_CASDOOR_ISSUER:-http://localhost:8000}
       NGINX_ENVSUBST_FILTER: "^CSP_"
     ports:
-      - "8093:80"
+      - "${LANGCHAIN4J_UI_PORT:-8093}:80"
 
   # order-service：按订单号只读查订单，供深度 Agent 的 order_query 动作调用。
   # 共用 mysql 容器 + 独立 schema order_service；schema 由 migrate-order 前置任务创建/升级。
