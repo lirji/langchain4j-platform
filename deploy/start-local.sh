@@ -22,7 +22,7 @@
 # 要退回无模型 embedding：export RAG_EMBEDDING_PROVIDER=hash 后再跑。
 #
 # 可用环境变量覆盖端口：EDGE_HOST_PORT / VISION_HOST_PORT / MYSQL_HOST_PORT /
-# REDIS_HOST_PORT / INTEROP_HOST_PORT
+# REDIS_HOST_PORT / INTEROP_HOST_PORT / TAX_HOST_PORT
 #
 set -euo pipefail
 cd "$(dirname "$0")"   # 切到 deploy/（compose 与本机端口变量的工作目录）
@@ -33,6 +33,7 @@ export VISION_HOST_PORT="${VISION_HOST_PORT:-18091}"
 export MYSQL_HOST_PORT="${MYSQL_HOST_PORT:-13307}"
 export REDIS_HOST_PORT="${REDIS_HOST_PORT:-16379}"
 export INTEROP_HOST_PORT="${INTEROP_HOST_PORT:-18089}"
+export TAX_HOST_PORT="${TAX_HOST_PORT:-8095}"
 export AGENTSCOPE_IMAGE="${AGENTSCOPE_IMAGE:-agentscope-platform:local}"
 AGENTSCOPE_REPO="${AGENTSCOPE_REPO:-../../agentscope-platform}"
 
@@ -88,7 +89,7 @@ else
   echo "▶ 重启【后端应用服务】（基础设施 ${INFRA//|/ } 保持运行）。加 --all 连基础设施一起重启"
 fi
 TARGET_LINE="$(echo "$TARGET" | tr '\n' ' ')"
-echo "  端口: gateway=${EDGE_HOST_PORT} vision=${VISION_HOST_PORT} mysql=${MYSQL_HOST_PORT} redis=${REDIS_HOST_PORT} interop=${INTEROP_HOST_PORT}"
+echo "  端口: gateway=${EDGE_HOST_PORT} vision=${VISION_HOST_PORT} mysql=${MYSQL_HOST_PORT} redis=${REDIS_HOST_PORT} interop=${INTEROP_HOST_PORT} tax=${TAX_HOST_PORT}"
 echo "  目标: ${TARGET_LINE}"
 echo
 

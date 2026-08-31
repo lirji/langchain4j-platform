@@ -43,6 +43,12 @@
 - [视觉指南](多模态语音/vision-guide.md)：vision-service `/vision/caption`·`/describe` + 对话入口 `/chat/vision` + agent `browser_see`；Docker `vision-default` 默认映射百炼 `qwen3-vl-plus`。
 - [语音指南](多模态语音/voice-guide.md)：voice-service 语音闭环 `/voice/transcribe`·`/voice/chat`(+`/stream`)，ASR(whisper)→对话大脑→TTS。
 
+**财税**
+
+- [发票风险审查助手](财税/tax-invoice-risk-review.md)：确定性发票勾稽规则、租户政策证据、AI 辅助说明、降级边界、GoldenCase 和本地演示。
+- [财税功能交付报告](delivery/tax-invoice-risk-review/DELIVERY_REPORT.md)：Gate B 结论、证据入口、发布与回滚建议。
+- [财税功能 QA 报告](qa/tax-invoice-risk-review/QA.md)：AC-01～AC-14、349 个回归测试、HTTP、代码图和 Docker 证据。
+
 **互操作与渠道**
 - [A2A 接入指南](互操作渠道/a2a-guide.md)：agent-card 发现、`/interop/a2a` JSON-RPC task 协议、`message/stream` 真流式 + push 中继、代理到 agent、live discovery。
 - [MCP 接入指南](互操作渠道/mcp-guide.md)：agent 作 MCP client（`mcp_call`）与 interop 的 MCP tool surface。
@@ -53,7 +59,7 @@
 - [Coding Agent 评测沙箱](平台工程/coding-agent-sandbox.md)：Codex worktree 与 Docker 评分的双层边界、断网/只读/非 root/资源限制、镜像准备与故障分类。
 - [Java Code Graph](平台工程/java-codegraph.md)：JDK 21 离线源码图谱、符号/文件影响查询、证据强度与已知限制。
 - [AI Coding 团队培训提纲](平台工程/ai-coding-training-outline.md)：60～90 分钟课程、演示脚本、对抗练习与分阶段推广方式。
-- [软件供应链与可信发布](平台工程/software-supply-chain.md)：完整 Reactor/17 镜像矩阵、CycloneDX、Trivy、OIDC Cosign、SLSA provenance、发布后验证与 digest 回滚。
+- [软件供应链与可信发布](平台工程/software-supply-chain.md)：完整 Reactor/18 镜像矩阵、CycloneDX、Trivy、OIDC Cosign、SLSA provenance、发布后验证与 digest 回滚。
 - [版本化数据库迁移与回滚](平台工程/database-migrations.md)：8 个关系 schema 的 Flyway/Flowable 独立迁移阶段、expand-contract、最小权限账号、Compose/Helm 前置任务和故障回滚手册。
 - [登录、RBAC 与公共知识库指南](平台工程/rbac-and-public-kb.md)：auth-service 账号密码登录 → 会话令牌 + 刷新 cookie、边缘 `SessionBearerAuthFilter` 换发内部 JWT、角色→scope 展开、`role-admin`/`public-ingest` 平台 scope、后端 `/auth/admin/**` 管理面（If-Match 乐观锁；前端随包 RBAC 控制台已移除）、`__public__` 公共/共享知识库；另含**外接 auth-platform 的文档级 ReBAC / 部门层级隔离与 Casdoor 多租户 SSO 登录**（Casdoor SSO 整栈默认开、`only` 严格模式；文档级 ReBAC `app.rag.authz.mode` 默认 `disabled`，见文中授权章节）。
 - [公网化 OIDC 改造方案](平台工程/公网化-OIDC-改造方案.md)：外部 IdP（Casdoor）SSO 落地方案——**已落地并成为默认**：edge `CasdoorTokenExchangeFilter` 验 Casdoor JWT 换发内部 JWT（`edge.casdoor.enabled` **默认开**、`mode` **默认 `only`** 严格，`dual` 作灰度回滚窗口）+ 前端方案 C 多租户登录（Shared Application + 选组织）+ 接 SpiceDB 文档级 ReBAC；与 auth-service 自建会话登录、api-key 并存（切 `dual` 时回退）。
@@ -74,7 +80,7 @@
 
 ## 当前定位
 
-`langchain4j-platform` 是从原单体 `LangChain4j_project` 拆分出来的微服务平台。业务 API 统一从 `edge-gateway` 进入（Casdoor OIDC Bearer **或** 登录会话 Bearer **或** api-key → 内部 JWT；整栈默认 Casdoor `only` 严格模式，`dual` 时回退老路），所有 LLM 调用统一走 LiteLLM/OpenAI-compatible 网关。当前覆盖 auth（登录 + RBAC）、conversation、knowledge、agent、analytics、workflow、async-task、channel、interop、eval、vision、voice、order 等限界上下文，配套 config-server 配置中心、platform-eventbus 事件总线（Kafka 事务性 outbox + relay 的可靠终态投递），RAG 检索接 Qdrant 向量库 + Elasticsearch(smartcn) 全文混排，另有前后端分离的能力展示前端 `capability-showcase-frontend`。授权侧除内建 RBAC/多租户硬隔离外，已落地**外接 auth-platform（Casdoor 身份 + SpiceDB ReBAC）**：Casdoor 多租户 SSO 登录（方案 C，整栈默认开、`only` 严格）+ RAG 文档/部门层级细粒度授权（`app.rag.authz.mode`，默认 `disabled`，可切 `shadow`/`enforce`）。
+`langchain4j-platform` 是从原单体 `LangChain4j_project` 拆分出来的微服务平台。业务 API 统一从 `edge-gateway` 进入（Casdoor OIDC Bearer **或** 登录会话 Bearer **或** api-key → 内部 JWT；整栈默认 Casdoor `only` 严格模式，`dual` 时回退老路），所有 LLM 调用统一走 LiteLLM/OpenAI-compatible 网关。当前覆盖 auth（登录 + RBAC）、conversation、knowledge、agent、analytics、workflow、async-task、channel、interop、eval、vision、voice、order、tax 等限界上下文，配套 config-server 配置中心、platform-eventbus 事件总线（Kafka 事务性 outbox + relay 的可靠终态投递），RAG 检索接 Qdrant 向量库 + Elasticsearch(smartcn) 全文混排，另有前后端分离的能力展示前端 `capability-showcase-frontend`。授权侧除内建 RBAC/多租户硬隔离外，已落地**外接 auth-platform（Casdoor 身份 + SpiceDB ReBAC）**：Casdoor 多租户 SSO 登录（方案 C，整栈默认开、`only` 严格）+ RAG 文档/部门层级细粒度授权（`app.rag.authz.mode`，默认 `disabled`，可切 `shadow`/`enforce`）。
 
 ## 文档维护原则
 

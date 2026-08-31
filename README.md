@@ -18,7 +18,7 @@ client ──X-Api-Key/Bearer──▶ edge-gateway (Spring Cloud Gateway)
                           ▼
                   ┌───────────────── 各微服务 ─────────────────┐
    auth(登录/RBAC) / conversation / knowledge / agent / analytics /
-   workflow / async-task / channel / interop / eval / vision / voice
+   workflow / async-task / channel / interop / eval / vision / voice / order / tax
                           │  所有 LLM 调用统一走 ▼
                      LiteLLM (AI 网关)  ── provider 路由 + failover ──▶ deepseek/ollama/openai/...
 
@@ -57,6 +57,7 @@ client ──X-Api-Key/Bearer──▶ edge-gateway (Spring Cloud Gateway)
 | `vision-service` | 服务 | `/vision/caption`·`/vision/describe` 图像描述（多模态，JSON 或 multipart 上传）；默认开（`VISION_ENABLED=true`） |
 | `voice-service` | 服务 | `/voice/transcribe` 转写 + `/voice/chat`(+`/stream`) 语音闭环 ASR(whisper)→`/chat`→TTS；默认关（`VOICE_ENABLED=false`） |
 | `order-service` | 服务 | `/orders/{orderNo}` 按订单号只读查订单（状态/金额/客户/下单日期）；裸 JdbcTemplate + 持久化 MySQL（独立库 `order_service`）、按 `tenant_id` 隔离；供深度 Agent 的 `order_query` 动作调用（:8093，宿主机映射 8094——8093 被展示前端占用） |
+| `tax-service` | 服务 | `POST /tax/invoices/review` 中国增值税发票批次风险审查：确定性重复/金额/税额/期间规则为权威，租户 RAG 证据与 AI 仅作辅助说明；AI/RAG 失败自动降级（:8094，宿主机默认映射 8095） |
 | `edge-gateway` | 服务 | 边缘 API 网关：入站凭证 → 换发内部 JWT（`X-Internal-Token`）转发下游。三个签发 filter：`CasdoorTokenExchangeFilter`(Casdoor Bearer, -120，**默认开**) / `SessionBearerAuthFilter`(会话 Bearer, -110) / `ApiKeyToInternalTokenFilter`(X-Api-Key, -100)。Casdoor `EDGE_CASDOOR_MODE`=ONLY(**默认**，仅 Casdoor，非 open-path 无有效 token→401)/DUAL(灰度回滚窗口，验不过透传老路)；多租户登录方案 C（Casdoor Shared Application + 选 org，前端按 org 用 `<base>-org-<tenant>` 客户端，edge 校验 `<base>-org-*` aud 家族 + owner 绑定）。限流 + CORS 白名单 |
 
 > 后续继续加固 `channel`/`interop`/`eval` 的真实适配逻辑，并继续加固 `knowledge`/`async-task` 的持久化和跨服务协议。
@@ -74,6 +75,7 @@ client ──X-Api-Key/Bearer──▶ edge-gateway (Spring Cloud Gateway)
 - 对话与检索：[RAG](docs/对话与检索/rag-guide.md) · [记忆](docs/对话与检索/memory-guide.md) · [语义缓存](docs/对话与检索/semantic-cache.md) · [模型级联](docs/对话与检索/model-cascade.md) · [NL2SQL](docs/对话与检索/nl2sql-guide.md)
 - Agent 与编排：[Agent](docs/Agent编排/agent-guide.md) · [工作流](docs/Agent编排/workflow-guide.md) · [Code Interpreter](docs/Agent编排/code-exec.md)
 - 多模态与语音：[视觉](docs/多模态语音/vision-guide.md) · [语音](docs/多模态语音/voice-guide.md)
+- 财税：[发票风险审查助手](docs/财税/tax-invoice-risk-review.md)
 - 互操作与渠道：[A2A](docs/互操作渠道/a2a-guide.md) · [MCP](docs/互操作渠道/mcp-guide.md) · [钉钉桥](docs/互操作渠道/dingtalk-guide.md)
 - 平台工程：[可信发布](docs/平台工程/software-supply-chain.md) · [RBAC与登录](docs/平台工程/rbac-and-public-kb.md) · [Casdoor SSO/OIDC 接入](docs/平台工程/公网化-OIDC-改造方案.md) · [事件总线](docs/平台工程/eventbus-guide.md) · [可观测性](docs/平台工程/observability-guide.md) · [成本归因](docs/平台工程/cost-attribution.md) · [评测](docs/平台工程/eval-guide.md)
 - [迁移路线图](docs/迁移/migration-roadmap.md)

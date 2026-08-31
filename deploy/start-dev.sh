@@ -20,7 +20,7 @@
 #   ./start-dev.sh --back-only  # 只起/重启后端 docker（等价于 start-local.sh）
 #
 # 可用环境变量覆盖端口：EDGE_HOST_PORT(默认 18080) / VISION_HOST_PORT / MYSQL_HOST_PORT /
-# REDIS_HOST_PORT / INTEROP_HOST_PORT
+# REDIS_HOST_PORT / INTEROP_HOST_PORT / TAX_HOST_PORT
 #   —— EDGE_HOST_PORT 会同时传给 start-local.sh 和前端 vite 代理目标，保持一致。
 #
 set -euo pipefail
@@ -41,6 +41,7 @@ export VISION_HOST_PORT="${VISION_HOST_PORT:-18091}"
 export MYSQL_HOST_PORT="${MYSQL_HOST_PORT:-13307}"
 export REDIS_HOST_PORT="${REDIS_HOST_PORT:-16379}"
 export INTEROP_HOST_PORT="${INTEROP_HOST_PORT:-18089}"
+export TAX_HOST_PORT="${TAX_HOST_PORT:-8095}"
 # 前端 vite 的代理目标 / direct 基址，跟随 EDGE_HOST_PORT（覆盖 .env.local 的默认 :18080）。
 export VITE_EDGE_BASE_URL="${VITE_EDGE_BASE_URL:-http://localhost:${EDGE_HOST_PORT}}"
 

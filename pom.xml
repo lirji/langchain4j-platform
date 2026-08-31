@@ -47,6 +47,7 @@
         <module>vision-service</module>
         <module>voice-service</module>
         <module>order-service</module>
+        <module>tax-service</module>
         <module>edge-gateway</module>
     </modules>
 

@@ -910,6 +910,36 @@ services:
     ports:
       - "8094:8093"
 
+  # tax-service：无状态发票一致性风险审查；RAG/AI 失败时保留确定性结果。
+  tax-service:
+    <<: *app-security
+    build:
+      context: ../tax-service
+    environment:
+      GATEWAY_BASE_URL: http://litellm:4000/v1
+      GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
+      GATEWAY_MODEL: chat-default
+      PLATFORM_GATEWAY_TENANT_ATTRIBUTION: ${PLATFORM_GATEWAY_TENANT_ATTRIBUTION:-none}
+      KNOWLEDGE_BASE_URL: http://knowledge-service:8084
+      TAX_AI_ENABLED: ${TAX_AI_ENABLED:-true}
+      TAX_KNOWLEDGE_ENABLED: ${TAX_KNOWLEDGE_ENABLED:-true}
+      INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
+      INTERNAL_AUTH_REQUIRED: "true"
+      INTERNAL_API_KEY_FALLBACK: "false"
+      MANAGEMENT_TRACING_ENABLED: ${MANAGEMENT_TRACING_ENABLED:-false}
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
+    depends_on:
+      knowledge-service:
+        condition: service_started
+      litellm:
+        condition: service_started
+      redis:
+        condition: service_started
+    ports:
+      - "${TAX_HOST_PORT:-8095}:8094"
+
   edge-gateway:
     <<: *app-security
     build:
@@ -932,6 +962,7 @@ services:
       VOICE_URI: http://voice-service:8091
       AUTH_URI: http://auth-service:8092
       ORDER_URI: http://order-service:8093
+      TAX_URI: http://tax-service:8094
       # 允许分离部署的展示前端跨域（含 compose 内 :8093 与本地 dev/preview 端口）。
       GATEWAY_CORS_ORIGINS: ${GATEWAY_CORS_ORIGINS:-http://localhost:8093,http://127.0.0.1:8093,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5273,http://127.0.0.1:5273,http://localhost:4173,http://127.0.0.1:4173}
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
@@ -965,6 +996,7 @@ services:
       - vision-service
       - voice-service
       - order-service
+      - tax-service
     extra_hosts:
       # Casdoor 等宿主机依赖在 Linux Docker 下也可解析。
       - "host.docker.internal:host-gateway"

@@ -36,7 +36,7 @@ class SchemaMigrationRunnerTest {
                 url, "sa", "", SchemaName.AUTH);
 
         assertTrue(result.success());
-        assertEquals("2", result.targetVersion());
+        assertEquals("3", result.targetVersion());
     }
 
     @Test
@@ -66,7 +66,8 @@ class SchemaMigrationRunnerTest {
         SchemaMigrationRunner.migrate(dataSource, SchemaName.AUTH);
 
         assertEquals(2, count(dataSource, "SELECT COUNT(*) FROM USER_ROLE WHERE USERNAME='alice'"));
-        assertEquals(2, count(dataSource, "SELECT COUNT(*) FROM ROLE_SCOPE WHERE ROLE_NAME='admin'"));
+        assertEquals(3, count(dataSource, "SELECT COUNT(*) FROM ROLE_SCOPE WHERE ROLE_NAME='admin'"));
+        assertEquals(2, count(dataSource, "SELECT COUNT(*) FROM ROLE_SCOPE WHERE ROLE_NAME='tax-analyst'"));
         assertEquals(0, count(dataSource, "SELECT VERSION FROM USERS WHERE USERNAME='alice'"));
         assertEquals(1, count(dataSource, "SELECT COUNT(*) FROM USERS WHERE USERNAME='alice'"));
     }

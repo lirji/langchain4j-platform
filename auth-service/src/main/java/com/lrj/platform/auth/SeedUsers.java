@@ -24,6 +24,6 @@ final class SeedUsers {
                 new UserAccount("bob", hash, "globex", "bob",
                         Set.of("chat"), Set.of("viewer"), true),
                 new UserAccount("analyst-a", hash, "tenantA", "analyst-a",
-                        Set.of("chat", "analytics"), Set.of("analyst"), true));
+                        Set.of("chat", "analytics"), Set.of("analyst", "tax-analyst"), true));
     }
 }

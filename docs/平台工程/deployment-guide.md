@@ -52,7 +52,7 @@ compose 编排的各服务端口（容器内部）：edge-gateway `8080`、confi
 
 > **宿主端口重映射**：推荐用 `bash deploy/start-all.sh` 起整栈（本地 `deploy/.env` 不提交），
 > 它把宿主端口挪开以避开本机 Apollo——网关 `18080`、vision `18090`、MySQL `13307`；
-> 前端 `8093`、order-service `8094`。裸 `docker compose up` 不会读取百炼 CSV，且端口会回到 compose 默认值。
+> 前端 `8093`、order-service `8094`、tax-service `8095`。裸 `docker compose up` 不会读取百炼 CSV，且端口会回到 compose 默认值。
 
 > **身份/RBAC 整栈默认**：compose 默认 `AUTH_STORE=jdbc`、`AUTH_RBAC_ENABLED=true`、`AUTH_RBAC_ADMIN_WRITES_ENABLED=true`、`AUTH_RBAC_INHERITANCE_ENABLED=true`、bootstrap admin=`alice`（各服务 yml 兜底默认则全关、`AUTH_STORE=in-memory`）；edge `EDGE_CASDOOR_ENABLED=true` + `EDGE_CASDOOR_MODE=only`、前端 `SHOWCASE_AUTH_MODE=oidc`——故裸起整栈需先起外部 Casdoor/auth 栈，否则登录/业务全 401（应急可临时 `EDGE_CASDOOR_MODE=dual`）。
 

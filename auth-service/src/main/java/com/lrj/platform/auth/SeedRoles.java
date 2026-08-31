@@ -19,10 +19,11 @@ final class SeedRoles {
                 new Role("viewer", Set.of("chat"), "只读对话"),
                 new Role("editor", Set.of("chat", "ingest"), "对话 + 知识库入库"),
                 new Role("analyst", Set.of("chat", "analytics"), "对话 + 数据分析"),
+                new Role("tax-analyst", Set.of("chat", "tax-review"), "对话 + 财税发票风险审查"),
                 new Role("approver", Set.of("chat", "approve"), "对话 + 审批"),
                 new Role("admin",
                         Set.of("chat", "ingest", "approve", "agent", "channel", "eval",
-                                "vision", "voice", "analytics", "role-admin", "public-ingest"),
+                                "vision", "voice", "analytics", "tax-review", "role-admin", "public-ingest"),
                         "全权限：含管理角色/账号与写公共库"));
     }
 }

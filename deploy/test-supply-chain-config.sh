@@ -55,8 +55,8 @@ done
 
 expected_images="$(find . -mindepth 2 -maxdepth 2 -name Dockerfile -not -path './deploy/*' | wc -l | tr -d ' ')"
 matrix_images="$(sed -n '/^  image-scan:/,/^  release-images:/p' "$supply_chain" | rg -c '^          - [a-z0-9-]+$')"
-if [[ "$expected_images" != "17" || "$matrix_images" != "$expected_images" ]]; then
-  echo "image scan matrix must cover all 17 deployable Dockerfiles (found $matrix_images/$expected_images)" >&2
+if [[ "$expected_images" != "18" || "$matrix_images" != "$expected_images" ]]; then
+  echo "image scan matrix must cover all 18 deployable Dockerfiles (found $matrix_images/$expected_images)" >&2
   exit 1
 fi
 

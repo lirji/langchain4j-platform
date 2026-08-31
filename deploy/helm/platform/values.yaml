@@ -167,6 +167,8 @@ config:
   AUTH_URI: "http://auth-service:8092"
   # 订单查询服务（edge-gateway 路由 /orders/** 到此；agent order_query 直连）。
   ORDER_URI: "http://order-service:8093"
+  # 财税发票风险审查服务（edge-gateway 路由 /tax/** 到此）。
+  TAX_URI: "http://tax-service:8094"
   ORDER_DB_URL: "jdbc:mysql://mysql:3306/order_service?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true"
   ORDER_DB_USER: "order_app"
 
@@ -1009,6 +1011,18 @@ services:
     env:
       - name: ORDER_DB_PASSWORD
         secret: ORDER_DB_PASSWORD
+
+  # -------- 财税发票风险审查（无状态，AI/RAG 可降级） --------
+  tax-service:
+    port: 8094
+    replicaCount: 1
+    env:
+      - name: GATEWAY_API_KEY
+        secret: GATEWAY_API_KEY
+      - name: TAX_AI_ENABLED
+        value: "true"
+      - name: TAX_KNOWLEDGE_ENABLED
+        value: "true"
 
   # -------- 登录 / RBAC --------
   auth-service:

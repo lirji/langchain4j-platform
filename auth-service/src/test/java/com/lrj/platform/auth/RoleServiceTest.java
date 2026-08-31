@@ -17,7 +17,13 @@ class RoleServiceTest {
     @Test
     void expand_admin_containsNewPlatformScopes() {
         Set<String> scopes = svc.expand(Set.of("admin"));
-        assertThat(scopes).contains("role-admin", "public-ingest", "chat", "ingest");
+        assertThat(scopes).contains("role-admin", "public-ingest", "tax-review", "chat", "ingest");
+    }
+
+    @Test
+    void expand_taxAnalyst_grantsOnlyTaxReviewAndChat() {
+        assertThat(svc.expand(Set.of("tax-analyst")))
+                .containsExactlyInAnyOrder("chat", "tax-review");
     }
 
     @Test

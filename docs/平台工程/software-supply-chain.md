@@ -9,7 +9,7 @@
 - Pull Request、`main` push 和手工运行只有 `contents: read` 权限，先执行完整 Maven Reactor
   测试，再打包所有 JAR，生成包含生产依赖的 CycloneDX 1.6 aggregate SBOM，并用 Trivy 对
   `HIGH,CRITICAL` 漏洞做阻断扫描。
-- `image-scan` 矩阵从仓库实际 Dockerfile 派生并由静态测试核对，当前覆盖 17 个可部署镜像：
+- `image-scan` 矩阵从仓库实际 Dockerfile 派生并由静态测试核对，当前覆盖 18 个可部署镜像：
   Java 服务、数据库迁移器和能力展示前端。任何镜像扫描失败都会阻止发布。
 - 只有 `v*` tag 的 release jobs 拥有 GHCR、OIDC 和 attestation 写权限。每个实际推送 digest
   会再次扫描，生成独立 CycloneDX SBOM，再通过 Cosign GitHub OIDC 签名并绑定 SLSA
@@ -38,7 +38,7 @@ mvn -B org.cyclonedx:cyclonedx-maven-plugin:2.9.2:makeAggregateBom \
 ```
 
 静态脚本会拒绝浮动 Action、`pull_request_target`、提前授予的 OIDC/write 权限、缺失扫描/
-签名/证明步骤，以及与 17 个 Dockerfile 不一致的镜像矩阵。实际容器构建与扫描需要 Docker
+签名/证明步骤，以及与 18 个 Dockerfile 不一致的镜像矩阵。实际容器构建与扫描需要 Docker
 daemon；签名和 attestation 需要 GitHub tag、OIDC 与 GHCR，不能由本地结果替代。
 
 ## 发布后验证
@@ -79,10 +79,10 @@ digest、签名与 attestation 输出。
 4. 线上回滚：选择前一已验证 digest，重新验证签名和 provenance，再按服务排空/回滚手册部署。
    不得使用 mutable tag，不删除签名/证明，不赋予发布 job 生产集群凭据。
 5. Action 或构建器安全事件：冻结发布、在 admission/registry 策略中拒绝受影响 digest、保全
-   workflow/SBOM/扫描证据，升级至已核验 immutable commit 后从已知良好源码全量重建 17 个镜像。
+   workflow/SBOM/扫描证据，升级至已核验 immutable commit 后从已知良好源码全量重建 18 个镜像。
 
 ## 目标环境证据
 
-生产闭环仍必须提供：真实 `v*` GitHub Actions run、17 个 GHCR digest 的扫描/签名/来源证明、
+生产闭环仍必须提供：真实 `v*` GitHub Actions run、18 个 GHCR digest 的扫描/签名/来源证明、
 JAR provenance、registry/admission 拒绝未签名 digest 的测试，以及至少一次回滚到前一可信
 digest 的演练。缺少这些外部证据时，本地测试通过不等于可以生产放行。

@@ -9,7 +9,7 @@
 | 唯一对外入口 | edge-gateway `http://localhost:18080`（本机 `EDGE_HOST_PORT` 映射；所有 API 经它转发） |
 | 健康检查 | `curl -s localhost:18080/actuator/health` |
 | 前端（capability showcase） | `http://localhost:8093` |
-| 各微服务 | 8081–8094（不直连，QA 一律走网关；vision-service 宿主机映射 18090、order-service 映射 8094） |
+| 各微服务 | 8081–8095（不直连，QA 一律走网关；vision-service 宿主机映射 18090、order-service 映射 8094、tax-service 映射 8095） |
 
 ## 启动方式
 
@@ -59,6 +59,7 @@
 ## 已知坑
 
 - 8093 端口前端和 order-service 容器内端口重叠（宿主机 order 映射 8094），探活别搞混。
+- tax-service 容器内 8094、宿主 8095；业务验收仍从 edge-gateway 的 `/tax/**` 进入。
 - Playwright 浏览器二进制首次需联网安装。
 - **（0718）本机 edge 网关宿主端口是 18080 而非 8080**（8080 被 apollo-configservice 占，
   见 `deploy/.env` 的 `EDGE_HOST_PORT`）；mysql 宿主映射 13307（3306 被本机 MySQL 占）。

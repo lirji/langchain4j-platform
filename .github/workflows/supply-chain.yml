@@ -99,6 +99,7 @@ jobs:
           - interop-service
           - knowledge-service
           - order-service
+          - tax-service
           - vision-service
           - voice-service
           - workflow-service
@@ -171,6 +172,7 @@ jobs:
           - interop-service
           - knowledge-service
           - order-service
+          - tax-service
           - vision-service
           - voice-service
           - workflow-service

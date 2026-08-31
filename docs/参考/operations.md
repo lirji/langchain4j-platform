@@ -100,6 +100,7 @@ mvn -pl platform-security -Dtest=InternalTokenTest test   # 单类（务必带 -
 | voice-service | 8091 | `/voice`、`/voice/**` | ASR + 对话 + TTS 语音闭环 |
 | auth-service | 8092 | `/auth`、`/auth/**` | 账号登录 / 注册 / 刷新 / RBAC 管理 |
 | order-service | 8093（宿主 8094） | `/orders`、`/orders/**` | 按订单号只读查订单（agent order_query 下游）；持久化 MySQL、按租户隔离。宿主机 8093 被展示前端占用，compose 映射 8094 |
+| tax-service | 8094（宿主 8095） | `/tax`、`/tax/**` | 无状态发票一致性审查；`tax-review` scope；RAG/AI 可独立关闭并确定性降级 |
 | config-server | 8888 | 不经网关 | 集中配置分发（可选） |
 | capability-showcase-frontend | 8093 | 不经网关（浏览器跨域直调） | 能力展示前端（Vue3 静态 SPA / nginx） |
 | LiteLLM | 4000 | 不经网关 | LLM 网关 |

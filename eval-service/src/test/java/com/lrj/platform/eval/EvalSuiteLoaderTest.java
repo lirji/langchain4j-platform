@@ -25,6 +25,24 @@ class EvalSuiteLoaderTest {
     }
 
     @Test
+    void loadsTaxInvoiceGoldenCasesWithDeterministicAssertions() {
+        EvalSuiteLoader loader = new EvalSuiteLoader(new ObjectMapper(), new EvalProperties());
+
+        var suite = loader.load("tax-invoice-risk");
+
+        assertThat(suite.name()).isEqualTo("tax-invoice-risk");
+        assertThat(suite.cases()).hasSize(4);
+        assertThat(suite.cases()).extracting("id").containsExactly(
+                "tax-clear-consistent-invoice",
+                "tax-high-amount-mismatch",
+                "tax-medium-outside-period",
+                "tax-high-duplicate-invoice");
+        assertThat(suite.cases().get(1).expectedJsonPaths())
+                .containsEntry("$.overallRisk", "HIGH")
+                .containsEntry("$.findingCount", 2);
+    }
+
+    @Test
     void rejectsUnsafeSuiteName() {
         EvalSuiteLoader loader = new EvalSuiteLoader(new ObjectMapper(), new EvalProperties());
 

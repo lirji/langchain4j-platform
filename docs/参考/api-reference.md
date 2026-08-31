@@ -773,3 +773,17 @@ curl -o /dev/null -w '%{http_code}\n' -H 'X-Api-Key: dev-key-tenantA-admin' \
 ```
 
 > 主要开关：order-service 侧 `ORDER_DB_URL`/`ORDER_DB_USER`/`ORDER_DB_PASSWORD`（持久化 MySQL）、`ORDER_SEED_DEMO=true`（默认，接真库置 false）；agent 侧 `AGENT_ORDER_ENABLED=true`（默认开）、`ORDER_BASE_URL=http://localhost:8093`。compose 宿主机端口映射 `8094:8093`（8093 被展示前端占用）。
+
+---
+
+## Tax（tax-service）
+
+### POST `/tax/invoices/review`
+
+- 用途：审查中国增值税发票批次的重复、价税合计、税额计算和所属期间一致性。
+- 权限：调用身份必须包含 `tax-review` scope；无身份返回 401，缺 scope 返回 403。
+- 请求：`jurisdiction` 当前固定 `CN`，`taxPeriod` 为 `YYYY-MM`，`invoices` 为 1～100 张结构化发票。
+- 响应：`overallRisk`、`findings`、租户政策 `evidence`、`narrativeMode=AI|FALLBACK` 和固定免责声明。风险代码和等级只由 Java 规则产生，AI 不参与判定。
+- 降级：知识库或模型不可用时仍返回确定性结果，`evidence=[]` 且 `narrativeMode=FALLBACK`。
+
+完整请求、配置和边界见[财税发票风险审查指南](../财税/tax-invoice-risk-review.md)。

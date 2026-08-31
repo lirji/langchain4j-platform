@@ -86,6 +86,10 @@ spring:
           uri: ${ORDER_URI:http://localhost:8093}
           predicates:
             - Path=/orders,/orders/**
+        - id: tax
+          uri: ${TAX_URI:http://localhost:8094}
+          predicates:
+            - Path=/tax,/tax/**
 
 # 边缘持有 api-key → 租户映射；换发内部 JWT 后下游只认 JWT。
 platform:
@@ -114,6 +118,11 @@ platform:
         tenant: acme
         user: alice
         scopes: [chat, ingest]
+      # 财税 GoldenCase / 本地演示专用最小权限 key；生产环境应由 Casdoor 角色授予 tax-review。
+      dev-key-tax-review:
+        tenant: tenantA
+        user: tax-demo
+        scopes: [tax-review]
 
 # ③ Casdoor SSO 身份切换（默认开、mode=only 严格；dual 为灰度回滚）。edge 验 Casdoor access token → 换发内部 JWT，
 # 验不过透传给 legacy(session/api-key) filter。scope 由 Casdoor 展开进 token，edge 只透传 + 固定 allowlist
@@ -143,7 +152,7 @@ edge:
     scope-claim: ${CASDOOR_SCOPE_CLAIM:permissions}
     scope-name-field: ${CASDOOR_SCOPE_NAME_FIELD:name}
     # 固定业务 scope 全集（allowlist，与角色数量无关）
-    scope-allowlist: [chat, ingest, approve, agent, channel, eval, vision, voice, analytics, role-admin, public-ingest]
+    scope-allowlist: [chat, ingest, approve, agent, channel, eval, vision, voice, analytics, tax-review, role-admin, public-ingest]
 
 app:
   rate-limit:

@@ -1,0 +1,127 @@
+{
+  "name": "tax-invoice-risk",
+  "cases": [
+    {
+      "id": "tax-clear-consistent-invoice",
+      "endpoint": "/tax/invoices/review",
+      "method": "POST",
+      "body": {
+        "jurisdiction": "CN",
+        "taxPeriod": "2026-08",
+        "invoices": [
+          {
+            "invoiceCode": "044001900111",
+            "invoiceNumber": "00000001",
+            "issueDate": "2026-08-15",
+            "sellerTaxId": "91440000111111111A",
+            "buyerTaxId": "91440000222222222B",
+            "netAmount": 100.00,
+            "taxRate": 0.13,
+            "taxAmount": 13.00,
+            "totalAmount": 113.00
+          }
+        ]
+      },
+      "expectedJsonPaths": {
+        "$.ruleSetVersion": "cn-vat-invoice-consistency-v1",
+        "$.overallRisk": "CLEAR",
+        "$.invoiceCount": 1,
+        "$.findingCount": 0
+      }
+    },
+    {
+      "id": "tax-high-amount-mismatch",
+      "endpoint": "/tax/invoices/review",
+      "method": "POST",
+      "body": {
+        "jurisdiction": "CN",
+        "taxPeriod": "2026-08",
+        "invoices": [
+          {
+            "invoiceCode": "044001900111",
+            "invoiceNumber": "00000002",
+            "issueDate": "2026-08-16",
+            "sellerTaxId": "91440000111111111A",
+            "buyerTaxId": "91440000222222222B",
+            "netAmount": 100.00,
+            "taxRate": 0.13,
+            "taxAmount": 10.00,
+            "totalAmount": 111.00
+          }
+        ]
+      },
+      "expectedJsonPaths": {
+        "$.overallRisk": "HIGH",
+        "$.findingCount": 2,
+        "$.findings[0].code": "TOTAL_AMOUNT_MISMATCH",
+        "$.findings[1].code": "TAX_AMOUNT_MISMATCH"
+      }
+    },
+    {
+      "id": "tax-medium-outside-period",
+      "endpoint": "/tax/invoices/review",
+      "method": "POST",
+      "body": {
+        "jurisdiction": "CN",
+        "taxPeriod": "2026-08",
+        "invoices": [
+          {
+            "invoiceCode": "044001900111",
+            "invoiceNumber": "00000003",
+            "issueDate": "2026-07-31",
+            "sellerTaxId": "91440000111111111A",
+            "buyerTaxId": "91440000222222222B",
+            "netAmount": 100.00,
+            "taxRate": 0.13,
+            "taxAmount": 13.00,
+            "totalAmount": 113.00
+          }
+        ]
+      },
+      "expectedJsonPaths": {
+        "$.overallRisk": "MEDIUM",
+        "$.findingCount": 1,
+        "$.findings[0].code": "OUTSIDE_TAX_PERIOD"
+      }
+    },
+    {
+      "id": "tax-high-duplicate-invoice",
+      "endpoint": "/tax/invoices/review",
+      "method": "POST",
+      "body": {
+        "jurisdiction": "CN",
+        "taxPeriod": "2026-08",
+        "invoices": [
+          {
+            "invoiceCode": "044001900111",
+            "invoiceNumber": "00000004",
+            "issueDate": "2026-08-15",
+            "sellerTaxId": "91440000111111111A",
+            "buyerTaxId": "91440000222222222B",
+            "netAmount": 100.00,
+            "taxRate": 0.13,
+            "taxAmount": 13.00,
+            "totalAmount": 113.00
+          },
+          {
+            "invoiceCode": "044001900111",
+            "invoiceNumber": "00000004",
+            "issueDate": "2026-08-16",
+            "sellerTaxId": "91440000111111111A",
+            "buyerTaxId": "91440000222222222B",
+            "netAmount": 200.00,
+            "taxRate": 0.13,
+            "taxAmount": 26.00,
+            "totalAmount": 226.00
+          }
+        ]
+      },
+      "expectedJsonPaths": {
+        "$.overallRisk": "HIGH",
+        "$.invoiceCount": 2,
+        "$.findingCount": 1,
+        "$.findings[0].code": "DUPLICATE_INVOICE"
+      }
+    }
+  ]
+}

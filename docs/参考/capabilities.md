@@ -63,6 +63,7 @@
 | 多模态视觉 | 图片 caption/描述（多模态 ChatModel 经 LiteLLM），供 knowledge/agent 复用 | `/vision/caption`、`/vision/describe`（vision :8090） | `VISION_ENABLED=true`（默认开；须配 `VISION_MODEL` 否则 fail-fast） |
 | 语音闭环 | 音频 → ASR → `/chat` → TTS，支持百炼原生 Qwen3 与 OpenAI 兼容 provider | `/voice/chat`、`/voice/chat/stream`、`/voice/transcribe`（voice :8091） | 源码默认关；本地百炼加载器默认开启 |
 | 订单查询（工具调用示例） | 按订单号确定性只读查订单（状态/金额/客户/日期），持久化 MySQL、参数化按租户隔离；供深度 Agent 的 `order_query` 动作在对话里自主调用 | `/orders/{orderNo}`（order :8093）；agent 侧 `order_query` 动作 | order-service 常开；agent 侧 `AGENT_ORDER_ENABLED=true`（默认开） |
+| 财税发票风险审查 | BigDecimal 确定性校验批内重复、金额、税额和期间；租户 RAG + AI 只解释，失败自动降级 | `POST /tax/invoices/review`（tax :8094） | `tax-review` scope；`TAX_AI_ENABLED` / `TAX_KNOWLEDGE_ENABLED` 默认开，可分别关闭 |
 | 审计与计量 | 审计日志、LLM audit listener、token budget、cost attribution | `platform-audit`、`platform-metering` | audit/budget 常开、cost 默认关 |
 | 可观测性 | trace id 生成与跨服务透传 | `platform-observability` | 常开 |
 | 能力展示前端 | 前后端分离的独立静态 SPA（Vue3/nginx），凭证感知导航、direct mode 跨域直调、能力五态诚实呈现、RAG 租户/共享双视图、移动端/响应式适配 | `capability-showcase-frontend`（:8093） | 独立部署；**前端 RBAC 管理控制台已移除**（身份/授权外置 Casdoor + auth-platform），后端 `/auth/admin/**` API 仍在 |
@@ -73,7 +74,7 @@
 
 ### 语言与运行时 / 构建
 - **Java 21**（`maven.compiler.release=21`），全模块统一。
-- **Maven** 多模块：父 `pom.xml`（`packaging=pom`）聚合 7 个共享库 + 13 个服务（含 `auth-service`、`order-service`）+ edge-gateway/config-server，统一版本管理。**无 Maven wrapper**，用系统 `mvn`。前端 `capability-showcase-frontend` 是独立的 Vite/Vue3 项目，不在 Maven reactor 内。
+- **Maven** 多模块：父 `pom.xml`（`packaging=pom`）聚合共享库、业务服务、edge-gateway、config-server 与迁移工具，统一版本管理。**无 Maven wrapper**，用系统 `mvn`。前端 `capability-showcase-frontend` 是独立的 Vite/Vue3 项目，不在 Maven reactor 内。
 - **Spring Boot 3.3.5**（`spring-boot-starter-parent`）、**Spring Cloud 2023.0.3**。
 - 打包可执行 fat jar（`spring-boot-maven-plugin`）；Docker 镜像基于 `eclipse-temurin:21-jre`。
 - **刻意未用**：JPA/Hibernate/MyBatis、Flyway/Liquibase、Lombok、任何 linter/格式化/静态分析（风格靠约定）。

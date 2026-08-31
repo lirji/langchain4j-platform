@@ -30,6 +30,8 @@ public enum AuditEventType {
 
     NL2SQL_QUERY("nl2sql.query"),
 
+    TAX_INVOICE_REVIEWED("tax.invoice_reviewed"),
+
     WORKFLOW_STARTED("workflow.started"),
     APPROVAL_REQUESTED("approval.requested"),
     APPROVAL_GRANTED("approval.granted"),

@@ -26,7 +26,7 @@
 # 百炼凭据通过 deploy/.env 的 BAILIAN_CREDENTIAL_CSV 指向本地 CSV；零模型依赖回退可设 RAG_EMBEDDING_PROVIDER=hash。
 #
 # 可用环境变量覆盖端口：EDGE_HOST_PORT(默认 18080) / VISION_HOST_PORT / MYSQL_HOST_PORT /
-# REDIS_HOST_PORT / INTEROP_HOST_PORT
+# REDIS_HOST_PORT / INTEROP_HOST_PORT / TAX_HOST_PORT
 #
 set -euo pipefail
 cd "$(dirname "$0")"   # 切到 deploy/
@@ -45,6 +45,7 @@ export VISION_HOST_PORT="${VISION_HOST_PORT:-18091}"
 export MYSQL_HOST_PORT="${MYSQL_HOST_PORT:-13307}"
 export REDIS_HOST_PORT="${REDIS_HOST_PORT:-16379}"
 export INTEROP_HOST_PORT="${INTEROP_HOST_PORT:-18089}"
+export TAX_HOST_PORT="${TAX_HOST_PORT:-8095}"
 export AGENTSCOPE_IMAGE="${AGENTSCOPE_IMAGE:-agentscope-platform:local}"
 AGENTSCOPE_REPO="${AGENTSCOPE_REPO:-../../agentscope-platform}"
 # 前端容器构建期烘焙的网关基址：浏览器从宿主直调网关，必须指向宿主端口 EDGE_HOST_PORT。
@@ -88,7 +89,7 @@ if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
 fi
 
 echo "▶ 全 docker 拉起【前端 nginx + 后端 + 基础设施】"
-echo "  端口: gateway=${EDGE_HOST_PORT} vision=${VISION_HOST_PORT} mysql=${MYSQL_HOST_PORT} redis=${REDIS_HOST_PORT} interop=${INTEROP_HOST_PORT} frontend=${LANGCHAIN4J_UI_PORT}"
+echo "  端口: gateway=${EDGE_HOST_PORT} vision=${VISION_HOST_PORT} mysql=${MYSQL_HOST_PORT} redis=${REDIS_HOST_PORT} interop=${INTEROP_HOST_PORT} tax=${TAX_HOST_PORT} frontend=${LANGCHAIN4J_UI_PORT}"
 echo "  前端网关基址(构建期): ${SHOWCASE_EDGE_BASE_URL}"
 echo
 
