@@ -5,14 +5,27 @@
  *
  * collapsible=true 时标题变为可折叠开关（内容 v-show，不销毁 DOM，保留内部组件状态）。
  */
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 const props = withDefaults(
-  defineProps<{ title: string; subtitle?: string; collapsible?: boolean; defaultOpen?: boolean }>(),
+  defineProps<{
+    title: string
+    subtitle?: string
+    collapsible?: boolean
+    defaultOpen?: boolean
+    /** 外部强制展开（侧栏深链聚焦）；变回 false 不自动收起，避免打断用户已打开的分区。 */
+    opened?: boolean
+  }>(),
   { collapsible: false, defaultOpen: true },
 )
 
-const open = ref(props.defaultOpen)
+const open = ref(props.defaultOpen || !!props.opened)
+watch(
+  () => props.opened,
+  (v) => {
+    if (v) open.value = true
+  },
+)
 function toggle(): void {
   if (props.collapsible) open.value = !open.value
 }

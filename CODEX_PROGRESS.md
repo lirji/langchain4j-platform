@@ -47,8 +47,12 @@ Docker Desktop 虚拟盘清空后，恢复共享 `dev-infra`，并把能力门�
 
 ## Git 发布
 
-- 已发布：`a5a5ef7` `fix(frontend): restore sidebar capability page navigation`
-- 进行中：`feat/knowledge-dev-infra` 入库恢复 / 并行检索 / 共享 dev-infra（不含其它前端脏改动、不含本机 `.env`）。
+- `a5a5ef7` `fix(frontend): restore sidebar capability page navigation`
+- `f8d0be6` `feat(knowledge): recover ingestion jobs and parallel retrieval`
+- `d1548ec` `feat(deploy): add shared dev-infra compose entry`
+- `488f122` `fix(runtime): isolate Redis keys and Kafka consumer groups`
+- 远程 `origin/main` 已快进到 `488f122`。
+- 本地仍停在任务分支；其余前端工作台 / 简历文档本轮一并发布。
 
 ## 下一步（一次只起一个控制台）
 

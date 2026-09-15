@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
+import { useAbortable } from '../../composables/useAbortable'
 import { useCatalogStore } from '../../stores/catalog'
 import { useSessionStore } from '../../stores/session'
 import { runCapability } from '../../api/client'
-import { humanizeError } from '../../api/errors'
+import { humanizeError, isAbortError } from '../../api/errors'
 import { executionGate } from '../../utils/gate'
 import type { Capability } from '../../types/catalog'
 import type { FormValues } from '../../utils/validation'
@@ -86,6 +87,8 @@ function prioTone(p?: string): 'danger' | 'warning' | 'neutral' {
   return 'neutral'
 }
 
+const actionAbort = useAbortable()
+
 /**
  * 复用 executionGate + runCapability 驱动一次动作（不手写 fetch，不绕过安全闸门）。
  * clearMessages=false 供动作后的静默刷新使用：刷新成功不得清掉动作自身的错误/成功提示（issue-01）。
@@ -107,14 +110,16 @@ async function exec(
     actionError.value = null
     actionNote.value = null
   }
+  const controller = actionAbort.fresh()
   try {
-    const res = await runCapability(cap, values, session.runContext())
+    const res = await runCapability(cap, values, session.runContext(controller.signal))
     return res.data
   } catch (e) {
+    if (isAbortError(e) || controller.signal.aborted) return undefined
     actionError.value = humanizeError(e, cap)
     return undefined
   } finally {
-    busyKey.value = null
+    if (!controller.signal.aborted) busyKey.value = null
   }
 }
 

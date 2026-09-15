@@ -204,7 +204,7 @@ describe('AgentLabView interaction', () => {
     expect(buttonByText(wrapper, '执行').attributes('disabled')).toBeDefined()
     await wrapper.get('.ag__advanced input[type="number"]').setValue('10')
     expect(buttonByText(wrapper, '执行').attributes('disabled')).toBeDefined()
-    expect(wrapper.text()).toContain('采样路数 n 需为 1..9')
+    expect(wrapper.text()).toMatch(/采样路数.*不能(小于 1|大于 9)/)
     expect(fetchMock).not.toHaveBeenCalled()
     wrapper.unmount()
   })

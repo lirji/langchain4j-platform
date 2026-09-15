@@ -23,6 +23,7 @@ defineEmits<{ action: [] }>()
     <button v-if="actionLabel" type="button" class="empty__action" @click="$emit('action')">
       {{ actionLabel }}
     </button>
+    <slot />
   </div>
 </template>
 

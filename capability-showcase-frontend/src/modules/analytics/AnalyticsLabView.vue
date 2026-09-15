@@ -11,10 +11,11 @@
  * 所有执行统一经 executionGate + runCapability，不手写 fetch / 路径 / 绕闸门。
  */
 import { computed, ref } from 'vue'
+import { useAbortable } from '../../composables/useAbortable'
 import { useCatalogStore } from '../../stores/catalog'
 import { useSessionStore } from '../../stores/session'
 import { runCapability } from '../../api/client'
-import { humanizeError } from '../../api/errors'
+import { humanizeError, isAbortError } from '../../api/errors'
 import { executionGate } from '../../utils/gate'
 import { toCurl } from '../../utils/curl'
 import type { Capability } from '../../types/catalog'
@@ -43,17 +44,23 @@ const describeCap = computed(() => catalog.capabilityById('analytics.schema.desc
 const sqlCap = computed(() => catalog.capabilityById('analytics.sql'))
 
 // ── 通用一次性调用（复用 executionGate + runCapability；诚实返回 data / error）──
+const tablesAbort = useAbortable()
+const describeAbort = useAbortable()
+const sqlAbort = useAbortable()
+
 async function callCap(
   cap: Capability | undefined,
   values: FormValues,
-): Promise<{ data?: unknown; error?: string }> {
+  signal?: AbortSignal,
+): Promise<{ data?: unknown; error?: string; aborted?: boolean }> {
   if (!cap) return { error: '能力不在目录中。' }
   const gate = executionGate(cap, { ...session.permissionContext(), confirmed: false })
   if (!gate.allowed) return { error: gate.reason ?? '当前不可执行。' }
   try {
-    const res = await runCapability(cap, values, session.runContext())
+    const res = await runCapability(cap, values, session.runContext(signal))
     return { data: res.data }
   } catch (e) {
+    if (isAbortError(e) || signal?.aborted) return { aborted: true }
     return { error: humanizeError(e, cap) }
   }
 }
@@ -105,7 +112,8 @@ function parseTables(data: unknown): TableItem[] {
 async function loadTables(): Promise<void> {
   tablesBusy.value = true
   tablesError.value = null
-  const { data, error } = await callCap(tablesCap.value, {})
+  const { data, error, aborted } = await callCap(tablesCap.value, {}, tablesAbort.fresh().signal)
+  if (aborted) return
   tablesBusy.value = false
   tablesLoaded.value = true
   if (error) {
@@ -128,8 +136,12 @@ async function selectTable(name: string): Promise<void> {
     return
   }
   describeBusy.value = true
-  const { data, error } = await callCap(describeCap.value, { table: name })
-  if (my !== describeSeq) return // 已被更新的选择取代 → 丢弃陈旧结果
+  const { data, error, aborted } = await callCap(
+    describeCap.value,
+    { table: name },
+    describeAbort.fresh().signal,
+  )
+  if (my !== describeSeq || aborted) return // 已被更新的选择取代 → 丢弃陈旧结果
   describeBusy.value = false
   if (error) {
     describeError.value = error
@@ -224,7 +236,12 @@ async function runSql(): Promise<void> {
   sqlBusy.value = true
   sqlError.value = null
   sqlResult.value = null
-  const { data, error } = await callCap(sqlCap.value, { question: question.value.trim() })
+  const { data, error, aborted } = await callCap(
+    sqlCap.value,
+    { question: question.value.trim() },
+    sqlAbort.fresh().signal,
+  )
+  if (aborted) return
   sqlBusy.value = false
   if (error) {
     sqlError.value = error

@@ -1,6 +1,8 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { Capability, Catalog, Module } from '../types/catalog'
+import type { KnowledgeRuntimeView } from '../types/knowledge'
+import { applyKnowledgeHonesty } from '../utils/runtimeHonesty'
 import {
   discoverLive,
   fetchCatalog,
@@ -68,6 +70,12 @@ export const useCatalogStore = defineStore('catalog', () => {
     }
   }
 
+  /** 用 /rag/config 覆盖 RAG 五态（只降级）。探测失败时不要调用。 */
+  function applyKnowledgeRuntime(view: KnowledgeRuntimeView): void {
+    if (!catalog.value) return
+    catalog.value = applyKnowledgeHonesty(catalog.value, view)
+  }
+
   return {
     catalog,
     status,
@@ -79,5 +87,6 @@ export const useCatalogStore = defineStore('catalog', () => {
     capabilityById,
     load,
     refreshLive,
+    applyKnowledgeRuntime,
   }
 })

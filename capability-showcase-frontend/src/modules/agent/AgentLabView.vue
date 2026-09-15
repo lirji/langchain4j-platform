@@ -17,7 +17,7 @@ import { useSessionStore } from '../../stores/session'
 import { executionGate } from '../../utils/gate'
 import { useCapabilityRun } from '../../composables/useCapabilityRun'
 import type { Capability } from '../../types/catalog'
-import type { FormValues } from '../../utils/validation'
+import { validateParams, type FormValues } from '../../utils/validation'
 import CapabilityRunner from '../../components/capability/CapabilityRunner.vue'
 import CapabilityCard from '../../components/capability/CapabilityCard.vue'
 import ResponseViewer from '../../components/capability/ResponseViewer.vue'
@@ -128,36 +128,28 @@ const webhookUrl = ref('')
 const tasksText = ref('')
 const voteN = ref<number | null>(3)
 
-/** 任务 DAG 字段错误：填了但不是合法 JSON 数组（issue-07）。 */
-const tasksError = computed(() => {
-  if (!showTasks.value || !tasksText.value.trim()) return null
-  try {
-    return Array.isArray(JSON.parse(tasksText.value)) ? null : '任务 DAG 不是合法的 JSON 数组。'
-  } catch {
-    return '任务 DAG 不是合法的 JSON 数组。'
+const composerErrors = computed(() => {
+  const cap = activeCap.value
+  if (!cap) return {} as Record<string, string>
+  const errors = { ...validateParams(cap.params, buildValues(cap)) }
+  if (showTasks.value && tasksText.value.trim()) {
+    try {
+      if (!Array.isArray(JSON.parse(tasksText.value))) {
+        errors.tasks = '任务 DAG 不是合法的 JSON 数组。'
+      }
+    } catch {
+      // validateParams 已覆盖非法 JSON
+    }
   }
+  return errors
 })
-/** 投票采样路数字段错误：越界/非整数（issue-08）。 */
-const voteNError = computed(() => {
-  if (!showVoteN.value || voteN.value == null) return null
-  return Number.isInteger(voteN.value) && voteN.value >= 1 && voteN.value <= 9
-    ? null
-    : '采样路数 n 需为 1..9 的整数。'
-})
+const tasksError = computed(() => composerErrors.value.tasks ?? null)
+const voteNError = computed(() => composerErrors.value.n ?? null)
 
 const canSend = computed(() => {
   const cap = activeCap.value
   if (!cap || !activeGate.value.allowed || run.running.value) return false
-  if (tasksError.value || voteNError.value) return false
-  // 按目录 required 声明逐项校验（issue-07：DAG 的 goal 与 tasks 都是 required，缺一不可）。
-  for (const p of cap.params) {
-    if (!p.required) continue
-    if (p.name === primaryParam.value?.name && !goalText.value.trim()) return false
-    if (p.name === 'tasks' && !tasksText.value.trim()) return false
-    if (p.name === 'n' && voteN.value == null) return false
-    if (p.name === 'webhookUrl' && !webhookUrl.value.trim()) return false
-  }
-  // 保持既有底线：至少填了主输入或任务 DAG，不允许全空提交。
+  if (Object.keys(composerErrors.value).length) return false
   return goalText.value.trim().length > 0 || (showTasks.value && tasksText.value.trim().length > 0)
 })
 

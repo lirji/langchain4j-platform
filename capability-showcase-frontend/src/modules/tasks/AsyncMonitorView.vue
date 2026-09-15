@@ -10,11 +10,12 @@
  * 深链沿用通用 CapabilityRunner，结果回流时间线。执行统一经 executionGate + runCapability / streamCapability。
  */
 import { computed, onUnmounted, ref } from 'vue'
+import { useAbortable } from '../../composables/useAbortable'
 import { useCatalogStore } from '../../stores/catalog'
 import { useSessionStore } from '../../stores/session'
 import { runCapability } from '../../api/client'
 import { streamCapability } from '../../api/sse'
-import { humanizeError } from '../../api/errors'
+import { humanizeError, isAbortError } from '../../api/errors'
 import { executionGate } from '../../utils/gate'
 import { tryParseJson } from '../../utils/json'
 import type { Capability } from '../../types/catalog'
@@ -190,6 +191,7 @@ const deadRaw = ref<unknown>(null)
 const deadBusy = ref(false)
 const deadError = ref<string | null>(null)
 const deadLoaded = ref(false)
+const deadAbort = useAbortable()
 
 function parseDeadRows(data: unknown): Record<string, unknown>[] | null {
   const arr = firstArray(data, ['dead', 'deadLetters', 'entries', 'items', 'data', 'results', 'records'])
@@ -211,10 +213,11 @@ async function loadDeadletter(): Promise<void> {
   deadRaw.value = null
   deadRows.value = null
   try {
-    const res = await runCapability(capDl, {} as FormValues, session.runContext())
+    const res = await runCapability(capDl, {} as FormValues, session.runContext(deadAbort.fresh().signal))
     deadRaw.value = res.data ?? null
     deadRows.value = parseDeadRows(res.data)
   } catch (e) {
+    if (isAbortError(e)) return
     deadError.value = humanizeError(e, capDl)
   } finally {
     deadBusy.value = false
