@@ -12,6 +12,7 @@
 #   3) capability-showcase-frontend 是独立前端容器，本脚本【不启动】它——前端用 `npm run dev`。
 #
 # 用法：
+#   ./start-local.sh --dev-infra  # 使用已初始化的共享 dev-infra，保留标准凭据与端口加载
 #   ./start-local.sh          # 重启【后端应用服务】(基础设施保持运行) —— 日常最常用
 #   ./start-local.sh --all    # 连基础设施(mysql/redis/kafka/qdrant/litellm/litellm-postgres/jaeger)一起重启
 #   ./start-local.sh --build  # 先 mvn package 再重建镜像后起（改了后端代码用；不加会装旧 jar）
@@ -50,14 +51,31 @@ fi
 # ── 参数解析 ──
 BUILD_FLAG="--no-build"
 SCOPE="app"
+USE_DEV_INFRA=0
 for arg in "$@"; do
   case "$arg" in
+    --dev-infra) USE_DEV_INFRA=1 ;;
     --all)   SCOPE="all" ;;
     --build) BUILD_FLAG="--build" ;;
     --es)    echo "ℹ  --es 已弃用：ES 全文混排现为默认（见 docker-compose.yml），无需再加。" ;;
     *) echo "未知参数: ${arg}（可用: --all, --build）"; exit 2 ;;
   esac
 done
+
+# 共享中间件模式沿用原启动脚本的凭据、网关端口和前端构建参数。
+COMPOSE_CMD=(docker compose)
+MAVEN_SKIP_FLAG=-DskipTests
+TRACE_HINT="Jaeger http://localhost:16686"
+ES_VIEW_PORT=9200
+KIBANA_VIEW_PORT=5601
+if [ "$USE_DEV_INFRA" = 1 ]; then
+  COMPOSE_CMD=(bash "$PWD/dev-infra/compose.sh")
+  MAVEN_SKIP_FLAG=-Dmaven.test.skip=true
+  TRACE_HINT="dev-infra Grafana / Tempo（见共享基础设施文档）"
+  ES_VIEW_PORT=49200
+  KIBANA_VIEW_PORT=45601
+  [ -r "$PWD/.dev-infra.env" ] || { echo "请先按 deploy/dev-infra/README.md 完成共享资源初始化与迁移"; exit 1; }
+fi
 verify_bailian_vision_model
 
 # ── LLM key 检查（litellm 的 chat-default 走 DeepSeek）。env 缺失时先尝试从既有 litellm 容器提取
@@ -80,7 +98,12 @@ FRONTEND="capability-showcase-frontend"
 # --app 时保持运行（jaeger 重建会丢内存 trace），--all 才连同重建。
 INFRA="mysql|redis|kafka|qdrant|litellm|litellm-postgres|jaeger|elasticsearch|kibana"
 
-ALL_SERVICES="$(docker compose config --services)"
+if [ "$USE_DEV_INFRA" = 1 ]; then
+  # config --services 会包含未启用 profile；显式指定这些名字会意外启动旧中间件。
+  ALL_SERVICES="$("${COMPOSE_CMD[@]}" config --format json | python3 -c 'import json,sys; print("\n".join(k for k,v in json.load(sys.stdin)["services"].items() if not v.get("profiles")))')"
+else
+  ALL_SERVICES="$(docker compose config --services)"
+fi
 if [ "$SCOPE" = "all" ]; then
   TARGET="$(echo "$ALL_SERVICES" | grep -vE "^(${FRONTEND})$")"
   echo "▶ 重启【全部服务（含基础设施）】，排除前端容器 ${FRONTEND}"
@@ -103,8 +126,8 @@ if [ "$BUILD_FLAG" = "--build" ]; then
   fi
   echo "▶ 构建 AgentScope 权威编排镜像 ${AGENTSCOPE_IMAGE}"
   docker compose -f "${AGENTSCOPE_REPO}/compose.yml" build orchestrator
-  echo "▶ mvn -DskipTests package（--build 前置，避免镜像装旧 jar）"
-  ( cd .. && mvn -DskipTests package )
+  echo "▶ mvn ${MAVEN_SKIP_FLAG} package（--build 前置，避免镜像装旧 jar）"
+  ( cd .. && mvn "$MAVEN_SKIP_FLAG" package )
 elif [ "$AGENTSCOPE_IMAGE" = "agentscope-platform:local" ] \
     && ! docker image inspect "$AGENTSCOPE_IMAGE" >/dev/null 2>&1; then
   echo "✗ 缺少 ${AGENTSCOPE_IMAGE}。使用 --build，或设置 AGENTSCOPE_IMAGE 为已发布镜像。"
@@ -113,7 +136,7 @@ fi
 
 # ── 重建并启动（--force-recreate 确保应用当前 compose 配置 = 真正重启一遍）──
 # shellcheck disable=SC2086
-docker compose up -d ${BUILD_FLAG} --force-recreate ${TARGET}
+"${COMPOSE_CMD[@]}" up -d ${BUILD_FLAG} --force-recreate ${TARGET}
 
 # ── 等待网关就绪（401=活着但需 API Key）──
 echo
@@ -156,11 +179,11 @@ cat <<EOF
   • 启动前端(dev)  cd ../capability-showcase-frontend && npm run dev
                    → http://localhost:5173  (.env.local 已指向 :${EDGE_HOST_PORT})
   • LiteLLM 记账   http://localhost:4000/ui  (spend/模型/token/费用；admin / litellm-ui-dev)
-  • 链路追踪       Jaeger http://localhost:16686  (LiteLLM span 常开；Java 侧 MANAGEMENT_TRACING_ENABLED=true 后同 trace)
+  • 链路追踪       ${TRACE_HINT}  (LiteLLM span 常开；Java 侧 MANAGEMENT_TRACING_ENABLED=true 后同 trace)
   • RAG 检索       百炼 text-embedding-v4 + qwen3-rerank + ES(smartcn) RRF
-                   Kibana http://localhost:5601 · ES http://localhost:9200
+                   Kibana http://localhost:${KIBANA_VIEW_PORT} · ES http://localhost:${ES_VIEW_PORT}
   • 视觉模型       vision-default → ${BAILIAN_VISION_MODEL:-openai/qwen3-vl-plus}（百炼）
                    首次 ES 需 --all --build 构建镜像
-  • 查看日志       docker compose logs -f conversation-service
+  • 查看日志       ${COMPOSE_CMD[*]} logs -f conversation-service
 ════════════════════════════════════════════════════════════
 EOF

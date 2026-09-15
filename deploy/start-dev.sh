@@ -12,6 +12,7 @@
 #   start-all.sh —— 前端 = nginx 生产镜像(同一中央注册端口, 无 HMR)，全 docker，验收/接近生产时用。
 #
 # 用法：
+#   ./start-dev.sh --dev-infra # 后端复用已初始化的共享中间件
 #   ./start-dev.sh              # 起后端 docker(应用服务) + 前端 dev(默认 :8093) —— 日常最常用
 #   ./start-dev.sh --all        # 连基础设施一起重启后端，再起前端 dev
 #   ./start-dev.sh --build      # 先 mvn package 再重建后端镜像后起，再起前端 dev
@@ -49,8 +50,10 @@ export VITE_EDGE_BASE_URL="${VITE_EDGE_BASE_URL:-http://localhost:${EDGE_HOST_PO
 RUN_BACKEND=1
 RUN_FRONTEND=1
 BACKEND_ARGS=()
+TRACE_HINT="Jaeger http://localhost:16686"
 for arg in "$@"; do
   case "$arg" in
+    --dev-infra) BACKEND_ARGS+=("$arg"); TRACE_HINT="dev-infra Grafana / Tempo" ;;
     --all|--build|--es)     BACKEND_ARGS+=("$arg") ;;
     --front-only|--frontend-only) RUN_BACKEND=0 ;;
     --back-only|--backend-only)   RUN_FRONTEND=0 ;;
@@ -91,7 +94,7 @@ cat <<EOF
                     未跑先: docker start authz-postgres && sleep 5 && docker start authz-spicedb authz-casdoor）
   • 登录(dual 时)   alice / ${AUTH_DEMO_PASSWORD:-demo12345} 或顶栏 API Key dev-key-acme
                     （需 EDGE_CASDOOR_MODE=dual ./start-dev.sh 重起后端才可用）
-  • LiteLLM 记账    http://localhost:4000/ui · Jaeger http://localhost:16686
+  • LiteLLM 记账    http://localhost:4000/ui · ${TRACE_HINT}
   • 停止            Ctrl-C 停前端；后端 docker 仍在跑（停后端: docker compose stop）
 ════════════════════════════════════════════════════════════
 EOF

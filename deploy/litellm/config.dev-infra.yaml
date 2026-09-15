@@ -1,0 +1,64 @@
+# LiteLLM Proxy 配置（AI 网关）。逻辑模型名 chat-default 供所有服务的 platform.gateway.model-name 引用。
+# provider 路由 + 跨 provider failover 在这里集中管理（应用侧不再有 provider switch）。
+#
+# spend 记账 / virtual key / 管理 UI：由 compose 注入 DATABASE_URL（litellm-postgres）自动启用，
+# 本文件无需 database 配置 —— 没有 DATABASE_URL 时本配置依旧可独立跑（无状态转发模式）。
+model_list:
+  # 默认走 DeepSeek（云端，OpenAI 兼容；key 由 litellm 容器环境变量 DEEPSEEK_API_KEY 提供）。
+  # 换 openai / anthropic / ollama / vllm 等只改这一处，应用侧（都用逻辑名 chat-default）无需改动。
+  - model_name: chat-default
+    litellm_params:
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+  # chat-default 的备用目标（正式 failover）：本机 Ollama llama3.1，零云依赖。
+  # 前置：宿主机 `ollama pull llama3.1` 且 Ollama 在 :11434。注意它与 DeepSeek 在工具调用/JSON
+  # schema/上下文窗上并不等价 —— 只作主 provider 故障时的降级兜底，不承诺能力一致。
+  # 使用 Ollama 的 OpenAI-compatible /v1 端点，避免 LiteLLM native Ollama adapter 无法转换
+  # AgentScope list/string 混合消息内容。
+  - model_name: chat-default-fallback
+    litellm_params:
+      model: openai/llama3.1
+      api_base: http://host.docker.internal:11434/v1
+      api_key: ollama          # Ollama 忽略鉴权，但 openai 客户端要求非空 key，占位即可
+  # 多模态视觉模型：走阿里云百炼业务空间的 OpenAI-compatible 接口。
+  # vision-service 只引用逻辑名 vision-default，因此后续切 qwen3.7-plus/qwen3.6-flash 等无需改 Java。
+  # BAILIAN_BASE_URL / BAILIAN_API_KEY / BAILIAN_VISION_MODEL 由 load-bailian-env.sh
+  # 从本地 CSV 与环境变量安全注入。
+  # 视觉刻意不配 fallback（未配置第二个视觉 provider，不虚构备用目标）。
+  - model_name: vision-default
+    litellm_params:
+      model: os.environ/BAILIAN_VISION_MODEL
+      api_base: os.environ/BAILIAN_BASE_URL
+      api_key: os.environ/BAILIAN_API_KEY
+  # 其它 provider 示例（取消注释并配 key 即可切换/加 failover 目标）：
+  # - model_name: chat-default
+  #   litellm_params:
+  #     model: openai/gpt-4o-mini
+  #     api_key: os.environ/OPENAI_API_KEY
+
+router_settings:
+  # 失败上游冷却 30s：期间请求直接走 fallback，不再反复撞已挂的主上游（双层重试放大缓解之一；
+  # 另一半在 Java 侧 platform.gateway.max-retries——两层重试预算需一起权衡，见 litellm-gateway-guide §6）
+  cooldown_time: 30
+
+litellm_settings:
+  # 主目标不可用时按序回退（语法与 config.failover.yaml 一致，smoke-failover.sh 真机验证过）
+  num_retries: 2
+  request_timeout: 60
+  fallbacks:
+    - chat-default: ["chat-default-fallback"]
+  # ── 响应缓存：复用栈内 Redis（host/port 由容器环境变量 REDIS_HOST/REDIS_PORT 提供）。
+  # 精确匹配缓存；有限 TTL + namespace 与应用侧限流/预算 key 区隔，禁止对共享 Redis 全库 FLUSH。
+  cache: true
+  cache_params:
+    type: redis
+    ttl: 600
+    namespace: "lc4j:litellm.cache"
+    username: os.environ/REDIS_USERNAME
+    password: os.environ/REDIS_PASSWORD
+  # ── LiteLLM 自身 span → OTel collector（endpoint 由 OTEL_EXPORTER/OTEL_ENDPOINT 环境变量提供）。
+  # Java 侧开启追踪（MANAGEMENT_TRACING_ENABLED=true）后出站带 traceparent，两侧同 trace。
+  callbacks: ["otel"]
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

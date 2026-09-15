@@ -151,3 +151,9 @@ coverage/
 # Generated Files
 ############################
 generated/
+
+# dev-infra 本机凭据、数据备份和迁移运行记录
+deploy/.dev-infra.env
+deploy/.dev-infra-state/
+
+deploy/dev-infra/__pycache__/

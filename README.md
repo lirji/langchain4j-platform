@@ -80,6 +80,10 @@ client ──X-Api-Key/Bearer──▶ edge-gateway (Spring Cloud Gateway)
 - 平台工程：[可信发布](docs/平台工程/software-supply-chain.md) · [RBAC与登录](docs/平台工程/rbac-and-public-kb.md) · [Casdoor SSO/OIDC 接入](docs/平台工程/公网化-OIDC-改造方案.md) · [事件总线](docs/平台工程/eventbus-guide.md) · [可观测性](docs/平台工程/observability-guide.md) · [成本归因](docs/平台工程/cost-attribution.md) · [评测](docs/平台工程/eval-guide.md)
 - [迁移路线图](docs/迁移/migration-roadmap.md)
 
+## 本地 Casdoor 登录（能力门户）
+
+门户入口 `http://localhost:8093/login`。组织填 `acme`，账号 `alice` / `Alice@12345`（shared app `ragshared0client00000001`）。备用组织 `globex` / `bob` / `Bob@12345`。这与 auth-service 演示账号 `demo12345` 不是同一套。IAM 重建后由 auth-platform `deploy/portal-casdoor-restore.sh` 开通。
+
 ## 本地跑（Phase 0）
 
 前置：Docker、JDK 21、Maven、阿里云百炼业务空间凭据 CSV。Ollama `llama3.1` 仅作为
@@ -94,8 +98,9 @@ cp deploy/.env.example deploy/.env
 # 编辑 deploy/.env 的 BAILIAN_CREDENTIAL_CSV=/绝对路径/凭据.csv
 
 # 3. 起整网（推荐脚本会构建 AgentScope、加载凭据并完成 Compose 注入）
-bash deploy/start-all.sh       # 全 docker，前端端口来自 auth-platform 中央注册表
-# 或 bash deploy/start-dev.sh  # 后端 docker + 前端 vite HMR，复用同一入口端口
+bash deploy/start-all.sh --dev-infra  # 已按 deploy/dev-infra/README.md 初始化共享实例时使用
+# bash deploy/start-all.sh            # 独立旧栈/回退入口
+# 或 bash deploy/start-dev.sh --dev-infra  # 后端 docker + 前端 vite HMR
 
 # 4. 打一条 /chat（走边缘网关，用 api-key，网关内部换 JWT 转发给 conversation-service）
 curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
@@ -594,3 +599,7 @@ mvn -pl edge-gateway spring-boot:run           # :8080
 - **租户传播**：不带 `X-Api-Key` → 网关 401；带合法 key → 响应里 `tenantId`/`userId` 为该 key 绑定的租户。
 - **单测**：`mvn test`（含 `InternalTokenTest` JWT 签发/校验/过期/篡改）。
 - **文档级授权 / SSO（默认全关，需外部 auth-platform + Casdoor）**：`RAG_AUTHZ_MODE=enforce` + `EDGE_CASDOOR_ENABLED=true` + `EDGE_CASDOOR_MODE=only` 后跑 `bash deploy/smoke-rag-tenant-authz.sh`（跨服务 E2E：Casdoor 登录 → 文档级 ReBAC 过滤 → 租户/部门隔离断言）。授权模型见 auth-platform 仓库 `docs/authz-department-model.md`。
+
+## 共享 dev-infra 接入
+
+本机共享中间件入口为 `bash deploy/dev-infra/compose.sh`。资源隔离、首次迁移和回退见 [接入说明](deploy/dev-infra/README.md)。旧 Compose 保留原行为；不要同时运行两套写入应用。

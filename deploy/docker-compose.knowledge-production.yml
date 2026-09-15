@@ -1,0 +1,43 @@
+# 叠加在基础 compose + knowledge-split 上；仅提供生产行为约束，不提供生产凭据。
+# 数据库、S3、Redis、向量库及模型端点必须由实际环境配置；应用前先执行 knowledge-ingestion migration。
+services:
+  # 旧服务名保留为只读兼容入口，内部客户端不会继续写入 combined 实例。
+  knowledge-service:
+    environment: &production-query
+      RAG_RUNTIME_ROLE: query
+      RAG_PRODUCTION: "true"
+      RAG_LEGACY_WRITE_ENABLED: "false"
+      RAG_GRAPH_ENABLED: "false"
+      RAG_REGISTRY_STORE: redis
+      RAG_VECTOR_STORE_PROVIDER: ${RAG_VECTOR_STORE_PROVIDER:-qdrant}
+      RAG_VECTOR_STORE_BASE_COLLECTION: ${KNOWLEDGE_SPLIT_VECTOR_BASE_COLLECTION:-knowledge_segments_split_hash}
+      RAG_EMBEDDING_PROVIDER: ${KNOWLEDGE_SPLIT_EMBEDDING_PROVIDER:-hash}
+      RAG_EMBEDDING_MODEL: ${KNOWLEDGE_SPLIT_EMBEDDING_MODEL:-text-embedding-v4}
+      RAG_EMBEDDING_BASE_URL: ${KNOWLEDGE_SPLIT_EMBEDDING_BASE_URL:-}
+      RAG_EMBEDDING_API_KEY: ${KNOWLEDGE_SPLIT_EMBEDDING_API_KEY:-}
+      APP_RAG_EMBEDDING_BASE_URL: ${KNOWLEDGE_SPLIT_EMBEDDING_BASE_URL:-}
+      APP_RAG_EMBEDDING_API_KEY: ${KNOWLEDGE_SPLIT_EMBEDDING_API_KEY:-}
+      RAG_ES_ENABLED: "true"
+      RAG_ES_QUERY_ENABLED: "true"
+  knowledge-query:
+    environment:
+      <<: *production-query
+  knowledge-ingest-api:
+    environment:
+      RAG_PRODUCTION: "true"
+      RAG_LEGACY_WRITE_ENABLED: "false"
+  knowledge-ingest-worker:
+    environment:
+      RAG_PRODUCTION: "true"
+      RAG_LEGACY_WRITE_ENABLED: "false"
+      RAG_GRAPH_ENABLED: "false"
+      RAG_ES_ENABLED: "true"
+      RAG_ES_QUERY_ENABLED: "true"
+      RAG_ES_INDEX_ENABLED: "true"
+      RAG_ES_FAIL_FAST: "true"
+  edge-gateway:
+    environment:
+      KNOWLEDGE_INGEST_URI: http://knowledge-ingest-api:8084
+      KNOWLEDGE_QUERY_URI: http://knowledge-query:8084
+      # 默认指向只读角色以关闭管理写入；需要管理操作时显式指定受控 combined 实例。
+      KNOWLEDGE_ADMIN_URI: ${KNOWLEDGE_ADMIN_URI:-http://knowledge-query:8084}

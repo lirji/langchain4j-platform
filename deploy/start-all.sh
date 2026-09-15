@@ -17,6 +17,7 @@
 #   start-dev.sh —— 前端 = vite dev(同一中央注册端口, 有 HMR)，日常改前端时用。
 #
 # 用法：
+#   ./start-all.sh --dev-infra  # 使用已初始化的共享 dev-infra，保留标准凭据与端口加载
 #   ./start-all.sh            # mvn package + 构建并起【全部服务(含前端 nginx + 基础设施)】—— 首次/改动后用
 #   ./start-all.sh --no-build # 不打包不重建，直接用已有镜像拉起(快)
 #   ./start-all.sh --recreate # 强制重建容器(--force-recreate)，确保 compose 里的能力开关生效
@@ -54,8 +55,10 @@ export SHOWCASE_EDGE_BASE_URL="${SHOWCASE_EDGE_BASE_URL:-http://localhost:${EDGE
 # ── 参数解析 ──
 BUILD_FLAG="--build"
 RECREATE_FLAG=""
+USE_DEV_INFRA=0
 for arg in "$@"; do
   case "$arg" in
+    --dev-infra) USE_DEV_INFRA=1 ;;
     --no-build) BUILD_FLAG="" ;;
     --recreate) RECREATE_FLAG="--force-recreate" ;;
     --es)       echo "ℹ  --es 已弃用：ES 全文混排现为默认（见 docker-compose.yml），无需再加。" ;;
@@ -63,6 +66,23 @@ for arg in "$@"; do
     *) echo "未知参数: ${arg}（可用: --no-build, --recreate）"; exit 2 ;;
   esac
 done
+
+# 共享中间件模式沿用原启动脚本的凭据、网关端口和前端构建参数。
+COMPOSE_CMD=(docker compose)
+MAVEN_SKIP_FLAG=-DskipTests
+STOP_ACTION=down
+TRACE_HINT="Jaeger http://localhost:16686"
+ES_VIEW_PORT=9200
+KIBANA_VIEW_PORT=5601
+if [ "$USE_DEV_INFRA" = 1 ]; then
+  COMPOSE_CMD=(bash "$PWD/dev-infra/compose.sh")
+  MAVEN_SKIP_FLAG=-Dmaven.test.skip=true
+  STOP_ACTION=stop
+  TRACE_HINT="dev-infra Grafana / Tempo（见共享基础设施文档）"
+  ES_VIEW_PORT=49200
+  KIBANA_VIEW_PORT=45601
+  [ -r "$PWD/.dev-infra.env" ] || { echo "请先按 deploy/dev-infra/README.md 完成共享资源初始化与迁移"; exit 1; }
+fi
 
 # ── 百炼 embedding/rerank/vision 凭据（CSV 仅留本机，不把 API Key 写进仓库/.env）──
 # shellcheck source=load-bailian-env.sh
@@ -103,8 +123,8 @@ if [ -n "$BUILD_FLAG" ]; then
   fi
   echo "▶ 构建 AgentScope 权威编排镜像 ${AGENTSCOPE_IMAGE}"
   docker compose -f "${AGENTSCOPE_REPO}/compose.yml" build orchestrator
-  echo "▶ mvn -DskipTests package（构建前置，避免镜像装旧 jar）"
-  ( cd .. && mvn -DskipTests package )
+  echo "▶ mvn ${MAVEN_SKIP_FLAG} package（构建前置，避免镜像装旧 jar）"
+  ( cd .. && mvn "$MAVEN_SKIP_FLAG" package )
 elif [ "$AGENTSCOPE_IMAGE" = "agentscope-platform:local" ] \
     && ! docker image inspect "$AGENTSCOPE_IMAGE" >/dev/null 2>&1; then
   echo "✗ 缺少 ${AGENTSCOPE_IMAGE}。先运行默认构建，或设置 AGENTSCOPE_IMAGE 为已发布镜像。"
@@ -113,7 +133,9 @@ fi
 
 # ── 拉起全部服务（不排除任何 service，含前端与基础设施）──
 # shellcheck disable=SC2086
-docker compose up -d ${BUILD_FLAG} ${RECREATE_FLAG} --remove-orphans
+ORPHAN_FLAG=--remove-orphans
+[ "$USE_DEV_INFRA" = 0 ] || ORPHAN_FLAG=""
+"${COMPOSE_CMD[@]}" up -d ${BUILD_FLAG} ${RECREATE_FLAG} ${ORPHAN_FLAG}
 
 # ── 等待网关就绪（401=活着但需 API Key）──
 echo
@@ -164,8 +186,8 @@ cat <<EOF
   • 旧凭证(dual)   EDGE_CASDOOR_MODE=dual 时: API Key dev-key-acme / dev-key-globex，
                    或 alice·bob / ${AUTH_DEMO_PASSWORD:-demo12345} 自建登录
   • LiteLLM 记账   http://localhost:4000/ui  (spend/模型/token/费用；admin / litellm-ui-dev)
-  • 链路追踪       Jaeger http://localhost:16686
-  • 查看日志       docker compose logs -f edge-gateway capability-showcase-frontend
-  • 停止全部       docker compose down     (⚠ 别加 -v：会删 mysql/qdrant/redis/es/litellm-pg 全部数据卷)
+  • 链路追踪       ${TRACE_HINT}
+  • 查看日志       ${COMPOSE_CMD[*]} logs -f edge-gateway capability-showcase-frontend
+  • 停止全部       ${COMPOSE_CMD[*]} ${STOP_ACTION}     (⚠ 别加 -v：会删 mysql/qdrant/redis/es/litellm-pg 全部数据卷)
 ════════════════════════════════════════════════════════════
 EOF
