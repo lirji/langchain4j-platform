@@ -210,7 +210,7 @@ describe('ChatConsoleView interaction', () => {
     // 500 → memError 以 role=alert 呈现，不伪装成功。
     await buttonByText(wrapper, '查看画像').trigger('click')
     await settle()
-    expect(wrapper.get('.chat__memory-body [role="alert"]').text()).toContain('profile backend down')
+    expect(wrapper.get('[data-mem-error]').text()).toContain('profile backend down')
     wrapper.unmount()
   })
 
@@ -225,6 +225,40 @@ describe('ChatConsoleView interaction', () => {
     await settle()
     expect(wrapper.get('.msg--assistant').text()).toContain('partial answer')
     expect(wrapper.get('.msg--system').text()).toContain('tool failed')
+    wrapper.unmount()
+  })
+
+  it('抽取工单：气泡动作把文本送入工具并渲染 Ticket 卡片', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ reply: '登录页打不开，很急' }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          title: '登录失败',
+          priority: 'HIGH',
+          category: 'auth',
+          summary: '手机打不开登录页',
+          nextSteps: ['查网关日志'],
+        }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+    const wrapper = mount(ChatConsoleView, { props: { moduleId: 'chat', capId: 'chat.sync' } })
+    await wrapper.get('.chat__textarea').setValue('登录页打不开')
+    await buttonByText(wrapper, '发送').trigger('click')
+    await settle()
+    const extractBtns = wrapper.findAll('.msg--assistant button').filter((b) => b.text().includes('抽取工单'))
+    expect(extractBtns.length).toBeGreaterThan(0)
+    await extractBtns[0].trigger('click')
+    expect((wrapper.get('[aria-label="待抽取文本"]').element as HTMLTextAreaElement).value).toContain(
+      '登录页打不开，很急',
+    )
+    await wrapper.get('[data-tool="extract"] .btn--primary').trigger('click')
+    await settle()
+    const extractCall = fetchMock.mock.calls.find(([url]) => String(url).startsWith('/extract'))
+    expect(extractCall).toBeTruthy()
+    expect(String(extractCall![0])).toContain('/extract')
+    expect(JSON.parse(String((extractCall![1] as RequestInit).body))).toEqual({ text: '登录页打不开，很急' })
+    expect(wrapper.get('[data-ticket="true"]').text()).toContain('登录失败')
+    expect(wrapper.get('[data-ticket="true"]').text()).toContain('HIGH')
     wrapper.unmount()
   })
 

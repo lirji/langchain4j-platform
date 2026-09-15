@@ -6,7 +6,13 @@
  * （docVisibility 仅作兜底/校验）；query 命中用服务端 KnowledgeHit.visibility。删共享需 public-ingest（后端 403 兜底）。
  */
 import type { RunContext } from '../types/api'
-import type { DocumentInfo, KnowledgeRuntimeView, PagedDocuments, Visibility } from '../types/knowledge'
+import type {
+  DocumentInfo,
+  IngestionJobView,
+  KnowledgeRuntimeView,
+  PagedDocuments,
+  Visibility,
+} from '../types/knowledge'
 import { API_KEY_HEADER, AUTH_HEADER } from './client'
 import { authorizedFetch } from './authorizedFetch'
 import { ApiError } from './errors'
@@ -69,3 +75,7 @@ export const deleteDocument = (docId: string, visibility: Visibility, ctx: RunCo
   edgeJson<void>(`/rag/documents/${encodeURIComponent(docId)}${visQuery(visibility)}`, ctx, {
     method: 'DELETE',
   }).then(() => undefined)
+
+/** 按 jobId 查询 durable ingestion 状态；无列表接口，只能点查。 */
+export const getIngestionJob = (jobId: string, ctx: RunContext): Promise<IngestionJobView> =>
+  edgeJson<IngestionJobView>(`/rag/ingestions/${encodeURIComponent(jobId)}`, ctx)

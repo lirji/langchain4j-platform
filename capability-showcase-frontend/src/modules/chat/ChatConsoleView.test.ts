@@ -59,13 +59,19 @@ describe('ChatConsoleView', () => {
     expect(wrapper.text()).toContain('长期用户画像')
   })
 
-  it('深链非会话能力（chat.extract）委派通用运行器', () => {
+  it('侧栏深链抽取 / 画像进入通用运行器', async () => {
     const wrapper = mount(ChatConsoleView, {
       props: { moduleId: 'chat', capId: 'chat.extract' },
     })
-    expect(wrapper.findAllComponents(CapabilityRunner).length).toBe(1)
-    // 非会话深链不渲染对话流
-    expect(wrapper.text()).not.toContain('开始对话')
+    expect(wrapper.findComponent(CapabilityRunner).exists()).toBe(true)
+    expect((wrapper.findComponent(CapabilityRunner).props('cap') as { id: string }).id).toBe(
+      'chat.extract',
+    )
+    expect(wrapper.find('.chat__mode').exists()).toBe(false)
+    await wrapper.setProps({ capId: 'memory.profile.get' })
+    expect((wrapper.findComponent(CapabilityRunner).props('cap') as { id: string }).id).toBe(
+      'memory.profile.get',
+    )
   })
 
   it('深链对话模式（chat.sync）进入对话控制台并选中该模式', () => {

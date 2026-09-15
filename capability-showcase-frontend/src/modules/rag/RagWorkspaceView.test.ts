@@ -5,10 +5,9 @@ import { useCatalogStore } from '../../stores/catalog'
 import { useSessionStore } from '../../stores/session'
 import { loadCatalog } from '../../test/fixtures'
 import { fetchRagConfig } from '../../api/knowledge'
-import CapabilityRunner from '../../components/capability/CapabilityRunner.vue'
 import InfoNote from '../_shared/InfoNote.vue'
-import WorkbenchSection from '../_shared/WorkbenchSection.vue'
 import RagWorkspaceView from './RagWorkspaceView.vue'
+import CapabilityRunner from '../../components/capability/CapabilityRunner.vue'
 
 // fetchRagConfig 走网关，测试里 mock 掉；其余 api/knowledge 导出保持真实。
 vi.mock('../../api/knowledge', async (importOriginal) => ({
@@ -87,14 +86,21 @@ describe('RagWorkspaceView', () => {
     expect(text).toContain('app.rag.graph.enabled')
   })
 
-  it('深链 rag.query 时聚焦单个运行器', () => {
+  it('侧栏深链能力整页进入通用运行器，不再留在工作台', async () => {
     const wrapper = mount(RagWorkspaceView, {
-      props: { moduleId: 'rag', capId: 'rag.query' },
+      props: { moduleId: 'rag', capId: 'rag.upload.file' },
       ...mountOpts,
     })
-    expect(wrapper.findAllComponents(CapabilityRunner).length).toBe(1)
-    // 聚焦模式不渲染任何工作台分区（断言组件本身，避免"检索台"字样出现在文案里造成误伤）
-    expect(wrapper.findAllComponents(WorkbenchSection).length).toBe(0)
+    const runner = wrapper.findComponent(CapabilityRunner)
+    expect(runner.exists()).toBe(true)
+    expect((runner.props('cap') as { id: string }).id).toBe('rag.upload.file')
+    expect(wrapper.find('[data-rag-section="docs"]').exists()).toBe(false)
+
+    await wrapper.setProps({ capId: 'rag.graph.query' })
+    await flushPromises()
+    expect((wrapper.findComponent(CapabilityRunner).props('cap') as { id: string }).id).toBe(
+      'rag.graph.query',
+    )
   })
 
   it('未知能力 id 优雅报错', () => {

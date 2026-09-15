@@ -9,6 +9,7 @@ import { useCapabilityRun } from '../../composables/useCapabilityRun'
 import { executionGate } from '../../utils/gate'
 import { toCurl } from '../../utils/curl'
 import { tryParseJson } from '../../utils/json'
+import { scrollIntoMain } from '../../utils/scroll'
 import CapabilityHeader from './CapabilityHeader.vue'
 import DynamicForm from '../form/DynamicForm.vue'
 import ResponseViewer from './ResponseViewer.vue'
@@ -144,32 +145,9 @@ watch(
   },
 )
 
-/** 向上找最近的真正滚动容器（overflow-y auto/scroll）。 */
-function nearestScroller(node: HTMLElement | null): HTMLElement | null {
-  for (let el = node?.parentElement ?? null; el; el = el.parentElement) {
-    const oy = getComputedStyle(el).overflowY
-    if (oy === 'auto' || oy === 'scroll') return el
-  }
-  return null
-}
-
-/**
- * 手机档执行后把响应区滚入视口。**不能用 scrollIntoView(block:'start')**：
- * 它会连 overflow:hidden 的 app-shell 一起滚，把顶栏(☰)顶出屏外且无法自行恢复
- * （真机 bug：结果出来后菜单栏消失、刷新才回来）。只滚最近的滚动容器（.app-main）。
- */
+/** 手机档执行后把响应区滚入视口（只滚 .app-main，不碰 overflow:hidden 的壳层）。 */
 function scrollResponseIntoView(): void {
-  const el = resEl.value
-  if (!el) return
-  const scroller = nearestScroller(el)
-  if (!scroller) {
-    // 兜底（jsdom 无布局时走此路径，测试据此断言）
-    el.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
-    return
-  }
-  const top =
-    el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 8
-  scroller.scrollTo({ top, behavior: 'smooth' })
+  scrollIntoMain(resEl.value)
 }
 
 async function execute(): Promise<void> {

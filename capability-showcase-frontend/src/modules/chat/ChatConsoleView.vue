@@ -2,19 +2,18 @@
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useCatalogStore } from '../../stores/catalog'
 import { useSessionStore } from '../../stores/session'
-import { runCapability } from '../../api/client'
-import { humanizeError } from '../../api/errors'
 import { executionGate } from '../../utils/gate'
 import { renderMarkdown } from '../../utils/markdown'
 import { downloadText } from '../../utils/download'
+import { tryParseJson } from '../../utils/json'
 import { useCapabilityRun, type RunPhase } from '../../composables/useCapabilityRun'
 import type { Capability } from '../../types/catalog'
 import type { FormValues } from '../../utils/validation'
 import CapabilityRunner from '../../components/capability/CapabilityRunner.vue'
 import EmptyState from '../../components/common/EmptyState.vue'
 import ModuleHeader from '../../components/layout/ModuleHeader.vue'
-import InfoNote from '../_shared/InfoNote.vue'
 import CopyButton from '../../components/common/CopyButton.vue'
+import ChatToolsPanel from './ChatToolsPanel.vue'
 
 const props = defineProps<{ moduleId: string; capId?: string }>()
 const catalog = useCatalogStore()
@@ -45,10 +44,10 @@ function modeLabelFor(id: string): string {
   return MODES.find((m) => m.id === id)?.label ?? id
 }
 
-// 非会话能力（结构化抽取 / 画像读写 / 清缓存等深链）→ 交给通用运行器。
 const selectedCap = computed(() =>
   props.capId ? catalog.capabilityById(props.capId) : undefined,
 )
+/** 非对话模式（抽取/画像/缓存等）走通用运行器，侧栏才能整页跳到指定能力。 */
 const delegateToRunner = computed(
   () => !!selectedCap.value && !CHAT_MODE_IDS.includes(selectedCap.value.id),
 )
@@ -256,18 +255,44 @@ async function regenerate(src: ChatMsg): Promise<void> {
 function stop(): void {
   run.abort()
 }
+const sessionEpoch = ref(0)
 function clearAll(): void {
   run.abort()
   messages.value = []
   activeAsstId.value = null
+  extractSeed.value = ''
   // 清空即开新会话：换 chatId，服务端对话记忆随之隔离（旧会话不再被带入）。
+  // sessionEpoch 保证即使 chatId 碰巧相同（测试 stub UUID）也会重置工具面板。
   chatId.value = newChatId()
-  // 画像属于旧 chatId：一并清理，并使在途画像请求失效（晚到不得写入新会话的抽屉）。
-  memSeq += 1
-  memProfile.value = null
-  memError.value = null
-  memBusy.value = false
+  sessionEpoch.value += 1
 }
+
+function applyStarter(text: string): void {
+  message.value = text
+}
+
+const extractSeed = ref('')
+function extractFrom(text: string): void {
+  extractSeed.value = text
+}
+
+const extractCap = computed(() => catalog.capabilityById('chat.extract'))
+const memGetCap = computed(() => catalog.capabilityById('memory.profile.get'))
+const memClearCap = computed(() => catalog.capabilityById('memory.profile.clear'))
+const cacheCap = computed(() => catalog.capabilityById('chat.cache.clear'))
+
+const starters = computed(() => {
+  const cap = activeCap.value
+  if (!cap?.examples?.length) return []
+  const out: { label: string; message: string }[] = []
+  for (const ex of cap.examples) {
+    const body = tryParseJson(ex.body)
+    if (!body || typeof body !== 'object') continue
+    const msg = (body as Record<string, unknown>).message
+    if (typeof msg === 'string' && msg.trim()) out.push({ label: ex.label, message: msg })
+  }
+  return out.slice(0, 3)
+})
 function onComposerKey(e: KeyboardEvent): void {
   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
     e.preventDefault()
@@ -299,67 +324,6 @@ function exportJson(): void {
     traceId: m.traceId,
   }))
   downloadText(`chat-${Date.now()}.json`, JSON.stringify(payload, null, 2), 'application/json')
-}
-
-// ── 长期记忆画像（仅记忆模式；经 executionGate 诚实处理 flag/scope）──
-const memGetCap = computed(() => catalog.capabilityById('memory.profile.get'))
-const memClearCap = computed(() => catalog.capabilityById('memory.profile.clear'))
-const showMemory = ref(false)
-const memProfile = ref<string | null>(null)
-const memError = ref<string | null>(null)
-const memBusy = ref(false)
-const isMemoryMode = computed(() => modeId.value === 'chat.memory')
-// 画像请求序号：连点/清空会话（换 chatId）后，旧请求晚到不得覆盖新状态。
-let memSeq = 0
-
-async function loadProfile(): Promise<void> {
-  const cap = memGetCap.value
-  if (!cap) return
-  const gate = executionGate(cap, { ...session.permissionContext() })
-  if (!gate.allowed) {
-    memError.value = gate.reason ?? '当前不可执行。'
-    return
-  }
-  const my = ++memSeq
-  memBusy.value = true
-  memError.value = null
-  try {
-    const res = await runCapability(
-      cap,
-      { chatId: chatId.value.trim() || 'default' },
-      session.runContext(),
-    )
-    if (my !== memSeq) return
-    memProfile.value =
-      res.data == null ? '（空画像）' : JSON.stringify(res.data, null, 2)
-  } catch (e) {
-    if (my !== memSeq) return
-    memError.value = humanizeError(e, cap)
-  } finally {
-    if (my === memSeq) memBusy.value = false
-  }
-}
-async function clearProfile(): Promise<void> {
-  const cap = memClearCap.value
-  if (!cap) return
-  const gate = executionGate(cap, { ...session.permissionContext() })
-  if (!gate.allowed) {
-    memError.value = gate.reason ?? '当前不可执行。'
-    return
-  }
-  const my = ++memSeq
-  memBusy.value = true
-  memError.value = null
-  try {
-    await runCapability(cap, { chatId: chatId.value.trim() || 'default' }, session.runContext())
-    if (my !== memSeq) return
-    memProfile.value = '（已清除）'
-  } catch (e) {
-    if (my !== memSeq) return
-    memError.value = humanizeError(e, cap)
-  } finally {
-    if (my === memSeq) memBusy.value = false
-  }
 }
 
 // 状态条：取最近一条已定稿助手消息的耗时 / traceId（无则不显示——诚实）。
@@ -424,6 +388,10 @@ onUnmounted(() => run.abort())
           </button>
         </template>
       </ModuleHeader>
+      <p class="chat__session" aria-label="当前会话">
+        <span>会话</span>
+        <code :title="chatId">{{ chatId }}</code>
+      </p>
 
       <!-- 统一模式选择器（分段） -->
       <div class="chat__rail" role="tablist" aria-label="对话模式">
@@ -458,7 +426,19 @@ onUnmounted(() => run.abort())
         icon="💬"
         title="开始对话"
         description="输入消息并按 ⌘/Ctrl+Enter 发送。切换上方模式复用同一对话流。"
-      />
+      >
+        <div v-if="starters.length" class="chat__starters" aria-label="目录示例">
+          <button
+            v-for="s in starters"
+            :key="s.label"
+            type="button"
+            class="chat__starter"
+            @click="applyStarter(s.message)"
+          >
+            {{ s.label }}
+          </button>
+        </div>
+      </EmptyState>
 
       <div
         v-for="m in messages"
@@ -505,47 +485,28 @@ onUnmounted(() => run.abort())
           >
             重新生成
           </button>
+          <button
+            v-if="extractCap && m.text"
+            type="button"
+            class="msg__act"
+            title="把本条消息送入结构化抽取"
+            @click="extractFrom(m.text)"
+          >
+            抽取工单
+          </button>
         </div>
       </div>
     </div>
 
-    <!-- 记忆画像抽屉（仅记忆模式） -->
-    <aside v-if="isMemoryMode" class="chat__memory">
-      <button
-        type="button"
-        class="chat__memory-toggle"
-        :aria-expanded="showMemory"
-        @click="showMemory = !showMemory"
-      >
-        <span class="chat__chevron" :class="{ 'is-open': showMemory }" aria-hidden="true">▸</span>
-        长期用户画像
-      </button>
-      <div v-show="showMemory" class="chat__memory-body">
-        <InfoNote v-if="memGetCap && memGetCap.state === 'flag-off'" tone="warning">
-          画像读写需开启 <strong>{{ memGetCap.featureFlag }}</strong>=true；未启用时以下操作将被闸门拦截。
-        </InfoNote>
-        <div class="chat__memory-actions">
-          <button
-            type="button"
-            class="btn btn--sm"
-            :disabled="memBusy || !memGetCap"
-            @click="loadProfile"
-          >
-            {{ memBusy ? '读取中…' : '查看画像' }}
-          </button>
-          <button
-            type="button"
-            class="btn btn--sm btn--danger"
-            :disabled="memBusy || !memClearCap"
-            @click="clearProfile"
-          >
-            清除画像
-          </button>
-        </div>
-        <InfoNote v-if="memError" tone="danger" role="alert">{{ memError }}</InfoNote>
-        <pre v-if="memProfile" class="chat__memory-pre">{{ memProfile }}</pre>
-      </div>
-    </aside>
+    <ChatToolsPanel
+      :chat-id="chatId"
+      :session-epoch="sessionEpoch"
+      :extract-cap="extractCap"
+      :mem-get-cap="memGetCap"
+      :mem-clear-cap="memClearCap"
+      :cache-cap="cacheCap"
+      :extract-seed="extractSeed"
+    />
 
     <!-- Composer：sticky 底部玻璃 -->
     <footer class="chat__composer">
@@ -635,6 +596,40 @@ onUnmounted(() => run.abort())
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+.chat__session {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--text-subtle);
+}
+.chat__session code {
+  font-family: var(--font-mono);
+  padding: 1px 6px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+.chat__starters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.chat__starter {
+  padding: 6px 12px;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.chat__starter:hover {
+  color: var(--text);
+  border-color: var(--primary-border);
 }
 
 /* 模式分段选择器 */

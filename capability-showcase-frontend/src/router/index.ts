@@ -101,12 +101,29 @@ export function resolveRouteAccess(
   return true
 }
 
+/**
+ * 同模块工作台内切能力（/m/rag → /m/rag/rag.upload.file）不要滚回顶部，
+ * 交给页面内分区聚焦；跨模块 / 回总览仍归顶。
+ */
+export function resolveScrollBehavior(
+  to: Pick<RouteLocationNormalized, 'name' | 'params'>,
+  from: Pick<RouteLocationNormalized, 'name' | 'params'>,
+): false | { top: number } {
+  const sameWorkspace =
+    (to.name === 'module' || to.name === 'capability') &&
+    (from.name === 'module' || from.name === 'capability') &&
+    String(to.params.moduleId ?? '') !== '' &&
+    String(to.params.moduleId) === String(from.params.moduleId)
+  if (sameWorkspace) return false
+  return { top: 0 }
+}
+
 export const router = createRouter({
   // 与 vite base（VITE_BASE，默认 /）一致；静态站点 SPA 回退由 nginx try_files 处理。
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
-  scrollBehavior() {
-    return { top: 0 }
+  scrollBehavior(to, from) {
+    return resolveScrollBehavior(to, from)
   },
 })
 

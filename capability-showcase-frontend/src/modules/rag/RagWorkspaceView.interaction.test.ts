@@ -239,7 +239,7 @@ describe('RagWorkspaceView interaction', () => {
     await buttonByText(wrapper, '检索').trigger('click')
     expect(fetchMock.mock.calls.filter(([url]) => url === '/rag/query')).toHaveLength(0)
     expect(wrapper.text()).toContain('TopK 不能小于 1')
-    expect(wrapper.text()).toContain('最低分需在 0..1 之间')
+    expect(wrapper.text()).toContain('最低分 不能大于 1')
     // 上界与负值同样禁发
     await nums[0].setValue('51')
     await nums[1].setValue('-0.1')
@@ -277,6 +277,54 @@ describe('RagWorkspaceView interaction', () => {
     await settle()
     const graphSection = wrapper.findAll('section').find((s) => s.text().includes('GraphRAG'))!
     expect(graphSection.text()).not.toContain('未启用')
+    wrapper.unmount()
+  })
+
+  it('命中「查看文档」按 hit.visibility 拉详情', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === '/rag/config') return Promise.resolve(jsonResponse(config()))
+      if (url === '/rag/query')
+        return Promise.resolve(jsonResponse({
+          hits: [{ docId: 'hit-1', score: 0.9, text: '退款政策', visibility: 'tenant' }],
+        }))
+      if (url === '/rag/documents/hit-1') return Promise.resolve(jsonResponse(doc('hit-1', 'Hit Doc')))
+      throw new Error(`unexpected ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const wrapper = mount(RagWorkspaceView, { props: { moduleId: 'rag' }, ...opts })
+    await settle()
+    await wrapper.get('[aria-label="检索查询"]').setValue('退款')
+    await buttonByText(wrapper, '检索').trigger('click')
+    await settle()
+    await buttonByText(wrapper, '查看文档').trigger('click')
+    await settle()
+    expect(fetchMock.mock.calls.some(([url]) => url === '/rag/documents/hit-1')).toBe(true)
+    expect(wrapper.get('.rag__detail').text()).toContain('hit-1')
+    wrapper.unmount()
+  })
+
+  it('跟踪入库任务：粘贴 jobId 后请求 GET /rag/ingestions/{id}', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === '/rag/config') return Promise.resolve(jsonResponse(config()))
+      if (url === '/rag/ingestions/job-9')
+        return Promise.resolve(jsonResponse({
+          jobId: 'job-9',
+          documentId: 'doc-9',
+          documentVersion: 1,
+          status: 'READY',
+          sinks: { VECTOR: 'SUCCEEDED' },
+        }))
+      throw new Error(`unexpected ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const wrapper = mount(RagWorkspaceView, { props: { moduleId: 'rag' }, ...opts })
+    await settle()
+    await wrapper.get('[aria-label="入库任务 ID"]').setValue('job-9')
+    await buttonByText(wrapper, '跟踪任务').trigger('click')
+    await settle()
+    expect(fetchMock.mock.calls.some(([url]) => url === '/rag/ingestions/job-9')).toBe(true)
+    expect(wrapper.text()).toContain('READY')
+    expect(wrapper.text()).toContain('doc-9')
     wrapper.unmount()
   })
 

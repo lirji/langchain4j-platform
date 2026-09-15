@@ -8,21 +8,22 @@
  *   未探测到运行时（v1 后端 / 无凭证 / 探测失败）诚实回退到"默认 HashEmbedding 降级"提示。
  * GraphRAG 子分区（rag.graph.query / entities，flag-off）：诚实锁定。
  *
- * 深链（capId 存在）沿用通用 CapabilityRunner。执行统一经 executionGate + runCapability。
+ * 侧栏子菜单 / 深链：有 capId 时整页进入通用 CapabilityRunner（与 Agent / 工作流一致）。
+ * 执行统一经 executionGate + runCapability。
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useAbortable } from '../../composables/useAbortable'
 import { useCatalogStore } from '../../stores/catalog'
 import { useSessionStore } from '../../stores/session'
 import { runCapability } from '../../api/client'
-import { humanizeError } from '../../api/errors'
 import { executionGate } from '../../utils/gate'
 import { highlightSegments } from '../../utils/highlight'
 import { SHARED_KB_UI_ENABLED } from '../../config'
-import { deleteDocument, fetchRagConfig, getDocument, listDocumentsPaged } from '../../api/knowledge'
-import type { DocumentInfo, KnowledgeRuntimeView, Visibility } from '../../types/knowledge'
+import { deleteDocument, fetchRagConfig, getDocument, getIngestionJob, listDocumentsPaged } from '../../api/knowledge'
+import { humanizeError, isAbortError } from '../../api/errors'
+import type { DocumentInfo, IngestionJobView, KnowledgeRuntimeView, Visibility } from '../../types/knowledge'
 import type { Capability } from '../../types/catalog'
-import type { FormValues } from '../../utils/validation'
+import { validateParams, type FormValues } from '../../utils/validation'
 import CapabilityRunner from '../../components/capability/CapabilityRunner.vue'
 import ResponseViewer from '../../components/capability/ResponseViewer.vue'
 import JsonView from '../../components/capability/JsonView.vue'
@@ -96,7 +97,7 @@ async function callCap(
   cap: Capability | undefined,
   values: FormValues,
   signal?: AbortSignal,
-): Promise<{ data?: unknown; error?: string }> {
+): Promise<{ data?: unknown; error?: string; aborted?: boolean }> {
   if (!cap) return { error: '能力不在目录中。' }
   const gate = executionGate(cap, { ...session.permissionContext(), confirmed: false })
   if (!gate.allowed) return { error: gate.reason ?? '当前不可执行。' }
@@ -104,6 +105,7 @@ async function callCap(
     const res = await runCapability(cap, values, session.runContext(signal))
     return { data: res.data }
   } catch (e) {
+    if (isAbortError(e) || signal?.aborted) return { aborted: true }
     return { error: humanizeError(e, cap) }
   }
 }
@@ -128,11 +130,20 @@ const sharedDisabledNote = computed(
   () => SHARED_KB_UI_ENABLED && ragConfig.value != null && ragConfig.value.publicEnabled === false,
 )
 
+const configAbort = useAbortable()
+const docsAbort = useAbortable()
+const detailAbort = useAbortable()
+const deleteAbort = useAbortable()
+
 async function probeRagConfig(): Promise<void> {
   if (!session.hasCredential) return
+  const controller = configAbort.fresh()
   try {
-    ragConfig.value = await fetchRagConfig(session.runContext())
-  } catch {
+    ragConfig.value = await fetchRagConfig(session.runContext(controller.signal))
+    if (controller.signal.aborted) return
+    catalog.applyKnowledgeRuntime(ragConfig.value)
+  } catch (e) {
+    if (isAbortError(e) || controller.signal.aborted) return
     ragConfig.value = null // 探测失败：共享分区保持隐藏（fail-closed）
   }
 }
@@ -178,7 +189,12 @@ async function loadDocs(): Promise<void> {
   docsError.value = null
   docsNote.value = null
   try {
-    const result = await listDocumentsPaged(reqVis, page.value, pageSize.value, session.runContext())
+    const result = await listDocumentsPaged(
+      reqVis,
+      page.value,
+      pageSize.value,
+      session.runContext(docsAbort.fresh().signal),
+    )
     if (my !== docsSeq) return // 已被更新的请求取代 → 丢弃陈旧结果，绝不覆盖新 tab
     docs.value = result.items
     page.value = result.page // 服务端 clamp 后回写（如删到末页越界会被拉回最后一页）
@@ -190,7 +206,7 @@ async function loadDocs(): Promise<void> {
         reqVis === 'public' ? '共享知识库暂无文档。' : '当前租户下暂无文档。上传后可在此管理与检索。'
     }
   } catch (e) {
-    if (my !== docsSeq) return
+    if (my !== docsSeq || isAbortError(e)) return
     docsError.value = humanizeError(e)
     docsLoaded.value = true
   } finally {
@@ -231,20 +247,20 @@ async function switchTab(v: Visibility): Promise<void> {
   await loadDocs()
 }
 
-async function viewDetail(docId: string): Promise<void> {
+async function viewDetail(docId: string, vis?: Visibility): Promise<void> {
   const my = ++detailSeq
-  const reqVis = visibility.value
+  const reqVis = vis ?? visibility.value
   detailDocId.value = docId
   detailData.value = null
   detailError.value = null
   detailBusy.value = true
   busyKey.value = `get:${docId}`
   try {
-    const data = await getDocument(docId, reqVis, session.runContext())
+    const data = await getDocument(docId, reqVis, session.runContext(detailAbort.fresh().signal))
     if (my !== detailSeq) return // 已被更新的详情请求取代 → 丢弃，避免张冠李戴
     detailData.value = data
   } catch (e) {
-    if (my !== detailSeq) return
+    if (my !== detailSeq || isAbortError(e)) return
     detailError.value = humanizeError(e)
   } finally {
     if (my === detailSeq) {
@@ -259,7 +275,7 @@ async function confirmDelete(docId: string): Promise<void> {
   docsError.value = null
   try {
     // 删共享需 public-ingest（后端 403 兜底并翻译为人话）。
-    await deleteDocument(docId, visibility.value, session.runContext())
+    await deleteDocument(docId, visibility.value, session.runContext(deleteAbort.fresh().signal))
     if (detailDocId.value === docId) {
       detailDocId.value = null
       detailData.value = null
@@ -267,6 +283,7 @@ async function confirmDelete(docId: string): Promise<void> {
     docsNote.value = `文档 ${docId} 已删除。`
     await loadDocs()
   } catch (e) {
+    if (isAbortError(e)) return
     docsError.value = humanizeError(e)
   } finally {
     busyKey.value = null
@@ -274,12 +291,20 @@ async function confirmDelete(docId: string): Promise<void> {
   }
 }
 
-function onUploaded(): void {
+function jobIdOf(data: unknown): string | undefined {
+  if (!data || typeof data !== 'object') return undefined
+  const o = data as Record<string, unknown>
+  return asStr(o.jobId) ?? asStr(o.ingestionJobId)
+}
+
+function onUploaded(payload?: { cap: Capability; data: unknown; status: number | null }): void {
   // 入库成功后刷新文档库（若已填凭证）；回到第 1 页——新文档按上传时间降序排在最前，便于立即看到。
   if (session.hasCredential) {
     page.value = 1
     void loadDocs()
   }
+  const jobId = jobIdOf(payload?.data)
+  if (jobId) void trackJob(jobId)
 }
 
 // 启动时探测 rag 配置；凭证到位后再探一次（登录/填 Key 后共享分区才能出现）。
@@ -316,19 +341,19 @@ const searched = ref(false)
 // 检索请求的 AbortController：新检索中止旧请求，组件卸载自动中止（issue-15）。
 const searchAbort = useAbortable()
 
-/** TopK/最低分边界校验（issue-08）：越界禁发并显示字段错误，不依赖 HTML min/max。 */
-const topKError = computed(() => {
-  if (topK.value == null) return null
-  return Number.isInteger(topK.value) && topK.value >= 1 && topK.value <= 50
-    ? null
-    : 'TopK 不能小于 1 或大于 50。'
+const searchValues = computed<FormValues>(() => {
+  const v: FormValues = { query: query.value }
+  if (topK.value != null) v.topK = topK.value
+  if (minScore.value != null) v.minScore = minScore.value
+  if (category.value.trim()) v.category = category.value.trim()
+  return v
 })
-const minScoreError = computed(() => {
-  if (minScore.value == null) return null
-  return Number.isFinite(minScore.value) && minScore.value >= 0 && minScore.value <= 1
-    ? null
-    : '最低分需在 0..1 之间。'
-})
+/** 与通用表单同一套 ParamSpec 校验（issue-08 / P0）。 */
+const searchFieldErrors = computed(() =>
+  queryCap.value ? validateParams(queryCap.value.params, searchValues.value) : {},
+)
+const topKError = computed(() => searchFieldErrors.value.topK ?? null)
+const minScoreError = computed(() => searchFieldErrors.value.minScore ?? null)
 
 const queryGate = computed(() => {
   if (!queryCap.value) return { allowed: false, reason: '未找到检索能力。' }
@@ -388,7 +413,8 @@ async function runSearch(): Promise<void> {
   if (category.value.trim()) values.category = category.value.trim()
   // fresh()：新检索中止上一次仍在途的检索；组件卸载时 useAbortable 自动中止（issue-15）。
   const controller = searchAbort.fresh()
-  const { data, error } = await callCap(queryCap.value, values, controller.signal)
+  const { data, error, aborted } = await callCap(queryCap.value, values, controller.signal)
+  if (aborted || controller.signal.aborted) return
   searchBusy.value = false
   searched.value = true
   if (error) {
@@ -396,6 +422,63 @@ async function runSearch(): Promise<void> {
     return
   }
   searchResult.value = data ?? null
+}
+
+function cancelSearch(): void {
+  searchAbort.abort()
+  searchBusy.value = false
+}
+
+function openHit(h: Hit): void {
+  if (!h.docId) return
+  void viewDetail(h.docId, h.visibility)
+}
+
+const TRACKED_JOB_LIMIT = 8
+const trackedJobs = ref<IngestionJobView[]>([])
+const jobIdInput = ref('')
+const jobTrackError = ref<string | null>(null)
+const jobBusy = ref(false)
+const jobAbort = useAbortable()
+const TERMINAL_JOB = new Set(['READY', 'PARTIAL', 'FAILED', 'DELETED'])
+
+function upsertJob(job: IngestionJobView): void {
+  const rest = trackedJobs.value.filter((j) => j.jobId !== job.jobId)
+  trackedJobs.value = [job, ...rest].slice(0, TRACKED_JOB_LIMIT)
+}
+
+async function refreshJob(jobId: string): Promise<IngestionJobView | null> {
+  const controller = jobAbort.fresh()
+  jobBusy.value = true
+  jobTrackError.value = null
+  try {
+    const job = await getIngestionJob(jobId, session.runContext(controller.signal))
+    if (controller.signal.aborted) return null
+    upsertJob(job)
+    return job
+  } catch (e) {
+    if (isAbortError(e) || controller.signal.aborted) return null
+    jobTrackError.value = humanizeError(e)
+    return null
+  } finally {
+    if (!controller.signal.aborted) jobBusy.value = false
+  }
+}
+
+async function trackJob(jobId: string): Promise<void> {
+  const first = await refreshJob(jobId)
+  if (!first || TERMINAL_JOB.has(first.status)) return
+  for (let i = 0; i < 12; i += 1) {
+    await new Promise((r) => setTimeout(r, 2000))
+    const next = await refreshJob(jobId)
+    if (!next || TERMINAL_JOB.has(next.status)) return
+  }
+}
+
+async function trackTypedJob(): Promise<void> {
+  const id = jobIdInput.value.trim()
+  if (!id) return
+  await trackJob(id)
 }
 
 const ingestScopeHint = computed(() => {
@@ -413,7 +496,6 @@ const ingestScopeHint = computed(() => {
     :description="`未找到模块「${moduleId}」。`"
   />
 
-  <!-- 深链：单能力聚焦 -->
   <CapabilityRunner v-else-if="capId && focusedCap" :key="focusedCap.id" :cap="focusedCap" />
 
   <EmptyState
@@ -429,7 +511,7 @@ const ingestScopeHint = computed(() => {
 
     <div class="rag__cols">
       <!-- 左：文档库 -->
-      <div class="rag__col">
+      <div class="rag__col" data-rag-section="docs">
         <WorkbenchSection
           v-if="listCap"
           title="文档库"
@@ -604,7 +686,7 @@ const ingestScopeHint = computed(() => {
       </div>
 
       <!-- 右：检索台 -->
-      <div class="rag__col">
+      <div class="rag__col" data-rag-section="query">
         <WorkbenchSection
           v-if="queryCap"
           title="检索台"
@@ -670,8 +752,16 @@ const ingestScopeHint = computed(() => {
             <p v-if="minScoreError" class="rag__field-err" role="alert">{{ minScoreError }}</p>
 
             <div class="rag__search-actions">
-              <button type="button" class="btn btn--primary" :disabled="!canSearch" @click="runSearch">
-                {{ searchBusy ? '检索中…' : '检索' }}
+              <button
+                v-if="searchBusy"
+                type="button"
+                class="btn btn--danger"
+                @click="cancelSearch"
+              >
+                取消检索
+              </button>
+              <button v-else type="button" class="btn btn--primary" :disabled="!canSearch" @click="runSearch">
+                检索
               </button>
             </div>
 
@@ -697,6 +787,14 @@ const ingestScopeHint = computed(() => {
                     :class="{ 'rag__mark': s.hit }"
                   >{{ s.text }}</span></p>
                 <p v-else class="rag__muted">（该命中项无文本字段）</p>
+                <button
+                  v-if="h.docId && getCap"
+                  type="button"
+                  class="btn btn--ghost btn--sm rag__hit-open"
+                  @click="openHit(h)"
+                >
+                  查看文档
+                </button>
               </li>
             </ul>
             <EmptyState
@@ -722,6 +820,38 @@ const ingestScopeHint = computed(() => {
       </div>
     </div>
 
+    <WorkbenchSection
+      v-if="session.hasCredential"
+      title="入库任务"
+      subtitle="对接 GET /rag/ingestions/{jobId}。上传响应若含 jobId 会自动跟踪；也可粘贴已有任务号。没有列表接口，不臆造任务清单。"
+      collapsible
+      :default-open="false"
+    >
+      <div class="rag__jobs">
+        <label class="rag__field rag__field--wide">
+          任务 ID
+          <input v-model="jobIdInput" class="form-control" type="text" placeholder="粘贴 jobId" aria-label="入库任务 ID" />
+        </label>
+        <button
+          type="button"
+          class="btn btn--sm"
+          :disabled="jobBusy || !jobIdInput.trim()"
+          @click="trackTypedJob"
+        >
+          {{ jobBusy ? '查询中…' : '跟踪任务' }}
+        </button>
+        <InfoNote v-if="jobTrackError" tone="danger" role="alert">{{ jobTrackError }}</InfoNote>
+        <ul v-if="trackedJobs.length" class="rag__joblist">
+          <li v-for="j in trackedJobs" :key="j.jobId" class="rag__job">
+            <code>{{ j.jobId }}</code>
+            <span class="rag__job-st" :data-st="j.status">{{ j.status }}</span>
+            <span class="rag__muted">文档 {{ j.documentId }} · v{{ j.documentVersion }}</span>
+          </li>
+        </ul>
+        <p v-else class="rag__muted">当前会话尚未跟踪任何入库任务。</p>
+      </div>
+    </WorkbenchSection>
+
     <!-- 文档入库（租户库 file/json/obsidian 需 ingest；共享库另有专用入口需 public-ingest） -->
     <WorkbenchSection
       v-if="tenantUploadRunners.length || sharedUploadRunners.length"
@@ -729,6 +859,7 @@ const ingestScopeHint = computed(() => {
       subtitle="上传文档到知识库以供检索。入库为 caution 操作。"
       collapsible
       :default-open="false"
+      data-rag-section="upload"
     >
       <template #notice>
         <InfoNote tone="warning">
@@ -765,6 +896,7 @@ const ingestScopeHint = computed(() => {
       :subtitle="graphOff ? '基于实体关系图的检索增强。需开启 feature flag 后方可执行。' : '基于实体关系图的检索增强。'"
       collapsible
       :default-open="false"
+      data-rag-section="graph"
     >
       <template #notice>
         <InfoNote v-if="graphOff" tone="neutral">
@@ -911,6 +1043,41 @@ const ingestScopeHint = computed(() => {
   align-items: center;
   gap: 5px;
   cursor: pointer;
+}
+.rag__hit-open {
+  margin-top: var(--space-2);
+}
+.rag__jobs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.rag__joblist {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+}
+.rag__job {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-sm);
+}
+.rag__job-st {
+  font-size: var(--fs-xs);
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.rag__job-st[data-st='READY'] {
+  color: var(--success, var(--primary));
+}
+.rag__job-st[data-st='FAILED'] {
+  color: var(--danger);
 }
 .rag__confirm {
   display: inline-flex;

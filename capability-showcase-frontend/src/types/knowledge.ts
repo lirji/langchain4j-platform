@@ -68,6 +68,17 @@ export interface KnowledgeHitView {
   visibility: Visibility
 }
 
+/** 后端 `IngestionJobView`（`GET /rag/ingestions/{jobId}`）。status/sinks 为枚举名字符串。 */
+export interface IngestionJobView {
+  jobId: string
+  documentId: string
+  documentVersion: number
+  status: string
+  sinks: Record<string, string>
+  contentHash?: string
+  traceId?: string
+}
+
 /** 共享库保留分区 tenantId（对齐后端 `PublicKb.TENANT_ID`）；仅作兜底/校验，不作为权威来源。 */
 export const PUBLIC_TENANT_ID = '__public__'
 

@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import type { RouteLocationNormalized } from 'vue-router'
-import { resolveAuthNavigation, resolveRouteAccess, sanitizeRedirect, type RouteAccessContext } from './index'
+import {
+  resolveAuthNavigation,
+  resolveRouteAccess,
+  resolveScrollBehavior,
+  sanitizeRedirect,
+  type RouteAccessContext,
+} from './index'
 
 /** 构造守卫入参（只取用到的字段）。 */
 function to(partial: Record<string, unknown>): Pick<RouteLocationNormalized, 'name' | 'fullPath' | 'meta' | 'query'> {
@@ -118,5 +124,34 @@ describe('resolveRouteAccess（组合守卫：登录层 + register 门禁）', (
 
   it('普通已登录路由 → 放行', () => {
     expect(resolveRouteAccess(to({ name: 'overview' }), ctx())).toBe(true)
+  })
+})
+
+describe('resolveScrollBehavior', () => {
+  it('同模块工作台内切能力不滚回顶部', () => {
+    expect(
+      resolveScrollBehavior(
+        { name: 'capability', params: { moduleId: 'rag', capId: 'rag.upload.file' } },
+        { name: 'module', params: { moduleId: 'rag' } },
+      ),
+    ).toBe(false)
+    expect(
+      resolveScrollBehavior(
+        { name: 'capability', params: { moduleId: 'rag', capId: 'rag.graph.query' } },
+        { name: 'capability', params: { moduleId: 'rag', capId: 'rag.upload.file' } },
+      ),
+    ).toBe(false)
+  })
+
+  it('跨模块或回总览仍归顶', () => {
+    expect(
+      resolveScrollBehavior(
+        { name: 'capability', params: { moduleId: 'chat', capId: 'chat.extract' } },
+        { name: 'module', params: { moduleId: 'rag' } },
+      ),
+    ).toEqual({ top: 0 })
+    expect(
+      resolveScrollBehavior({ name: 'overview', params: {} }, { name: 'module', params: { moduleId: 'rag' } }),
+    ).toEqual({ top: 0 })
   })
 })
