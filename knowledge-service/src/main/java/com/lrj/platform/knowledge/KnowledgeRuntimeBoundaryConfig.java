@@ -29,7 +29,10 @@ public class KnowledgeRuntimeBoundaryConfig {
             Environment environment
     ) {
         return () -> {
-            if (runtime.getRole() == KnowledgeRuntimeProperties.Role.COMBINED) {
+            if (runtime.isProduction() && runtime.isLegacyWriteEnabled()) {
+                throw new IllegalStateException("production requires legacy-write-enabled=false");
+            }
+            if (runtime.getRole() == KnowledgeRuntimeProperties.Role.COMBINED && !runtime.isProduction()) {
                 return;
             }
             if (runtime.getRole() == KnowledgeRuntimeProperties.Role.QUERY) {
@@ -44,9 +47,17 @@ public class KnowledgeRuntimeBoundaryConfig {
                 throw new IllegalStateException(
                         "ingest roles require app.rag.source.store=s3");
             }
+            if (runtime.isProduction() && runtime.getRole() != KnowledgeRuntimeProperties.Role.INGEST_API) {
+                validateQueryDataPlane(environment);
+                if (environment.getProperty("app.rag.es.enabled", Boolean.class, false)
+                        && (!environment.getProperty("app.rag.es.index-enabled", Boolean.class, false)
+                        || !environment.getProperty("app.rag.es.fail-fast", Boolean.class, false))) {
+                    throw new IllegalStateException("production ingestion requires ES index-enabled=true and fail-fast=true");
+                }
+            }
             String registryStore = environment.getProperty(
                     "app.rag.registry.store", "in-memory");
-            if ("in-memory".equalsIgnoreCase(registryStore)) {
+            if (!"redis".equalsIgnoreCase(registryStore)) {
                 throw new IllegalStateException(
                         "ingest roles require a shared persistent document registry");
             }
@@ -67,7 +78,7 @@ public class KnowledgeRuntimeBoundaryConfig {
         boolean graphEnabled = environment.getProperty(
                 "app.rag.graph.enabled", Boolean.class, false);
         if ("in-memory".equalsIgnoreCase(vectorStore)
-                || "in-memory".equalsIgnoreCase(registryStore)) {
+                || !"redis".equalsIgnoreCase(registryStore)) {
             throw new IllegalStateException(
                     "query role requires persistent vector and registry stores");
         }
@@ -87,7 +98,7 @@ public class KnowledgeRuntimeBoundaryConfig {
     ) {
         FilterRegistrationBean<KnowledgeRoleRequestFilter> registration =
                 new FilterRegistrationBean<>(
-                        new KnowledgeRoleRequestFilter(runtime.getRole()));
+                        new KnowledgeRoleRequestFilter(runtime.getRole(), runtime.isLegacyWriteEnabled()));
         registration.addUrlPatterns("/*");
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 30);
         return registration;

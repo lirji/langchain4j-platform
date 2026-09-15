@@ -14,9 +14,16 @@ import java.io.IOException;
 public class KnowledgeRoleRequestFilter extends OncePerRequestFilter {
 
     private final KnowledgeRuntimeProperties.Role role;
+    private final boolean legacyWriteEnabled;
 
     public KnowledgeRoleRequestFilter(KnowledgeRuntimeProperties.Role role) {
+        this(role, true);
+    }
+
+    /** 旧写入口单独受控，防止生产 combined 同时走两种版本写入协议。 */
+    public KnowledgeRoleRequestFilter(KnowledgeRuntimeProperties.Role role, boolean legacyWriteEnabled) {
         this.role = role;
+        this.legacyWriteEnabled = legacyWriteEnabled;
     }
 
     @Override
@@ -33,10 +40,18 @@ public class KnowledgeRoleRequestFilter extends OncePerRequestFilter {
     }
 
     boolean allows(HttpServletRequest request) {
+        // 与 MVC 使用相同的路径解码/分号参数处理，避免编码路径绕过旧写入口开关。
+        String normalizedPath = new org.springframework.web.util.UrlPathHelper()
+                .getPathWithinApplication(request).replaceAll("/{2,}", "/").replaceAll("/+$", "");
+        if (!legacyWriteEnabled && "POST".equals(request.getMethod())
+                && (normalizedPath.equals("/rag/documents") || normalizedPath.equals("/rag/image")
+                || normalizedPath.equals("/rag/obsidian/import"))) {
+            return false;
+        }
         if (role == KnowledgeRuntimeProperties.Role.COMBINED) {
             return true;
         }
-        String path = request.getRequestURI();
+        String path = normalizedPath;
         if (path.startsWith("/actuator/") || path.equals("/actuator")
                 || path.equals("/error")) {
             return true;
@@ -46,7 +61,7 @@ public class KnowledgeRoleRequestFilter extends OncePerRequestFilter {
                     && path.startsWith("/rag/")
                     && !path.startsWith("/rag/ingestions"))
                     || isQueryPost(request.getMethod(), path);
-            case INGEST_API -> path.startsWith("/rag/ingestions");
+            case INGEST_API -> path.equals("/rag/ingestions") || path.startsWith("/rag/ingestions/");
             case INGEST_WORKER -> false;
             case COMBINED -> true;
         };

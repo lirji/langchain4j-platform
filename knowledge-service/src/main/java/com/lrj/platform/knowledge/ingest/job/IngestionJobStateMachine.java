@@ -42,16 +42,18 @@ public final class IngestionJobStateMachine {
     }
 
     public static IngestionJob retry(IngestionJob job, Instant now) {
-        if (job.status() != IngestionStatus.PARTIAL && job.status() != IngestionStatus.FAILED) {
+        if (job.status() != IngestionStatus.PARTIAL && job.status() != IngestionStatus.FAILED
+                && job.status() != IngestionStatus.MANUAL_REVIEW) {
             throw new IllegalStateException("only PARTIAL or FAILED jobs can be retried");
         }
         EnumMap<IngestionSink, IngestionSinkState> states = new EnumMap<>(job.sinks());
         if (states.entrySet().stream().anyMatch(entry ->
-                entry.getValue() == IngestionSinkState.FAILED && !entry.getKey().idempotent())) {
+                (entry.getValue() == IngestionSinkState.FAILED || entry.getValue() == IngestionSinkState.RUNNING)
+                        && !entry.getKey().idempotent())) {
             throw new IllegalStateException("non-idempotent failed sink requires manual recovery");
         }
         states.replaceAll((sink, state) ->
-                state == IngestionSinkState.FAILED ? IngestionSinkState.PENDING : state);
+                (state == IngestionSinkState.FAILED || state == IngestionSinkState.RUNNING) ? IngestionSinkState.PENDING : state);
         return copy(job, IngestionStatus.PROCESSING, states, null, now);
     }
 
@@ -84,6 +86,11 @@ public final class IngestionJobStateMachine {
                 ? "document preparation failed"
                 : error.trim();
         return copy(job, IngestionStatus.FAILED, job.sinks(), normalized, now);
+    }
+
+    /** 永久错误或重试耗尽后等待人工处理，不再进入自动恢复队列。 */
+    public static IngestionJob manualReview(IngestionJob job, Instant now) {
+        return copy(job, IngestionStatus.MANUAL_REVIEW, job.sinks(), job.error(), now);
     }
 
     private static Map<IngestionSink, IngestionSinkState> update(
@@ -136,6 +143,6 @@ public final class IngestionJobStateMachine {
                 job.scopes(), job.department(), job.traceId(),
                 job.documentId(), job.displayName(), job.category(),
                 job.documentVersion(), job.newDocument(), job.revision(), job.source(), status, sinks,
-                job.requiredSinks(), error, job.createdAt(), now);
+                job.requiredSinks(), error, job.createdAt(), now, job.execution());
     }
 }

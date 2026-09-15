@@ -4,12 +4,29 @@
 
 ## 架构
 
-`KnowledgeQueryService` 重构为**编排器**：查询扩展 → 收集各启用 `RetrievalSource`（`vector` / `keyword`(内存) / `es` / `graph`）→ `HybridFusionService` 融合 → `Reranker` 重排。
+`KnowledgeQueryService` 重构为**编排器**：查询扩展 → 并行召回各启用 `RetrievalSource`（`vector` / `keyword`(内存) / `es` / `graph`）→ `HybridFusionService` 融合 → `Reranker` 重排。
 
 - 检索源 SPI：`search/RetrievalSource`（`VectorRetrievalSource`、`InMemoryKeywordRetrievalSource`、`EsKeywordRetrievalSource`、`GraphRetrievalSource`）。
 - 融合：`search/HybridFusionService`，两种策略见下。
 - ES 写入：`DocumentService.upload/deleteInternal` 挂 `es/SegmentIndexer`（默认 `NoopSegmentIndexer`，开启后 `ElasticsearchSegmentIndexer`），与向量写入同一批最终 chunk。
 - ES 客户端：`es/ElasticsearchEsGateway`（低层 RestClient），窄端口 `es/EsGateway` 便于 fake 单测。
+
+## 并行召回与资源边界
+
+查询扩展完成后，`KnowledgeQueryService` 将已启用的向量、内存关键词、ES 和图谱源提交到实例独立的有界执行器。四源全部启用且执行器有空闲容量时可同时召回；关闭的源不提交，繁忙时任务排队。单源内部的查询变体及公共库查询仍沿用现有执行方式。
+
+- 工作线程传递完整 `TenantContext`（租户、用户、scopes、部门）与 MDC，任务结束时清理，避免跨请求串租户或日志上下文。
+- 按「向量 → 关键词 → ES/额外源 → 图谱」排列结果后再融合，完成先后不改变代表字段、同分排序或融合分数。版本过滤、授权过滤和重排仍在请求线程依次执行。
+- ES 自身捕获查询异常并返回空结果的降级行为不变。其他未处理异常使整个查询失败，并尽力取消同请求的剩余任务；请求线程被中断时保留中断标志。
+- 默认最多 16 个召回任务执行、256 个任务排队（均为服务实例级，非请求数）。队列饱和时抛出 `RejectedExecutionException`，查询失败，不返回部分命中。服务停止时关闭执行器并取消排队任务。
+- 本次不新增整体检索超时；下游客户端原有超时继续生效。取消是中断请求，不保证无法响应中断的网络调用立即结束。并行带来的延迟收益取决于下游耗时和负载，尚未进行真实后端压测。
+
+| env | 默认 | Spring 属性 |
+|---|---|---|
+| `RAG_QUERY_RETRIEVAL_PARALLELISM` | `16` | `app.rag.query.retrieval-parallelism` |
+| `RAG_QUERY_RETRIEVAL_QUEUE_CAPACITY` | `256` | `app.rag.query.retrieval-queue-capacity` |
+
+两项必须为正整数；非法配置使启动失败。直接构造 `KnowledgeQueryService` 的非 Spring 调用方应在使用结束后调用 `close()`。
 
 ## 融合策略（关键）
 

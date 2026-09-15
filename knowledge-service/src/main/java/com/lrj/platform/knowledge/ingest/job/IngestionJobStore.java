@@ -28,4 +28,11 @@ public interface IngestionJobStore {
 
     /** 找出需要 reconcile 的 PARTIAL/FAILED 或超时 PROCESSING 任务。 */
     List<IngestionJob> findRecoverable(Instant processingStaleBefore, int limit);
+
+    /** 恢复筛选在存储层先过滤到期任务，再限量，避免未到期任务阻塞后续队列。 */
+    List<IngestionJob> findRecoverable(Instant processingStaleBefore, Instant now, int limit);
+
+    /** 全局低基数运行指标，不暴露租户或文档内容。 */
+    java.util.Map<IngestionStatus, Long> countsByStatus();
+    Optional<Instant> oldestPending();
 }

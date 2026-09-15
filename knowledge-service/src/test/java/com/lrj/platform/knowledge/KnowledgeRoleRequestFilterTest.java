@@ -41,6 +41,18 @@ class KnowledgeRoleRequestFilterTest {
         assertThat(filter.allows(request("GET", "/actuator/health/readiness"))).isTrue();
     }
 
+    @Test
+    void combinedCanDisableAllSynchronousUploadEntrypointsWithoutHidingReadsOrShare() {
+        var filter = new KnowledgeRoleRequestFilter(KnowledgeRuntimeProperties.Role.COMBINED, false);
+        for (String path : java.util.List.of("/rag/documents", "/rag/documents/", "/rag/%64ocuments", "/rag/documents;mode=sync", "/rag//documents", "/rag/image", "/rag/obsidian/import")) {
+            assertThat(filter.allows(request("POST", path))).isFalse();
+        }
+        assertThat(filter.allows(request("GET", "/rag/documents"))).isTrue();
+        assertThat(filter.allows(request("POST", "/rag/ingestions"))).isTrue();
+        assertThat(filter.allows(request("DELETE", "/rag/documents/doc-1"))).isTrue();
+        assertThat(filter.allows(request("POST", "/rag/documents/doc-1/share"))).isTrue();
+    }
+
     private MockHttpServletRequest request(String method, String path) {
         MockHttpServletRequest request = new MockHttpServletRequest(method, path);
         request.setRequestURI(path);

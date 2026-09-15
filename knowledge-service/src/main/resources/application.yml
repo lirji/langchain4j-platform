@@ -46,6 +46,8 @@ app:
     # 独立角色会在启动期强制使用 JDBC job store；ingest 角色还会强制使用 S3 source store。
     runtime:
       role: ${RAG_RUNTIME_ROLE:combined}
+      production: ${RAG_PRODUCTION:false}
+      legacy-write-enabled: ${RAG_LEGACY_WRITE_ENABLED:true}
     ingestion:
       version-gc:
         enabled: ${RAG_INGESTION_VERSION_GC_ENABLED:false}
@@ -55,6 +57,10 @@ app:
         batch-size: ${RAG_INGESTION_VERSION_GC_BATCH_SIZE:100}
       store: ${RAG_INGESTION_STORE:memory} # memory | jdbc
       processing-timeout: ${RAG_INGESTION_PROCESSING_TIMEOUT:15m}
+      heartbeat-interval: ${RAG_INGESTION_HEARTBEAT_INTERVAL:30s}
+      max-retries: ${RAG_INGESTION_MAX_RETRIES:3}
+      retry-delay: ${RAG_INGESTION_RETRY_DELAY:5s}
+      max-retry-delay: ${RAG_INGESTION_MAX_RETRY_DELAY:5m}
       reconcile-batch-size: ${RAG_INGESTION_RECONCILE_BATCH_SIZE:100}
       worker-batch-size: ${RAG_INGESTION_WORKER_BATCH_SIZE:10}
       worker-poll-delay: ${RAG_INGESTION_WORKER_POLL_DELAY:1000}
@@ -189,6 +195,9 @@ app:
       top-k: ${RAG_MULTIMODAL_TOP_K:5}
       min-score: ${RAG_MULTIMODAL_MIN_SCORE:0.0}
     query:
+      # 服务实例级召回并发与排队上限；饱和拒绝请求，避免无界排队。
+      retrieval-parallelism: ${RAG_QUERY_RETRIEVAL_PARALLELISM:16}
+      retrieval-queue-capacity: ${RAG_QUERY_RETRIEVAL_QUEUE_CAPACITY:256}
       top-k: ${RAG_QUERY_TOP_K:5}
       min-score: ${RAG_QUERY_MIN_SCORE:0.0}
     ranking:

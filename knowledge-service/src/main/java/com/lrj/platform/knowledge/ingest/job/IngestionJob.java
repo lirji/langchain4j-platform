@@ -30,10 +30,31 @@ public record IngestionJob(
         Set<IngestionSink> requiredSinks,
         String error,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        IngestionExecution execution
 ) {
 
+    /** 保留旧构造签名；迁移前任务从空恢复状态开始。 */
+    public IngestionJob(String jobId, String idempotencyKey, String tenantId, String userId,
+                        Set<String> scopes, String department, String traceId, String documentId,
+                        String displayName, String category, long documentVersion, boolean newDocument,
+                        long revision, DocumentSourceRef source, IngestionStatus status,
+                        Map<IngestionSink, IngestionSinkState> sinks, Set<IngestionSink> requiredSinks,
+                        String error, Instant createdAt, Instant updatedAt) {
+        this(jobId, idempotencyKey, tenantId, userId, scopes, department, traceId, documentId,
+                displayName, category, documentVersion, newDocument, revision, source, status,
+                sinks, requiredSinks, error, createdAt, updatedAt, IngestionExecution.EMPTY);
+    }
+
+    /** 状态机与租约更新复用不可变快照，避免重试字段在状态转换时丢失。 */
+    public IngestionJob withExecution(IngestionExecution value) {
+        return new IngestionJob(jobId, idempotencyKey, tenantId, userId, scopes, department,
+                traceId, documentId, displayName, category, documentVersion, newDocument,
+                revision, source, status, sinks, requiredSinks, error, createdAt, updatedAt, value);
+    }
+
     public IngestionJob {
+        execution = execution == null ? IngestionExecution.EMPTY : execution;
         jobId = requireText(jobId, "jobId");
         idempotencyKey = requireText(idempotencyKey, "idempotencyKey");
         tenantId = requireText(tenantId, "tenantId");
@@ -95,7 +116,7 @@ public record IngestionJob(
                 scopes, department, traceId, documentId,
                 displayName, category, documentVersion, newDocument,
                 nextRevision, source, status, sinks, requiredSinks,
-                error, createdAt, updatedAt);
+                error, createdAt, updatedAt, execution);
     }
 
     private static Map<IngestionSink, IngestionSinkState> immutableSinkMap(

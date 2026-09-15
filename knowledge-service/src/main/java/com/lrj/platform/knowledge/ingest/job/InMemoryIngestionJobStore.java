@@ -24,6 +24,11 @@ public class InMemoryIngestionJobStore implements IngestionJobStore {
         if (jobs.containsKey(key)) {
             throw new IngestionJobConflictException("jobId already exists");
         }
+        if (jobs.values().stream().anyMatch(existing -> existing.tenantId().equals(job.tenantId())
+                && existing.documentId().equals(job.documentId())
+                && existing.documentVersion() == job.documentVersion())) {
+            throw new IngestionJobConflictException("document version already exists");
+        }
         jobs.put(key, job);
         idempotencyIndex.put(idempotency, job.jobId());
         return job;
@@ -66,6 +71,7 @@ public class InMemoryIngestionJobStore implements IngestionJobStore {
         return jobs.values().stream()
                 .filter(job -> job.status() == IngestionStatus.RECEIVED
                         || job.status() == IngestionStatus.PROCESSING)
+                .filter(job -> job.execution().leaseOwner() == null)
                 .sorted(Comparator.comparing(IngestionJob::updatedAt))
                 .limit(limit)
                 .toList();
@@ -76,17 +82,36 @@ public class InMemoryIngestionJobStore implements IngestionJobStore {
             Instant processingStaleBefore,
             int limit
     ) {
+        return findRecoverable(processingStaleBefore, Instant.now(), limit);
+    }
+
+    @Override
+    public synchronized List<IngestionJob> findRecoverable(Instant processingStaleBefore, Instant now, int limit) {
         if (limit < 1) {
             return List.of();
         }
         return jobs.values().stream()
-                .filter(job -> job.status() == IngestionStatus.PARTIAL
-                        || job.status() == IngestionStatus.FAILED
+                .filter(job -> ((job.status() == IngestionStatus.PARTIAL || job.status() == IngestionStatus.FAILED)
+                        && (job.execution().nextRetryAt() == null || !job.execution().nextRetryAt().isAfter(now)))
                         || (job.status() == IngestionStatus.PROCESSING
-                        && job.updatedAt().isBefore(processingStaleBefore)))
+                        && (job.execution().leaseUntil() != null ? !job.execution().leaseUntil().isAfter(now)
+                        : job.updatedAt().isBefore(processingStaleBefore))))
                 .sorted(Comparator.comparing(IngestionJob::updatedAt))
                 .limit(limit)
                 .toList();
+    }
+
+    @Override
+    public synchronized Map<IngestionStatus, Long> countsByStatus() {
+        return jobs.values().stream().collect(java.util.stream.Collectors.groupingBy(
+                IngestionJob::status, java.util.stream.Collectors.counting()));
+    }
+
+    @Override
+    public synchronized Optional<Instant> oldestPending() {
+        return jobs.values().stream().filter(j -> j.status() == IngestionStatus.RECEIVED
+                || j.status() == IngestionStatus.PROCESSING || j.status() == IngestionStatus.PARTIAL
+                || j.status() == IngestionStatus.FAILED).map(IngestionJob::createdAt).min(Instant::compareTo);
     }
 
     private static String tenantKey(String tenantId, String value) {

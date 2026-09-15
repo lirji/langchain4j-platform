@@ -37,6 +37,22 @@ import java.util.Set;
 @EnableConfigurationProperties(IngestionJobProperties.class)
 public class IngestionJobConfig {
 
+    /** 抓取时从权威任务库读取积压，重启后指标仍能反映未完成任务。 */
+    @Bean
+    io.micrometer.core.instrument.binder.MeterBinder ingestionMetrics(IngestionJobStore store) {
+        return registry -> {
+            for (IngestionStatus status : IngestionStatus.values()) {
+                io.micrometer.core.instrument.Gauge.builder("knowledge.ingestion.jobs", store,
+                        value -> value.countsByStatus().getOrDefault(status, 0L).doubleValue())
+                        .tag("status", status.name()).register(registry);
+            }
+            io.micrometer.core.instrument.Gauge.builder("knowledge.ingestion.oldest.pending.seconds", store,
+                    value -> value.oldestPending().map(time -> (double) Math.max(0,
+                            java.time.Duration.between(time, java.time.Instant.now()).getSeconds())).orElse(0.0))
+                    .register(registry);
+        };
+    }
+
     @Bean
     @ConditionalOnProperty(prefix = "app.rag.ingestion", name = "store",
             havingValue = "memory", matchIfMissing = true)
@@ -73,10 +89,7 @@ public class IngestionJobConfig {
             IngestionJobProperties properties
     ) {
         return new IngestionReconciler(
-                store,
-                Clock.systemUTC(),
-                properties.getProcessingTimeout(),
-                properties.getReconcileBatchSize());
+                store, Clock.systemUTC(), properties);
     }
 
     @Bean
@@ -151,10 +164,11 @@ public class IngestionJobConfig {
             IngestionJobStore store,
             IngestionDocumentPreparer preparer,
             IngestionSinkProcessor processor,
-            IngestionTaskLifecycle lifecycle
+            IngestionTaskLifecycle lifecycle,
+            IngestionJobProperties properties
     ) {
         return new IngestionJobWorker(
-                store, preparer, processor, lifecycle, Clock.systemUTC());
+                store, preparer, processor, lifecycle, Clock.systemUTC(), properties);
     }
 
     @Bean

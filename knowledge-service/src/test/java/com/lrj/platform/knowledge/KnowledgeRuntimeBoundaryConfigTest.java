@@ -59,6 +59,29 @@ class KnowledgeRuntimeBoundaryConfigTest {
                 .hasMessageContaining("persistent document registry");
     }
 
+    @Test
+    void productionCombinedRequiresDurableStoresAndStrictEsWrites() throws Exception {
+        var runtime = new KnowledgeRuntimeProperties();
+        runtime.setProduction(true);
+        var source = new DocumentSourceProperties();
+        var ingestion = new IngestionJobProperties();
+        var env = new MockEnvironment().withProperty("app.rag.vector-store.provider", "qdrant")
+                .withProperty("app.rag.registry.store", "redis")
+                .withProperty("app.rag.es.enabled", "true")
+                .withProperty("app.rag.es.query-enabled", "true")
+                .withProperty("app.rag.es.index-enabled", "true");
+        var check = config.knowledgeRuntimeBoundaryValidator(runtime, source, ingestion, env);
+        assertThatThrownBy(check::afterPropertiesSet).hasMessageContaining("legacy-write-enabled=false");
+        runtime.setLegacyWriteEnabled(false);
+        assertThatThrownBy(check::afterPropertiesSet).hasMessageContaining("store=jdbc");
+        ingestion.setStore("jdbc");
+        assertThatThrownBy(check::afterPropertiesSet).hasMessageContaining("store=s3");
+        source.setStore("s3");
+        assertThatThrownBy(check::afterPropertiesSet).hasMessageContaining("fail-fast=true");
+        env.withProperty("app.rag.es.fail-fast", "true");
+        assertThatCode(check::afterPropertiesSet).doesNotThrowAnyException();
+    }
+
     private InitializingBean validator(
             KnowledgeRuntimeProperties.Role role,
             String sourceStore,

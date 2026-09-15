@@ -52,8 +52,19 @@ spring:
           uri: ${WORKFLOW_URI:http://localhost:8082}
           predicates:
             - Path=/workflow,/workflow/**
+        # 精确入库路径先于 /rag/**，未拆分时回退到既有地址。
+        - id: knowledge-ingestion
+          uri: ${KNOWLEDGE_INGEST_URI:${KNOWLEDGE_URI:http://localhost:8084}}
+          predicates:
+            - Path=/rag/ingestions,/rag/ingestions/**
+        # 删除/分享保留独立管理路由；拆分部署须指定具备管理能力的 combined 实例。
+        - id: knowledge-admin
+          uri: ${KNOWLEDGE_ADMIN_URI:${KNOWLEDGE_URI:http://localhost:8084}}
+          predicates:
+            - Path=/rag/documents/*,/rag/documents/*/share,/rag/documents/*/share/*
+            - Method=POST,DELETE
         - id: knowledge
-          uri: ${KNOWLEDGE_URI:http://localhost:8084}
+          uri: ${KNOWLEDGE_QUERY_URI:${KNOWLEDGE_URI:http://localhost:8084}}
           predicates:
             - Path=/rag,/rag/**,/knowledge,/knowledge/**
         - id: agent

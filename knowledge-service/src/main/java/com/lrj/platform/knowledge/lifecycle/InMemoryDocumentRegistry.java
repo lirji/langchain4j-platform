@@ -27,6 +27,19 @@ public class InMemoryDocumentRegistry implements DocumentRegistry {
                 .put(info.docId(), info);
     }
 
+    /** 在同一文档的 compute 内校验并提交，防止旧 worker 覆盖较新版本。 */
+    @Override
+    public boolean commitVersion(DocumentInfo info) {
+        var accepted = new java.util.concurrent.atomic.AtomicBoolean();
+        map.computeIfAbsent(info.tenantId(), key -> new ConcurrentHashMap<>()).compute(info.docId(), (key, current) -> {
+            int version = current == null ? 0 : current.version();
+            if (version == info.version()) { accepted.set(true); return current; }
+            if (version + 1 == info.version()) { accepted.set(true); return info; }
+            return current;
+        });
+        return accepted.get();
+    }
+
     @Override
     public Optional<DocumentInfo> get(String tenantId, String docId) {
         ConcurrentMap<String, DocumentInfo> tenantMap = map.get(tenantId);

@@ -55,6 +55,8 @@ class IngestionControllerTest {
                         .param("documentId", "doc-1")
                         .param("documentVersion", "1"))
                 .andExpect(status().isAccepted())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("Location", "/rag/ingestions/job-1"))
                 .andExpect(jsonPath("$.jobId").value("job-1"))
                 .andExpect(jsonPath("$.status").value("RECEIVED"))
                 .andExpect(jsonPath("$.traceId").value("trace-1"));
@@ -83,6 +85,16 @@ class IngestionControllerTest {
                 .andExpect(status().isForbidden());
 
         verify(submissions, never()).submit(any());
+    }
+
+    @Test
+    void statusLookupPassesCallerIdentityAndHidesOtherOwners() throws Exception {
+        TenantContext.set(new TenantContext.Tenant("acme", "bob", Set.of("chat")));
+        when(submissions.get("acme", "bob", "job-1"))
+                .thenThrow(new com.lrj.platform.knowledge.ingest.job.IngestionJobNotFoundException("job-1"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/rag/ingestions/job-1"))
+                .andExpect(status().isNotFound());
+        verify(submissions).get("acme", "bob", "job-1");
     }
 
     private IngestionJob job() {

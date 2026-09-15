@@ -7,6 +7,15 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class KnowledgeRuntimeProperties {
 
     private Role role = Role.COMBINED;
+    private boolean production = false;
+    private boolean legacyWriteEnabled = true;
+
+    /** 显式生产保护，避免 combined 部署绕过持久化约束。 */
+    public boolean isProduction() { return production; }
+    public void setProduction(boolean production) { this.production = production; }
+    /** 仅开发或迁移期允许旧同步上传；生产必须关闭。 */
+    public boolean isLegacyWriteEnabled() { return legacyWriteEnabled; }
+    public void setLegacyWriteEnabled(boolean enabled) { this.legacyWriteEnabled = enabled; }
 
     public Role getRole() {
         return role;

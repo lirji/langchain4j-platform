@@ -63,7 +63,11 @@ public class DefaultIngestionSinkProcessor implements IngestionSinkProcessor {
                             job.tenantId(), job.documentId(), job.userId(), job.department());
                 }
             }
-            case REGISTRY -> registry.put(prepared.info());
+            case REGISTRY -> {
+                if (!registry.commitVersion(prepared.info())) {
+                    throw new IllegalArgumentException("document version commit rejected");
+                }
+            }
         }
     }
 

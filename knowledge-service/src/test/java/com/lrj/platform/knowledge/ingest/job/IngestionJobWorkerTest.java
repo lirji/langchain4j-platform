@@ -76,7 +76,7 @@ class IngestionJobWorkerTest {
                 .isEqualTo(IngestionStatus.PARTIAL);
 
         IngestionReconciler reconciler = new IngestionReconciler(
-                store, clock, Duration.ofMinutes(5), 10);
+                store, Clock.offset(clock, Duration.ofSeconds(5)), Duration.ofMinutes(5), 10);
         assertThat(reconciler.reconcile()).isEqualTo(1);
         assertThat(worker.process("acme", job.jobId())).isTrue();
         assertThat(store.find("acme", job.jobId()).orElseThrow().status())
@@ -84,7 +84,7 @@ class IngestionJobWorkerTest {
     }
 
     @Test
-    void preparationFailureBecomesRecoverableFailedJob() {
+    void invalidDocumentRequiresManualRecovery() {
         IngestionJob job = store.createOrGet(job("job-3"));
         IngestionJobWorker worker = new IngestionJobWorker(
                 store,
@@ -98,10 +98,11 @@ class IngestionJobWorkerTest {
         assertThat(worker.process("acme", job.jobId())).isTrue();
 
         IngestionJob failed = store.find("acme", job.jobId()).orElseThrow();
-        assertThat(failed.status()).isEqualTo(IngestionStatus.FAILED);
-        assertThat(failed.error()).isEqualTo("encrypted document");
+        assertThat(failed.status()).isEqualTo(IngestionStatus.MANUAL_REVIEW);
+        assertThat(failed.execution().errorCode()).isEqualTo("INVALID_INPUT_OR_PERMISSION");
+        assertThat(failed.error()).isEqualTo("PREPARATION_FAILED");
         assertThat(new IngestionReconciler(
-                store, clock, Duration.ofMinutes(5), 10).reconcile()).isEqualTo(1);
+                store, clock, Duration.ofMinutes(5), 10).reconcile()).isZero();
     }
 
     private IngestionJob job(String jobId) {

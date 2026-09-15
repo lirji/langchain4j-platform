@@ -30,6 +30,9 @@ public class RedisDocumentRegistry implements DocumentRegistry {
 
     private static final Logger log = LoggerFactory.getLogger(RedisDocumentRegistry.class);
     private static final String KEY_PREFIX = "rag:docs:";
+    // 默认空前缀保持旧部署兼容；共享 Redis 使用项目前缀隔离持久业务键。
+    @org.springframework.beans.factory.annotation.Value("${platform.redis.key-prefix:}")
+    private String projectPrefix = "";
 
     private final StringRedisTemplate redis;
     private final ObjectMapper mapper;
@@ -43,6 +46,23 @@ public class RedisDocumentRegistry implements DocumentRegistry {
     @Override
     public void put(DocumentInfo info) {
         redis.opsForHash().put(key(info.tenantId()), info.docId(), toJson(info));
+    }
+
+    /** Redis Lua 在同一原子操作中读取版本并提交；重复版本保留首次提交的元数据。 */
+    @Override
+    public boolean commitVersion(DocumentInfo info) {
+        var script = new org.springframework.data.redis.core.script.DefaultRedisScript<Long>("""
+                local raw = redis.call('HGET', KEYS[1], ARGV[1])
+                local version = 0
+                if raw then version = tonumber(cjson.decode(raw).version) end
+                local incoming = tonumber(ARGV[2])
+                if version == incoming then return 1 end
+                if version + 1 ~= incoming then return 0 end
+                redis.call('HSET', KEYS[1], ARGV[1], ARGV[3])
+                return 1
+                """, Long.class);
+        return Long.valueOf(1).equals(redis.execute(script, List.of(key(info.tenantId())),
+                info.docId(), Integer.toString(info.version()), toJson(info)));
     }
 
     @Override
@@ -74,16 +94,16 @@ public class RedisDocumentRegistry implements DocumentRegistry {
     @Override
     public Map<String, Collection<DocumentInfo>> snapshotAll() {
         Map<String, Collection<DocumentInfo>> out = new LinkedHashMap<>();
-        Set<String> keys = redis.keys(KEY_PREFIX + "*");
+        Set<String> keys = redis.keys(projectPrefix + KEY_PREFIX + "*");
         if (keys == null) return out;
         for (String k : keys) {
-            out.put(k.substring(KEY_PREFIX.length()), list(k.substring(KEY_PREFIX.length())));
+            out.put(k.substring(projectPrefix.length() + KEY_PREFIX.length()), list(k.substring(projectPrefix.length() + KEY_PREFIX.length())));
         }
         return out;
     }
 
-    private static String key(String tenantId) {
-        return KEY_PREFIX + tenantId;
+    private String key(String tenantId) {
+        return projectPrefix + KEY_PREFIX + tenantId;
     }
 
     private String toJson(DocumentInfo info) {

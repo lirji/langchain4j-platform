@@ -66,7 +66,10 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
                 required,
                 rs.getString("ERROR_TEXT"),
                 rs.getTimestamp("CREATED_AT").toInstant(),
-                rs.getTimestamp("UPDATED_AT").toInstant());
+                rs.getTimestamp("UPDATED_AT").toInstant(),
+                new IngestionExecution(rs.getInt("RETRY_COUNT"), instant(rs, "NEXT_RETRY_AT"),
+                        rs.getString("ERROR_CODE"), rs.getString("FAILED_STAGE"),
+                        rs.getString("LEASE_OWNER"), instant(rs, "LEASE_UNTIL")));
     };
 
     public JdbcIngestionJobStore(DataSource dataSource, ObjectMapper mapper) {
@@ -84,8 +87,9 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
                       DEPARTMENT, TRACE_ID, DOCUMENT_ID, DISPLAY_NAME, CATEGORY,
                       DOCUMENT_VERSION, NEW_DOCUMENT, REVISION, SOURCE_BUCKET, SOURCE_OBJECT_KEY,
                       SOURCE_HASH, SOURCE_CONTENT_TYPE, SOURCE_SIZE, STATUS, SINKS_JSON,
-                      REQUIRED_SINKS_JSON, ERROR_TEXT, CREATED_AT, UPDATED_AT
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                      REQUIRED_SINKS_JSON, ERROR_TEXT, CREATED_AT, UPDATED_AT,
+                      RETRY_COUNT, NEXT_RETRY_AT, ERROR_CODE, FAILED_STAGE, LEASE_OWNER, LEASE_UNTIL
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     job.tenantId(), job.jobId(), job.idempotencyKey(), job.userId(),
                     write(job.scopes()), job.department(), job.traceId(), job.documentId(),
@@ -95,7 +99,9 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
                     job.source().contentType(), job.source().size(), job.status().name(),
                     writeSinks(job.sinks()), write(job.requiredSinks().stream()
                             .map(Enum::name).collect(Collectors.toUnmodifiableSet())),
-                    job.error(), Timestamp.from(job.createdAt()), Timestamp.from(job.updatedAt()));
+                    job.error(), Timestamp.from(job.createdAt()), Timestamp.from(job.updatedAt()),
+                    job.execution().retries(), timestamp(job.execution().nextRetryAt()), job.execution().errorCode(),
+                    job.execution().failedStage(), job.execution().leaseOwner(), timestamp(job.execution().leaseUntil()));
             return job;
         } catch (DuplicateKeyException ex) {
             return findByIdempotency(job.tenantId(), job.idempotencyKey())
@@ -121,13 +127,15 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
         int updated = jdbc.update("""
                         UPDATE KNOWLEDGE_INGESTION_JOB
                         SET REVISION=?, STATUS=?, SINKS_JSON=?, REQUIRED_SINKS_JSON=?,
-                            ERROR_TEXT=?, UPDATED_AT=?
+                            ERROR_TEXT=?, UPDATED_AT=?, RETRY_COUNT=?, NEXT_RETRY_AT=?, ERROR_CODE=?, FAILED_STAGE=?, LEASE_OWNER=?, LEASE_UNTIL=?
                         WHERE TENANT_ID=? AND JOB_ID=? AND REVISION=?
                         """,
                 nextRevision, job.status().name(), writeSinks(job.sinks()),
                 write(job.requiredSinks().stream()
                         .map(Enum::name).collect(Collectors.toUnmodifiableSet())),
-                job.error(), Timestamp.from(job.updatedAt()), job.tenantId(), job.jobId(),
+                job.error(), Timestamp.from(job.updatedAt()),
+                job.execution().retries(), timestamp(job.execution().nextRetryAt()), job.execution().errorCode(),
+                job.execution().failedStage(), job.execution().leaseOwner(), timestamp(job.execution().leaseUntil()), job.tenantId(), job.jobId(),
                 expectedRevision);
         if (updated != 1) {
             throw new IngestionJobConflictException("stale ingestion job revision");
@@ -142,7 +150,7 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
         }
         return jdbc.query("""
                         SELECT * FROM KNOWLEDGE_INGESTION_JOB
-                        WHERE STATUS IN ('RECEIVED','PROCESSING')
+                        WHERE STATUS IN ('RECEIVED','PROCESSING') AND LEASE_OWNER IS NULL
                         ORDER BY UPDATED_AT
                         LIMIT ?
                         """,
@@ -151,17 +159,23 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
 
     @Override
     public List<IngestionJob> findRecoverable(Instant processingStaleBefore, int limit) {
+        return findRecoverable(processingStaleBefore, Instant.now(), limit);
+    }
+
+    @Override
+    public List<IngestionJob> findRecoverable(Instant processingStaleBefore, Instant now, int limit) {
         if (limit < 1) {
             return List.of();
         }
         return jdbc.query("""
                         SELECT * FROM KNOWLEDGE_INGESTION_JOB
-                        WHERE STATUS IN ('PARTIAL','FAILED')
-                           OR (STATUS='PROCESSING' AND UPDATED_AT < ?)
+                        WHERE (STATUS IN ('PARTIAL','FAILED') AND (NEXT_RETRY_AT IS NULL OR NEXT_RETRY_AT <= ?))
+                           OR (STATUS='PROCESSING' AND ((LEASE_UNTIL IS NOT NULL AND LEASE_UNTIL <= ?)
+                               OR (LEASE_UNTIL IS NULL AND UPDATED_AT < ?)))
                         ORDER BY UPDATED_AT
                         LIMIT ?
                         """,
-                rowMapper, Timestamp.from(processingStaleBefore), limit);
+                rowMapper, Timestamp.from(now), Timestamp.from(now), Timestamp.from(processingStaleBefore), limit);
     }
 
     @Override
@@ -173,13 +187,38 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
                 .stream().findFirst();
     }
 
+    @Override
+    public Map<IngestionStatus, Long> countsByStatus() {
+        Map<IngestionStatus, Long> result = new EnumMap<>(IngestionStatus.class);
+        jdbc.query("SELECT STATUS, COUNT(*) FROM KNOWLEDGE_INGESTION_JOB GROUP BY STATUS",
+                (org.springframework.jdbc.core.RowCallbackHandler) rs -> result.put(
+                        IngestionStatus.valueOf(rs.getString(1)), rs.getLong(2)));
+        return result;
+    }
+
+    @Override
+    public Optional<Instant> oldestPending() {
+        Timestamp oldest = jdbc.queryForObject("SELECT MIN(CREATED_AT) FROM KNOWLEDGE_INGESTION_JOB "
+                + "WHERE STATUS IN ('RECEIVED','PROCESSING','PARTIAL','FAILED')", Timestamp.class);
+        return Optional.ofNullable(oldest).map(Timestamp::toInstant);
+    }
+
+    private static Instant instant(ResultSet rs, String column) throws SQLException {
+        Timestamp value = rs.getTimestamp(column);
+        return value == null ? null : value.toInstant();
+    }
+
+    private static Timestamp timestamp(Instant value) {
+        return value == null ? null : Timestamp.from(value);
+    }
+
     private void initialize() {
         jdbc.queryForList("""
                 SELECT TENANT_ID, JOB_ID, IDEMPOTENCY_KEY, USER_ID, SCOPES_JSON, DEPARTMENT,
                        TRACE_ID, DOCUMENT_ID, DISPLAY_NAME, CATEGORY, DOCUMENT_VERSION,
                        NEW_DOCUMENT, REVISION, SOURCE_BUCKET, SOURCE_OBJECT_KEY, SOURCE_HASH,
                        SOURCE_CONTENT_TYPE, SOURCE_SIZE, STATUS, SINKS_JSON, REQUIRED_SINKS_JSON,
-                       ERROR_TEXT, CREATED_AT, UPDATED_AT
+                       ERROR_TEXT, CREATED_AT, UPDATED_AT, RETRY_COUNT, NEXT_RETRY_AT, ERROR_CODE, FAILED_STAGE, LEASE_OWNER, LEASE_UNTIL
                 FROM KNOWLEDGE_INGESTION_JOB WHERE 1=0""");
     }
 

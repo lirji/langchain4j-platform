@@ -15,6 +15,7 @@ public class IngestionReconciler {
     private final Clock clock;
     private final Duration processingTimeout;
     private final int batchSize;
+    private int maxRetries = 3;
 
     public IngestionReconciler(
             IngestionJobStore store,
@@ -31,14 +32,27 @@ public class IngestionReconciler {
         this.batchSize = batchSize;
     }
 
+    /** 生产使用与 worker 一致的恢复上限。 */
+    public IngestionReconciler(IngestionJobStore store, Clock clock, IngestionJobProperties properties) {
+        this(store, clock, properties.getProcessingTimeout(), properties.getReconcileBatchSize());
+        properties.validateRecovery();
+        this.maxRetries = properties.getMaxRetries();
+    }
+
     public int reconcile() {
         Instant now = clock.instant();
         int reconciled = 0;
-        for (IngestionJob job : store.findRecoverable(now.minus(processingTimeout), batchSize)) {
-            IngestionJob candidate = job.status() == IngestionStatus.PROCESSING
-                    ? IngestionJobStateMachine.resumeStaleProcessing(job, now)
-                    : IngestionJobStateMachine.retry(job, now);
+        for (IngestionJob job : store.findRecoverable(now.minus(processingTimeout), now, batchSize)) {
             try {
+                boolean exhausted = job.execution().retries() >= maxRetries;
+                IngestionJob candidate = exhausted ? IngestionJobStateMachine.manualReview(job, now)
+                        : job.status() == IngestionStatus.PROCESSING
+                        ? IngestionJobStateMachine.resumeStaleProcessing(job, now)
+                        : IngestionJobStateMachine.retry(job, now);
+                candidate = candidate.withExecution(new IngestionExecution(
+                        exhausted ? job.execution().retries() : job.execution().retries() + 1,
+                        null, exhausted ? "RETRY_EXHAUSTED" : job.execution().errorCode(),
+                        job.execution().failedStage(), null, null));
                 store.save(candidate, job.revision());
                 reconciled++;
             } catch (IngestionJobConflictException ignored) {

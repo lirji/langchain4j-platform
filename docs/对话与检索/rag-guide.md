@@ -1,5 +1,7 @@
 # RAG 接入指南
 
+> 生产新增/更新请使用 `/rag/ingestions`，同步上传示例仅用于兼容或开发。入口限制、持久化、恢复及迁移规则见 [可靠入库接入](可靠入库接入.md)。
+
 本指南面向要把知识库检索（RAG）接进平台的开发者，覆盖 `knowledge-service` 的文档上传、
 向量库 / embedding provider 选型、四路混排（vector + keyword + Elasticsearch BM25 全文 + 可选 GraphRAG，RRF 融合）、GraphRAG 图谱查询，
 以及 `conversation-service` 侧的 `/chat` RAG 增强与 L1 语义缓存。

@@ -67,6 +67,58 @@ class IngestionSubmissionServiceTest {
                 .isInstanceOf(IngestionJobNotFoundException.class);
     }
 
+    @Test
+    void replayRejectsDifferentContentMetadataAndOwner() throws Exception {
+        var original = command("same-key", "acme");
+        var first = service.submit(original);
+        var changed = new IngestionSubmissionService.SubmitCommand(original.idempotencyKey(),
+                original.tenantId(), original.userId(), original.scopes(), original.department(), original.traceId(),
+                original.documentId(), original.displayName(), original.category(), original.documentVersion(),
+                original.contentType(), "different".getBytes());
+        assertThatThrownBy(() -> service.submit(changed)).isInstanceOf(IngestionJobConflictException.class);
+        var changedMetadata = new IngestionSubmissionService.SubmitCommand(original.idempotencyKey(),
+                original.tenantId(), original.userId(), original.scopes(), original.department(), original.traceId(),
+                original.documentId(), original.displayName(), "other", original.documentVersion(),
+                original.contentType(), original.content());
+        assertThatThrownBy(() -> service.submit(changedMetadata)).isInstanceOf(IngestionJobConflictException.class);
+        assertThatThrownBy(() -> service.get("acme", "bob", first.jobId()))
+                .isInstanceOf(IngestionJobNotFoundException.class);
+        // 即使新版本已提交，同指纹重放也必须返回旧任务，而非再次要求版本加一。
+        registry.put(new DocumentInfo("doc-1", "acme", "guide.txt", "text/plain", 5, 1, 1, NOW, "manual"));
+        assertThat(service.submit(original).jobId()).isEqualTo(first.jobId());
+    }
+
+    @Test
+    void concurrentUniqueKeyFallbackStillChecksFingerprintAndNeverDeletesWinnerSource() throws Exception {
+        var accepted = service.submit(command("same-key", "acme"));
+        var racingStore = org.mockito.Mockito.mock(IngestionJobStore.class);
+        org.mockito.Mockito.when(racingStore.findByIdempotency("acme", "same-key"))
+                .thenReturn(java.util.Optional.empty());
+        org.mockito.Mockito.when(racingStore.createOrGet(org.mockito.ArgumentMatchers.any())).thenReturn(accepted);
+        var concurrent = new IngestionSubmissionService(sources, racingStore, registry, new NoopKnowledgeAuthz(),
+                Clock.fixed(NOW, ZoneOffset.UTC), Set.of(IngestionSink.VECTOR));
+        var cmd = command("same-key", "acme");
+        var changed = new IngestionSubmissionService.SubmitCommand(cmd.idempotencyKey(), cmd.tenantId(),
+                cmd.userId(), cmd.scopes(), cmd.department(), cmd.traceId(), cmd.documentId(), "changed.txt",
+                cmd.category(), cmd.documentVersion(), cmd.contentType(), cmd.content());
+        assertThatThrownBy(() -> concurrent.submit(changed)).isInstanceOf(IngestionJobConflictException.class);
+        assertThat(sources.open("acme", accepted.source()).readAllBytes()).isEqualTo(cmd.content());
+    }
+
+    @Test
+    void manualRetryRequiresOwnerAndPreservesCompletedSinks() throws Exception {
+        var job = service.submit(command("retry", "acme"));
+        var started = IngestionJobStateMachine.start(job, NOW);
+        var failed = IngestionJobStateMachine.preparationFailed(started, "PREPARATION_FAILED", NOW);
+        jobs.save(IngestionJobStateMachine.manualReview(failed, NOW), job.revision());
+        assertThatThrownBy(() -> service.retry("acme", "bob", Set.of("ingest"), job.jobId()))
+                .isInstanceOf(IngestionJobNotFoundException.class);
+        assertThatThrownBy(() -> service.retry("acme", "alice", Set.of(), job.jobId()))
+                .isInstanceOf(IngestionAuthorizationException.class);
+        assertThat(service.retry("acme", "alice", Set.of("ingest"), job.jobId()).status())
+                .isEqualTo(IngestionStatus.PROCESSING);
+    }
+
     private IngestionSubmissionService.SubmitCommand command(String key, String tenant) {
         return new IngestionSubmissionService.SubmitCommand(
                 key,

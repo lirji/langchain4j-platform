@@ -10,6 +10,7 @@ import com.lrj.platform.knowledge.search.FusionStrategy;
 import com.lrj.platform.knowledge.search.GraphRetrievalSource;
 import com.lrj.platform.knowledge.search.HybridFusionService;
 import com.lrj.platform.knowledge.search.InMemoryKeywordRetrievalSource;
+import com.lrj.platform.knowledge.search.ParallelRetrievalExecutor;
 import com.lrj.platform.knowledge.search.RetrievalHit;
 import com.lrj.platform.knowledge.search.RetrievalRequest;
 import com.lrj.platform.knowledge.search.RetrievalSource;
@@ -26,6 +27,7 @@ import com.lrj.platform.security.TenantContext;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
+import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -42,12 +44,12 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 检索编排器（es-hybrid-rerank 重构后）。职责：校验 → topK/minScore → 查询扩展 → 收集各启用
+ * 检索编排器（es-hybrid-rerank 重构后）。职责：校验 → topK/minScore → 查询扩展 → 并发收集各启用
  * {@link RetrievalSource}（向量 / 内存关键词 / ES / 图谱）的命中 → {@link HybridFusionService} 融合 →
  * {@link Reranker} 重排。ES 关闭时源列表与融合语义（weighted_max）与重构前逐字等价。
  */
 @Service
-public class KnowledgeQueryService {
+public class KnowledgeQueryService implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(KnowledgeQueryService.class);
 
@@ -88,6 +90,24 @@ public class KnowledgeQueryService {
     private RagAuthzProperties authzProps = new RagAuthzProperties();
     // split query role 使用 Registry 作为版本可见性提交点；null 保持旧 combined/单测兼容。
     private DocumentRegistry documentRegistry;
+    private ParallelRetrievalExecutor retrievalExecutor = new ParallelRetrievalExecutor(16, 256);
+
+    /** Spring 启动期配置独立召回执行器；直接构造的调用方使用相同默认值。 */
+    @Autowired
+    void configureRetrievalExecutor(
+            @Value("${app.rag.query.retrieval-parallelism:16}") int parallelism,
+            @Value("${app.rag.query.retrieval-queue-capacity:256}") int queueCapacity) {
+        ParallelRetrievalExecutor configured = new ParallelRetrievalExecutor(parallelism, queueCapacity);
+        retrievalExecutor.close();
+        retrievalExecutor = configured;
+    }
+
+    /** 服务停止时取消召回任务；非 Spring 调用方也应在使用结束后调用。 */
+    @PreDestroy
+    @Override
+    public void close() {
+        retrievalExecutor.close();
+    }
 
     @Autowired
     public KnowledgeQueryService(EmbeddingStoreRouter storeRouter,
@@ -282,23 +302,24 @@ public class KnowledgeQueryService {
         String reqPublicTenant = (publicKbEnabled && publicKbTenantId != null
                 && !publicKbTenantId.equals(tenantId)) ? publicKbTenantId : null;
         RetrievalRequest request = new RetrievalRequest(
-                query, variants, tenantId, category, poolLimit, floor, reqPublicTenant);
+                query, List.copyOf(variants), tenantId, category, poolLimit, floor, reqPublicTenant);
 
-        // 顺序敏感（weighted_max）：向量 → 关键词 → ES/额外源 → 图谱，复刻原合并顺序。
-        List<List<RetrievalHit>> groups = new ArrayList<>();
-        groups.add(vectorSource.retrieve(request));
+        // 并发召回，但按向量 → 关键词 → ES/额外源 → 图谱归位，保持融合代表字段与同分顺序。
+        List<RetrievalSource> sources = new ArrayList<>();
+        sources.add(vectorSource);
         if (keywordSource.enabled()) {
-            groups.add(keywordSource.retrieve(request));
+            sources.add(keywordSource);
         }
         for (RetrievalSource extra : extraSources) {
             if (extra.enabled()) {
-                groups.add(extra.retrieve(request));
+                sources.add(extra);
             }
         }
         if (graphSource.enabled()) {
-            groups.add(graphSource.retrieve(request));
+            sources.add(graphSource);
         }
 
+        List<List<RetrievalHit>> groups = retrievalExecutor.retrieve(sources, request);
         List<Hit> candidates = fusion.fuse(groups, fusionStrategy, rrfK);
         candidates = filterCommittedVersions(tenantId, candidates);
         // 细粒度读授权过滤（融合后、重排前；关闭时直通）。

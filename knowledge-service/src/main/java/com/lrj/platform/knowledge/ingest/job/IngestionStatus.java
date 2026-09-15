@@ -6,6 +6,7 @@ public enum IngestionStatus {
     READY,
     PARTIAL,
     FAILED,
+    MANUAL_REVIEW,
     DELETING,
     DELETED
 }

@@ -72,6 +72,20 @@ class JdbcIngestionJobStoreTest {
                 .containsExactly("partial");
     }
 
+    @Test
+    void recoveryMetadataSurvivesReloadAndFiltersUnexpiredLeases() {
+        var original = store.createOrGet(job("lease", "acme", "lease"));
+        var leased = IngestionJobStateMachine.start(original, NOW).withExecution(
+                new IngestionExecution(2, null, "DEPENDENCY_FAILURE", "VECTOR", "owner", NOW.plusSeconds(60)));
+        var saved = store.save(leased, original.revision());
+        assertThat(store.find("acme", "lease").orElseThrow().execution()).isEqualTo(saved.execution());
+        assertThat(store.findRunnable(10)).isEmpty();
+        assertThat(store.findRecoverable(NOW.plusSeconds(100), NOW.plusSeconds(59), 10)).isEmpty();
+        assertThat(store.findRecoverable(NOW.plusSeconds(100), NOW.plusSeconds(60), 10)).hasSize(1);
+        assertThat(store.countsByStatus()).containsEntry(IngestionStatus.PROCESSING, 1L);
+        assertThat(store.oldestPending()).contains(NOW);
+    }
+
     private IngestionJob ready(IngestionJob job) {
         IngestionJob current = IngestionJobStateMachine.start(job, NOW);
         current = succeed(current, IngestionSink.VECTOR);

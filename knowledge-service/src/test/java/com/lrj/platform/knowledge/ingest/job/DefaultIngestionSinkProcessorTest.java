@@ -49,6 +49,8 @@ class DefaultIngestionSinkProcessorTest {
         assertThat(indexer.indexed).isEqualTo(prepared.segments());
         assertThat(registry.get("acme", "doc-1")).isEmpty();
 
+        registry.put(new DocumentInfo("doc-1", "acme", "guide.md", "text/markdown",
+                5, 1, 1, job.createdAt(), "manual"));
         processor.process(job, prepared, IngestionSink.REGISTRY);
 
         assertThat(registry.get("acme", "doc-1")).contains(prepared.info());

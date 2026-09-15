@@ -69,13 +69,23 @@ public class IngestionController {
                         ? MediaType.APPLICATION_OCTET_STREAM_VALUE
                         : file.getContentType(),
                 file.getBytes()));
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(IngestionJobView.from(job));
+        return ResponseEntity.accepted()
+                .location(java.net.URI.create("/rag/ingestions/" + job.jobId()))
+                .body(IngestionJobView.from(job));
     }
 
     @GetMapping("/{jobId}")
     public IngestionJobView get(@PathVariable String jobId) {
         TenantContext.Tenant tenant = TenantContext.current();
-        return IngestionJobView.from(submissions.get(tenant.tenantId(), jobId));
+        return IngestionJobView.from(submissions.get(tenant.tenantId(), tenant.userId(), jobId));
+    }
+
+    /** 人工处理配置或依赖问题后恢复原任务，不允许变更该幂等键绑定的内容。 */
+    @PostMapping("/{jobId}/retry")
+    public ResponseEntity<IngestionJobView> retry(@PathVariable String jobId) {
+        var tenant = requireIngest();
+        return ResponseEntity.accepted().body(IngestionJobView.from(submissions.retry(
+                tenant.tenantId(), tenant.userId(), tenant.scopes(), jobId)));
     }
 
     private static TenantContext.Tenant requireIngest() {
@@ -93,7 +103,12 @@ public class IngestionController {
             String status,
             Map<String, String> sinks,
             String contentHash,
-            String traceId
+            String traceId,
+            String errorCode,
+            String failedStage,
+            boolean retryable,
+            int retryCount,
+            java.time.Instant nextRetryAt
     ) {
         static IngestionJobView from(IngestionJob job) {
             return new IngestionJobView(
@@ -105,7 +120,10 @@ public class IngestionController {
                             entry -> entry.getKey().name(),
                             entry -> entry.getValue().name())),
                     job.source().contentHash(),
-                    job.traceId());
+                    job.traceId(), job.execution().errorCode(), job.execution().failedStage(),
+                    job.status() == com.lrj.platform.knowledge.ingest.job.IngestionStatus.PARTIAL
+                            || job.status() == com.lrj.platform.knowledge.ingest.job.IngestionStatus.FAILED,
+                    job.execution().retries(), job.execution().nextRetryAt());
         }
     }
 }

@@ -9,6 +9,29 @@ import java.time.Duration;
 public class IngestionJobProperties {
 
     private String store = "memory";
+    private int maxRetries = 3;
+    private Duration retryDelay = Duration.ofSeconds(5);
+    private Duration maxRetryDelay = Duration.ofMinutes(5);
+    private Duration heartbeatInterval = Duration.ofSeconds(30);
+
+    public int getMaxRetries() { return maxRetries; }
+    public void setMaxRetries(int value) { maxRetries = value; }
+    public Duration getRetryDelay() { return retryDelay; }
+    public void setRetryDelay(Duration value) { retryDelay = value; }
+    public Duration getMaxRetryDelay() { return maxRetryDelay; }
+    public void setMaxRetryDelay(Duration value) { maxRetryDelay = value; }
+    public Duration getHeartbeatInterval() { return heartbeatInterval; }
+    public void setHeartbeatInterval(Duration value) { heartbeatInterval = value; }
+
+    /** 非法恢复参数启动即失败，避免毫秒忙循环或租约先于心跳到期。 */
+    public void validateRecovery() {
+        if (maxRetries < 0 || maxRetries > 30 || retryDelay.isNegative() || retryDelay.isZero()
+                || maxRetryDelay.compareTo(retryDelay) < 0 || maxRetryDelay.compareTo(Duration.ofDays(1)) > 0
+                || heartbeatInterval.toMillis() < 1
+                || processingTimeout.compareTo(heartbeatInterval.multipliedBy(2)) <= 0) {
+            throw new IllegalArgumentException("invalid ingestion retry or heartbeat configuration");
+        }
+    }
     private Duration processingTimeout = Duration.ofMinutes(15);
     private int reconcileBatchSize = 100;
     private int workerBatchSize = 10;

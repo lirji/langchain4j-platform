@@ -24,6 +24,11 @@ public interface DocumentRegistry {
 
     void put(DocumentInfo info);
 
+    /** 新版本只允许从前一版本提交；相同版本重放不覆盖，旧版本不能回退可见性。 */
+    default boolean commitVersion(DocumentInfo info) {
+        throw new UnsupportedOperationException("registry does not support atomic version commit");
+    }
+
     Optional<DocumentInfo> get(String tenantId, String docId);
 
     List<DocumentInfo> list(String tenantId);

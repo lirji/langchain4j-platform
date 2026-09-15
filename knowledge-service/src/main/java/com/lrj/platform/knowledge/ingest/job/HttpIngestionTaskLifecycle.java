@@ -79,6 +79,10 @@ public class HttpIngestionTaskLifecycle implements IngestionTaskLifecycle {
         result.put("documentId", job.documentId());
         result.put("documentVersion", job.documentVersion());
         result.put("sinks", job.sinks());
+        result.put("errorCode", job.execution().errorCode());
+        result.put("failedStage", job.execution().failedStage());
+        result.put("retryCount", job.execution().retries());
+        result.put("nextRetryAt", job.execution().nextRetryAt() == null ? null : job.execution().nextRetryAt().toString());
         http.patchForObject(
                 "/async/tasks/{taskId}/status",
                 new AsyncTaskStatusUpdateRequest(
