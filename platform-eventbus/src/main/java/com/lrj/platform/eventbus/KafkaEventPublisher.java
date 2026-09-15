@@ -23,9 +23,17 @@ public class KafkaEventPublisher implements EventPublisher {
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
     private final Duration sendTimeout;
+    private final String topicPrefix;
 
     public KafkaEventPublisher(KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper,
                                Duration sendTimeout) {
+        this(kafkaTemplate, objectMapper, sendTimeout, "");
+    }
+
+    /** 项目前缀在出站边界统一添加，保持业务 topic 常量和旧部署兼容。 */
+    public KafkaEventPublisher(KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper,
+                               Duration sendTimeout, String topicPrefix) {
+        this.topicPrefix = topicPrefix;
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
         this.sendTimeout = sendTimeout;
@@ -41,7 +49,7 @@ public class KafkaEventPublisher implements EventPublisher {
         }
         try {
             // 阻塞等待 broker 确认（acks=all）；超时/失败 → 抛出交由 relay 重投。
-            kafkaTemplate.send(topic, key, json).get(sendTimeout.toMillis(), TimeUnit.MILLISECONDS);
+            kafkaTemplate.send(topicPrefix + topic, key, json).get(sendTimeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("interrupted while publishing to topic " + topic, ex);

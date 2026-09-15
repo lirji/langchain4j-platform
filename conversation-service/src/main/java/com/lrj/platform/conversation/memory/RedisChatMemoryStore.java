@@ -21,6 +21,9 @@ import java.util.List;
 public class RedisChatMemoryStore implements ChatMemoryStore {
 
     private static final String KEY_PREFIX = "chat:mem:";
+    // 默认空前缀保持旧部署兼容；共享 Redis 使用项目前缀隔离持久业务键。
+    @org.springframework.beans.factory.annotation.Value("${platform.redis.key-prefix:}")
+    private String projectPrefix = "";
 
     private final StringRedisTemplate redis;
     private final Duration ttl;
@@ -54,7 +57,7 @@ public class RedisChatMemoryStore implements ChatMemoryStore {
         redis.delete(key(memoryId));
     }
 
-    private static String key(Object memoryId) {
-        return KEY_PREFIX + memoryId;
+    private String key(Object memoryId) {
+        return projectPrefix + KEY_PREFIX + memoryId;
     }
 }

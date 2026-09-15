@@ -53,6 +53,17 @@ class KafkaEventPublisherTest {
     }
 
     @Test
+    void prefixesPhysicalTopicWithoutChangingBusinessContract() {
+        @SuppressWarnings("unchecked")
+        KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
+        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+                .thenReturn(CompletableFuture.completedFuture(null));
+        new KafkaEventPublisher(kafkaTemplate, mapper, Duration.ofSeconds(5), "lc4j.")
+                .publish(EventTopics.WORKFLOW_TERMINAL, "acme", msg());
+        verify(kafkaTemplate).send(eq("lc4j.platform.workflow.terminal"), eq("acme"), anyString());
+    }
+
+    @Test
     void publishFailure_isPropagatedSoRelayCanRetry() {
         @SuppressWarnings("unchecked")
         KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);

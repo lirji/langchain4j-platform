@@ -45,10 +45,10 @@ Docker Desktop 虚拟盘清空后，恢复共享 `dev-infra`，并把能力门�
 - marketing `offer-decision-service` 在 generation 未激活时仍 503。
 - 9 月 8 日之后写进旧 Docker 卷的数据无法恢复。
 
-## Git 发布（进行中）
+## Git 发布
 
-- 工作树仍有 knowledge / deploy / 其它前端脏改动，**不**并入这次提交。
-- 本次只发布侧栏跳转修复：`fix/sidenav-capability-page` → 远程 `main`。
+- 已发布：`a5a5ef7` `fix(frontend): restore sidebar capability page navigation`
+- 进行中：`feat/knowledge-dev-infra` 入库恢复 / 并行检索 / 共享 dev-infra（不含其它前端脏改动、不含本机 `.env`）。
 
 ## 下一步（一次只起一个控制台）
 

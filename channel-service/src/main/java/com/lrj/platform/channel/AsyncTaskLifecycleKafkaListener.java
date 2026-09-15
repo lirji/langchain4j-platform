@@ -39,7 +39,7 @@ public class AsyncTaskLifecycleKafkaListener {
     }
 
     @KafkaListener(
-            topics = EventTopics.ASYNCTASK_LIFECYCLE,
+            topics = "${platform.eventbus.topic-prefix:}" + EventTopics.ASYNCTASK_LIFECYCLE,
             groupId = "${platform.eventbus.consumer.group-id:channel-service}",
             containerFactory = "eventbusKafkaListenerContainerFactory")
     public void onMessage(String payload) throws Exception {

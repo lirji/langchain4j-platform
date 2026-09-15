@@ -40,7 +40,7 @@ public class WorkflowTerminalKafkaListener {
     }
 
     @KafkaListener(
-            topics = EventTopics.WORKFLOW_TERMINAL,
+            topics = "${platform.eventbus.topic-prefix:}" + EventTopics.WORKFLOW_TERMINAL,
             groupId = "${platform.eventbus.consumer.group-id:channel-service}",
             containerFactory = "eventbusKafkaListenerContainerFactory")
     public void onMessage(String payload) throws Exception {

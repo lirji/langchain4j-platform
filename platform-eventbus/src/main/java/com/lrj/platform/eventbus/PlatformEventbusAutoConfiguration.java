@@ -36,9 +36,10 @@ public class PlatformEventbusAutoConfiguration {
     @ConditionalOnProperty(prefix = "platform.eventbus", name = "enabled", havingValue = "true")
     public EventPublisher kafkaEventPublisher(KafkaTemplate<String, String> eventbusKafkaTemplate,
                                               ObjectMapper objectMapper,
-                                              EventbusProperties properties) {
+                                              EventbusProperties properties,
+                                              @org.springframework.beans.factory.annotation.Value("${platform.eventbus.topic-prefix:}") String topicPrefix) {
         return new KafkaEventPublisher(eventbusKafkaTemplate, objectMapper,
-                properties.getProducer().getSendTimeout());
+                properties.getProducer().getSendTimeout(), topicPrefix);
     }
 
     @Bean

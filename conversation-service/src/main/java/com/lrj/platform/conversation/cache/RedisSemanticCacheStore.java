@@ -30,6 +30,9 @@ public class RedisSemanticCacheStore implements SemanticCacheStore {
 
     private static final Logger log = LoggerFactory.getLogger(RedisSemanticCacheStore.class);
     private static final String KEY_PREFIX = "conv:semcache:";
+    // 默认空前缀保持旧部署兼容；共享 Redis 使用项目前缀隔离持久业务键。
+    @org.springframework.beans.factory.annotation.Value("${platform.redis.key-prefix:}")
+    private String projectPrefix = "";
 
     private final StringRedisTemplate redis;
     private final ObjectMapper mapper;
@@ -82,8 +85,8 @@ public class RedisSemanticCacheStore implements SemanticCacheStore {
         return removed != null && removed > 0;
     }
 
-    private static String key(String tenantId) {
-        return KEY_PREFIX + tenantId;
+    private String key(String tenantId) {
+        return projectPrefix + KEY_PREFIX + tenantId;
     }
 
     private static String field(String question) {
