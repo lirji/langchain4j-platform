@@ -60,6 +60,13 @@
                 </executions>
                 <configuration>
                     <mainClass>com.lrj.platform.migrations.MigrationMain</mainClass>
+                    <!--
+                      必须带 classifier：默认 repackage 会用可执行 fat jar 顶替普通 jar，而 fat jar 的
+                      类在 BOOT-INF/classes 下，不能被当依赖使用。platform-eventbus 的迁移测试依赖
+                      本模块，没有 classifier 时 `mvn package` 会在它的 testCompile 阶段找不到
+                      com.lrj.platform.migrations（`mvn test` 不跑 package，所以看不到这个问题）。
+                    -->
+                    <classifier>exec</classifier>
                 </configuration>
             </plugin>
         </plugins>
