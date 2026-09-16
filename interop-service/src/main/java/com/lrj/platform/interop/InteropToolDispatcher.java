@@ -7,32 +7,56 @@ import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 
 import java.util.Map;
+import java.util.Set;
 
 /**
  * MCP 工具调用调度器：按 {@link McpToolCallRequest#tool()} 将请求分派到本地 {@code platform.ping}
  * 或经 {@link AgentInteropClient} 代理到 AgentScope（run / run_async / dag.plan_run[_async]），
  * 并把下游 HTTP/网络异常规约为带错误信息的 {@link McpToolCallReply}。供 {@link InteropController} 使用。
+ *
+ * <p>代理 agent 工具前先查 {@link InteropToolRegistry} 是否真的宣告过该工具。Java 侧的 case 分支只是
+ * 「能怎么代理」的映射，不构成能力事实源；不做这层校验的话，AgentScope live discovery 没有宣告的工具
+ * 也会被照常代理出去，Java Agent 退役门禁「互操作层只依赖 AgentScope live discovery」就无法成立。
  */
 @Component
 public class InteropToolDispatcher {
 
-    private final AgentInteropClient agentClient;
+    /** interop 能代理到 AgentScope 的工具；是否可调用仍以 live discovery 宣告为准。 */
+    private static final Set<String> PROXYABLE_AGENT_TOOLS = Set.of(
+            InteropToolRegistry.AGENT_RUN_TOOL,
+            InteropToolRegistry.AGENT_RUN_ASYNC_TOOL,
+            InteropToolRegistry.AGENT_DAG_PLAN_RUN_TOOL,
+            InteropToolRegistry.AGENT_DAG_PLAN_RUN_ASYNC_TOOL);
 
-    public InteropToolDispatcher(AgentInteropClient agentClient) {
+    private final AgentInteropClient agentClient;
+    private final InteropToolRegistry registry;
+
+    public InteropToolDispatcher(AgentInteropClient agentClient, InteropToolRegistry registry) {
         this.agentClient = agentClient;
+        this.registry = registry;
     }
 
     public McpToolCallReply dispatch(McpToolCallRequest request) {
         if (request == null || request.tool() == null || request.tool().isBlank()) {
             return new McpToolCallReply(null, false, null, "tool is required");
         }
-        return switch (request.tool()) {
-            case InteropToolRegistry.PING_TOOL -> ping(request);
+        String tool = request.tool();
+        if (InteropToolRegistry.PING_TOOL.equals(tool)) {
+            return ping(request);
+        }
+        if (!PROXYABLE_AGENT_TOOLS.contains(tool)) {
+            return new McpToolCallReply(tool, false, null, "unknown tool");
+        }
+        if (!registry.capabilityNames().contains(tool)) {
+            return new McpToolCallReply(tool, false, null,
+                    "tool is not advertised by AgentScope capability discovery");
+        }
+        return switch (tool) {
             case InteropToolRegistry.AGENT_RUN_TOOL -> agentRun(request);
             case InteropToolRegistry.AGENT_RUN_ASYNC_TOOL -> agentRunAsync(request);
             case InteropToolRegistry.AGENT_DAG_PLAN_RUN_TOOL -> agentDagPlanRun(request);
             case InteropToolRegistry.AGENT_DAG_PLAN_RUN_ASYNC_TOOL -> agentDagPlanRunAsync(request);
-            default -> new McpToolCallReply(request.tool(), false, null, "unknown tool");
+            default -> new McpToolCallReply(tool, false, null, "unknown tool");
         };
     }
 
