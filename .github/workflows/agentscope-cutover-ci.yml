@@ -28,6 +28,7 @@ on:
       - 'deploy/test-database-migration-config.sh'
       - 'deploy/test-supply-chain-config.sh'
       - 'deploy/smoke-knowledge-s3-iam.sh'
+      - 'deploy/sync-agent-contracts.sh'
       - 'deploy/helm/**'
       - '.github/workflows/agentscope-cutover-ci.yml'
       - '.github/workflows/supply-chain.yml'
@@ -59,6 +60,7 @@ on:
       - 'deploy/test-database-migration-config.sh'
       - 'deploy/test-supply-chain-config.sh'
       - 'deploy/smoke-knowledge-s3-iam.sh'
+      - 'deploy/sync-agent-contracts.sh'
       - 'deploy/helm/**'
       - '.github/workflows/agentscope-cutover-ci.yml'
       - '.github/workflows/supply-chain.yml'
@@ -86,6 +88,15 @@ jobs:
           cache: maven
 
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+
+      # 跨语言契约门禁：证明 Java 消费侧与 agentscope-platform 导出的语言中立 schema 一致。
+      # 本仓 CI 拿不到兄弟仓，所以这里只能校验 vendored 副本与固定 digest；「副本 == 上游」
+      # 由 deploy/sync-agent-contracts.sh 在能看到上游仓时校验（脚本无上游时自行 skip）。
+      - name: Verify agentscope contract compatibility
+        run: |
+          bash -n deploy/sync-agent-contracts.sh
+          bash deploy/sync-agent-contracts.sh
+          mvn -B -pl platform-protocol test
 
       - name: Verify edge and interop
         run: mvn -B -pl edge-gateway,interop-service -am test

@@ -59,6 +59,7 @@
         <playwright.version>1.47.0</playwright.version>
         <spring-cloud.version>2023.0.3</spring-cloud.version>
         <jjwt.version>0.12.6</jjwt.version>
+        <json-schema-validator.version>1.5.1</json-schema-validator.version>
     </properties>
 
     <dependencyManagement>
@@ -126,6 +127,16 @@
                 <artifactId>jjwt-jackson</artifactId>
                 <version>${jjwt.version}</version>
                 <scope>runtime</scope>
+            </dependency>
+            <!--
+              JSON Schema draft 2020-12 校验器。仅 test scope 使用：platform-protocol 用它证明
+              跨服务 DTO 与 agentscope-platform 导出的语言中立契约一致，不进任何服务运行时。
+            -->
+            <dependency>
+                <groupId>com.networknt</groupId>
+                <artifactId>json-schema-validator</artifactId>
+                <version>${json-schema-validator.version}</version>
+                <scope>test</scope>
             </dependency>
             <!-- 共享库自引用 -->
             <dependency>

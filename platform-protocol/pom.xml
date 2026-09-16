@@ -13,4 +13,21 @@
     <artifactId>platform-protocol</artifactId>
     <name>platform-protocol (shared lib)</name>
     <description>跨服务 DTO / 事件契约 / 客户端协议模型</description>
+
+    <!--
+      主代码仍是零依赖的纯 record。以下依赖只用于测试：校验跨语言 DTO 与
+      contracts/agentscope/ 下 vendored 的语言中立契约保持一致。
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.networknt</groupId>
+            <artifactId>json-schema-validator</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 </project>

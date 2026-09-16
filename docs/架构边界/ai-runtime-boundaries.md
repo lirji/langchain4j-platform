@@ -27,6 +27,26 @@ AgentScope/Python 负责推理、计划、工具选择、多 Agent 编排和轨�
 - 模型产生的 tenant/user/scope/department 不可信。
 - 未通过 shadow、契约、安全和回滚门禁前，不删除旧实现或修改生产默认路由。
 
+## 跨语言契约门禁
+
+「跨语言协议使用 JSON Schema」不再只是约定，已有机器门禁。契约权威始终在
+`agentscope-platform/contracts/`，本仓只保存消费侧副本：
+
+- 上游 `scripts/export_contracts.py` 生成 `contracts/manifest.json`，逐个 JSON 契约固定
+  sha256（含手写的 boundary schema），其 CI 的 `--check` 会拦住未重新导出的改动。
+- 本仓 vendored 副本位于 `platform-protocol/src/main/resources/contracts/agentscope/`，只包含
+  Java 真正消费或生产的契约，附带同格式的 digest manifest。
+- `deploy/sync-agent-contracts.sh` 校验「副本 == 上游」并可 `--write` 重新同步；看不到上游
+  worktree 时自行 skip（可用 `AGENTSCOPE_REPO` 指定路径）。
+- `platform-protocol` 的 `AgentScopeContractManifestTest` 校验「副本 == manifest 固定 digest」，
+  `AgentScopeContractConformanceTest` 双向校验 DTO：生产方向要求 Java 序列化结果通过 schema
+  校验，消费方向要求 Java 读取的每个字段仍被契约发布（允许 Java 只读子集）。
+- `agentscope-cutover-ci.yml` 的 `Verify agentscope contract compatibility` 步骤执行以上检查。
+
+已知残留缺口：两仓 CI 都无法访问对方仓库，所以「本仓副本 == 上游最新」只在本地或跨仓联动时
+被证明。上游改契约后，本仓要靠人跑一次同步脚本才会发现。彻底闭合需要把契约作为版本化制品
+发布给 Java 构建解析，属于后续变更。
+
 ## 默认运行拓扑
 
 - `/agent/**` 与 interop Agent proxy 默认指向 `agentscope-orchestrator`。
