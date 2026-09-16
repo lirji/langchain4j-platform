@@ -27,7 +27,7 @@ edge-gateway :8080
 channel-service :8087
   DingtalkInboundController    ── 验签(HMAC-SHA256) → 立即 ACK（钉钉要求 <3s 响应）
       │
-  DingtalkMessageBridge        ── 异步 · 按 msgId 去重 · 设 TenantContext（配置里的租户）
+  DingtalkMessageBridge        ── 异步 · 按 msgId 抢占去重（InboundIdempotency）· 设 TenantContext（配置里的租户）
       │
       ├─(兜底闸门) 先查知识库 /rag/query
       │     ├─ 命中不足（0 命中或最高分 < 阈值） ─▶ 走「转人工」话术 + @人工客服，结束
@@ -153,7 +153,10 @@ Body:
   ```java
   || path.equals("/channel/dingtalk/events")
   ```
-- `edge-gateway/.../EdgeRateLimitFilter.java` 的 `isOpen()` 同样加一行（webhook 不计租户限流）。
+- 免鉴权路径的判定收在 `edge-gateway/.../EdgeOpenPaths.java`（`ApiKeyToInternalTokenFilter`、`SessionBearerAuthFilter`、
+  `EdgeRateLimitFilter` 共用），新增回调只改这一处。**免鉴权不等于免限流**：回调没有租户身份，
+  由 `EdgeOpenPaths.rateLimitFamilyOf()` 归到 `channel-callback` family，按客户端 IP 限桶
+  （默认 600/min，`RATE_LIMIT_CHANNEL_CALLBACK_QPM`）。
 
 路由无需改：`application.yml` 里 `Path=/channel,/channel/**` 已覆盖 `/channel/dingtalk/events`。
 
@@ -266,14 +269,19 @@ if (answer != null && !answer.isBlank()) {
 
 - `DingtalkEventCryptoTest`：§3.1 验签正/负样例。
 - `DingtalkInboundControllerTest`：验签通过/失败、非 text 消息过滤、立即 ACK。
-- `DingtalkMessageBridgeTest`：**命中 → 走 `/chat` 并回复**、**无命中 → 转人工话术 + @人工客服、不调 `/chat`**、按 `msgId` 去重。用 `CapturingReplyClient` 和 mock 的 `KnowledgeClient`/`HttpConversationClient` 断言分支。
+- `DingtalkMessageBridgeTest`：**命中 → 走 `/chat` 并回复**、**无命中 → 转人工话术 + @人工客服、不调 `/chat`**、按 `msgId` 去重（含多副本共享同一去重存储、处理失败归还抢占使重投能重来）。用 `CapturingReplyClient` 和 mock 的 `KnowledgeClient`/`HttpConversationClient` 断言分支。
 
 ---
 
 ## 8. 生产注意事项
 
 - **3 秒 ACK**：控制器解析 + 验签后立即返回，重活丢给 `executor` 异步跑（飞书桥已是此模式，直接沿用）。
-- **多副本去重**：`FeishuMessageBridge` 的进程内 `ConcurrentHashMap` 去重是 best-effort；多副本部署需换 Redis/JDBC 去重（参考 `CHANNEL_DEDUP_STORE=jdbc`）。
+- **多副本去重**：两个 bridge 的去重都走平台统一的 `InboundIdempotency`（底层 `ProcessedEventStore`，与本服务两个
+  Kafka listener 同一套存储）。默认内存实现**限单进程**且去重窗口有界（10 万条，满后淘汰最早）；多副本部署必须设
+  `CHANNEL_DEDUP_STORE=jdbc` 让去重落 `PROCESSED_EVENT` 表，跨副本、跨重启生效。
+- **失败要能重投**：入站去重是**抢占**语义（`markProcessed` 的原子返回值），处理失败或线程池拒收会
+  `releaseClaim` 归还，渠道重投才能重来。早期「先 put 进 map 再处理」的写法会把失败的消息永久标记为已处理，
+  等于静默丢客服提问。因此 `process()` 里**不要**自己 catch 掉异常。
 - **token 缓存**：`HttpDingtalkReplyClient` 缓存 access_token 至过期前 60s，避免每条消息都换 token（照搬飞书）。
 - **凭据管理**：`DINGTALK_APP_SECRET` 等走密钥管理（见 [部署指南](../平台工程/deployment-guide.md) 的 External Secrets），不要写进代码或明文配置。
 - **多钉钉企业 / 多租户**：一个机器人 = 一个租户。要支持多个钉钉企业，扩成按 `robotCode → tenantId` 的映射表，或起多份 dingtalk 配置。

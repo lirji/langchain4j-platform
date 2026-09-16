@@ -70,7 +70,8 @@ API Key 放 `platform-secrets`；启用 ESO 时，模板会从
 | `global.envFrom` | 所有服务只注入非敏感 `platform-config`；Secret 禁止整包 envFrom。 |
 | `global.podSecurityContext` / `global.securityContext` | 非 root、seccomp、只读根文件系统、drop capabilities 等默认限制。 |
 | `global.topologySpread` | hostname/zone 拓扑分散。 |
-| `global.probes` | 存活/就绪探针，复用 actuator health group（liveness/readiness 路径与阈值）。 |
+| `global.probes` | 存活/就绪探针，复用 actuator health group（liveness/readiness 路径与阈值）。默认打 `mgmt` 端口——业务端口上 `/actuator/**` 会被内部 JWT filter 拦成 401，kubelet 不带凭据会导致 Pod 永远 not ready。 |
+| `services.<svc>.managementPort` | actuator 监听端口，**默认 = `port` + 1000**，同时渲染成容器端口与 Service 端口 `mgmt`（供 Prometheus 抓 `/actuator/prometheus`）。非 Spring 的单端口服务显式设 `0`（如 `agentscope-orchestrator`），此时不渲染 `mgmt`、探针回落到 `http`。 |
 | `global.resources` | 默认 requests/limits，可被 `services.<svc>.resources` 覆盖。 |
 | `config.*` | **非敏感** base-url / feature flag → ConfigMap `platform-config`。 |
 | `secrets.*` | **敏感项**占位值 → Secret；生产用 ESO 覆盖（见下）。 |

@@ -66,7 +66,7 @@
 - [事件总线与终态可靠投递(EOS)指南](平台工程/eventbus-guide.md)：事务性 outbox + relay + 消费侧去重 = effective exactly-once（workflow/async-task 两侧）。
 - [长任务处理指南](平台工程/长任务处理指南.md)：async-task-service 租约式任务中心（提交/lease/回报、SSE 断点续传、webhook outbox、Kafka 生命周期事件）、各服务接入现状、通用长任务模式对照与当前限制。
 - [Webhook / Callback 安全接入](平台工程/webhook-security.md)：async-task、Workflow、A2A push 的 SSRF allowlist、DNS 重校验、禁止重定向、统一 v1 HMAC、接收方去重及生产回滚规则。
-- [可观测性指南](平台工程/observability-guide.md)：跨服务 traceId 透传、OTel GenAI span（Spring Boot 原生 tracing 开关）、Prometheus 指标、`/actuator/{tokenbudget,cost}`。
+- [可观测性指南](平台工程/observability-guide.md)：跨服务 traceId 透传、OTel GenAI span（Spring Boot 原生 tracing 开关）、统一指标面（actuator 独立 management 端口 = 业务端口 + 1000、`deploy/prometheus/` 抓取与 8 条告警）、`/actuator/{tokenbudget,cost}`。
 - [LiteLLM 网关能力指南](平台工程/litellm-gateway-guide.md)：spend 记账 + 管理 UI（自带 Postgres）、租户归因三档（`platform.gateway.tenant-attribution`=none/user/virtual-key，默认 none）、per-tenant virtual key 预算/TPM/RPM 硬保底、Redis 响应缓存、正式 fallback（chat-default→ollama）、LiteLLM↔Java 同 trace 的 OTel；含签发/轮换/备份/回滚 runbook 与 8 步冒烟。
 - [成本归因与配额指南](平台工程/cost-attribution.md)：per-tenant USD 成本归因 + token 预算，redis 默认的分布式计数（水平扩容正确性）、`/actuator/{tokenbudget,cost}`；与 LiteLLM spend 双轨分工见 LiteLLM 网关能力指南。
 - [评测指南](平台工程/eval-guide.md)：eval-service `/eval/**` 回归客户端、检索召回评测（Recall@k/MRR/Hit@k）、baseline suite、对冻结单体双跑 oracle 门禁。

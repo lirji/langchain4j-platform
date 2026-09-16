@@ -37,7 +37,7 @@ Content-Type: application/json
 
 登录账号（auth-service demo 种子，口令 `demo12345`，与上表 api-key 租户/scope 镜像对齐）：`alice`(acme, admin 角色—含 `role-admin`/`public-ingest`) / `bob`(globex, viewer) / `analyst-a`(tenantA, analyst)。
 
-限流分类（`EdgeRateLimitFilter`，默认 `app.rate-limit.enabled=true`，`store=redis`）：`chat=60`、`agent=20`、`stream=20`、`ingest=5`、`eval=5`、`default=120`（每分钟）。
+限流分类（`EdgeRateLimitFilter`，默认 `app.rate-limit.enabled=true`，`store=redis`）：`chat=60`、`agent=20`、`stream=20`、`ingest=5`、`eval=5`、`default=120`（每分钟，按租户）。免鉴权入口按**客户端 IP** 限：`auth=30`（`/auth/login|register|refresh|logout|public-config`）、`channel-callback=600`（`/channel/feishu|dingtalk/events`）；`/actuator/**`、`/health`、`/.well-known/**` 不限。
 
 ---
 
@@ -541,6 +541,13 @@ HTTP/JSON/SSE 契约和内部 JWT。当前工具面只读；旧 Java 高风险/�
 ### GET `/async/webhook-outbox/dead`
 
 - 用途：查询当前租户投递耗尽（`DEAD`）的 webhook outbox 记录。可选 query `limit`（默认 50，上限 200）。经网关：是。
+
+### GET `/async/drain-inventory`
+
+- 用途：盘点当前租户**未完结**的 Agent 异步任务，按 `kind` + `status` + `leaseOwnerId` 分组计数
+  （`leaseOwnerId=null` 表示无人持租约）。默认统计六种 Agent kind，可选 query `kinds` 收窄。
+  用于判定 [Java Agent 退役门禁](../架构边界/java-agent-retirement-gate.md) 的存量排空条件；
+  排空后返回 `[]`。经网关：是。
 
 HTTP callback 的目标校验、禁止重定向、`X-Webhook-*` v1 HMAC 与接收方去重合同见 [Webhook / Callback 安全接入](../平台工程/webhook-security.md)。
 

@@ -403,7 +403,19 @@ RAG_GRAPH_MAX_TRIPLES_PER_CHUNK=12
 RAG_GRAPH_RELATION_WHITELIST=隶属于,使用   # 仅保留白名单关系（留空=不过滤）
 RAG_GRAPH_ALIASES=张三经理=张三           # 实体别名归一
 RAG_GRAPH_ASYNC=false
+RAG_GRAPH_REQUIRE_PROVENANCE=false     # true=丢弃没有版本 provenance 的历史三元组（见下）
 ```
+
+### 版本 provenance 与判权
+
+三元组的 `sourceId` 形如 `<docId>/v<version>/<name>#<index>`，查询侧据此把 `docId`/`version` 还原进命中，
+因此图命中和向量/ES 命中一样会被**按 Registry 当前版本过滤**（过期版本的三元组不再返回），并在
+`RAG_AUTHZ_MODE=enforce` 下参与**文档级判权**（此前图命中无 `docId`，enforce 会把它们整类丢弃）。
+
+`RAG_GRAPH_REQUIRE_PROVENANCE=true` 时，还原不出版本归属的历史三元组（引入该格式之前写入的）在检索
+源侧直接丢弃——它们既证不明新鲜度也证不明可读性。`combined` 默认 `false`，保持原召回口径；
+`RAG_RUNTIME_ROLE=query` 开图检索时必须为 `true`，否则启动校验失败。历史三元组无需迁移：文档下次入库
+即带 provenance，旧版本数据由版本 GC 按 `sourceId` 前缀清理。
 
 ### 图存储：jdbc（默认）/ in-memory
 

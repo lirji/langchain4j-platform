@@ -62,6 +62,7 @@ global:
         whenUnsatisfiable: ScheduleAnyway
 
   # 探针复用 Spring Boot actuator health group（各服务 application.yml 已 probes.enabled=true）。
+  # 目标端口默认取 mgmt（业务端口 +1000 的 actuator 端口）；managementPort: 0 的服务自动回落到 http。
   probes:
     enabled: true
     livenessPath: /actuator/health/liveness
@@ -195,6 +196,8 @@ config:
   NL2SQL_DB_READONLY_USER: "nl2sql_ro"
 
   # --- channel JDBC dedup（默认 memory；切 jdbc 时同时开启 channel migration） ---
+  # 同时是钉钉/飞书入站回调的去重存储（InboundIdempotency）：memory 只在单进程内去重且窗口有界，
+  # channel-service 副本数 >1 或开启入站桥时必须切 jdbc，否则渠道重投会被不同副本各处理一次。
   CHANNEL_DEDUP_STORE: "memory"
   CHANNEL_DEDUP_DB_URL: "jdbc:mysql://mysql:3306/channel?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&nullCatalogMeansCurrent=true"
   CHANNEL_DEDUP_DB_USER: "channel_app"
@@ -727,8 +730,12 @@ services:
         value: "true"
       - name: RAG_ES_QUERY_ENABLED
         value: "true"
+      # 图检索默认关（开启要连图库）；query 角色开启时必须同时要求版本 provenance，否则启动即失败——
+      # 无归属的历史三元组会绕过「按 Registry 当前版本过滤」与文档级判权。
       - name: RAG_GRAPH_ENABLED
         value: "false"
+      - name: RAG_GRAPH_REQUIRE_PROVENANCE
+        value: "true"
     hpa:
       enabled: false
       minReplicas: 2
@@ -865,6 +872,8 @@ services:
 
   agentscope-orchestrator:
     port: 8085
+    # 非 Spring 服务：/health、/readiness、/metrics 都在业务端口上，没有独立 management 端口。
+    managementPort: 0
     replicaCount: 2
     terminationGracePeriodSeconds: 45
     image:

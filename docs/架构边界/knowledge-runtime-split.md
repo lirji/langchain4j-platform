@@ -7,8 +7,8 @@ Knowledge 仍是 Java 数据面，不迁入 AgentScope。拆分使用同一 arti
 
 - `combined`：现有 `/rag/**` 兼容 façade 和回滚目标，默认角色。
 - `query`：只开放 `/rag/**` 的 GET/HEAD/OPTIONS，禁止 ingestion job API；要求持久化向量库、
-  registry，开启 hybrid 时要求 Elasticsearch query。当前必须关闭 graph query，直到图命中携带
-  `documentId/documentVersion` provenance。
+  registry，开启 hybrid 时要求 Elasticsearch query。开启 graph query 时必须同时设
+  `RAG_GRAPH_REQUIRE_PROVENANCE=true`（否则启动即失败），见下节。
 - `ingest-api`：只开放 `/rag/ingestions`，负责 S3 原文落盘和 durable job 创建，不做索引。
 - `ingest-worker`：不开放业务 HTTP，只保留 Actuator 探针；消费 job 并执行 Java 领域 sink。
 
@@ -69,6 +69,25 @@ GC 以 Registry 当前版本为权威，只清理 `currentVersion-retainVersions
 已稳定超过 grace period 才执行。单 sink 失败不会阻断其它 sink，下一轮会幂等重试。S3 原文
 不由 GC 删除，继续由 bucket lifecycle 独立管理。历史 Graph source 没有版本 provenance，
 无法证明归属，因此 fail-safe 保留，不能猜测性删除。
+
+## 图三元组的版本 provenance
+
+三元组的 `sourceId` 形如 `<docId>/v<version>/<name>#<index>`，格式由 `GraphSourceId` 单点定义——
+写入（`GraphIngestor`）、GC 的前缀删除和查询侧的还原都用它，避免三方各自拼字符串后静默分叉。
+`docId` 是 SHA-256 前 16 hex（不含 `/`）、`version` 是 `v<数字>`，因此从左侧按前两个 `/` 切分即可
+无歧义还原，文件名本身含 `/` 也不影响。
+
+查询侧 `GraphRetrievalSource` 把还原出的 `docId`/`version` 放进命中，图命中因此和向量/ES 命中一样
+经过两道过滤：**按 Registry 当前版本丢弃过期命中**，以及 enforce 档的**文档级判权**（此前图命中无
+`docId`，在 enforce 下被整类 fail-closed 丢弃）。融合去重键仍是三元组自身 id，图命中不会被同文档
+同 chunk 的向量命中吞掉。
+
+`RAG_GRAPH_REQUIRE_PROVENANCE`（默认 `false`）为 true 时，还原不出版本归属的历史三元组在检索源侧
+直接丢弃：它们既证不明新鲜度也证不明可读性，放行等于绕过上述两道过滤。`combined` 保持默认 false，
+召回口径与引入 provenance 之前一致；`query` 角色开图检索时必须为 true，否则启动校验失败。
+
+历史数据不需要迁移脚本：旧三元组在 require-provenance 下不参与查询，会在其文档下次入库（新版本
+sourceId 带 provenance）后被正常召回，或由 GC 在该文档版本进入清理窗口时按前缀删除。
 
 ## async-task 生命周期
 

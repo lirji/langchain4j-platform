@@ -76,6 +76,31 @@ void publish(String topic, String key, Object payload); // key 约定为 tenantI
 | `InMemoryProcessedEventStore` | **默认** | 进程内，重启失忆 |
 | `JdbcProcessedEventStore` | `platform.eventbus.processed-event-store=jdbc` 且 classpath 有 `JdbcTemplate` | MySQL `PROCESSED_EVENT` 表（由 `channel` migration 预建，靠 PK 冲突判重）；**跨重启去重** |
 
+内存实现的去重窗口**有界**（默认 10 万条，满后淘汰最早插入）：入站回调会持续产生新 id，无界 map 等于内存泄漏；
+换来的风险是「极旧事件重投可能被重复处理」，而渠道/broker 的重投窗口远小于该容量。要求严格无窗口限制用 JDBC。
+
+### 2.2.1 入站回调的幂等（`InboundIdempotency`）
+
+Kafka 消费者用「先查 → 处理 → 成功后标记」，失败不标记、靠重投重来。**入站 webhook 不能照抄这个顺序**：
+控制器必须在几秒内 ack（钉钉/飞书都是 3s），真正处理是异步的，而渠道重投可能并发打到多个副本——
+「先查后标记」两步之间的窗口会让两个副本同时通过检查、各回一次，重复回复 / 重复起流程 / 重复 LLM 花费照样发生。
+
+`InboundIdempotency` 因此用**抢占**语义，并把「抢占必须可归还」这条约束收在一处：
+
+| 步骤 | 做法 | 为什么 |
+|---|---|---|
+| 抢占 | `markProcessed()` 的原子返回值，在**调用线程同步**完成 | 并发重投只有一个能抢到；且在 ack 之前就判完，重复消息不会先排进队列再被丢 |
+| 处理 | 交渠道自己的线程池 | 控制器 3s 内 ack |
+| 失败 | `releaseClaim()` 归还（含线程池拒收） | 不归还 = 这条消息被永久当成已处理，渠道重投也进不来，等于静默丢消息 |
+| 无消息 id | 放行（无法去重） | 宁可重复回复，也不能丢用户可见的提问 |
+
+key 形如 `inbound:<source>:<messageId>`，`source` 前缀让不同渠道的 id 落进同一张 `PROCESSED_EVENT` 表也不互撞。
+接入方（`DingtalkMessageBridge` / `FeishuMessageBridge`）的 `process()` **不要**自己 catch 掉异常——
+异常要抛给 `submitOnce`，否则归还逻辑不会触发。
+
+多副本部署必须 `processed-event-store=jdbc`（channel-service 的 `CHANNEL_DEDUP_STORE=jdbc`），
+否则每个副本各去重一份，跨副本的重投拦不住。
+
 ### 2.3 Kafka 生产/消费基础设施（仅 `enabled=true` 时装配）
 
 - **生产者**（`KafkaProducerConfig`）：`enable.idempotence=true`（默认）、`acks=all`、`max.in.flight<=5` 的**幂等生产者**。

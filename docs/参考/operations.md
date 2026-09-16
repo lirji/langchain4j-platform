@@ -249,6 +249,17 @@ confirmation 或 downstream key。issuer/audience/kid/header/TTL 由 Compose/Hel
 
 默认开启（`enabled: true`，`store: redis`，`RATE_LIMIT_STORE=redis`；单机无 redis 时设 `in-memory`）。按 scope 每分钟配额：`chat=60`、`agent=20`、`stream=20`、`ingest=5`、`eval=5`、`default=120`；匿名请求乘以 `anonymous-multiplier=0.2`。
 
+**免鉴权入口也限流**（这些路径没有租户身份，早期被整体跳过，是公网上唯一无速率保护的面）：按**客户端 IP** 限桶。
+
+| family | 覆盖路径 | 默认 QPM | 变量 |
+|---|---|---|---|
+| `auth` | `/auth/login`、`/auth/register`、`/auth/refresh`、`/auth/logout`、`/auth/public-config` | 30 | `RATE_LIMIT_AUTH_QPM` |
+| `channel-callback` | `/channel/feishu/events`、`/channel/dingtalk/events` | 600 | `RATE_LIMIT_CHANNEL_CALLBACK_QPM` |
+
+`/actuator/**`、`/health`、`/.well-known/**` 仍不限流（限流探针会误伤存活检查）。
+
+客户端 IP 默认只取 **TCP 对端地址**，不信任任何请求头——`X-Forwarded-For` 可被伪造，默认信任等于让攻击者每个请求换一个假 IP 绕开限流。边缘前面确有会**覆写**该头的可信代理/LB 时才设 `RATE_LIMIT_CLIENT_IP_HEADER=X-Forwarded-For`（取第一跳）；不设且部署在 LB 后面，则所有请求共享同一个 IP 桶，需相应放大上面两个限额。`store=in-memory` 时限单 JVM（多副本各一份桶），多副本部署必须 `redis`。
+
 ---
 
 ## 5. LLM 网关（所有调 LLM 的服务共用 `platform.gateway.*`）
@@ -381,7 +392,7 @@ confirmation 或 downstream key。issuer/audience/kid/header/TTL 由 Compose/Hel
 | `CHAT_CASCADE_MIN_ANSWER_CHARS` | `8` | 便宜答案最短长度 |
 | `CHAT_CASCADE_SELF_RATING` | `false` | 是否让模型自评置信 |
 
-> `token-budget` 默认开启（计数默认持久化到 `redis`，`TOKEN_BUDGET_STORE=redis`；无 redis 时设 `in-memory`，时区 `Asia/Shanghai`）；`cost` 默认关（开启后 `COST_STORE` 同样默认 `redis`）。二者经 `ChatModelListener` 挂载，指标从 `/actuator/{tokenbudget,cost,prometheus}` 暴露。
+> `token-budget` 默认开启（计数默认持久化到 `redis`，`TOKEN_BUDGET_STORE=redis`；无 redis 时设 `in-memory`，时区 `Asia/Shanghai`）；`cost` 默认关（开启后 `COST_STORE` 同样默认 `redis`）。二者经 `ChatModelListener` 挂载，指标从 `/actuator/{tokenbudget,cost,prometheus}` 暴露（在 management 端口 = 业务端口 + 1000 上，见 15 节）。
 
 ---
 
@@ -428,7 +439,7 @@ confirmation 或 downstream key。issuer/audience/kid/header/TTL 由 Compose/Hel
 | `AUTHZ_SERVER_URL`（→ `authz.client.server-url`） | `http://localhost:8200` | auth-platform-server 判权服务地址（compose 内为 `http://host.docker.internal:8200`） |
 | `AUTHZ_SERVER_TOKEN`（→ `authz.client.token`） | 空 | service credential，须与 auth-platform-server 的 `authz.server.security.token` 一致；server 未开鉴权（默认）时留空 |
 
-> enforce 下另有几处硬约束：① 上传**新建**（非共享）文档时若判不出上传人部门（无 `department`）→ **403**，拒绝建档（并写 `owner` + `home_dept` 关系到 auth-platform）；② `/rag/query` 命中中无 `docId` 的条目（如 GraphRAG 三元组）被 **fail-closed 丢弃**；③ 同名覆盖既有（非共享）文档需 `edit` 权限，否则 403（覆盖不夺原 owner）。shadow/disabled 均不触发上述拦截。shadow 灰度指标：`knowledge.authz.decisions{mode,operation,permission,decision}`（`/actuator/metrics`，内网只读）。
+> enforce 下另有几处硬约束：① 上传**新建**（非共享）文档时若判不出上传人部门（无 `department`）→ **403**，拒绝建档（并写 `owner` + `home_dept` 关系到 auth-platform）；② `/rag/query` 命中中无 `docId` 的条目（如 GraphRAG 三元组）被 **fail-closed 丢弃**；③ 同名覆盖既有（非共享）文档需 `edit` 权限，否则 403（覆盖不夺原 owner）。shadow/disabled 均不触发上述拦截。shadow 灰度指标：`knowledge.authz.decisions{mode,operation,permission,decision}`（knowledge 的 management 端口 `:9084/actuator/metrics`，内网只读）。
 
 ### Embedding
 
@@ -518,6 +529,7 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 | `RAG_GRAPH_ENABLED` | `true` | GraphRAG 抽取与 `/rag/graph/**` 接口开关（yml/compose 默认开） |
 | `RAG_GRAPH_STORE` | `jdbc` | `in-memory` 或 `jdbc`（MySQL `knowledge_graph`，默认 jdbc） |
 | `RAG_GRAPH_INCLUDE_IN_QUERY` | 跟随 `RAG_GRAPH_ENABLED` | graph hit 是否融合进 `/rag/query` |
+| `RAG_GRAPH_REQUIRE_PROVENANCE` | `false` | true=丢弃 `sourceId` 无 `<docId>/v<version>/` 的历史三元组；`RAG_RUNTIME_ROLE=query` 开图检索时必须为 true |
 | `RAG_GRAPH_QUERY_TOP_K` | `20` | graph 查询返回上限 |
 | `RAG_GRAPH_MAX_HOPS` | `2` | 邻居扩展跳数 |
 | `RAG_GRAPH_MAX_TRIPLES` / `_PER_CHUNK` | `20` / `12` | 三元组上限 |
@@ -779,15 +791,21 @@ A2A push 的独立签名密钥是 `INTEROP_A2A_PUSH_HMAC_SECRET`。三个 HMAC k
 
 ## 15. 健康检查与可观测
 
-各服务暴露 Spring Boot actuator health（`/actuator/health`，直连服务端口）：
+actuator 不在业务端口上，而在**独立的 management 端口 = 业务端口 + 1000**（`MANAGEMENT_PORT`）。业务端口挂着内部
+JWT filter，而内部 JWT 只活 5 分钟，Prometheus 与 K8s probe 拿不到静态凭据；management 端口跑在独立子上下文里，
+不经过租户 filter，因此运维面免鉴权、业务面鉴权不变。**该端口只在内网/集群内暴露**。
 
 ```bash
-curl -s http://localhost:8081/actuator/health   # conversation
-curl -s http://localhost:8084/actuator/health   # knowledge
-curl -s http://localhost:8086/actuator/health   # async-task
+curl -s http://localhost:9081/actuator/health   # conversation（业务口 8081）
+curl -s http://localhost:9084/actuator/health   # knowledge（业务口 8084）
+curl -s http://localhost:9086/actuator/health   # async-task（业务口 8086）
+curl -s http://localhost:8085/health            # AgentScope 编排：单端口应用，运维面即业务口
 ```
 
-- `edge-gateway` 额外暴露 `gateway` 端点；`conversation` / `agent` / `vision` 额外暴露 `prometheus,tokenbudget,cost`；多数服务暴露 `prometheus`。
+- `health,info,prometheus` 是全部 16 个 Java 服务的基线；`edge-gateway` 额外有 `gateway`，`conversation`/`agent`/`vision` 额外有 `tokenbudget,cost`。
+- 抓取与告警配置随仓库交付：`deploy/prometheus/prometheus.yml` + `alerts.yml`（8 条）；起 Prometheus 用 `docker compose -f deploy/docker-compose.yml --profile observability up -d prometheus`（UI `:19090`）。
+- 一致性由 `deploy/test-observability-config.sh` 静态守（CI 内跑）：少 `prometheus`、少 management 端口、端口不等于业务口 +1000、或没进抓取配置都会失败。
+- 细节（指标清单、告警阈值口径、PromQL、Helm `mgmt` 端口）见 [observability-guide.md](../平台工程/observability-guide.md)。
 - traceId 由 `platform-observability` 的 `TraceIdFilter` 生成并跨服务透传。
 
 ---
@@ -866,7 +884,7 @@ curl -s http://localhost:8086/actuator/health   # async-task
 
 - enforce 下 `/rag/query` 只返回调用者对其有 `view` 权限的文档——跨部门/未授权文档被 auth-platform `checkBulk` 过滤属正常；命中中无 `docId` 的条目（如 GraphRAG 三元组）被 fail-closed 丢弃。想先观测不拦截：设 `RAG_AUTHZ_MODE=shadow`（照算记差异、不过滤）。
 - `checkBulk`/判权依赖失败时 enforce 档 **fail-closed**（返回空、宁可少给），`shadow` 档 fail-open（返回全集）。确认 `AUTHZ_SERVER_URL`（默认 `:8200`）指向的 auth-platform-server 可达、`AUTHZ_SERVER_TOKEN` 与 server 端 `authz.server.security.token` 一致。
-- 灰度看板：`GET /actuator/metrics/knowledge.authz.decisions`（`{mode,operation,permission,decision}`）。
+- 灰度看板：`GET :9084/actuator/metrics/knowledge.authz.decisions`（`{mode,operation,permission,decision}`；management 端口，免凭据）。
 
 ### 上传文档 403「cannot determine uploader's home department」
 

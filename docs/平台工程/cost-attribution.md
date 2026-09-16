@@ -84,8 +84,9 @@ curl -s http://localhost:8080/chat \
   -H 'X-Api-Key: dev-key-acme' -H 'Content-Type: application/json' \
   -d '{"message":"你好"}'
 
-# 再直连服务读 per-tenant 当日 token 快照（Redis 后端下是跨 pod 共享计数）
-curl -s http://localhost:8081/actuator/tokenbudget | jq
+# 再读 per-tenant 当日 token 快照（Redis 后端下是跨 pod 共享计数）
+# actuator 在 conversation 的 management 端口 9081（= 业务端口 8081 + 1000），免凭据、只在内网暴露
+curl -s http://localhost:9081/actuator/tokenbudget | jq
 # → {
 #     "acme":      { "used": 1287, "budget": 100000, "day": "2026-07-09" },
 #     "anonymous": { "used": 42,   "budget": 5000,   "day": "2026-07-09" }
@@ -162,15 +163,15 @@ mvn -pl conversation-service spring-boot:run \
   -Dspring-boot.run.jvmArguments="-Dapp.cost.enabled=true"
 #（或整栈 docker compose 起，云 provider 经 LiteLLM 路由）
 
-# 经网关打几次 chat 后，直连服务读 per-tenant 当日累计 USD
-curl -s http://localhost:8081/actuator/cost | jq
+# 经网关打几次 chat 后，读 per-tenant 当日累计 USD（management 端口）
+curl -s http://localhost:9081/actuator/cost | jq
 # → {
 #     "acme":      { "usd": 0.00042, "currency": "USD", "day": "2026-07-09" },
 #     "anonymous": { "usd": 0.00001, "currency": "USD", "day": "2026-07-09" }
 #   }
 
 # Prometheus 里的成本 counter（按 model/provider tag，不带 tenant）
-curl -s http://localhost:8081/actuator/prometheus | grep gen_ai_client_cost_usd
+curl -s http://localhost:9081/actuator/prometheus | grep gen_ai_client_cost_usd
 ```
 
 > 成本是**纯观测**指标（只累计、永不拦截）—— 拦截语义归 token 预算（及未来的 cost-based guard filter）。

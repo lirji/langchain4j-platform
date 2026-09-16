@@ -10,11 +10,12 @@
 | --- | --- | --- | --- |
 | **跨服务 traceId** | `platform-observability`：`TraceIdFilter` + `OutboundTraceForwarder` | 一条调用链在多服务日志里用同一个 id 串起来 | **默认开**（servlet 服务自动挂 filter） |
 | **OpenTelemetry GenAI span** | `platform-observability`：`otel/OtelChatModelListener` + `OtelTracingAutoConfiguration`（配合 `platform-gateway-client` 的 `TracingDefaultsEnvironmentPostProcessor`） | 每次 LLM 调用的 span 树、耗时分解、token、finish_reason、租户归属 | **默认关**（`management.tracing.enabled=false` 兜底） |
-| **指标 + Actuator** | Spring Boot Actuator + Micrometer（`platform-metering` 的 `tokenbudget`/`cost` 端点、`knowledge` 的 `ChunkMetrics`、`workflow` 的 `WorkflowMetrics`、`cost` 的 `gen_ai.client.cost.usd`） | 聚合趋势：请求量、成本、切分质量、工作流；租户 token/成本快照；健康 | **部分默认开**（health/info 全开；prometheus/tokenbudget/cost 按服务声明） |
+| **指标 + Actuator** | Spring Boot Actuator + Micrometer（`platform-metering` 的 `tokenbudget`/`cost` 端点、`knowledge` 的 `ChunkMetrics`、`workflow` 的 `WorkflowMetrics`、`cost` 的 `gen_ai.client.cost.usd`） | 聚合趋势：请求量、成本、切分质量、工作流；租户 token/成本快照；健康 | **默认开**（health/info/prometheus 全服务；tokenbudget/cost 按服务声明） |
 
 > 阅读约定：
 > - **业务接口**统一经边缘网关 `http://localhost:8080` + `-H 'X-Api-Key: dev-key-acme'`（网关校验 key → 签发内部 JWT → 路由下游）。
-> - **Actuator（health/prometheus/tokenbudget/cost）属于运维面，不经边缘网关**——网关只路由业务路径（`/chat`、`/agent`、`/rag` 等），`/actuator/**` 不在路由表里。用**服务自身端口直连**访问（内网/本地）：conversation `:8081`、workflow `:8082`、analytics `:8083`、knowledge `:8084`、agent `:8085`、async-task `:8086`、channel `:8087`、interop `:8088`、eval `:8089`、vision `:8090`、voice `:8091`、edge-gateway `:8080`、config-server `:8888`。
+> - **Actuator 属于运维面，既不经边缘网关、也不在业务端口上**——每个 Java 服务把 actuator 搬到了独立的 **management 端口 = 业务端口 + 1000**（`MANAGEMENT_PORT`）。运维面直连该端口（内网/本地）：edge-gateway `:9080`、conversation `:9081`、workflow `:9082`、analytics `:9083`、knowledge `:9084`、agent `:9085`、async-task `:9086`、channel `:9087`、interop `:9088`、eval `:9089`、vision `:9090`、voice `:9091`、auth `:9092`、order `:9093`、tax `:9094`、config-server `:9888`。**AgentScope 编排运行时是例外**：它是单端口应用，`/metrics`、`/health`、`/readiness` 都在业务端口 `:8085`。
+> - **为什么要拆端口**：业务端口上挂着内部 JWT 校验 filter，而内部 JWT 只活 5 分钟——Prometheus 和 K8s probe 拿不到能长期使用的静态凭据，抓取和探活就必然失败。Spring Boot 的 management 端口跑在独立子上下文里，天然不经过父上下文的租户 filter，因此运维面免鉴权、业务面鉴权不变（第 3.3 节有验证）。该端口**只在内网/集群内暴露，不要发布到公网**。
 > - 三条线**默认都无需任何外部基础设施**：traceId 纯内存 MDC；OTel 关着且开着也只走 OTLP HTTP，不引 gRPC；指标在进程内 Micrometer registry。
 
 ---
@@ -151,17 +152,19 @@ curl -X POST 'http://localhost:8080/chat?chatId=u1' \
 
 ### 3.1 各服务暴露了什么（Actuator exposure）
 
-每个服务独立暴露自己的 Actuator（单体是一个进程一套端点，微服务是**每服务一套**、用各自端口）。当前各服务
-`management.endpoints.web.exposure.include` 实际声明如下（以各 `application.yml` 为准）：
+每个服务独立暴露自己的 Actuator（单体是一个进程一套端点，微服务是**每服务一套**、各自一个 management 端口）。
+**`health,info,prometheus` 是全服务基线**——16 个常驻 Java 服务无一例外，否则同一套抓取配置会漏掉一部分进程。
+在此之上按能力追加端点：
 
-| 暴露集合 | 服务 |
-| --- | --- |
-| `health,info,prometheus,tokenbudget,cost` | conversation `:8081`、agent `:8085`、vision `:8090` |
-| `health,info,prometheus` | async-task `:8086`、channel `:8087`、interop `:8088`、eval `:8089`、voice `:8091` |
-| `health,info`（不含 prometheus） | analytics `:8083`、knowledge `:8084`、workflow `:8082`、config-server `:8888` |
-| `health,info,gateway` | edge-gateway `:8080`（额外 `gateway` 端点） |
+| 追加端点 | 服务 | 说明 |
+| --- | --- | --- |
+| `tokenbudget,cost` | conversation `:9081`、agent `:9085`、vision `:9090` | 引了 `platform-metering` 的 LLM 服务，见 3.4 |
+| `gateway` | edge-gateway `:9080` | Spring Cloud Gateway 自带的路由端点 |
+| （仅基线） | workflow `:9082`、analytics `:9083`、knowledge `:9084`、async-task `:9086`、channel `:9087`、interop `:9088`、eval `:9089`、voice `:9091`、auth `:9092`、order `:9093`、tax `:9094`、config-server `:9888` | — |
 
-> 注意：`knowledge` 虽然在采集 `rag.chunk.*` 指标，但其 exposure **默认不含 `prometheus`**——要抓它的切分质量指标，需把 `prometheus` 加进 knowledge 的 `management.endpoints.web.exposure.include`。
+> 这条基线由 `deploy/test-observability-config.sh` 静态守住（CI 的 supply-chain workflow 里跑）：任一服务少了
+> `prometheus`、少了 management 端口、management 端口不等于业务端口 +1000，或没进抓取配置，门禁直接失败。
+> 加新服务时照抄任一现有 `application.yml` 的 `management` 块即可。
 
 ### 3.2 平台实际发出的 Micrometer 指标
 
@@ -177,32 +180,66 @@ curl -X POST 'http://localhost:8080/chat?chatId=u1' \
 | `workflow.tasks.pending` | gauge | — | workflow 待审批任务数 |
 | `workflow.started` / `workflow.completed` / `workflow.approval.timeout` | counter | `priority`/`outcome` 等 | 退款审批流启动/完成/超时数 |
 | `workflow.approval.duration` | timer | — | 审批耗时分布 |
+| `async_task_backlog` / `async_task_inflight` | gauge | — | async-task 中心队列的 PENDING / RUNNING 任务数（读的是持久化存储，各副本看同一份） |
+| `async_task_event_append_total` | counter | `event`,`duplicate` | 任务事件追加数（`duplicate` 区分幂等重放） |
+| `async_task_orphan_failed_total` | counter | `kind` | 租约过期被孤儿回收判失败的任务数 |
+| `knowledge.ingestion.jobs` | counter | — | 入库任务数 |
+| `knowledge.ingestion.oldest.pending.seconds` | gauge | — | 最老待处理入库任务的等待秒数（队列老化，比 backlog 数量更能反映卡住） |
+| `knowledge.ingestion.stage.duration` / `knowledge.ingestion.commit.latency` | timer | 阶段 | 入库各阶段耗时 / 提交延迟 |
+| `knowledge.ingestion.failures` | counter | — | 入库失败数 |
+| `knowledge.authz.decisions` / `knowledge.authz.candidates` / `knowledge.authz.allowed_docs` / `knowledge.authz.underfill` | counter / summary | 决策维度 | 文档级 ReBAC 判权结果、候选集与过滤后不足量（`RAG_AUTHZ_MODE` 非 disabled 时有数） |
+| `knowledge.authz.check_bulk.latency` | timer | — | 外部 auth-platform `checkBulk` 延迟 |
+| `conversation.shadow.requests` / `conversation.shadow.latency` | counter / timer | — | 影子流量对比（灰度切换期） |
+
+**AgentScope 编排运行时（Python，OTel → 手写 Prometheus 渲染）**。渲染器给单调 counter 补 `_total`、不追加 unit 后缀，
+所以下面的名字加 `_total` 就是抓取后的真实序列名：
+
+| OTel 名 | 类型 | attributes | 含义 |
+| --- | --- | --- | --- |
+| `agent_async_task_submissions` / `agent_async_task_completions` | counter | `kind`（+`status`） | Agent 异步任务受理数 / 终态完成数 |
+| `agent_async_task_heartbeat_failures` | counter | — | 租约心跳失败数（心跳断了租约会过期，任务可能被重复领取） |
+| `agent_async_task_running` / `agent_async_task_inflight` / `agent_async_task_backlog` | up-down counter | `kind` | **本进程内**执行中 / 已受理 / 等执行槽的任务数（与 Java 侧 `async_task_backlog` 不同：那是中心队列，这是单进程视角） |
+| `agent_tool_policy_denials` | counter | `tool`,`reason` | 受治理工具在执行前被策略拒绝数 |
+| `agent_tool_provider_failures` | counter | `tool`,`provider` | 受治理工具的下游 provider 调用失败数 |
 
 > **相对单体的重要差异（诚实提示）**：单体有自研 `MetricsChatModelListener` 发 `gen_ai_client_requests_total` / `_operation_duration_seconds` / `_token_usage_total` / `_errors_total` 四个聚合指标。新平台**没有**这套 Micrometer 聚合计数器——这些「每调用」信号改由**第 2 节的 OTel span** 承载（耗时/token/finish_reason/error 都在 span 上），token 用量另由 `/actuator/tokenbudget` 快照（3.4 节）、成本由 `gen_ai.client.cost.usd` counter 承载。
 
 ### 3.3 抓取（Prometheus scrape）
 
-> **坑（务必先看）**：exposure 里写了 `prometheus` 只是**声明意图**。`/actuator/prometheus` 抓取端点由 `micrometer-registry-prometheus` 注册表激活，而当前依赖树里**没有**这个 registry（只有 `micrometer-core`/`micrometer-tracing-*`）。也就是说，直接 `curl /actuator/prometheus` 目前会 404。要真正抓取，需给相关服务的 pom **加上 `io.micrometer:micrometer-registry-prometheus`**（进程内所有 Micrometer 指标随即在该端点以文本格式暴露）。加了 registry 后：
+`/actuator/prometheus` 这个端点只有在 `micrometer-registry-prometheus` 在 classpath 上时才真的存在——光在 exposure 里
+写 `prometheus` 会得到 404。这个 registry 现在由 **`platform-observability` 统一带入**（`runtime` 且**不加 `optional`**，
+否则依赖不传递、接入方仍然拿不到端点）；`edge-gateway` 与 `config-server` 不依赖该共享库，因此在自己的 pom 里直接声明。
+
+抓取与告警配置在仓库里，**不用自己拼**：
+
+| 文件 | 内容 |
+| --- | --- |
+| `deploy/prometheus/prometheus.yml` | 14 个默认拓扑 Java 服务（management 端口 + `/actuator/prometheus`）+ AgentScope（`:8085/metrics`）。每个 target 带 `service` 标签，告警文案直接引用它。`agent-service`（`legacy-agent` profile）与 `eval-service`（`evaluation` profile）默认不启动，故意不在列表里——列进去只会制造长期 `up==0` 噪声 |
+| `deploy/prometheus/alerts.yml` | 8 条规则，见 3.5 |
+
+起 Prometheus（`observability` profile，不影响默认栈）：
 
 ```bash
-curl -s http://localhost:8085/actuator/prometheus   # agent，加了 registry 后返回指标文本
+docker compose -f deploy/docker-compose.yml --profile observability up -d prometheus
+# UI: http://localhost:19090（PROMETHEUS_HOST_PORT 可改）→ Status / Targets 应全绿；Alerts 里 8 条规则均为 inactive
 ```
 
-最小 Prometheus 配置（每服务一个 target，因为端点是每服务独立的）：
+直接看某个服务的原始指标（走 management 端口、**不需要任何凭据**）：
 
-```yaml
-scrape_configs:
-  - job_name: langchain4j-platform
-    metrics_path: /actuator/prometheus
-    scrape_interval: 15s
-    static_configs:
-      - targets:   # K8s 换成 <svc>.<ns>.svc.cluster.local:<port>
-          - "conversation-service:8081"
-          - "agent-service:8085"
-          - "vision-service:8090"
-          - "async-task-service:8086"
-          # …按需补齐暴露了 prometheus 的服务
+```bash
+curl -s http://localhost:9084/actuator/prometheus | grep '^rag_chunk'   # knowledge 的切分质量
+curl -s http://localhost:8085/metrics | grep '^agent_tool'             # AgentScope（单端口，业务端口即运维端口）
 ```
+
+业务端口上则**取不到**它——请求会被内部 JWT filter 拦在路由之前，返回 401 而不是 404
+（`AsyncTaskManagementPortTest` 对这条边界做了断言：management 端口免鉴权可取指标与探针，业务端口 401，业务接口仍要凭据）：
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8084/actuator/prometheus   # 401
+```
+
+K8s 侧由 Helm 渲染：`platform-lib` 给每个 Spring 服务额外开一个名为 `mgmt` 的容器端口与 Service 端口，探针也打在 `mgmt` 上；
+`agentscope-orchestrator` 在 `values.yaml` 里显式 `managementPort: 0`（单端口应用），此时不渲染 `mgmt` 端口、探针回落到 `http`。
 
 示例 PromQL（切分质量，沿用单体洞察）：
 
@@ -232,17 +269,46 @@ conversation/agent/vision 三个服务已在 exposure 里带上它们：
 | `GET /actuator/tokenbudget` | `tokenbudget` | `{used, budget, day}`（当日 token 用量/配额） | token 预算默认**开**；计数默认落 `redis`（`TOKEN_BUDGET_STORE`，无 redis 设 `in-memory`） |
 | `GET /actuator/cost` | `cost` | `{usd, currency, day}`（当日累计成本） | 成本归因默认**关**；开启后 `COST_STORE` 默认 `redis`。详见 [cost-attribution.md](cost-attribution.md) |
 
-直连服务端口访问（不经网关）：
+直连 management 端口访问（不经网关、不需凭据）：
 
 ```bash
-curl -s http://localhost:8081/actuator/tokenbudget   # conversation：各租户当日 token 用量
-curl -s http://localhost:8085/actuator/cost          # agent：各租户当日成本 USD
+curl -s http://localhost:9081/actuator/tokenbudget   # conversation：各租户当日 token 用量
+curl -s http://localhost:9085/actuator/cost          # agent：各租户当日成本 USD
 ```
+
+> 这两个端点按租户返回快照，**不要暴露到公网**——management 端口整体只在内网/集群内开放。
 
 响应示例（map：tenantId → 快照）：
 
 ```json
 { "acme": { "used": 12840, "budget": 200000, "day": "2026-07-09" } }
+```
+
+---
+
+## 3.5 关键告警（`deploy/prometheus/alerts.yml`）
+
+规则只引用代码里确实注册过的序列（3.2 节两张表），**不引用臆想的指标**。阈值是异常信号的起点，
+**不是经过验证的 SLO**——本仓没有正式性能验收目标，所以刻意不设延迟/TP99 门限，上线前应按真实容量与值班能力重定：
+
+| 告警 | 触发 | 级别 | 首查 |
+| --- | --- | --- | --- |
+| `PlatformServiceDown` | `up == 0` 持续 2m | critical | 容器状态 + `/actuator/health/readiness` |
+| `PlatformServerErrorRatioHigh` | 5xx 比例 > 5% 持续 10m（分母 > 0 保护，空闲期不除零误报） | warning | 是单接口回归还是下游依赖故障 |
+| `AsyncTaskBacklogNotDraining` | `async_task_backlog` 15m 内一次都没归零 | warning | `GET /async/drain-inventory` 看存量按 kind + 状态 + 租约持有者的归属 |
+| `AsyncTaskOrphansReaped` | `async_task_orphan_failed_total` 有增长 | warning | worker 是否重启 / 租约续约失败 |
+| `AgentAsyncTaskHeartbeatFailing` | `agent_async_task_heartbeat_failures_total` 有增长 | warning | 心跳断→租约过期→任务可能被重复领取，先查 async-task-service 连通性 |
+| `AgentToolProviderFailing` | `agent_tool_provider_failures_total` 持续增长 5m | warning | 下游 provider 可达性与凭据（Agent 会降级但答案质量下降） |
+| `WorkflowApprovalsTimingOut` | `workflow_approval_timeout_total` 有增长 | warning | 待办分派与值班 |
+| `KnowledgeIngestionBacklogAging` | `knowledge_ingestion_oldest_pending_seconds > 900` 持续 10m | warning | ingestion worker 是否在跑、embedding / 向量库可达性 |
+
+改完规则本地先过语法：
+
+```bash
+# 必须挂到 /etc/prometheus：prometheus.yml 里的 rule_files 是容器内绝对路径，挂别处会报 rule 文件不存在
+docker run --rm -v "$PWD/deploy/prometheus:/etc/prometheus:ro" --entrypoint promtool \
+  prom/prometheus:v2.55.1 check config /etc/prometheus/prometheus.yml
+# SUCCESS: 1 rule files found / SUCCESS: 8 rules found
 ```
 
 ---
@@ -256,22 +322,26 @@ curl -s http://localhost:8085/actuator/cost          # agent：各租户当日�
 - **TCP 探测的取舍**（沿用单体洞察）：只查网络可达，不发 LLM 请求 → 不烧 token、不需 api-key 有效、1s 内出结果，适合 K8s readiness/liveness probe；但不反映模型实际可推理能力（那要靠 OTel 的 `error.type` span 或成本/用量趋势监控）。
 
 ```bash
-curl -s http://localhost:8081/actuator/health   # conversation，含 gateway 节点
-curl -s http://localhost:8080/actuator/health   # edge-gateway
+curl -s http://localhost:9081/actuator/health   # conversation，含 gateway 节点（management 端口）
+curl -s http://localhost:9080/actuator/health   # edge-gateway
+curl -s http://localhost:8085/health            # AgentScope：单端口应用
 ```
 
-K8s probe（直连服务端口，与网关无关）：
+K8s probe 打 **`mgmt` 端口**（Helm 的 `platform-lib` 已按此渲染，无需手写）：
 
 ```yaml
 readinessProbe:
-  httpGet: { path: /actuator/health/readiness, port: 8081 }
+  httpGet: { path: /actuator/health/readiness, port: mgmt }
   initialDelaySeconds: 5
   periodSeconds: 10
 livenessProbe:
-  httpGet: { path: /actuator/health/liveness, port: 8081 }
+  httpGet: { path: /actuator/health/liveness, port: mgmt }
   initialDelaySeconds: 30
   periodSeconds: 30
 ```
+
+> 探针必须打 management 端口：业务端口上 `/actuator/**` 会被内部 JWT filter 拦成 401，kubelet 不带凭据 → Pod 永远 not ready。
+> 本地脚本同理，`deploy/smoke-*.sh` 与 `deploy/dev-infra/smoke.py` 的健康等待都已改用 management 端口。
 
 要把 `gateway` 探测纳入 readiness group：
 
@@ -290,13 +360,15 @@ management:
 
 | 维度 | 单体（`LangChain4j_project`） | 新微服务平台 |
 | --- | --- | --- |
-| Actuator | 单进程一套端点（`:8080`） | **每服务一套**，用各自端口；exposure 按服务声明（见 3.1） |
+| Actuator | 单进程一套端点（与业务同端口 `:8080`） | **每服务一套**，且搬到独立 management 端口（业务端口 +1000）；`health,info,prometheus` 为全服务基线（见 3.1） |
 | traceId | 单进程 `TraceIdFilter` 打 MDC | 同款 filter + **`OutboundTraceForwarder` 跨服务透传**；由第一个 servlet 下游服务铸造、沿 `X-Trace-Id` 传播；网关（WebFlux）不打 traceId |
 | LLM 聚合指标 | 自研 `MetricsChatModelListener` 发 `gen_ai_client_*` 四指标 | **不再有**这套 counter；每调用信号移到 OTel span，token→`/actuator/tokenbudget`，成本→`gen_ai.client.cost.usd` |
 | OTel 追踪配置 | 自研 `app.observability.otel.*`（enabled/endpoint/service-name/sampler…） | **Spring Boot 原生** `management.tracing.*` + `management.otlp.tracing.*`；默认关由 `TracingDefaultsEnvironmentPostProcessor` 兜底 |
 | span API | 原生 OpenTelemetry SDK | `io.micrometer.tracing`（micrometer-tracing-bridge-otel），属性语义不变 |
 | 健康探测 | `llm`/`embedding` 双 TCP 探测各自 base-url | 单个 `gateway` TCP 探测 LiteLLM（provider 路由都在网关，一探即覆盖） |
-| Prometheus registry | 已在 classpath | **当前未引入**，需按需加 `micrometer-registry-prometheus`（见 3.3 坑） |
+| Prometheus registry | 已在 classpath | 由 `platform-observability` 统一带入（`runtime`、非 `optional`），edge-gateway / config-server 自行声明；全服务 `/actuator/prometheus` 可抓 |
+| 抓取凭据 | 单进程、无内部鉴权 | actuator 在**免鉴权的 management 端口**上；业务端口仍要内部 JWT。内部 JWT 只活 5 分钟，做不了静态抓取凭据 |
+| 抓取/告警配置 | 无 | 随仓库交付：`deploy/prometheus/prometheus.yml` + `alerts.yml`（8 条），`deploy/test-observability-config.sh` 静态守一致性 |
 
 ---
 
@@ -309,7 +381,7 @@ p50·p95·p99 / Token Usage / Error Rate / 24h Token Spend / Health / Request Co
 **新平台尚未内置该 JSON**，且它引用的 `gen_ai_client_requests_total` / `_operation_duration_seconds` / `_token_usage_total` /
 `_errors_total` 在 v2 里**不再产出**（见第 5 节）。如需沿用，请：
 
-1. 先按 3.3 给服务加上 `micrometer-registry-prometheus` 并配好 scrape；
+1. 起 Prometheus（3.3 节的 `observability` profile）并在 Grafana 里把它加成数据源；抓取配置与 registry 已就绪，不用再改 pom；
 2. 把 panel 的查询改成 v2 实际有的指标：成本用 `gen_ai_client_cost_usd_total`、耗时/错误改从 **OTel span**（Jaeger/Tempo）看、token 用量看 `/actuator/tokenbudget`、切分质量用 `rag_chunk_*`、工作流用 `workflow_*`；
 3. 导入方式不变：Grafana → Dashboards → New → Import → Upload JSON file。
 
@@ -327,17 +399,21 @@ p50·p95·p99 / Token Usage / Error Rate / 24h Token Spend / Health / Request Co
 | `TOKEN_BUDGET_STORE` | `redis` | token 用量计数存储（无 redis 设 `in-memory`）；`/actuator/tokenbudget` |
 | `COST_STORE` | `redis` | 成本快照存储；成本归因默认关，开启后生效；`/actuator/cost` |
 | `platform.gateway.base-url` | 各服务 yml | `gateway` 健康探测的 TCP 目标（LiteLLM） |
-| `management.endpoints.web.exposure.include` | 见 3.1 | 每服务暴露的 Actuator 端点集合 |
+| `management.endpoints.web.exposure.include` | 见 3.1 | 每服务暴露的 Actuator 端点集合（基线 `health,info,prometheus`） |
+| `MANAGEMENT_PORT` (`management.server.port`) | 业务端口 + 1000（各服务 yml） | actuator 独立监听端口。抓取与探针都打这里；**只在内网/集群内暴露** |
+| `SERVER_PORT` (`server.port`) | 见 3.1 | 业务端口，仍受内部 JWT filter 保护 |
+| `PROMETHEUS_HOST_PORT` | `19090` | compose `observability` profile 里 Prometheus UI 的宿主端口 |
 
 > traceId（`X-Trace-Id`/MDC `traceId`）**无开关、默认常开**，servlet 服务随 `platform-observability` 自动装配；OTel span listener 也常驻但**没开 tracing 时全程 no-op**。
 
-### 端点速查（均为服务自身端口直连，不经边缘网关）
+### 端点速查（均为服务自身 management 端口直连，不经边缘网关）
 
 | 端点 | 方法 | 暴露服务 | 说明 |
 | --- | --- | --- | --- |
 | `/actuator/health` | GET | 全部 | 健康（含 `gateway` TCP 探测、liveness/readiness group） |
 | `/actuator/info` | GET | 全部 | 构建信息 |
-| `/actuator/prometheus` | GET | conversation/agent/vision/async-task/channel/interop/eval/voice（**需加 `micrometer-registry-prometheus`**） | Micrometer 指标抓取 |
+| `/actuator/prometheus` | GET | **全部 16 个 Java 服务** | Micrometer 指标抓取（Prometheus 的抓取目标） |
+| `/metrics` | GET | agentscope-orchestrator（业务端口 `:8085`） | AgentScope 侧指标，同为免鉴权运维端点 |
 | `/actuator/tokenbudget` | GET | conversation/agent/vision | 各租户当日 token 用量/配额快照 |
 | `/actuator/cost` | GET | conversation/agent/vision | 各租户当日成本 USD 快照（成本归因开启时有数） |
 | `/actuator/gateway` | GET | edge-gateway | 网关路由信息（Spring Cloud Gateway 自带） |
