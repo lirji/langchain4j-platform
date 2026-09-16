@@ -1,11 +1,12 @@
 package com.lrj.platform.channel.feishu;
 
+import com.lrj.platform.eventbus.InboundIdempotency;
+import com.lrj.platform.eventbus.ProcessedEventStore;
 import com.lrj.platform.security.TenantContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 
 /**
@@ -15,8 +16,12 @@ import java.util.concurrent.Executor;
  * 处理链：按 {@code messageId} 去重（飞书会重投）→ 设 {@link TenantContext}（飞书应用配置的租户）→
  * 调 conversation {@code /chat}（内部 JWT 由 RestTemplate 转发器铸发）→ 经 {@link HttpFeishuReplyClient} 回复。
  *
- * <p><b>骨架说明</b>：去重目前是进程内 best-effort；生产多副本需换 Redis/JDBC 去重。回复需飞书应用凭据，
- * {@code reply.enabled=false} 时只收不回，便于先验证入站链路。
+ * <p>去重走平台统一的 {@link InboundIdempotency}（底层 {@link ProcessedEventStore}，与本服务两个 Kafka
+ * listener 同一套存储）：多副本部署把 {@code platform.eventbus.processed-event-store} 设为 {@code jdbc}
+ * 即跨副本、跨重启生效。处理失败会归还抢占，让飞书重投能重来；退款工单另有 workflow 侧
+ * {@code dedupeId} 幂等兜底，因此重投不会起出第二个流程。
+ *
+ * <p><b>骨架说明</b>：回复需飞书应用凭据，{@code reply.enabled=false} 时只收不回，便于先验证入站链路。
  */
 public class FeishuMessageBridge {
 
@@ -28,17 +33,19 @@ public class FeishuMessageBridge {
     private final Executor executor;
     private final String tenantId;
     private final boolean intentRoutingEnabled;
-    private final ConcurrentHashMap<String, Boolean> seen = new ConcurrentHashMap<>();
+    private final InboundIdempotency idempotency;
 
     public FeishuMessageBridge(HttpConversationClient conversation, HttpFeishuReplyClient reply,
                                HttpWorkflowClient workflow,
-                               Executor feishuBridgeExecutor, FeishuProperties props) {
+                               Executor feishuBridgeExecutor, FeishuProperties props,
+                               ProcessedEventStore processedEvents) {
         this.conversation = conversation;
         this.reply = reply;
         this.workflow = workflow;
         this.executor = feishuBridgeExecutor;
         this.tenantId = props.getTenantId();
         this.intentRoutingEnabled = props.getIntentRouting().isEnabled();
+        this.idempotency = new InboundIdempotency(processedEvents, "feishu");
     }
 
     /** 异步处理一条入站消息（控制器已 ack）。 */
@@ -46,14 +53,15 @@ public class FeishuMessageBridge {
         if (msg == null || msg.text() == null || msg.text().isBlank()) {
             return;
         }
-        if (msg.messageId() != null && seen.putIfAbsent(msg.messageId(), Boolean.TRUE) != null) {
-            log.debug("feishu message deduplicated messageId={}", msg.messageId());
-            return;
-        }
-        executor.execute(() -> process(msg));
+        idempotency.submitOnce(msg.messageId(), executor, () -> process(msg));
     }
 
-    /** 同步处理（抽出便于单测：不经 executor 直接跑）。 */
+    /**
+     * 同步处理（抽出便于单测：不经 executor 直接跑）。
+     *
+     * <p>失败<b>向上抛</b>：由 {@link InboundIdempotency#submitOnce} 归还抢占并记日志，飞书重投才能重来。
+     * 这里自己吞掉异常会让消息被永久标记为已处理。
+     */
     void process(FeishuInboundMessage msg) {
         TenantContext.Tenant prev = TenantContext.captureRaw();
         try {
@@ -69,8 +77,6 @@ public class FeishuMessageBridge {
             if (replyText != null && !replyText.isBlank()) {
                 reply.replyText(msg.openId(), replyText);
             }
-        } catch (Exception e) {
-            log.warn("feishu bridge process failed messageId={}: {}", msg.messageId(), e.toString());
         } finally {
             if (prev != null) TenantContext.set(prev); else TenantContext.clear();
         }

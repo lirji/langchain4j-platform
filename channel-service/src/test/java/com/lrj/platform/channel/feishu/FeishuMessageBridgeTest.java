@@ -1,5 +1,7 @@
 package com.lrj.platform.channel.feishu;
 
+import com.lrj.platform.eventbus.InMemoryProcessedEventStore;
+import com.lrj.platform.eventbus.ProcessedEventStore;
 import com.lrj.platform.security.TenantContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -15,7 +17,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * FeishuMessageBridgeTest：验证 {@link FeishuMessageBridge} 的入站处理与意图路由——默认走对话后回复、按 messageId 去重、
- * 空白文本 no-op、空回复跳过发送；意图路由开启时退款类关键词起 workflow 工单（等待审批回「已转人工」、自动完成回流程结论），
+ * 处理失败归还抢占使飞书重投能重来、空白文本 no-op、空回复跳过发送；意图路由开启时退款类关键词起 workflow 工单（等待审批回「已转人工」、自动完成回流程结论），
  * 关闭时退款关键词仍走对话不碰 workflow，且工单启动失败时降级为普通对话不丢消息。
  */
 class FeishuMessageBridgeTest {
@@ -47,7 +49,7 @@ class FeishuMessageBridgeTest {
         HttpFeishuReplyClient reply = mock(HttpFeishuReplyClient.class);
         HttpWorkflowClient workflow = mock(HttpWorkflowClient.class);
         when(conversation.chat(eq("你好"), eq("ou_1"))).thenReturn("你好，我能帮你什么？");
-        FeishuMessageBridge bridge = new FeishuMessageBridge(conversation, reply, workflow, Runnable::run, props());
+        FeishuMessageBridge bridge = new FeishuMessageBridge(conversation, reply, workflow, Runnable::run, props(), new InMemoryProcessedEventStore());
 
         bridge.handle(msg("om_1", "你好"));
 
@@ -61,10 +63,48 @@ class FeishuMessageBridgeTest {
         HttpFeishuReplyClient reply = mock(HttpFeishuReplyClient.class);
         HttpWorkflowClient workflow = mock(HttpWorkflowClient.class);
         when(conversation.chat(any(), any())).thenReturn("r");
-        FeishuMessageBridge bridge = new FeishuMessageBridge(conversation, reply, workflow, Runnable::run, props());
+        FeishuMessageBridge bridge = new FeishuMessageBridge(conversation, reply, workflow, Runnable::run, props(), new InMemoryProcessedEventStore());
 
         bridge.handle(msg("om_dup", "hi"));
         bridge.handle(msg("om_dup", "hi"));
+
+        verify(conversation, times(1)).chat(any(), any());
+    }
+
+    @Test
+    void handle_processingFailureReleasesClaim_soRedeliveryIsHandled() {
+        // /chat 失败：抢占必须归还，否则飞书重投进不来 = 用户消息被静默丢弃
+        HttpConversationClient conversation = mock(HttpConversationClient.class);
+        HttpFeishuReplyClient reply = mock(HttpFeishuReplyClient.class);
+        HttpWorkflowClient workflow = mock(HttpWorkflowClient.class);
+        when(conversation.chat(any(), any()))
+                .thenThrow(new RuntimeException("conversation down"))
+                .thenReturn("r");
+        FeishuMessageBridge bridge = new FeishuMessageBridge(
+                conversation, reply, workflow, Runnable::run, props(), new InMemoryProcessedEventStore());
+
+        bridge.handle(msg("om_retry", "hi"));
+        bridge.handle(msg("om_retry", "hi"));
+
+        verify(conversation, times(2)).chat(any(), any());
+        verify(reply).replyText(eq("ou_1"), eq("r"));
+    }
+
+    @Test
+    void handle_deduplicatesAcrossBridgeInstancesSharingTheSameStore() {
+        // 多副本部署：共享 JDBC 去重存储时，同一条飞书重投只应处理一次
+        ProcessedEventStore shared = new InMemoryProcessedEventStore();
+        HttpConversationClient conversation = mock(HttpConversationClient.class);
+        HttpFeishuReplyClient reply = mock(HttpFeishuReplyClient.class);
+        HttpWorkflowClient workflow = mock(HttpWorkflowClient.class);
+        when(conversation.chat(any(), any())).thenReturn("r");
+        FeishuMessageBridge replicaA = new FeishuMessageBridge(
+                conversation, reply, workflow, Runnable::run, props(), shared);
+        FeishuMessageBridge replicaB = new FeishuMessageBridge(
+                conversation, reply, workflow, Runnable::run, props(), shared);
+
+        replicaA.handle(msg("om_shared", "hi"));
+        replicaB.handle(msg("om_shared", "hi"));
 
         verify(conversation, times(1)).chat(any(), any());
     }
@@ -74,7 +114,7 @@ class FeishuMessageBridgeTest {
         HttpConversationClient conversation = mock(HttpConversationClient.class);
         HttpFeishuReplyClient reply = mock(HttpFeishuReplyClient.class);
         HttpWorkflowClient workflow = mock(HttpWorkflowClient.class);
-        FeishuMessageBridge bridge = new FeishuMessageBridge(conversation, reply, workflow, Runnable::run, props());
+        FeishuMessageBridge bridge = new FeishuMessageBridge(conversation, reply, workflow, Runnable::run, props(), new InMemoryProcessedEventStore());
 
         bridge.handle(msg("om_2", "   "));
 
@@ -87,7 +127,7 @@ class FeishuMessageBridgeTest {
         HttpFeishuReplyClient reply = mock(HttpFeishuReplyClient.class);
         HttpWorkflowClient workflow = mock(HttpWorkflowClient.class);
         when(conversation.chat(any(), any())).thenReturn("");
-        FeishuMessageBridge bridge = new FeishuMessageBridge(conversation, reply, workflow, Runnable::run, props());
+        FeishuMessageBridge bridge = new FeishuMessageBridge(conversation, reply, workflow, Runnable::run, props(), new InMemoryProcessedEventStore());
 
         bridge.handle(msg("om_3", "hi"));
 
@@ -101,7 +141,7 @@ class FeishuMessageBridgeTest {
         HttpWorkflowClient workflow = mock(HttpWorkflowClient.class);
         when(conversation.chat(any(), any())).thenReturn("好的");
         // 默认关：即便命中退款关键词也走对话，不碰 workflow（零回归）
-        FeishuMessageBridge bridge = new FeishuMessageBridge(conversation, reply, workflow, Runnable::run, props());
+        FeishuMessageBridge bridge = new FeishuMessageBridge(conversation, reply, workflow, Runnable::run, props(), new InMemoryProcessedEventStore());
 
         bridge.handle(msg("om_r1", "我要退款"));
 
@@ -116,7 +156,7 @@ class FeishuMessageBridgeTest {
         HttpWorkflowClient workflow = mock(HttpWorkflowClient.class);
         when(workflow.startRefund(eq("我要退款"), eq("feishu:ou_1"), eq("om_r2")))
                 .thenReturn(new HttpWorkflowClient.StartResult("inst-12345678abc", HttpWorkflowClient.STATUS_WAITING, null));
-        FeishuMessageBridge bridge = new FeishuMessageBridge(conversation, reply, workflow, Runnable::run, routingProps());
+        FeishuMessageBridge bridge = new FeishuMessageBridge(conversation, reply, workflow, Runnable::run, routingProps(), new InMemoryProcessedEventStore());
 
         bridge.handle(msg("om_r2", "我要退款"));
 
@@ -133,7 +173,7 @@ class FeishuMessageBridgeTest {
         HttpWorkflowClient workflow = mock(HttpWorkflowClient.class);
         when(workflow.startRefund(any(), any(), any()))
                 .thenReturn(new HttpWorkflowClient.StartResult("inst-9", HttpWorkflowClient.STATUS_COMPLETED, "已为您自动办理退款。"));
-        FeishuMessageBridge bridge = new FeishuMessageBridge(conversation, reply, workflow, Runnable::run, routingProps());
+        FeishuMessageBridge bridge = new FeishuMessageBridge(conversation, reply, workflow, Runnable::run, routingProps(), new InMemoryProcessedEventStore());
 
         bridge.handle(msg("om_r3", "申请退货"));
 
@@ -147,7 +187,7 @@ class FeishuMessageBridgeTest {
         HttpFeishuReplyClient reply = mock(HttpFeishuReplyClient.class);
         HttpWorkflowClient workflow = mock(HttpWorkflowClient.class);
         when(conversation.chat(any(), any())).thenReturn("你好");
-        FeishuMessageBridge bridge = new FeishuMessageBridge(conversation, reply, workflow, Runnable::run, routingProps());
+        FeishuMessageBridge bridge = new FeishuMessageBridge(conversation, reply, workflow, Runnable::run, routingProps(), new InMemoryProcessedEventStore());
 
         bridge.handle(msg("om_c1", "今天天气怎么样"));
 
@@ -162,7 +202,7 @@ class FeishuMessageBridgeTest {
         HttpWorkflowClient workflow = mock(HttpWorkflowClient.class);
         when(workflow.startRefund(any(), any(), any())).thenThrow(new RuntimeException("workflow down"));
         when(conversation.chat(any(), any())).thenReturn("我先帮您登记一下");
-        FeishuMessageBridge bridge = new FeishuMessageBridge(conversation, reply, workflow, Runnable::run, routingProps());
+        FeishuMessageBridge bridge = new FeishuMessageBridge(conversation, reply, workflow, Runnable::run, routingProps(), new InMemoryProcessedEventStore());
 
         bridge.handle(msg("om_r4", "投诉"));
 

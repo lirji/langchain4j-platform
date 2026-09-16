@@ -1,6 +1,7 @@
 package com.lrj.platform.channel.dingtalk;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lrj.platform.eventbus.ProcessedEventStore;
 import com.lrj.platform.observability.OutboundTraceForwarder;
 import com.lrj.platform.security.OutboundTenantForwarder;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -93,8 +94,9 @@ public class DingtalkConfig {
                                                 DingtalkKnowledgeClient dingtalkKnowledgeClient,
                                                 HttpDingtalkReplyClient httpDingtalkReplyClient,
                                                 Executor dingtalkBridgeExecutor,
-                                                DingtalkProperties props) {
+                                                DingtalkProperties props,
+                                                ProcessedEventStore processedEvents) {
         return new DingtalkMessageBridge(dingtalkConversationClient, dingtalkKnowledgeClient,
-                httpDingtalkReplyClient, dingtalkBridgeExecutor, props);
+                httpDingtalkReplyClient, dingtalkBridgeExecutor, props, processedEvents);
     }
 }

@@ -1,6 +1,7 @@
 package com.lrj.platform.channel.feishu;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lrj.platform.eventbus.ProcessedEventStore;
 import com.lrj.platform.observability.OutboundTraceForwarder;
 import com.lrj.platform.security.OutboundTenantForwarder;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -93,7 +94,9 @@ public class FeishuConfig {
                                             HttpFeishuReplyClient reply,
                                             HttpWorkflowClient workflow,
                                             Executor feishuBridgeExecutor,
-                                            FeishuProperties props) {
-        return new FeishuMessageBridge(conversation, reply, workflow, feishuBridgeExecutor, props);
+                                            FeishuProperties props,
+                                            ProcessedEventStore processedEvents) {
+        return new FeishuMessageBridge(conversation, reply, workflow, feishuBridgeExecutor, props,
+                processedEvents);
     }
 }

@@ -1,5 +1,7 @@
 package com.lrj.platform.channel.dingtalk;
 
+import com.lrj.platform.eventbus.InboundIdempotency;
+import com.lrj.platform.eventbus.ProcessedEventStore;
 import com.lrj.platform.protocol.knowledge.KnowledgeHit;
 import com.lrj.platform.protocol.knowledge.KnowledgeQueryReply;
 import com.lrj.platform.protocol.knowledge.KnowledgeQueryRequest;
@@ -8,7 +10,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 
 /**
@@ -19,8 +20,11 @@ import java.util.concurrent.Executor;
  * <b>兜底闸门</b>：先查 knowledge {@code /rag/query}，命中不足则发转人工话术 + @人工客服、<b>不调 LLM</b>；
  * 命中充分才调 conversation {@code /chat}（内部透明 RAG + LLM，命中相同知识块）→ 经 {@link HttpDingtalkReplyClient} 回复。
  *
- * <p><b>骨架说明</b>：去重目前是进程内 best-effort；生产多副本需换 Redis/JDBC 去重。回复需钉钉应用凭据，
- * 凭据未配时只收不回，便于先验证入站链路。
+ * <p>去重走平台统一的 {@link InboundIdempotency}（底层 {@link ProcessedEventStore}，与本服务两个 Kafka
+ * listener 同一套存储）：多副本部署把 {@code platform.eventbus.processed-event-store} 设为 {@code jdbc}
+ * 即跨副本、跨重启生效。处理失败会归还抢占，让钉钉重投能重来——重复回复只是冗余，静默丢客服提问是可见故障。
+ *
+ * <p><b>骨架说明</b>：回复需钉钉应用凭据，凭据未配时只收不回，便于先验证入站链路。
  */
 public class DingtalkMessageBridge {
 
@@ -31,18 +35,20 @@ public class DingtalkMessageBridge {
     private final HttpDingtalkReplyClient reply;
     private final Executor executor;
     private final DingtalkProperties props;
-    private final ConcurrentHashMap<String, Boolean> seen = new ConcurrentHashMap<>();
+    private final InboundIdempotency idempotency;
 
     public DingtalkMessageBridge(DingtalkConversationClient conversation,
                                  DingtalkKnowledgeClient knowledge,
                                  HttpDingtalkReplyClient reply,
                                  Executor dingtalkBridgeExecutor,
-                                 DingtalkProperties props) {
+                                 DingtalkProperties props,
+                                 ProcessedEventStore processedEvents) {
         this.conversation = conversation;
         this.knowledge = knowledge;
         this.reply = reply;
         this.executor = dingtalkBridgeExecutor;
         this.props = props;
+        this.idempotency = new InboundIdempotency(processedEvents, "dingtalk");
     }
 
     /** 异步处理一条入站消息（控制器已 ack）。 */
@@ -50,14 +56,15 @@ public class DingtalkMessageBridge {
         if (msg == null || msg.text() == null || msg.text().isBlank()) {
             return;
         }
-        if (msg.msgId() != null && seen.putIfAbsent(msg.msgId(), Boolean.TRUE) != null) {
-            log.debug("dingtalk message deduplicated msgId={}", msg.msgId());
-            return;
-        }
-        executor.execute(() -> process(msg));
+        idempotency.submitOnce(msg.msgId(), executor, () -> process(msg));
     }
 
-    /** 同步处理（抽出便于单测：不经 executor 直接跑）。 */
+    /**
+     * 同步处理（抽出便于单测：不经 executor 直接跑）。
+     *
+     * <p>失败<b>向上抛</b>：由 {@link InboundIdempotency#submitOnce} 归还抢占并记日志，钉钉重投才能重来。
+     * 这里自己吞掉异常会让消息被永久标记为已处理。
+     */
     void process(DingtalkInboundMessage msg) {
         TenantContext.Tenant prev = TenantContext.captureRaw();
         try {
@@ -77,8 +84,6 @@ public class DingtalkMessageBridge {
             if (answer != null && !answer.isBlank()) {
                 reply.replyText(msg.conversationId(), answer);
             }
-        } catch (Exception e) {
-            log.warn("dingtalk bridge process failed msgId={}: {}", msg.msgId(), e.toString());
         } finally {
             if (prev != null) TenantContext.set(prev); else TenantContext.clear();
         }

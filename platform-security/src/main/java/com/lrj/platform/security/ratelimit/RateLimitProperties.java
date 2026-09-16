@@ -52,6 +52,16 @@ public class RateLimitProperties {
     /** tenantId -> { family -> QPM }，覆盖 defaults 对应 family。 */
     private Map<String, Map<String, Integer>> overrides = new HashMap<>();
 
+    /**
+     * 免鉴权入口（登录、渠道回调）按客户端 IP 限流时，从哪个请求头取客户端地址。
+     *
+     * <p><b>默认留空 = 只用 TCP 对端地址</b>，因为 {@code X-Forwarded-For} 之类的头可被客户端伪造，
+     * 默认信任等于让攻击者每个请求换一个假 IP 绕开限流。仅当边缘前面确有会<b>覆写</b>该头的可信代理/LB
+     * 时才配置（如 {@code X-Forwarded-For}）；不配置且部署在 LB 后面，则所有请求会共享同一个 IP 桶，
+     * 需相应放大 {@code auth} / {@code channel-callback} 的限额。
+     */
+    private String clientIpHeader = "";
+
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
     public String getStore() { return store; }
@@ -64,6 +74,8 @@ public class RateLimitProperties {
     public void setAnonymousMultiplier(double anonymousMultiplier) { this.anonymousMultiplier = anonymousMultiplier; }
     public Map<String, Map<String, Integer>> getOverrides() { return overrides; }
     public void setOverrides(Map<String, Map<String, Integer>> overrides) { this.overrides = overrides; }
+    public String getClientIpHeader() { return clientIpHeader; }
+    public void setClientIpHeader(String clientIpHeader) { this.clientIpHeader = clientIpHeader; }
 
     public static class Redis {
         /** 桶 key 前缀。实际 key 为 {@code <prefix><tenant>|<family>|<qpm>}（见 {@link RateLimitKeys}）。 */
@@ -78,6 +90,10 @@ public class RateLimitProperties {
         m.put("stream", 20);
         m.put("ingest", 5);
         m.put("eval", 5);
+        // 免鉴权入口按客户端 IP 限：登录类给暴力破解留的余量要小；渠道回调是一个平台网关 IP 汇聚整个
+        // 租户的消息，限额要大得多，但仍要挡住"每条事件触发一次 LLM 花费"的洪峰。
+        m.put("auth", 30);
+        m.put("channel-callback", 600);
         m.put("default", 120);
         return m;
     }

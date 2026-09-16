@@ -44,4 +44,9 @@ public class JdbcProcessedEventStore implements ProcessedEventStore {
             return false;
         }
     }
+
+    @Override
+    public void releaseClaim(String eventId) {
+        jdbc.update("DELETE FROM PROCESSED_EVENT WHERE EVENT_ID = ?", eventId);
+    }
 }
