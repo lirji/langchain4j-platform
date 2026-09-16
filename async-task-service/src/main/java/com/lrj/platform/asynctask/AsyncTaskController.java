@@ -34,6 +34,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -354,6 +355,21 @@ public class AsyncTaskController {
         return ownerScoped(taskId).flatMap(task -> sse.subscribe(task.taskId(), lastEventId))
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /**
+     * 未完结任务的存量盘点（只读）：按 kind + 状态 + 租约持有者给出当前租户还没排空的 Agent 异步任务。
+     * Java Agent 退役门禁要求「async-task-service 中已无只能被 Java worker 领取的存量任务」，此前只能靠
+     * 人工翻库判断；这里给出可判定证据。是否把某个 leaseOwnerId 认定为 Java 运行时属于部署侧策略，
+     * 因此只返回原始归属，由门禁脚本裁决。
+     */
+    @GetMapping("/async/drain-inventory")
+    public List<AsyncTaskStore.DrainInventoryRow> drainInventory(
+            @RequestParam(name = "kinds", required = false) List<String> kinds) {
+        Set<String> requested = kinds == null || kinds.isEmpty()
+                ? AsyncTaskOrphanProperties.SUPPORTED_KINDS
+                : Set.copyOf(kinds);
+        return store.drainInventory(TenantContext.current().tenantId(), requested);
     }
 
     @GetMapping("/async/webhook-outbox/dead")

@@ -160,6 +160,49 @@ public class AsyncTaskStore {
                 .count();
     }
 
+    /**
+     * 按 kind + 状态 + 租约持有者盘点指定租户尚未完结的任务，用于判定「某个 worker 运行时是否还有存量
+     * 任务未排空」。只报事实，不判断哪个 leaseOwnerId 属于哪个运行时——那是部署侧的知识。
+     * JDBC 覆写为数据库聚合，使每个副本看到同一份中心队列状态。
+     */
+    public List<DrainInventoryRow> drainInventory(String tenantId, Set<String> kinds) {
+        if (tenantId == null || kinds == null || kinds.isEmpty()) {
+            return List.of();
+        }
+        Map<DrainInventoryKey, Long> grouped = tasks.values().stream()
+                .filter(task -> tenantId.equals(task.tenantId()))
+                .filter(task -> kinds.contains(task.kind()))
+                .filter(task -> !task.status().isTerminal())
+                .collect(java.util.stream.Collectors.groupingBy(
+                        task -> new DrainInventoryKey(task.kind(), task.status(), task.leaseOwnerId()),
+                        java.util.stream.Collectors.counting()));
+        return grouped.entrySet().stream()
+                .map(entry -> new DrainInventoryRow(entry.getKey().kind(), entry.getKey().status(),
+                        entry.getKey().leaseOwnerId(), entry.getValue()))
+                .sorted(DRAIN_INVENTORY_ORDER)
+                .toList();
+    }
+
+    /** 盘点结果稳定排序，便于门禁脚本做逐行 diff。 */
+    static final Comparator<DrainInventoryRow> DRAIN_INVENTORY_ORDER = Comparator
+            .comparing(DrainInventoryRow::kind)
+            .thenComparing(row -> row.status().name())
+            .thenComparing(DrainInventoryRow::leaseOwnerId,
+                    Comparator.nullsFirst(Comparator.naturalOrder()));
+
+    private record DrainInventoryKey(String kind, AsyncTaskStatus status, String leaseOwnerId) {
+    }
+
+    /**
+     * 未完结任务的盘点行：{@code leaseOwnerId} 为 null 表示当前无人持有租约（任何合法 worker 都能领取）。
+     * 供 Java Agent 退役门禁「已无只能被 Java worker 领取的存量任务」提供可判定证据。
+     */
+    public record DrainInventoryRow(String kind,
+                                    AsyncTaskStatus status,
+                                    String leaseOwnerId,
+                                    long tasks) {
+    }
+
     public List<AsyncTask> failOrphans(Set<String> kinds,
                                        Instant pendingCutoff,
                                        Instant runningCutoff,

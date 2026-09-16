@@ -303,6 +303,34 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
     }
 
     @Override
+    public List<DrainInventoryRow> drainInventory(String tenantId, Set<String> kinds) {
+        if (tenantId == null || kinds == null || kinds.isEmpty()) {
+            return List.of();
+        }
+        String kindPlaceholders = String.join(",", java.util.Collections.nCopies(kinds.size(), "?"));
+        List<AsyncTaskStatus> openStatuses = java.util.Arrays.stream(AsyncTaskStatus.values())
+                .filter(status -> !status.isTerminal())
+                .toList();
+        String statusPlaceholders = String.join(",", java.util.Collections.nCopies(openStatuses.size(), "?"));
+        List<Object> args = new java.util.ArrayList<>();
+        args.add(tenantId);
+        args.addAll(kinds);
+        openStatuses.forEach(status -> args.add(status.name()));
+        List<DrainInventoryRow> rows = jdbc.query("""
+                SELECT KIND, STATUS, LEASE_OWNER_ID, COUNT(*) AS OPEN_TASKS FROM ASYNC_TASK
+                WHERE TENANT_ID=? AND KIND IN (%s) AND STATUS IN (%s)
+                GROUP BY KIND, STATUS, LEASE_OWNER_ID"""
+                        .formatted(kindPlaceholders, statusPlaceholders),
+                (rs, rowNum) -> new DrainInventoryRow(
+                        rs.getString("KIND"),
+                        AsyncTaskStatus.valueOf(rs.getString("STATUS")),
+                        rs.getString("LEASE_OWNER_ID"),
+                        rs.getLong("OPEN_TASKS")),
+                args.toArray());
+        return rows.stream().sorted(DRAIN_INVENTORY_ORDER).toList();
+    }
+
+    @Override
     public List<AsyncTask> failOrphans(Set<String> kinds,
                                        Instant pendingCutoff,
                                        Instant runningCutoff,
