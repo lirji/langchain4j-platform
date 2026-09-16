@@ -7,6 +7,8 @@ services:
       RAG_RUNTIME_ROLE: query
       RAG_PRODUCTION: "true"
       RAG_LEGACY_WRITE_ENABLED: "false"
+      # 图检索保持关闭是容量决定，不再是能力限制：如需开启，同时设
+      # RAG_GRAPH_REQUIRE_PROVENANCE=true（query 角色的启动校验要求），让图命中进入版本过滤与文档级判权。
       RAG_GRAPH_ENABLED: "false"
       RAG_REGISTRY_STORE: redis
       RAG_VECTOR_STORE_PROVIDER: ${RAG_VECTOR_STORE_PROVIDER:-qdrant}

@@ -97,9 +97,10 @@ public class GraphIngestor {
         String docId = segment.metadata().getString("docId");
         String version = segment.metadata().getString("version");
         if (docId != null && !docId.isBlank() && version != null && !version.isBlank()) {
-            return docId + "/v" + version + "/"
-                    + TaggedSourceContentInjector.inferId(segment, index);
+            return GraphSourceId.of(docId, version, TaggedSourceContentInjector.inferId(segment, index));
         }
+        // 无 docId/version 的调用方（旧 combined 直传路径、单测）写出无 provenance 的三元组：
+        // 这类命中无法按 Registry 版本判新鲜度，查询侧按 require-provenance 决定是否放行。
         return TaggedSourceContentInjector.inferId(segment, index);
     }
 

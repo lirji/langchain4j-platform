@@ -3,6 +3,7 @@ package com.lrj.platform.knowledge.ingest.job;
 import com.lrj.platform.knowledge.DocumentMirror;
 import com.lrj.platform.knowledge.es.SegmentIndexer;
 import com.lrj.platform.knowledge.graph.GraphIngestor;
+import com.lrj.platform.knowledge.graph.GraphSourceId;
 import com.lrj.platform.knowledge.lifecycle.DocumentInfo;
 import com.lrj.platform.knowledge.lifecycle.DocumentRegistry;
 import com.lrj.platform.knowledge.store.EmbeddingStoreRouter;
@@ -108,7 +109,7 @@ public class KnowledgeVersionGarbageCollector {
         if (graphIngestor != null) {
             try {
                 graphIngestor.removeBySourcePrefix(
-                        current.tenantId(), current.docId() + "/v" + version + "/");
+                        current.tenantId(), GraphSourceId.prefix(current.docId(), version));
             } catch (RuntimeException exception) {
                 failures++;
                 warn("graph", current, version, exception);

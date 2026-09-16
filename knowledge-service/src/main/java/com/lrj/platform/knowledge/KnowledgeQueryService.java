@@ -120,6 +120,7 @@ public class KnowledgeQueryService implements AutoCloseable {
                                  ObjectProvider<GraphSearchService> graphSearchServiceProvider,
                                  @Value("${app.rag.graph.include-in-query:${app.rag.graph.enabled:false}}") boolean graphIncludedInQuery,
                                  @Value("${app.rag.graph.query-top-k:${app.rag.graph.max-triples:20}}") int graphTopK,
+                                 @Value("${app.rag.graph.require-provenance:false}") boolean graphRequireProvenance,
                                  @Value("${app.rag.ranking.vector-weight:1.0}") double vectorWeight,
                                  @Value("${app.rag.ranking.keyword-weight:1.0}") double keywordWeight,
                                  @Value("${app.rag.ranking.graph-weight:1.0}") double graphWeight,
@@ -145,7 +146,8 @@ public class KnowledgeQueryService implements AutoCloseable {
                 graphTopK,
                 vectorWeight,
                 keywordWeight,
-                graphWeight);
+                graphWeight,
+                graphRequireProvenance);
         if (queryExpanderProvider != null) {
             this.queryExpander = queryExpanderProvider.getIfAvailable(NoopQueryExpander::new);
         }
@@ -253,6 +255,25 @@ public class KnowledgeQueryService implements AutoCloseable {
                                  double vectorWeight,
                                  double keywordWeight,
                                  double graphWeight) {
+        this(storeRouter, embeddingModel, keywordSearchService, defaultTopK, defaultMinScore,
+                hybridEnabled, keywordTopK, graphSearchService, graphIncludedInQuery, graphTopK,
+                vectorWeight, keywordWeight, graphWeight, false);
+    }
+
+    public KnowledgeQueryService(EmbeddingStoreRouter storeRouter,
+                                 EmbeddingModel embeddingModel,
+                                 KeywordSearchService keywordSearchService,
+                                 int defaultTopK,
+                                 double defaultMinScore,
+                                 boolean hybridEnabled,
+                                 int keywordTopK,
+                                 GraphSearchService graphSearchService,
+                                 boolean graphIncludedInQuery,
+                                 int graphTopK,
+                                 double vectorWeight,
+                                 double keywordWeight,
+                                 double graphWeight,
+                                 boolean graphRequireProvenance) {
         this.storeRouter = storeRouter;
         this.embeddingModel = embeddingModel;
         this.keywordSearchService = keywordSearchService;
@@ -270,7 +291,8 @@ public class KnowledgeQueryService implements AutoCloseable {
         this.keywordSource = new InMemoryKeywordRetrievalSource(
                 this.keywordSearchService, this.keywordWeight, this.keywordTopK, this.hybridEnabled);
         this.graphSource = new GraphRetrievalSource(
-                this.graphSearchService, this.graphWeight, this.graphTopK, this.graphIncludedInQuery);
+                this.graphSearchService, this.graphWeight, this.graphTopK, this.graphIncludedInQuery,
+                graphRequireProvenance);
     }
 
     public QueryResult query(String query, Integer topK, Double minScore, String category) {
@@ -368,14 +390,16 @@ public class KnowledgeQueryService implements AutoCloseable {
         if (knowledgeAuthz.mode() != AuthzMode.ENFORCE) {
             return candidates;
         }
-        // enforce：公共库放行；有 docId 按可读过滤；【无 docId 命中（如 GraphRAG 三元组）无法资源级判权 → fail-closed 丢弃】。
+        // enforce：公共库放行；有 docId 按可读过滤；【无 docId 命中无法资源级判权 → fail-closed 丢弃】。
+        // 带版本 provenance 的图三元组现在也有 docId（见 GraphSourceId），因此走正常判权而非被整类丢弃；
+        // 只有无 provenance 的历史三元组仍落在 fail-closed 分支（query 角色下已在检索源侧丢弃）。
         List<Hit> out = candidates.stream()
                 .filter(h -> h.shared() || (h.docId() != null && readable.contains(h.docId())))
                 .toList();
         // 无 docId 命中（图谱三元组、或缺 metadata 的向量/关键词命中）无法资源级判权 → fail-closed 丢弃并计数。
         long droppedNoDocId = candidates.stream().filter(h -> !h.shared() && h.docId() == null).count();
         if (droppedNoDocId > 0) {
-            log.info("authz enforce dropped {} hits without docId (no resource-level authz; incl. graph triples / metadata-less vector·keyword hits)",
+            log.info("authz enforce dropped {} hits without docId (no resource-level authz; incl. graph triples without version provenance / metadata-less vector·keyword hits)",
                     droppedNoDocId);
         }
         log.debug("authz enforce filter tenant={} user={} candidates={} -> kept={}", tenantId, userId, candidates.size(), out.size());

@@ -67,8 +67,24 @@ class KnowledgeQueryServiceAuthzTest {
 
         var result = queries.query("q", 10, 0.0, null);
 
-        // 无 docId 的命中（图谱三元组）无法资源级判权 → enforce fail-closed 丢弃。
+        // 无 docId 的命中（无版本 provenance 的历史三元组）无法资源级判权 → enforce fail-closed 丢弃。
         assertThat(result.hits()).allSatisfy(h -> assertThat(h.docId()).isEqualTo("d1"));
+    }
+
+    @Test
+    void enforce_authorizesGraphHitsThatCarryVersionProvenance() {
+        // 带 provenance 的图三元组有 docId，因此和 chunk 命中一样按文档判权，而不是被整类丢弃：
+        // 可读文档的三元组保留，不可读文档的三元组过滤。
+        RecordingAuthz authz = new RecordingAuthz(AuthzMode.ENFORCE, Set.of("d1"));
+        queries.setKnowledgeAuthz(authz);
+        queries.setExtraSources(List.of(sourceOf(graphHit("d1", "3"), graphHit("d2", "3"))));
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
+
+        var result = queries.query("q", 10, 0.0, null);
+
+        assertThat(authz.lastDocIds).containsExactlyInAnyOrder("d1", "d2");
+        assertThat(result.hits()).extracting(KnowledgeQueryService.Hit::docId).containsExactly("d1");
+        assertThat(result.hits()).extracting(KnowledgeQueryService.Hit::source).containsExactly("graph");
     }
 
     @Test
@@ -128,6 +144,13 @@ class KnowledgeQueryServiceAuthzTest {
     private static RetrievalHit graphHitNoDocId() {
         return new RetrievalHit("graph:t1", "graph:t1", 0.8,
                 null, null, null, null, "triple", "graph", false);
+    }
+
+    /** 带版本 provenance 的图命中：docId/version 由 GraphRetrievalSource 从 sourceId 还原（见 GraphSourceId）。 */
+    private static RetrievalHit graphHit(String docId, String version) {
+        String id = "graph:" + docId + "/v" + version + "/a.md#0:s:r:o";
+        return new RetrievalHit(id, id, 0.8, docId, "a.md", "manual", "0", version,
+                "s --r-> o", "graph", false);
     }
 
     /** 记录传入 docIds 的 fake：enforce 返回配置的可读子集，shadow 返回全集，disabled 不会被调用。 */

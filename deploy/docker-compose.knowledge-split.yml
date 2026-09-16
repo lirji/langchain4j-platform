@@ -72,7 +72,10 @@ services:
       RAG_RERANK_ENABLED: ${KNOWLEDGE_SPLIT_RERANK_ENABLED:-false}
       RAG_ES_ENABLED: ${RAG_ES_ENABLED:-true}
       RAG_ES_QUERY_ENABLED: ${RAG_ES_QUERY_ENABLED:-true}
-      RAG_GRAPH_ENABLED: "false"
+      # 图检索默认仍关（开启要连图库，属独立的容量决定），但 query 角色一旦开就必须要求版本
+      # provenance：无归属的历史三元组会绕过「按 Registry 当前版本过滤」和文档级判权。
+      RAG_GRAPH_ENABLED: ${KNOWLEDGE_SPLIT_GRAPH_ENABLED:-false}
+      RAG_GRAPH_REQUIRE_PROVENANCE: "true"
     ports: !override
       - "${KNOWLEDGE_QUERY_HOST_PORT:-18084}:8084"
 

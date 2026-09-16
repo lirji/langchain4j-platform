@@ -31,11 +31,16 @@ class KnowledgeRuntimeBoundaryConfigTest {
                 .withProperty("app.rag.graph.enabled", "false");
         assertThatCode(() -> validator(KnowledgeRuntimeProperties.Role.QUERY,
                 "memory", "memory", persistent).afterPropertiesSet()).doesNotThrowAnyException();
+        // 图检索不再整体禁用，但必须显式要求版本 provenance：否则无归属的历史三元组会绕过
+        // 「按 Registry 当前版本过滤」与「文档级判权」两道过滤。
         persistent.withProperty("app.rag.graph.enabled", "true");
         assertThatThrownBy(() -> validator(KnowledgeRuntimeProperties.Role.QUERY,
                 "memory", "memory", persistent).afterPropertiesSet())
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("document version provenance");
+                .hasMessageContaining("app.rag.graph.require-provenance=true");
+        persistent.withProperty("app.rag.graph.require-provenance", "true");
+        assertThatCode(() -> validator(KnowledgeRuntimeProperties.Role.QUERY,
+                "memory", "memory", persistent).afterPropertiesSet()).doesNotThrowAnyException();
         assertThatThrownBy(() -> validator(KnowledgeRuntimeProperties.Role.QUERY,
                 "memory", "memory", new MockEnvironment()).afterPropertiesSet())
                 .isInstanceOf(IllegalStateException.class)

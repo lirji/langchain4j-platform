@@ -86,9 +86,14 @@ public class KnowledgeRuntimeBoundaryConfig {
             throw new IllegalStateException(
                     "query role with hybrid retrieval requires persistent Elasticsearch query");
         }
-        if (graphEnabled) {
+        // 图检索曾在 query 角色整体禁用：图命中不带版本 provenance，既无法按 Registry 当前版本判新鲜度，
+        // 也无法做文档级判权。现在 sourceId 里的 <docId>/v<version>/ 会还原进命中，因此改为要求显式开启
+        // require-provenance —— 该开关下无 provenance 的历史三元组被丢弃，剩下的和向量/ES 命中走同两道过滤。
+        boolean graphRequireProvenance = environment.getProperty(
+                "app.rag.graph.require-provenance", Boolean.class, false);
+        if (graphEnabled && !graphRequireProvenance) {
             throw new IllegalStateException(
-                    "query role must disable graph retrieval until graph hits carry document version provenance");
+                    "query role with graph retrieval requires app.rag.graph.require-provenance=true");
         }
     }
 
