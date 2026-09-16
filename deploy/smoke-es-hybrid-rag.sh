@@ -33,11 +33,13 @@ done
 curl -fsS http://localhost:9200/_cluster/health >/dev/null
 
 echo "== 等 knowledge-service 健康 =="
+# actuator 在独立 management 端口（业务端口 +1000），健康探测不走业务端口
+MGMT_URL="${MGMT_URL:-http://localhost:9084}"
 for _ in $(seq 1 60); do
-  if curl -fsS "$BASE_URL/actuator/health" >/dev/null 2>&1; then break; fi
+  if curl -fsS "$MGMT_URL/actuator/health" >/dev/null 2>&1; then break; fi
   sleep 2
 done
-curl -fsS "$BASE_URL/actuator/health" >/dev/null
+curl -fsS "$MGMT_URL/actuator/health" >/dev/null
 
 echo "== 上传中文文档 =="
 curl -fsS -X POST "$BASE_URL/rag/documents" \

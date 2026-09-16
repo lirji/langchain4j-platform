@@ -16,14 +16,16 @@ export RAG_HYBRID_ENABLED="${RAG_HYBRID_ENABLED:-false}"
 mvn -DskipTests package
 docker compose -f "$COMPOSE_FILE" up --build -d redis qdrant knowledge-service
 
+# actuator 在独立 management 端口（业务端口 +1000），健康探测不走业务端口
+MGMT_URL="${MGMT_URL:-http://localhost:9084}"
 for _ in $(seq 1 60); do
-  if curl -fsS "$BASE_URL/actuator/health" >/dev/null; then
+  if curl -fsS "$MGMT_URL/actuator/health" >/dev/null; then
     break
   fi
   sleep 2
 done
 
-curl -fsS "$BASE_URL/actuator/health" >/dev/null
+curl -fsS "$MGMT_URL/actuator/health" >/dev/null
 
 UPLOAD_RESPONSE="$(curl -fsS -X POST "$BASE_URL/rag/documents" \
   -H "X-Api-Key: $API_KEY" \

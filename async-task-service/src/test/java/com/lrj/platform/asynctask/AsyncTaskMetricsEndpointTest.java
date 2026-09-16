@@ -9,9 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
+import org.springframework.boot.test.web.server.LocalManagementPort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -28,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         properties = {
                 "app.async-task.store=in-memory",
                 "app.async-task.cleanup-initial-delay-ms=600000",
+                "management.server.port=0",
                 "management.prometheus.metrics.export.enabled=true",
                 "management.endpoints.web.exposure.include=health,info,prometheus",
                 "platform.security.jwt-secret=test-only-internal-secret-with-at-least-32-bytes",
@@ -37,6 +36,9 @@ class AsyncTaskMetricsEndpointTest {
 
     @Autowired
     private TestRestTemplate http;
+
+    @LocalManagementPort
+    private int managementPort;
 
     @Autowired
     private AsyncTaskMetrics metrics;
@@ -51,7 +53,7 @@ class AsyncTaskMetricsEndpointTest {
     private InternalSecurityProperties securityProperties;
 
     @Test
-    void prometheusEndpointRequiresAuthenticationAndExportsAsyncTaskMetrics() {
+    void prometheusEndpointExportsAsyncTaskMetricsOnTheManagementPort() {
         assertThat(securityProperties.getJwtTtl()).isEqualTo(Duration.ofMinutes(5));
         assertThat(securityProperties.getJwt().getClockSkew()).isEqualTo(Duration.ofSeconds(5));
         assertThat(securityProperties.getJwt().getIssuer()).isEqualTo("langchain4j-platform");
@@ -67,20 +69,14 @@ class AsyncTaskMetricsEndpointTest {
                 "metrics-worker",
                 Instant.now().plusSeconds(30),
                 null).acquired()).isTrue();
-        assertThat(http.getForEntity("/actuator/prometheus", String.class).getStatusCode())
-                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        // 内部 JWT 仍必须可签发校验（业务面鉴权不受指标面搬迁影响）
         TenantContext.Tenant tenant =
                 new TenantContext.Tenant("qa", "metrics-scraper", Set.of("metrics"));
-        String token = tokens.mint(tenant);
-        assertThat(tokens.verify(token)).isEqualTo(tenant);
-        HttpHeaders headers = new HttpHeaders();
-        headers.set(securityProperties.getInternalHeader(), token);
+        assertThat(tokens.verify(tokens.mint(tenant))).isEqualTo(tenant);
 
-        ResponseEntity<String> response = http.exchange(
-                "/actuator/prometheus",
-                HttpMethod.GET,
-                new HttpEntity<>(headers),
-                String.class);
+        // 指标只在 management 端口暴露，无需凭据；业务端口不再服务 actuator（见 AsyncTaskManagementPortTest）
+        ResponseEntity<String> response = http.getForEntity(
+                "http://localhost:" + managementPort + "/actuator/prometheus", String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody())

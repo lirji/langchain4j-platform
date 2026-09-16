@@ -175,14 +175,26 @@ app:
       stream: 20
       ingest: 5
       eval: 5
+      # 免鉴权入口按客户端 IP 限（无租户身份）：auth 挡暴力破解/刷注册，
+      # channel-callback 挡渠道重投洪峰（每条事件都会触发下游检索 + LLM 花费）。
+      auth: ${RATE_LIMIT_AUTH_QPM:30}
+      channel-callback: ${RATE_LIMIT_CHANNEL_CALLBACK_QPM:600}
       default: 120
     anonymous-multiplier: 0.2
+    # 只有边缘前面确有会覆写该头的可信代理/LB 时才配（如 X-Forwarded-For）——默认留空只信 TCP 对端地址，
+    # 因为该头可被客户端伪造；留空且部署在 LB 后面时所有请求共享一个 IP 桶，需相应放大上面两个限额。
+    client-ip-header: ${RATE_LIMIT_CLIENT_IP_HEADER:}
 
 management:
+  # actuator 走独立 management 端口（业务端口 +1000）：业务端口的入站鉴权 filter 注册在主上下文，
+  # 不作用于 management 子上下文，Prometheus 与 K8s 探针因此无需凭据即可采集，而内部 JWT 只活 5 分钟
+  # 本来就没法当静态抓取凭据。该端口只在内网/集群内暴露，禁止对外发布。见 docs/平台工程/observability-guide.md。
+  server:
+    port: ${MANAGEMENT_PORT:9080}
   endpoints:
     web:
       exposure:
-        include: health,info,gateway
+        include: health,info,prometheus,gateway
   endpoint:
     health:
       probes:

@@ -24,6 +24,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- 统一指标面：本模块不依赖 platform-observability（WebFlux 栈），Prometheus 导出器直接声明。 -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <scope>runtime</scope>
+        </dependency>
         <!-- 复用 InternalToken + api-key→租户映射来签发内部 JWT（只用其框架无关的核心件） -->
         <dependency>
             <groupId>com.lrj.platform</groupId>

@@ -69,6 +69,9 @@ app:
         human-agent-ids: ${DINGTALK_HUMAN_AGENT_IDS:}  # 转人工时 @ 的人工客服 userId，逗号分隔
 
 management:
+  # actuator 走独立 management 端口（业务端口 +1000），只在内网暴露给 Prometheus 与探针。
+  server:
+    port: ${MANAGEMENT_PORT:9087}
   endpoints:
     web:
       exposure:

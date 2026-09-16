@@ -1,0 +1,56 @@
+# 统一指标面的抓取配置（compose 内网）。
+#
+# Java 服务的 actuator 在独立 management 端口（业务端口 +1000），不经过业务端口的内部 JWT filter，
+# 因此无需抓取凭据——内部 JWT 只活 5 分钟，本来就没法当静态凭据。AgentScope 的 /metrics 取同一姿态。
+# 两侧导出的都是低基数序列，不带 tenant / task / prompt / token 标签。
+#
+# 只抓默认拓扑里的服务：agent-service（legacy-agent profile）与 eval-service（evaluation profile）
+# 默认不启动，列进来只会制造长期 up==0 告警，需要时再手工加。
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  # Java 服务：management 端口上的 /actuator/prometheus
+  - job_name: platform-java
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["edge-gateway:9080"]
+        labels: { service: edge-gateway }
+      - targets: ["conversation-service:9081"]
+        labels: { service: conversation-service }
+      - targets: ["workflow-service:9082"]
+        labels: { service: workflow-service }
+      - targets: ["analytics-service:9083"]
+        labels: { service: analytics-service }
+      - targets: ["knowledge-service:9084"]
+        labels: { service: knowledge-service }
+      - targets: ["async-task-service:9086"]
+        labels: { service: async-task-service }
+      - targets: ["channel-service:9087"]
+        labels: { service: channel-service }
+      - targets: ["interop-service:9088"]
+        labels: { service: interop-service }
+      - targets: ["vision-service:9090"]
+        labels: { service: vision-service }
+      - targets: ["voice-service:9091"]
+        labels: { service: voice-service }
+      - targets: ["auth-service:9092"]
+        labels: { service: auth-service }
+      - targets: ["order-service:9093"]
+        labels: { service: order-service }
+      - targets: ["tax-service:9094"]
+        labels: { service: tax-service }
+      - targets: ["config-server:9888"]
+        labels: { service: config-server }
+
+  # AgentScope 编排运行时：单端口应用，/metrics 与 /health、/readiness 同为免鉴权运维端点
+  - job_name: agentscope-orchestrator
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["agentscope-orchestrator:8085"]
+        labels: { service: agentscope-orchestrator }

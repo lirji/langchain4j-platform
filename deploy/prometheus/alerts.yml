@@ -1,0 +1,98 @@
+# 关键告警规则。
+#
+# 每条规则只使用代码里确实注册过的指标（Java 侧 Micrometer、Python 侧 OTel→Prometheus 渲染），
+# 不引用臆想的序列。阈值是**可用性与异常信号的起点，不是经过验证的 SLO**：本仓没有正式的性能
+# 验收目标，所以这里刻意不设延迟/TP99 门限。上线前应按真实容量与值班能力重定阈值。
+
+groups:
+  - name: platform-availability
+    rules:
+      # 覆盖 Java 服务与 AgentScope 编排运行时（两者都在抓取目标里）
+      - alert: PlatformServiceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.service }} 抓取失败超过 2 分钟"
+          description: "management 端口不可达或进程已退出；先看容器状态与 /actuator/health/readiness。"
+
+      # Micrometer 标准 http 指标；分母加 > 0 保护，空闲期不因除零误报
+      - alert: PlatformServerErrorRatioHigh
+        expr: |
+          sum by (service) (rate(http_server_requests_seconds_count{outcome="SERVER_ERROR"}[5m]))
+            /
+          sum by (service) (rate(http_server_requests_seconds_count[5m])) > 0.05
+          and
+          sum by (service) (rate(http_server_requests_seconds_count[5m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} 5xx 比例持续超过 5%"
+          description: "阈值是起点而非已验证 SLO；确认是单接口回归还是下游依赖故障。"
+
+  - name: platform-async-tasks
+    rules:
+      # 存量不排空说明没有 worker 在领取，或 worker 领取后一直失败重回队列
+      - alert: AsyncTaskBacklogNotDraining
+        expr: min_over_time(async_task_backlog[15m]) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "异步任务队列 15 分钟内未见排空"
+          description: "用 GET /async/drain-inventory 看按 kind + 状态 + 租约持有者的存量归属。"
+
+      # 孤儿回收意味着 worker 死亡或租约到期未续；任务被判失败，业务侧会看到失败结果
+      - alert: AsyncTaskOrphansReaped
+        expr: increase(async_task_orphan_failed_total[15m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "有异步任务被孤儿回收判失败（kind={{ $labels.kind }}）"
+          description: "检查对应 worker 运行时是否重启或租约续约失败。"
+
+      # AgentScope 侧租约心跳失败：租约可能过期后被另一个 worker 重复领取
+      - alert: AgentAsyncTaskHeartbeatFailing
+        expr: increase(agent_async_task_heartbeat_failures_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AgentScope 异步任务租约心跳失败"
+          description: "心跳失败会导致租约过期，任务可能被重复领取；先查 async-task-service 连通性。"
+
+  - name: platform-agent-runtime
+    rules:
+      # 受治理工具的 provider 调用失败：Agent 能力实际不可用，但请求未必报错
+      - alert: AgentToolProviderFailing
+        expr: increase(agent_tool_provider_failures_total[10m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AgentScope 工具 provider 持续失败（tool={{ $labels.tool }}）"
+          description: "确认下游 provider 可达性与凭据；Agent 会降级但答案质量下降。"
+
+  - name: platform-domain
+    rules:
+      - alert: WorkflowApprovalsTimingOut
+        expr: increase(workflow_approval_timeout_total[30m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "退款审批出现超时"
+          description: "审批停在人工节点未处理；确认待办分派与值班。"
+
+      # 入库最老待处理任务的等待时长；15 分钟只是起点阈值
+      - alert: KnowledgeIngestionBacklogAging
+        expr: knowledge_ingestion_oldest_pending_seconds > 900
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "知识库入库队列最老任务已等待超过 15 分钟"
+          description: "检查 ingestion worker 是否在跑，以及 embedding / 向量库是否可达。"

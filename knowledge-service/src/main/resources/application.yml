@@ -272,6 +272,9 @@ app:
       enabled: ${RAG_GRAPH_ENABLED:true}
       store: ${RAG_GRAPH_STORE:jdbc}
       include-in-query: ${RAG_GRAPH_INCLUDE_IN_QUERY:${RAG_GRAPH_ENABLED:true}}
+      # true = 丢弃 sourceId 里没有 <docId>/v<version>/ 的历史三元组（它们既证不明新鲜度也证不明可读性）。
+      # query 角色必须开（否则启动即失败）；combined 默认关，保持引入版本 provenance 之前的召回口径。
+      require-provenance: ${RAG_GRAPH_REQUIRE_PROVENANCE:false}
       query-top-k: ${RAG_GRAPH_QUERY_TOP_K:${RAG_GRAPH_MAX_TRIPLES:20}}
       max-hops: ${RAG_GRAPH_MAX_HOPS:2}
       max-triples: ${RAG_GRAPH_MAX_TRIPLES:20}
@@ -296,11 +299,14 @@ authz:
     token: ${AUTHZ_SERVER_TOKEN:}
 
 management:
+  # actuator 走独立 management 端口（业务端口 +1000），只在内网暴露给 Prometheus 与探针。
+  server:
+    port: ${MANAGEMENT_PORT:9084}
   endpoints:
     web:
       exposure:
         # metrics: 供 shadow 灰度观测 knowledge.authz.decisions{mode,operation,permission,decision}（内网只读）
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       probes:

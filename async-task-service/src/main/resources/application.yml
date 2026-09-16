@@ -64,6 +64,9 @@ app:
       hmac-secret: ${ASYNC_TASK_WEBHOOK_HMAC_SECRET:dev-only-async-webhook-signing-secret-change-me-32b}
 
 management:
+  # actuator 走独立 management 端口（业务端口 +1000），只在内网暴露给 Prometheus 与探针。
+  server:
+    port: ${MANAGEMENT_PORT:9086}
   prometheus:
     metrics:
       export:

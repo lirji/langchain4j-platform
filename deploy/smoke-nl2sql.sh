@@ -21,15 +21,17 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASE_URL="${BASE_URL:-http://localhost:18080}"
+# actuator 在独立 management 端口（业务端口 +1000），健康探测不走业务端口
+MGMT_URL="${MGMT_URL:-http://localhost:9080}"
 API_KEY="${API_KEY:-dev-key-tenantA-admin}"
 QUESTION="${QUESTION:-2026 年 5 月 tenantA 一共退款了多少钱？}"
 
 cd "$ROOT_DIR"
 
-echo "==> 等待 edge-gateway 健康 ($BASE_URL) ..."
+echo "==> 等待 edge-gateway 健康 ($MGMT_URL) ..."
 HEALTHY=false
 for _ in $(seq 1 60); do
-  if curl -fsS "$BASE_URL/actuator/health" >/dev/null 2>&1; then
+  if curl -fsS "$MGMT_URL/actuator/health" >/dev/null 2>&1; then
     HEALTHY=true
     break
   fi

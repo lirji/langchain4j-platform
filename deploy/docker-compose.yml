@@ -484,6 +484,8 @@ services:
         condition: service_healthy   # 等 ES 就绪再起，避免首次入库 index create 撞 ES 未起
     ports:
       - "8084:8084"
+      # management 端口：宿主侧 smoke 脚本用它做健康等待与指标抓取（业务端口不再暴露 actuator）
+      - "${KNOWLEDGE_MGMT_HOST_PORT:-9084}:9084"
 
   agent-service:
     <<: *app-security
@@ -1002,8 +1004,25 @@ services:
       - "host.docker.internal:host-gateway"
     ports:
       - "${EDGE_HOST_PORT:-8080}:8080"
+      # management 端口：宿主侧 smoke 脚本用它做健康等待（业务端口不再暴露 actuator）
+      - "${EDGE_MGMT_HOST_PORT:-9080}:9080"
+
+  # 统一指标面：抓取每个服务的 management 端口 + AgentScope 的 /metrics。默认不随主栈启动，
+  # 需要时 `docker compose --profile observability up -d prometheus`（UI http://localhost:19090）。
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:v2.55.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "${PROMETHEUS_HOST_PORT:-19090}:9090"
 
 volumes:
+  prometheus-data:
   mysql-data:
   qdrant-data:
   redis-data:

@@ -66,10 +66,13 @@ app:
       hmac-secret: ${WORKFLOW_OUTBOX_HMAC_SECRET:dev-only-workflow-webhook-signing-secret-change-me-32b}
 
 management:
+  # actuator 走独立 management 端口（业务端口 +1000），只在内网暴露给 Prometheus 与探针。
+  server:
+    port: ${MANAGEMENT_PORT:9082}
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       probes:

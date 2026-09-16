@@ -39,10 +39,13 @@ app:
       read-timeout: ${TAX_KNOWLEDGE_READ_TIMEOUT:3s}
 
 management:
+  # actuator 走独立 management 端口（业务端口 +1000），只在内网暴露给 Prometheus 与探针。
+  server:
+    port: ${MANAGEMENT_PORT:9094}
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       probes:

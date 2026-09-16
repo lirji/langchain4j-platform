@@ -54,6 +54,17 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
             <optional>true</optional>
         </dependency>
+        <!--
+          统一指标面：Prometheus 导出器是纯运行时依赖（本模块不编译它的 API），因此用 runtime 且不加
+          optional —— optional 不会传递，接入平台可观测性的服务就拿不到 /actuator/prometheus。各服务的
+          自定义指标（workflow.*、rag.chunk.*、knowledge.authz.*、async_task_*、gen_ai.client.cost.usd 等）
+          必须能被同一套抓取配置采集，抓取与告警见 deploy/prometheus/。
+        -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <scope>runtime</scope>
+        </dependency>
         <!-- #1 OTel：SimpleTracer 纯 POJO 断言 span，不连真 OTLP。 -->
         <dependency>
             <groupId>io.micrometer</groupId>

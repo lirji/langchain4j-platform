@@ -25,4 +25,12 @@ spec:
       {{- if and (default (dict) $svc.service).nodePort }}
       nodePort: {{ $svc.service.nodePort }}
       {{- end }}
+    {{- /* actuator / 指标端口，供集群内 Prometheus 抓取；不设 nodePort，不对外发布。 */ -}}
+    {{- $mgmtPort := int (ternary $svc.managementPort (add $svc.port 1000) (hasKey $svc "managementPort")) }}
+    {{- if gt $mgmtPort 0 }}
+    - name: mgmt
+      port: {{ $mgmtPort }}
+      targetPort: mgmt
+      protocol: TCP
+    {{- end }}
 {{- end -}}

@@ -34,7 +34,9 @@ token_for() { # $1=user $2=password -> 打印 access_token（失败为空）
 }
 
 echo "==> 0. 前置连通性（不可达即失败，非跳过）"
-curl -sf "$EDGE/actuator/health" >/dev/null || fail "edge($EDGE) 不可达 —— 请先起全栈并置 enforce/only"
+# actuator 在独立 management 端口（业务端口 +1000），健康探测不走业务端口
+EDGE_MGMT="${EDGE_MGMT_URL:-http://localhost:9080}"
+curl -sf "$EDGE_MGMT/actuator/health" >/dev/null || fail "edge($EDGE_MGMT) 不可达 —— 请先起全栈并置 enforce/only"
 curl -sf "$CASDOOR/api/health" >/dev/null 2>&1 || echo "  (warn: casdoor health 端点未探到，继续尝试取 token)"
 
 echo "==> 0b. 发布约束（F1）：细粒度 authz 开启时 conversation 语义缓存必须关闭"

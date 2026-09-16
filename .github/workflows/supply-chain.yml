@@ -35,6 +35,10 @@ jobs:
       - name: Verify supply-chain policy
         run: bash deploy/test-supply-chain-config.sh
 
+      # 指标面是配置一致性问题（依赖 / 暴露清单 / management 端口 / 抓取目标），编译和单测都发现不了。
+      - name: Verify observability policy
+        run: bash deploy/test-observability-config.sh
+
       - name: Test the complete reactor
         run: mvn -B -DskipITs test
 
@@ -67,10 +71,12 @@ jobs:
       - name: Upload JARs, SBOM and dependency scan evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        # 通配符要覆盖带 classifier 的产物：database-migrations 的可执行 jar 是 -exec.jar，而下游
+        # image-scan / release-images 只有 download-artifact 这一个 jar 来源，漏传即镜像构建失败。
         with:
           name: java-supply-chain-${{ github.sha }}
           path: |
-            */target/*-0.1.0-SNAPSHOT.jar
+            */target/*-0.1.0-SNAPSHOT*.jar
             target/langchain4j-platform.cdx.json
             target/trivy-dependencies.json
           if-no-files-found: error
@@ -293,10 +299,10 @@ jobs:
       - name: Attest JAR provenance
         uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
         with:
-          subject-path: "*/target/*-0.1.0-SNAPSHOT.jar"
+          subject-path: "*/target/*-0.1.0-SNAPSHOT*.jar"
 
       - name: Attach aggregate SBOM attestation
         uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
         with:
-          subject-path: "*/target/*-0.1.0-SNAPSHOT.jar"
+          subject-path: "*/target/*-0.1.0-SNAPSHOT*.jar"
           sbom-path: target/langchain4j-platform.cdx.json

@@ -40,10 +40,13 @@ def main():
     if host_mode:
         env['RAG_INGESTION_DB_URL']=env['RAG_INGESTION_DB_URL'].replace('infra-mysql84:3306','127.0.0.1:43306')
         migration_env['MIGRATION_DB_URL']=env['RAG_INGESTION_DB_URL']
-        m.run(['java','-Xmx128m','-jar',str(m.ROOT/'database-migrations/target/database-migrations-0.1.0-SNAPSHOT.jar')],env={**os.environ,**migration_env})
-        with socket.socket() as reserved:
+        m.run(['java','-Xmx128m','-jar',str(m.ROOT/'database-migrations/target/database-migrations-0.1.0-SNAPSHOT-exec.jar')],env={**os.environ,**migration_env})
+        # actuator 已搬到独立 management 端口，健康探测和业务调用是两个端口
+        with socket.socket() as reserved, socket.socket() as reserved_mgmt:
             reserved.bind(('127.0.0.1',0));port=reserved.getsockname()[1]
-        env.update(SERVER_PORT=str(port),SPRING_DATA_REDIS_HOST='127.0.0.1',SPRING_DATA_REDIS_PORT='46379',
+            reserved_mgmt.bind(('127.0.0.1',0));mgmt_port=reserved_mgmt.getsockname()[1]
+        env.update(SERVER_PORT=str(port),MANAGEMENT_PORT=str(mgmt_port),
+                   SPRING_DATA_REDIS_HOST='127.0.0.1',SPRING_DATA_REDIS_PORT='46379',
                    QDRANT_HOST='127.0.0.1',QDRANT_PORT='46334',RAG_ES_URIS='http://127.0.0.1:49200',
                    RAG_SOURCE_S3_ENDPOINT='http://127.0.0.1:49000')
         log_path=m.STATE/'smoke-container.log'
@@ -52,11 +55,13 @@ def main():
         process=subprocess.Popen(['java','-jar',str(m.ROOT/'knowledge-service/target/knowledge-service-0.1.0-SNAPSHOT.jar')],
             env={**os.environ,**env},stdout=local_log,stderr=subprocess.STDOUT)
     else:
-        with socket.socket() as reserved:
+        with socket.socket() as reserved, socket.socket() as reserved_mgmt:
             reserved.bind(('127.0.0.1',0));port=reserved.getsockname()[1]
+            reserved_mgmt.bind(('127.0.0.1',0));mgmt_port=reserved_mgmt.getsockname()[1]
         m.run(['bash',str(m.DEPLOY/'dev-infra/compose.sh'),'run','--rm','--no-deps',
                '-e','MIGRATION_DB_URL='+env['RAG_INGESTION_DB_URL'],'migrate-knowledge-ingestion'])
-        args=['docker','run','-d','--name',name,'--network','dev-infra','--memory','768m','-p',f'127.0.0.1:{port}:8084']
+        args=['docker','run','-d','--name',name,'--network','dev-infra','--memory','768m',
+              '-p',f'127.0.0.1:{port}:8084','-p',f'127.0.0.1:{mgmt_port}:9084']
         for key in env:args+=['-e',key]
         args+=['langchain4j-platform-knowledge-service:latest']
         m.run(args,env={**os.environ,**env})
@@ -70,10 +75,13 @@ def main():
     def request(path,body=None,headers=None):
         req=urllib.request.Request(f'http://127.0.0.1:{port}'+path,data=body,headers={'X-Internal-Token':mint_token(),**(headers or {})})
         with urllib.request.urlopen(req,timeout=30) as response:return json.load(response)
+    def probe(path):
+        # management 端口不经过租户 filter，探测不带内部 token
+        with urllib.request.urlopen(f'http://127.0.0.1:{mgmt_port}'+path,timeout=30) as response:return json.load(response)
     try:
         for attempt in range(600):
             try:
-                request('/actuator/health');break
+                probe('/actuator/health');break
             except Exception:
                 if process is not None and process.poll() is not None:raise RuntimeError('Knowledge exited; inspect private smoke-container.log')
                 time.sleep(1)

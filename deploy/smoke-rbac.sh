@@ -27,10 +27,12 @@ echo "== 起 mysql + auth-service + edge-gateway（RBAC demo：rbac+admin-writes
 docker compose -f deploy/docker-compose.yml up --build -d mysql auth-service edge-gateway
 
 echo "== 等 edge-gateway 健康 =="
+# actuator 在独立 management 端口（业务端口 +1000），健康探测不走业务端口
+GW_MGMT="${GW_MGMT_URL:-http://localhost:9080}"
 for _ in $(seq 1 60); do
-  curl -fsS "$GW/actuator/health" >/dev/null 2>&1 && break || sleep 3
+  curl -fsS "$GW_MGMT/actuator/health" >/dev/null 2>&1 && break || sleep 3
 done
-curl -fsS "$GW/actuator/health" >/dev/null
+curl -fsS "$GW_MGMT/actuator/health" >/dev/null
 
 echo "== 1) 登录 alice，取会话访问令牌 =="
 ALICE_TOKEN=$(curl -fsS -X POST "$GW/auth/login" -H 'Content-Type: application/json' \
