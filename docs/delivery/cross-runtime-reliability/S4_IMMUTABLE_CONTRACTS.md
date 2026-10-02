@@ -1,6 +1,6 @@
 # S4：不可变跨运行时契约组合
 
-LOCAL_PASS。Producer固定`51d0eb29d317b4fb489d535d656b01012bc649af`，46文件manifest
+LOCAL_PASS。Producer固定`6f43ddf83ffd47558a056d45a363ea911218846f`，46文件manifest
 `sha256:c6cf1ebcac313afdd21b7d6dab93ba284b768d6b1a52ef73abeb691eefa57410`。
 Consumer实际使用25项，vendor manifest同时固定完整producer revision/manifest摘要和消费文件摘要。
 预算、回执、只读领取协议来自Python typed models并被HTTP客户端实际使用；Java对应DTO正反向校验。
@@ -10,7 +10,7 @@ Consumer实际使用25项，vendor manifest同时固定完整producer revision/m
 上游工作树或HEAD变更不影响当前固定组合；更新需显式`--write --revision <40hex>`，
 所有上游blob验证后才写副本，不会将未提交schema冒充该版本。
 Producer CI重新生成校验并输出确定性ZIP/source.json；本地ZIP摘要
-`69a5eee25043644dfdea788a684f5b75b6df1336b36297fa1c9fe4004ca500be`。
+`62a55850df987a668170fabb39cc7fe1c11bf63dca121e236f943481b8a55165`。
 
 Consumer CI检出公开仓lirji/platform-agentscope的固定提交，运行locked producer export校验和完整native reactor。
 不依赖latest、兄弟仓是否碰巧存在、浮动artifact名或跨私有仓新凭据。

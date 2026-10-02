@@ -1,0 +1,6 @@
+{
+  "repository": "lirji/auth-platform",
+  "revision": "929e9caf394b98b3030357746c0ff396cc0806db",
+  "module": "auth-platform-sdk",
+  "coordinate": "com.lrj.authz:auth-platform-sdk:0.1.0-SNAPSHOT"
+}

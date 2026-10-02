@@ -16,7 +16,7 @@
 | S1 | LOCAL_PASS | 新用例旧代码 3 fail / 8 pass；修复后 11 pass；全量 483 pass；ruff/mypy PASS |
 | S2 | LOCAL_PASS | 渠道 84 项通过；内存/H2 恢复、ACK 503、管理员隔离；MySQL 8.4 独立临时库 10 项通过；见 S2_CHANNEL_INBOX.md |
 | S3 | LOCAL_PASS | Java reactor 1403/0 fail（最新修改聚焦复验）；Python 492 pass；Redis 4 项；真实本地 OpenAI HTTP/SSE 5 工厂出口单次计费；部署门禁/Compose/Helm PASS；见 S3_SHARED_BUDGET.md |
-| S4 | LOCAL_PASS | producer 51d0eb2、46项/消费25项固定SHA/digest；缺源/漂移 fail-closed；见 S4_IMMUTABLE_CONTRACTS.md |
+| S4 | LOCAL_PASS | producer 6f43ddf、46项/消费25项固定SHA/digest；缺源/漂移 fail-closed；见 S4_IMMUTABLE_CONTRACTS.md |
 | S5 | LOCAL_PASS | 原实例只读回执、用户/参数/租户绑定；真实 MySQL lost-response PASS；Python 9 项；见 S5_REFUND_RECEIPTS.md |
 | S6 | LOCAL_PASS | Java 75、Python 507；MySQL 5；独立 API退出/worker崩溃/接管/DAG/旧epoch恢复 PASS；见 S6_DURABLE_WORKER.md |
 | S7 | LOCAL_PASS | 原生取消、背压/上下文清理、真实跨进程JWT/SSE/TCP取消 PASS；见 S7_STREAM_SHADOW.md |

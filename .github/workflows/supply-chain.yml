@@ -39,6 +39,29 @@ jobs:
       - name: Verify observability policy
         run: bash deploy/test-observability-config.sh
 
+      - name: Read immutable IAM SDK source
+        id: auth-sdk
+        run: |
+          python3 - <<'PYCODE' >> "$GITHUB_OUTPUT"
+          import json, re
+          lock = json.load(open('deploy/auth-sdk-source.json'))
+          assert re.fullmatch('[0-9a-f]{40}', lock['revision'])
+          print('revision=' + lock['revision'])
+          PYCODE
+
+      - name: Checkout pinned IAM SDK
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: lirji/auth-platform
+          ref: ${{ steps.auth-sdk.outputs.revision }}
+          path: _auth-sdk-source
+          persist-credentials: false
+
+      - name: Build and test pinned IAM SDK dependencies
+        env:
+          AUTH_PLATFORM_REPO: ${{ github.workspace }}/_auth-sdk-source
+        run: bash deploy/install-auth-sdk.sh
+
       - name: Test the complete reactor
         run: mvn -B -DskipITs test
 
