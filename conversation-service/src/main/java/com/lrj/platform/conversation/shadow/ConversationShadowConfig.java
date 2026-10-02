@@ -62,6 +62,8 @@ public class ConversationShadowConfig {
             ObjectProvider<MeterRegistry> registry,
             @Value("${app.conversation.shadow.base-url}") String baseUrl,
             @Value("${app.conversation.shadow.read-timeout:5s}") Duration deadline) {
+        // RS256纯验签节点不能签发候选凭据; 显式启用时启动即失败, 避免永远失败却看似开启.
+        tokens.mint(new TenantContext.Tenant("shadow-preflight", "shadow-preflight", java.util.Set.of("chat")));
         var client = java.net.http.HttpClient.newBuilder().connectTimeout(Duration.ofMillis(500))
                 .followRedirects(java.net.http.HttpClient.Redirect.NEVER).build();
         return new HttpConversationStreamShadowObserver(client,

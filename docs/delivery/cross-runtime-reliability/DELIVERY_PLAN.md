@@ -22,7 +22,7 @@ Python/AgentScope/HTTP、现有 Redis/MySQL。保留兼容接口和 feature flag
 - Java vendored 18 个契约校验通过，但同步脚本无上游时成功跳过。
 - Python 确认 grant 先消费后调用退款，Java 数据库幂等已实现；响应丢失后的结果查询仍缺失。
 - Python async execution 为 request closure + local create_task；Java leaseEpoch fencing 已实现。
-- Chat shadow 只有非流式 seam，Java TokenStream 客户端断连不支持上游取消。
+- Chat shadow 只有非流式 seam，既有 controller 未取得 SDK 取消句柄；S7 已验证 1.13.1 支持句柄取消，并修复迟到句柄窗口。
 
 选择统一 Java 预算接口而不是 Python 直读 Java 私有 Redis 键；保留同一租户日预算权威。
 预算使用原子预留/幂等结算，区分真实 usage 与未决 reservation；请求中止或 usage 缺失不能按零消耗释放。

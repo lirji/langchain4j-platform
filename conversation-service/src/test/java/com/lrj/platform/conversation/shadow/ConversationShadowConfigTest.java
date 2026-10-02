@@ -66,4 +66,23 @@ class ConversationShadowConfigTest {
             assertThat(context).doesNotHaveBean("conversationShadowExecutor");
         });
     }
+
+    @Test
+    void streamShadowRejectsRs256VerificationOnlyNodeBeforeAnyHttpCall() throws Exception {
+        var generator = java.security.KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        var pair = generator.generateKeyPair();
+        var tokens = com.lrj.platform.security.InternalToken.forAlgorithm("RS256", "", null,
+                java.util.Base64.getEncoder().encodeToString(pair.getPublic().getEncoded()), java.time.Duration.ofMinutes(5));
+        try (var executor = java.util.concurrent.Executors.newSingleThreadExecutor();
+             var timer = new java.util.concurrent.ScheduledThreadPoolExecutor(1)) {
+            var registry = new org.springframework.beans.factory.support.StaticListableBeanFactory()
+                    .getBeanProvider(io.micrometer.core.instrument.MeterRegistry.class);
+            assertThatThrownBy(() -> new ConversationShadowConfig().conversationStreamShadowObserver(
+                    executor, timer, new com.fasterxml.jackson.databind.ObjectMapper(), tokens,
+                    new com.lrj.platform.security.InternalSecurityProperties(), registry,
+                    "http://127.0.0.1:8085", java.time.Duration.ofSeconds(5)))
+                    .isInstanceOf(IllegalStateException.class);
+        }
+    }
 }

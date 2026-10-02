@@ -38,7 +38,8 @@ Java conversation及上游完整聚合测试通过; 最终全仓统计见QA_REPO
 
 默认关闭。Java `docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.conversation-shadow.yml config`
 后可启动显式实验overlay; Python独立启动使用`compose.yml`加`compose.conversation-shadow.yml`。
-需要相同内部JWT配置、真实网关凭据; 不继承Agent写工具、session或worker的secret/env_file。
+需要相同内部JWT配置、真实网关凭据; Java需具备合法签发能力，RS256仅验签节点启用时启动失败，
+本轮不向验签服务自动分发私钥或改变信任边界; 不继承Agent写工具、session或worker的secret/env_file。
 预算开启时同时启用S3 authority, 影子消耗会计入租户日限额, 不能承诺对未来请求零影响。
 回滚关闭`CONVERSATION_STREAM_SHADOW_ENABLED`/`CONVERSATION_SHADOW_ENABLED`, 停止候选服务;
 无持久化数据迁移。正常主流完成后影子可继续在deadline内验证; 下游失败/超时取消。
