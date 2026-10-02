@@ -19,7 +19,7 @@
 | S4 | TODO | 固定 producer revision 与契约制品 |
 | S5 | LOCAL_PASS | 原实例只读回执、用户/参数/租户绑定；真实 MySQL lost-response PASS；Python 9 项；见 S5_REFUND_RECEIPTS.md |
 | S6 | LOCAL_PASS | Java 75、Python 507；MySQL 5；独立 API退出/worker崩溃/接管/DAG/旧epoch恢复 PASS；见 S6_DURABLE_WORKER.md |
-| S7 | TODO | 流式 shadow 与独立进程验证 |
+| S7 | LOCAL_PASS | 原生取消、背压/上下文清理、真实跨进程JWT/SSE/TCP取消 PASS；见 S7_STREAM_SHADOW.md |
 | S8 | TODO | 聚合回归、对抗复审、文档、发布 |
 
 ## 验证与交付门禁
@@ -35,4 +35,4 @@
 
 ## 下一步
 
-S1/S2/S3/S5 已完成本地验证；继续 S6 独立只读 worker，协议稳定后完成 S4 与 S7/S8。
+S1/S2/S3/S5/S6/S7 已完成本地验证；继续 S4 不可变契约组合和 S8 聚合交付。

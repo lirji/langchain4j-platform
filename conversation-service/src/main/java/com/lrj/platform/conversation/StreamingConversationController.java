@@ -8,6 +8,12 @@ import com.lrj.platform.conversation.history.HistoryAwareQueryCompressor;
 import com.lrj.platform.conversation.prompt.ResolvedAssistantStyle;
 import com.lrj.platform.security.TenantContext;
 import dev.langchain4j.service.TokenStream;
+import dev.langchain4j.model.chat.response.StreamingHandle;
+import com.lrj.platform.conversation.memory.ConversationHistoryReader;
+import com.lrj.platform.conversation.shadow.ConversationStreamShadowObserver;
+import com.lrj.platform.protocol.conversation.ConversationGenerationRequest;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.MDC;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,6 +39,9 @@ public class StreamingConversationController {
     private static final Logger log = LoggerFactory.getLogger(StreamingConversationController.class);
     private static final long SSE_TIMEOUT_MS = 120_000L;
 
+    private static final int MAX_STREAM_CHARS = 65_536;
+    private final ConversationHistoryReader historyReader;
+    private final ConversationStreamShadowObserver shadow;
     private final StreamingAssistant streamingAssistant;
     private final RagPromptAugmenter ragPromptAugmenter;
     private final ConversationGuardrail guardrail;
@@ -46,6 +55,17 @@ public class StreamingConversationController {
                                            HistoryAwareQueryCompressor historyCompressor,
                                            GroundingChecker groundingChecker,
                                            ResolvedAssistantStyle style) {
+        this(streamingAssistant, ragPromptAugmenter, guardrail, historyCompressor, groundingChecker,
+                style, (tenant, chat) -> java.util.List.of(), ConversationStreamShadowObserver.disabled());
+    }
+
+    @Autowired
+    public StreamingConversationController(StreamingAssistant streamingAssistant, RagPromptAugmenter ragPromptAugmenter,
+            ConversationGuardrail guardrail, HistoryAwareQueryCompressor historyCompressor,
+            GroundingChecker groundingChecker, ResolvedAssistantStyle style,
+            ConversationHistoryReader historyReader, ConversationStreamShadowObserver shadow) {
+        this.historyReader = historyReader;
+        this.shadow = shadow;
         this.streamingAssistant = streamingAssistant;
         this.ragPromptAugmenter = ragPromptAugmenter;
         this.guardrail = guardrail;
@@ -61,7 +81,7 @@ public class StreamingConversationController {
         String message = body.getOrDefault("message", "");
         // 前置注入护栏：block 档命中即发一条 blocked 事件收尾，不进 LLM。
         ConversationGuardrail.InputDecision decision = guardrail.inspectInput(message);
-        SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);
+        SseEmitter emitter = createEmitter();
         if (decision.blocked()) {
             try {
                 emitter.send(SseEmitter.event().name("blocked").data(decision.blockReply()));
@@ -87,25 +107,45 @@ public class StreamingConversationController {
         StreamControl control = new StreamControl();
         emitter.onCompletion(() -> control.clientClosed("completion"));
         emitter.onTimeout(() -> {
-            control.clientClosed("timeout");
+            control.transportFailed("timeout");
             emitter.complete();
         });
-        emitter.onError(ignored -> control.clientClosed("transport_error"));
+        emitter.onError(ignored -> control.transportFailed("transport_error"));
+        try {
+            if (shadow.enabled()) {
+                var request = new ConversationGenerationRequest("1", effective, rag.context(),
+                        new ConversationGenerationRequest.Style(style.getLanguage(), style.getTone(),
+                                style.getCitationPolicy(), style.getExtra()),
+                        historyReader.snapshot(tenant.tenantId(), chatId));
+                control.prepareShadow(() -> shadow.open(request));
+            }
+        } catch (RuntimeException ignored) {
+            log.warn("conversation stream shadow snapshot/submission failed");
+        }
         try {
             TokenStream stream = streamingAssistant.chat(memoryKey, style.getLanguage(), style.getTone(),
                     style.getCitationPolicy(), style.getExtra(), effective, rag.context());
-            stream.onPartialResponse(token -> {
-                    if (control.closed()) {
-                        return;
-                    }
-                    if (token != null) {
-                        answer.append(token);
-                    }
-                    safeSend(emitter, pii.accept(token), control);
+            stream.onPartialResponseWithContext((partial, context) -> {
+                    control.attach(context.streamingHandle());
+                    control.callback(() -> {
+                        if (!control.running()) return;
+                        String token = partial.text();
+                        if (token != null) {
+                            if (answer.length() + token.length() > MAX_STREAM_CHARS) {
+                                fail(emitter, new IllegalStateException("stream size exceeded"), control);
+                                control.cancelUpstream();
+                                return;
+                            }
+                            answer.append(token);
+                        }
+                        safeSend(emitter, pii.accept(token), control);
+                    });
                 })
-                    .onCompleteResponse(response ->
-                            completeWithGrounding(emitter, answer.toString(), rag, pii, control))
-                    .onError(error -> fail(emitter, error, control))
+                    .onPartialThinkingWithContext((partial, context) -> control.attach(context.streamingHandle()))
+                    .onPartialToolCallWithContext((partial, context) -> control.attach(context.streamingHandle()))
+                    .onCompleteResponse(response -> control.callback(() ->
+                            completeWithGrounding(emitter, answer.toString(), rag, pii, control)))
+                    .onError(error -> control.callback(() -> fail(emitter, error, control)))
                     .start();
         } catch (RuntimeException error) {
             fail(emitter, error, control);
@@ -116,20 +156,22 @@ public class StreamingConversationController {
     private void completeWithGrounding(SseEmitter emitter, String answer,
                                        RagPromptAugmenter.RagContext rag, StreamingPiiRedactor pii,
                                        StreamControl control) {
-        if (control.closed()) {
-            return;
-        }
+        if (!control.running()) return;
         try {
             safeSend(emitter, pii.finish(), control);
+            if (control.closed()) return;
             GroundingResult grounded = groundingChecker.verify(answer, rag.hits());
             if (!grounded.grounded()) {
                 emitter.send(SseEmitter.event().name("grounding-warning")
                         .data(guardrail.redactOutput(String.join("；", grounded.warnings()))));
             }
-            control.terminal();
-            complete(emitter);
-        } catch (IOException | IllegalStateException error) {
-            control.clientClosed("write_failed");
+            if (control.closed() || !control.tryTerminal()) return;
+            // 主模型与grounding均完成后才预留候选预算, 不抢占本次主请求的后续模型额度.
+            control.beginShadow();
+            try { control.shadow.finish(answer); } catch (RuntimeException ignored) { }
+            complete(emitter, control);
+        } catch (IOException error) {
+            control.transportFailed("write_failed");
             emitter.complete();
         } catch (RuntimeException error) {
             fail(emitter, error, control);
@@ -143,17 +185,17 @@ public class StreamingConversationController {
         try {
             emitter.send(SseEmitter.event().data(token));
         } catch (IOException | IllegalStateException e) {
-            // TokenStream API 没有取消句柄；停止下游写并明确记录该不可取消边界。
-            control.clientClosed("write_failed");
+            // 停止下游写并取消已取得的上游句柄; 首帧前断连则在句柄迟到时取消.
+            control.transportFailed("write_failed");
             emitter.complete();
         }
     }
 
-    private static void complete(SseEmitter emitter) {
+    private static void complete(SseEmitter emitter, StreamControl control) {
         try {
             emitter.send(SseEmitter.event().name("done").data(""));
         } catch (IOException | IllegalStateException ignored) {
-            // 客户端可能已断开，忽略收尾发送失败
+            control.transportFailed("terminal_write_failed");
         }
         emitter.complete();
     }
@@ -164,10 +206,9 @@ public class StreamingConversationController {
 
     private static void fail(SseEmitter emitter, Throwable error, StreamControl control) {
         log.warn("chat stream failed errorType={}", error.getClass().getSimpleName());
-        if (control.closed()) {
-            return;
-        }
-        control.terminal();
+        if (control.closed() || !control.tryTerminal()) return;
+        try { control.shadow.cancel(); } catch (RuntimeException ignored) { }
+        control.cancelUpstream();
         try {
             emitter.send(SseEmitter.event().name("error").data(Map.of(
                     "error", "conversation stream failed",
@@ -178,21 +219,83 @@ public class StreamingConversationController {
         emitter.complete();
     }
 
-    private static final class StreamControl {
+    /** 单测可替换emitter验证发送失败; 生产仍使用原SseEmitter协议. */
+    protected SseEmitter createEmitter() { return new SseEmitter(SSE_TIMEOUT_MS); }
+
+    static final class StreamControl {
         private final AtomicBoolean closed = new AtomicBoolean(false);
         private final AtomicBoolean terminal = new AtomicBoolean(false);
+        private final AtomicBoolean cancelRequested = new AtomicBoolean(false);
+        private final TenantContext.Tenant tenant = TenantContext.captureRaw();
+        private final Map<String, String> mdc = MDC.getCopyOfContextMap();
+        private final Object handleLock = new Object();
+        private StreamingHandle handle;
+        private StreamingHandle cancelledHandle;
+        private java.util.function.Supplier<ConversationStreamShadowObserver.Observation> shadowFactory;
+        private volatile ConversationStreamShadowObserver.Observation shadow = ConversationStreamShadowObserver.noop();
 
-        boolean closed() {
-            return closed.get();
+        boolean closed() { return closed.get(); }
+        boolean running() { return !closed.get() && !terminal.get(); }
+        boolean tryTerminal() { return terminal.compareAndSet(false, true); }
+
+        /** SDK回调没有servlet ThreadLocal, 显式恢复grounding/预算所需身份并在回调后清理. */
+        synchronized void callback(Runnable action) {
+            var previous = TenantContext.captureRaw();
+            var previousMdc = MDC.getCopyOfContextMap();
+            try {
+                if (tenant == null) TenantContext.clear(); else TenantContext.set(tenant);
+                if (mdc == null) MDC.clear(); else MDC.setContextMap(mdc);
+                action.run();
+            } finally {
+                if (previous == null) TenantContext.clear(); else TenantContext.set(previous);
+                if (previousMdc == null) MDC.clear(); else MDC.setContextMap(previousMdc);
+            }
         }
 
-        void terminal() {
-            terminal.set(true);
+        void prepareShadow(java.util.function.Supplier<ConversationStreamShadowObserver.Observation> factory) {
+            shadowFactory = factory;
+        }
+
+        void beginShadow() {
+            var factory = shadowFactory;
+            shadowFactory = null;
+            if (factory == null || closed.get()) return;
+            try {
+                shadow = factory.get();
+                if (closed.get()) shadow.cancel();
+            } catch (RuntimeException ignored) {
+                log.warn("conversation stream shadow submission failed");
+            }
+        }
+
+        void attach(StreamingHandle current) {
+            synchronized (handleLock) {
+                handle = current;
+                if (cancelRequested.get()) cancelUpstream();
+            }
+        }
+
+        void cancelUpstream() {
+            cancelRequested.set(true);
+            synchronized (handleLock) {
+                if (handle != null && handle != cancelledHandle) {
+                    cancelledHandle = handle;
+                    try { handle.cancel(); } catch (RuntimeException ignored) {
+                        log.warn("chat stream upstream cancellation failed");
+                    }
+                }
+            }
         }
 
         void clientClosed(String reason) {
-            if (!terminal.get() && closed.compareAndSet(false, true)) {
-                log.info("chat stream downstream closed reason={} upstreamCancelSupported=false", reason);
+            if (!terminal.get()) transportFailed(reason);
+        }
+
+        void transportFailed(String reason) {
+            if (closed.compareAndSet(false, true)) {
+                cancelUpstream();
+                try { shadow.cancel(); } catch (RuntimeException ignored) { }
+                log.info("chat stream downstream closed reason={} cancellationRequested=true", reason);
             }
         }
     }

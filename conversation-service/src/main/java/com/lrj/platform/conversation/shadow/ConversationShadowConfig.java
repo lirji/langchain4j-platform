@@ -24,6 +24,53 @@ import java.util.concurrent.Executor;
 public class ConversationShadowConfig {
 
     @Bean
+    @ConditionalOnProperty(name = "app.conversation.shadow.streaming-enabled", havingValue = "false", matchIfMissing = true)
+    ConversationStreamShadowObserver disabledStreamShadow() {
+        return ConversationStreamShadowObserver.disabled();
+    }
+
+    @Bean(destroyMethod = "shutdownNow")
+    @ConditionalOnProperty(prefix = "app.conversation.shadow", name = {"enabled", "streaming-enabled"}, havingValue = "true")
+    java.util.concurrent.ExecutorService conversationStreamShadowExecutor() {
+        return new java.util.concurrent.ThreadPoolExecutor(1, 2, 30, java.util.concurrent.TimeUnit.SECONDS,
+                new java.util.concurrent.ArrayBlockingQueue<>(16), runnable -> {
+                    Thread thread = new Thread(runnable, "conversation-stream-shadow");
+                    thread.setDaemon(true);
+                    return thread;
+                }, new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
+    }
+
+    @Bean(destroyMethod = "shutdownNow")
+    @ConditionalOnProperty(prefix = "app.conversation.shadow", name = {"enabled", "streaming-enabled"}, havingValue = "true")
+    java.util.concurrent.ScheduledExecutorService conversationStreamShadowTimer() {
+        var timer = new java.util.concurrent.ScheduledThreadPoolExecutor(1, runnable -> {
+            Thread thread = new Thread(runnable, "conversation-stream-shadow-deadline");
+            thread.setDaemon(true);
+            return thread;
+        });
+        timer.setRemoveOnCancelPolicy(true);
+        return timer;
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "app.conversation.shadow", name = {"enabled", "streaming-enabled"}, havingValue = "true")
+    ConversationStreamShadowObserver conversationStreamShadowObserver(
+            @Qualifier("conversationStreamShadowExecutor") java.util.concurrent.ExecutorService executor,
+            @Qualifier("conversationStreamShadowTimer") java.util.concurrent.ScheduledExecutorService timer,
+            com.fasterxml.jackson.databind.ObjectMapper mapper, com.lrj.platform.security.InternalToken tokens,
+            com.lrj.platform.security.InternalSecurityProperties security,
+            ObjectProvider<MeterRegistry> registry,
+            @Value("${app.conversation.shadow.base-url}") String baseUrl,
+            @Value("${app.conversation.shadow.read-timeout:5s}") Duration deadline) {
+        var client = java.net.http.HttpClient.newBuilder().connectTimeout(Duration.ofMillis(500))
+                .followRedirects(java.net.http.HttpClient.Redirect.NEVER).build();
+        return new HttpConversationStreamShadowObserver(client,
+                java.net.URI.create(baseUrl.replaceAll("/$", "") + "/internal/conversation/stream"), mapper,
+                tokens, security.getInternalHeader(), executor, timer, deadline,
+                new ConversationShadowMetrics(registry.getIfAvailable()));
+    }
+
+    @Bean
     @ConditionalOnProperty(name = "app.conversation.shadow.enabled", havingValue = "false",
             matchIfMissing = true)
     ConversationShadowObserver noOpConversationShadowObserver() {

@@ -117,19 +117,24 @@ public class ConversationController {
             var history = historyReader.snapshot(tenant.tenantId(), chatId);
             String answer = assistant.chat(memoryKey, style.getLanguage(), style.getTone(),
                     style.getCitationPolicy(), style.getExtra(), effective, rag.context());
-            shadowObserver.observe(
-                    new ConversationGenerationRequest(
-                            "1",
-                            effective,
-                            rag.context(),
-                            new ConversationGenerationRequest.Style(
-                                    style.getLanguage(),
-                                    style.getTone(),
-                                    style.getCitationPolicy(),
-                                    style.getExtra()),
-                            history),
-                    answer);
+            // 候选在所有主模型调用结束后才执行, 不能抢占本请求的grounding预算.
             GroundingResult grounded = groundingChecker.verify(answer, rag.hits());
+            try {
+                shadowObserver.observe(
+                        new ConversationGenerationRequest(
+                                "1",
+                                effective,
+                                rag.context(),
+                                new ConversationGenerationRequest.Style(
+                                        style.getLanguage(),
+                                        style.getTone(),
+                                        style.getCitationPolicy(),
+                                        style.getExtra()),
+                                history),
+                        answer);
+            } catch (RuntimeException ignored) {
+                // 影子观察失败不改变已完成的主结果.
+            }
             return guardrail.redactOutput(grounded.answer());
         });
         return Map.of(

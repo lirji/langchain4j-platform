@@ -112,6 +112,105 @@ class StreamingConversationControllerTest {
         assertThat(emitter.data.toString()).doesNotContain("secret-model-detail");
     }
 
+    @Test
+    void cancellationUsesSdkHandleAndAlsoCancelsLateHandle() {
+        var first = mock(dev.langchain4j.model.chat.response.StreamingHandle.class);
+        var late = mock(dev.langchain4j.model.chat.response.StreamingHandle.class);
+        var control = new StreamingConversationController.StreamControl();
+        control.attach(first);
+        control.clientClosed("disconnect");
+        control.attach(first);
+        verify(first).cancel();
+        var beforeFirstToken = new StreamingConversationController.StreamControl();
+        beforeFirstToken.clientClosed("disconnect");
+        beforeFirstToken.attach(late);
+        verify(late).cancel();
+        assertThat(beforeFirstToken.running()).isFalse();
+    }
+
+    @Test
+    void callbackIdentityIsCapturedAndRestoredWithoutLeakingAcrossThreads() throws Exception {
+        var owner = new TenantContext.Tenant("acme", "alice", Set.of("chat"));
+        TenantContext.set(owner);
+        var control = new StreamingConversationController.StreamControl();
+        TenantContext.clear();
+        try (var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            executor.submit(() -> {
+                control.callback(() -> assertThat(TenantContext.current()).isEqualTo(owner));
+                assertThat(TenantContext.captureRaw()).isNull();
+            }).get();
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void groundingFailureEmitsOneErrorTerminalAndRejectsDuplicateCompletion() {
+        StreamingAssistant assistant = mock(StreamingAssistant.class);
+        RagPromptAugmenter augmenter = mock(RagPromptAugmenter.class);
+        var grounding = mock(com.lrj.platform.conversation.grounding.GroundingChecker.class);
+        TokenStream stream = mock(TokenStream.class, Answers.RETURNS_SELF);
+        when(augmenter.contextWithHits("hi", null)).thenReturn(new RagPromptAugmenter.RagContext("ctx", List.of()));
+        when(assistant.chat("acme::c1", "中文", "简洁", "cite", "", "hi", "ctx")).thenReturn(stream);
+        when(grounding.verify(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyList()))
+                .thenThrow(new IllegalStateException("private grounding error"));
+        var recording = new RecordingEmitter();
+        var controller = new StreamingConversationController(assistant, augmenter,
+                new ConversationGuardrail(false, "block", false), new NoopHistoryAwareQueryCompressor(),
+                grounding, STYLE) {
+            @Override protected SseEmitter createEmitter() { return recording; }
+        };
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
+        controller.chatStream("c1", Map.of("message", "hi"));
+        var partial = org.mockito.ArgumentCaptor.forClass(java.util.function.BiConsumer.class);
+        var completed = org.mockito.ArgumentCaptor.forClass(java.util.function.Consumer.class);
+        verify(stream).onPartialResponseWithContext(partial.capture());
+        verify(stream).onCompleteResponse(completed.capture());
+        var handle = mock(dev.langchain4j.model.chat.response.StreamingHandle.class);
+        ((java.util.function.BiConsumer<dev.langchain4j.model.chat.response.PartialResponse,
+                dev.langchain4j.model.chat.response.PartialResponseContext>) partial.getValue()).accept(
+                        new dev.langchain4j.model.chat.response.PartialResponse("reply"),
+                        new dev.langchain4j.model.chat.response.PartialResponseContext(handle));
+        completed.getValue().accept(null);
+        completed.getValue().accept(null);
+        assertThat(recording.data).filteredOn(item -> item instanceof Map<?, ?>).hasSize(1);
+        assertThat(recording.data.toString()).doesNotContain("private grounding error");
+        assertThat(recording.completed).isTrue();
+        verify(handle).cancel();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void candidateFailurePreservesDoneAndUsesSnapshotBeforePrimaryAndGrounding() {
+        var order = new ArrayList<String>();
+        StreamingAssistant assistant = mock(StreamingAssistant.class);
+        RagPromptAugmenter augmenter = mock(RagPromptAugmenter.class);
+        TokenStream stream = mock(TokenStream.class, Answers.RETURNS_SELF);
+        when(augmenter.contextWithHits("hi", null)).thenReturn(new RagPromptAugmenter.RagContext("ctx", List.of()));
+        when(assistant.chat("acme::c1", "中文", "简洁", "cite", "", "hi", "ctx")).thenAnswer(call -> {
+            order.add("primary"); return stream;
+        });
+        var shadow = mock(com.lrj.platform.conversation.shadow.ConversationStreamShadowObserver.class);
+        when(shadow.enabled()).thenReturn(true);
+        when(shadow.open(org.mockito.ArgumentMatchers.any())).thenAnswer(call -> {
+            order.add("candidate"); throw new IllegalStateException("shadow unavailable");
+        });
+        var recording = new RecordingEmitter();
+        var controller = new StreamingConversationController(assistant, augmenter,
+                new ConversationGuardrail(false, "block", false), new NoopHistoryAwareQueryCompressor(),
+                (answer, hits) -> { order.add("grounding"); return new NoopGroundingChecker().verify(answer, hits); },
+                STYLE, (tenant, chat) -> { order.add("snapshot"); return List.of(); }, shadow) {
+            @Override protected SseEmitter createEmitter() { return recording; }
+        };
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
+        controller.chatStream("c1", Map.of("message", "hi"));
+        var completed = org.mockito.ArgumentCaptor.forClass(java.util.function.Consumer.class);
+        verify(stream).onCompleteResponse(completed.capture());
+        completed.getValue().accept(null);
+        assertThat(order).containsExactly("snapshot", "primary", "grounding", "candidate");
+        assertThat(recording.completed).isTrue();
+        assertThat(recording.data.toString()).contains("done").doesNotContain("shadow unavailable", "CONVERSATION_STREAM_FAILED");
+    }
+
     private static final class RecordingEmitter extends SseEmitter {
         private final List<Object> data = new ArrayList<>();
         private boolean completed;

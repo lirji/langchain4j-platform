@@ -141,6 +141,7 @@ app:
     # 独立无状态 conversation runtime 的候选 shadow。默认关闭；候选只接收已完成 Java 护栏/RAG
     # 后的生成输入，不拥有 memory/profile/cache，也不能改变 primary 返回。
     shadow:
+      streaming-enabled: ${CONVERSATION_STREAM_SHADOW_ENABLED:false}
       enabled: ${CONVERSATION_SHADOW_ENABLED:false}
       base-url: ${CONVERSATION_SHADOW_BASE_URL:}
       connect-timeout: ${CONVERSATION_SHADOW_CONNECT_TIMEOUT:500ms}
