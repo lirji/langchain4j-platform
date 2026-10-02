@@ -28,3 +28,6 @@
 复用既有两处干净verification worktree保护原项目dirty文件。
 确认远程main未前进后, 按Python producer→Java consumer顺序正常快进合并并推送main;
 不强推、不重置历史、不夹带用户未提交贡献。实际结果由DELIVERY_REPORT/DELIVERY_STATUS记录。
+
+实际执行: Python main1a7ceec先推送, Java main8bf6ad6后推送; 两仓远程核对成功。
+任务原目录dirty贡献保持; 后续仅交付闭合文档, 正常快进main, 无强推/清理。

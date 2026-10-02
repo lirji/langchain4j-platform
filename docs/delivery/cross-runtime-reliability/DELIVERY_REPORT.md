@@ -5,7 +5,7 @@
 S1–S7的七类可靠性缺口已实现并通过本地验收; Python quality与Java cutover CI通过。
 2026-10-02用户明确接受既有框架/依赖版本扫描结果并要求合并main; 本轮不执行框架升级。
 Java SBOM 85条HIGH/CRITICAL仍为FAIL, 按MERGE_EXCEPTION.md作本次源码合并例外,
-不降低CI门禁或声称漏洞已修复。S8正在按Python→Java正常合并与推送main。
+不降低CI门禁或声称漏洞已修复。S8已按Python→Java正常快进合并并推送main, 远程核对成功。
 生产结论保持NO-GO。
 
 ## 交付内容
@@ -61,5 +61,23 @@ Python原工作树新增未提交测试预期非规范JWT编码先decode成功; 
 用于干净验证与避免合并污染用户工作树; 未获清理授权, 不删除。
 其他既有worktree和共享infra不清理。UUID试验库/key和本轮测试进程已清理。
 
-合并前Git核对: 两仓远程main仍为初始基线, 无新增远程提交; 正常快进发布待执行。
+实际Git交付: Python main正常快进c4fc90d→1a7ceec4e4b39e12b046a01b60a7ee731e1e4876,
+随后Java main正常快进e8f11cb→8bf6ad6bfb37bac5c523db7631ea65ecbd5ddfdb。
+两个远程main SHA均经git ls-remote确认; Java deba7bc、Python固定producer6f43ddf及全部任务提交
+均为对应main祖先。后续仅此交付状态/进度文档闭合, 最终HEAD以git main/origin/main为准。
+原项目目录保持任务分支和dirty文件; main检出在既有verification worktree, 没有stash/强推/清空。
 恢复入口为两仓CODEX_PROGRESS与本目录DELIVERY_STATUS。
+
+## 合并后CI快照
+
+| CI | 首次main发布revision | 观察状态 |
+|---|---|---|
+| [Python quality](https://github.com/lirji/platform-agentscope/actions/runs/36983232314) | 1a7ceec | IN_PROGRESS |
+| [Java cutover](https://github.com/lirji/langchain4j-platform/actions/runs/36983259278) | 8bf6ad6 | IN_PROGRESS |
+| [Java supply chain](https://github.com/lirji/langchain4j-platform/actions/runs/36983259283) | 8bf6ad6 | IN_PROGRESS; 已披露版本扫描接受例外, 未预判PASS |
+| [Java edge](https://github.com/lirji/langchain4j-platform/actions/runs/36983259389) | 8bf6ad6 | IN_PROGRESS |
+| [Java tax](https://github.com/lirji/langchain4j-platform/actions/runs/36983259337) | 8bf6ad6 | IN_PROGRESS |
+
+此前相同产品代码的Python quality/Java cutover已通过; 之后仅交付文档改变。
+main最新文档提交会按现有工作流再次触发自动CI, 实际状态以Actions为准; 不以源码合并成功宣称CI全绿。
+Git交付完成, 当前工程结论COMPLETED_WITH_ACCEPTED_FINDINGS; 版本技术债另行安排, 生产NO-GO保持。
