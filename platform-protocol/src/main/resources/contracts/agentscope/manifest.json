@@ -1,8 +1,15 @@
 {
   "files": {
     "boundaries/analytics-sql-plan.schema.json": "sha256:2a1db30fb27ee5061e6cbf21e25c86f8dcca941d36493837224e5b846d746856",
+    "boundaries/async-task-worker-token-claims.schema.json": "sha256:d4f298fe14ffe5d35b4e6226d79a0b8ca182d3997ba621500b73cd72a1c68f47",
+    "boundaries/budget-reservation-reply.schema.json": "sha256:6df7b06a896cd7f3a42f2c7bc263e6c27b1486976563e4dccdd5cef5b455ecc2",
+    "boundaries/budget-reservation-request.schema.json": "sha256:46a087d849f075595bde240d46be45a0e03e333350443cc1bd12f723bde4a335",
+    "boundaries/budget-settlement-request.schema.json": "sha256:7d7acef8a429b4f4e0ea4020d62a91fa09bd2fffa919cd0c9d6343ed6322e352",
     "boundaries/conversation-generation.schema.json": "sha256:62b326fcd5141df23bc90cb1571e58a98458ba4958bc8ace57b799db1087f323",
     "boundaries/conversation-stream-event.schema.json": "sha256:16f6a7f0f9a296e10f17fbae1d798a7adc840fa894c1eb4f89bd684ee2edad00",
+    "boundaries/readonly-task-claim-reply.schema.json": "sha256:32cee3ddb852c15b66e95a48c97c5efb478247aa94c5c9c6c6b020b7a1fae802",
+    "boundaries/readonly-task-claim-request.schema.json": "sha256:67f6a58d7844b32fd1fade3104f51bc217abaf9f6cb50c81aee65aa76edfd088",
+    "boundaries/refund-receipt-request.schema.json": "sha256:ae1db4d81aab982991d8ce6ce9aab9506fe1a00dbdfa5125ae3e1dc108a0e77a",
     "boundaries/workflow-ai-draft.schema.json": "sha256:923027a36b7b06fb687f054d1229b7f0fc49aaa7bdb20eb730ac53f9e60c0c69",
     "capabilities/agent-capabilities.v1.json": "sha256:893eb3c40ddc01ab839deda6f99ac548ac5be0c4f6bb4cd0616d6b53e23e9ec1",
     "legacy/agent-async-task.schema.json": "sha256:990108eb55afda489feb953ebb327b1006f2afe560bb9c69b6a1fe9aa78ce8de",
@@ -20,8 +27,11 @@
     "legacy/vote-request.schema.json": "sha256:5966278b9e793c3a37c056aac9cced552d3ec862b387dfbebdb50642b62e5cb7"
   },
   "upstream": {
+    "git_repository": "https://github.com/lirji/platform-agentscope.git",
     "manifest": "contracts/manifest.json",
+    "manifest_digest": "sha256:c6cf1ebcac313afdd21b7d6dab93ba284b768d6b1a52ef73abeb691eefa57410",
     "repository": "agentscope-platform",
+    "revision": "51d0eb29d317b4fb489d535d656b01012bc649af",
     "schema_version": "1"
   }
 }

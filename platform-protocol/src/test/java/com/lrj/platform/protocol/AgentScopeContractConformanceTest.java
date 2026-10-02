@@ -68,7 +68,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AgentScopeContractConformanceTest {
 
     private static final Path CONTRACTS = Path.of("src/main/resources/contracts/agentscope");
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules()
+            .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     private static final JsonSchemaFactory FACTORY =
             JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012);
 
@@ -173,6 +174,30 @@ class AgentScopeContractConformanceTest {
         });
         JsonNode roundTripped = MAPPER.valueToTree(registry);
         assertThat(roundTripped).isEqualTo(published);
+    }
+
+    @Test
+    void shared_budget_receipt_and_durable_dispatch_match_the_fixed_combination() {
+        assertProduces("boundaries/budget-reservation-request.schema.json", null,
+                new com.lrj.platform.protocol.metering.BudgetReservationRequest("op-1", 100));
+        assertProduces("boundaries/budget-reservation-reply.schema.json", null,
+                new com.lrj.platform.protocol.metering.BudgetReservationReply("op-1", "2026-10-02", 100));
+        assertProduces("boundaries/budget-settlement-request.schema.json", null,
+                new com.lrj.platform.protocol.metering.BudgetSettlementRequest("op-1", "2026-10-02", 100, 42));
+        assertProduces("boundaries/refund-receipt-request.schema.json", null,
+                new com.lrj.platform.protocol.workflow.RefundReceiptRequest("chat", "refund order", "message-1", null));
+        assertProduces("boundaries/readonly-task-claim-request.schema.json", null,
+                new com.lrj.platform.protocol.asynctask.ReadOnlyTaskClaimRequest("agentscope-platform"));
+        var now = java.time.Instant.parse("2026-10-02T00:00:00Z");
+        var task = new com.lrj.platform.protocol.asynctask.AsyncTask("task-1", "acme", "alice",
+                "agent.readonly.run.v1", com.lrj.platform.protocol.asynctask.AsyncTaskStatus.RUNNING,
+                Map.of("goal", "hello"), null, null, null, now, now, null, "worker-1", now.plusSeconds(60), 1);
+        assertProduces("boundaries/readonly-task-claim-reply.schema.json", null,
+                new com.lrj.platform.protocol.asynctask.ReadOnlyTaskClaimReply(task, "signed-credential", "trace-1"));
+        assertConsumes("boundaries/readonly-task-claim-reply.schema.json", null,
+                com.lrj.platform.protocol.asynctask.ReadOnlyTaskClaimReply.class);
+        assertConsumes("boundaries/budget-reservation-reply.schema.json", null,
+                com.lrj.platform.protocol.metering.BudgetReservationReply.class);
     }
 
     /** 生产方向：Java 序列化出来的 JSON 必须通过 schema 校验。 */

@@ -19,6 +19,12 @@
       contracts/agentscope/ 下 vendored 的语言中立契约保持一致。
     -->
     <dependencies>
+        <!-- 模拟实际Spring服务的ISO时间序列化, 验证含租约时间的跨语言DTO. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

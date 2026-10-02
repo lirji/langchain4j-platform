@@ -6,6 +6,12 @@ on:
       - 'pom.xml'
       - 'platform-protocol/**'
       - 'platform-security/**'
+      - 'platform-metering/**'
+      - 'conversation-service/**'
+      - 'deploy/verify-agent-contracts.py'
+      - 'deploy/test-agent-contract-pin.py'
+      - 'deploy/docker-compose.readonly-worker.yml'
+      - 'deploy/docker-compose.conversation-shadow.yml'
       - 'interop-service/**'
       - 'edge-gateway/**'
       - 'voice-service/**'
@@ -38,6 +44,12 @@ on:
       - 'pom.xml'
       - 'platform-protocol/**'
       - 'platform-security/**'
+      - 'platform-metering/**'
+      - 'conversation-service/**'
+      - 'deploy/verify-agent-contracts.py'
+      - 'deploy/test-agent-contract-pin.py'
+      - 'deploy/docker-compose.readonly-worker.yml'
+      - 'deploy/docker-compose.conversation-shadow.yml'
       - 'interop-service/**'
       - 'edge-gateway/**'
       - 'voice-service/**'
@@ -89,27 +101,50 @@ jobs:
 
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
 
-      # 跨语言契约门禁：证明 Java 消费侧与 agentscope-platform 导出的语言中立 schema 一致。
-      # 本仓 CI 拿不到兄弟仓，所以这里只能校验 vendored 副本与固定 digest；「副本 == 上游」
-      # 由 deploy/sync-agent-contracts.sh 在能看到上游仓时校验（脚本无上游时自行 skip）。
-      - name: Verify agentscope contract compatibility
+      - name: Read immutable producer lock
+        id: producer
         run: |
-          bash -n deploy/sync-agent-contracts.sh
+          python3 - <<'PYCODE' >> "$GITHUB_OUTPUT"
+          import json, re
+          lock = json.load(open('platform-protocol/src/main/resources/contracts/agentscope/manifest.json'))
+          revision = lock['upstream']['revision']
+          assert re.fullmatch('[0-9a-f]{40}', revision)
+          print('revision=' + revision)
+          PYCODE
+
+      - name: Checkout exact public producer revision
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: lirji/platform-agentscope
+          ref: ${{ steps.producer.outputs.revision }}
+          path: _contract-producer
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.3"
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version-file: _contract-producer/.python-version
+
+      - name: Verify generated producer snapshots and fixed consumer combination
+        env:
+          AGENTSCOPE_REPO: ${{ github.workspace }}/_contract-producer
+        run: |
+          uv sync --directory _contract-producer --frozen --dev
+          uv run --directory _contract-producer python scripts/export_contracts.py --check
           bash deploy/sync-agent-contracts.sh
-          mvn -B -pl platform-protocol test
+          python3 deploy/test-agent-contract-pin.py
 
-      - name: Verify edge and interop
-        run: mvn -B -pl edge-gateway,interop-service -am test
-
-      - name: Verify Bailian multimodal providers
-        run: mvn -B -pl voice-service,knowledge-service -am test
-
-      - name: Verify versioned database migrations
-        run: mvn -B -pl database-migrations -am test
+      - name: Verify full native reactor including reliability slices
+        run: mvn -B test
 
       - name: Validate Compose
         run: |
           docker compose -f deploy/docker-compose.yml config --quiet
+          docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.readonly-worker.yml config --quiet
+          docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.conversation-shadow.yml config --quiet
           docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.knowledge-split.yml config --quiet
           bash -n deploy/start-all.sh deploy/start-local.sh deploy/load-bailian-env.sh deploy/test-bailian-env.sh \
             deploy/test-production-cutover-config.sh deploy/test-runtime-hardening-config.sh \

@@ -66,6 +66,8 @@ class AgentScopeContractManifestTest {
 
         assertThat(upstream.get("repository").asText()).isEqualTo("agentscope-platform");
         assertThat(upstream.get("manifest").asText()).isEqualTo("contracts/manifest.json");
+        assertThat(upstream.get("revision").asText()).matches("[0-9a-f]{40}");
+        assertThat(upstream.get("manifest_digest").asText()).matches("sha256:[0-9a-f]{64}");
         // 上游 manifest 换代（例如改 digest 算法）必须显式处理，不能静默按老格式解读。
         assertThat(upstream.get("schema_version").asText()).isEqualTo("1");
     }
