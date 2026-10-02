@@ -31,7 +31,7 @@
         <dependency>
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
-            <version>8.4.0</version>
+            <version>26.7.0</version>
         </dependency>
         <!-- 必需：入站内部 JWT 校验 + TenantContext 还原（AutoConfiguration.imports 自注册 InternalTokenAuthFilter） -->
         <dependency>
