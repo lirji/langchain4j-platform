@@ -2,10 +2,10 @@
 
 ## 结论
 
-S1–S7的七类可靠性缺口已实现并通过本地验收, Python远程CI通过。
-S8尚未完成main交付: Java安全门禁报告85条既有HIGH/CRITICAL,
-cutover已修复Linux SIGPIPE误报, 远程36980014838 SUCCESS。两仓仅推送任务分支, main尚未合并。
-技术升级取舍详见SECURITY_MIGRATION_PROPOSAL.md; 不绕过安全门禁完成发布。
+S1–S7的七类可靠性缺口已实现并通过本地验收; Python quality与Java cutover CI通过。
+2026-10-02用户明确接受既有框架/依赖版本扫描结果并要求合并main; 本轮不执行框架升级。
+Java SBOM 85条HIGH/CRITICAL仍为FAIL, 按MERGE_EXCEPTION.md作本次源码合并例外,
+不降低CI门禁或声称漏洞已修复。S8正在按Python→Java正常合并与推送main。
 生产结论保持NO-GO。
 
 ## 交付内容
@@ -46,8 +46,8 @@ IAM SDK源码固定auth-platform929e9caf394b98b3030357746c0ff396cc0806db。
 | [Java cutover](https://github.com/lirji/langchain4j-platform/actions/runs/36980014838) | deba7bc | SUCCESS, 包含固定契约/SDK、全reactor、Compose/安全配置/Helm校验; 已关闭早期Linux SIGPIPE误报 |
 | [Java supply chain](https://github.com/lirji/langchain4j-platform/actions/runs/36978975220) | 1ac14a0 | 测试/打包通过, 聚合SBOM扫描FAIL, 85条HIGH/CRITICAL; 未进入18镜像扫描 |
 
-main发布必须先完成必要门禁; Python→Java为producer/consumer发布顺序。
-正常Git授权存在, 此处阻塞是必要安全验证失败与框架迁移范围待决定。
+用户本轮授权覆盖正常合并/push main和已披露版本扫描的合并例外; Python→Java为发布顺序。
+未扩展框架迁移范围, 远程扫描FAIL与用户接受例外分开记录。
 没有生产部署、tag/release、付费模型、benchmark模型执行或sandbox-smoke。
 
 ## 用户改动与目录
@@ -61,5 +61,5 @@ Python原工作树新增未提交测试预期非规范JWT编码先decode成功; 
 用于干净验证与避免合并污染用户工作树; 未获清理授权, 不删除。
 其他既有worktree和共享infra不清理。UUID试验库/key和本轮测试进程已清理。
 
-最终Git核对: 报告提交后任务分支已推送; Java main仍e8f11cb, Python main仍c4fc90d。
-恢复入口为两仓CODEX_PROGRESS与本目录DELIVERY_STATUS; 仅框架升级路线待用户技术选择。
+合并前Git核对: 两仓远程main仍为初始基线, 无新增远程提交; 正常快进发布待执行。
+恢复入口为两仓CODEX_PROGRESS与本目录DELIVERY_STATUS。

@@ -40,3 +40,8 @@
 
 结论：七项本地实现无未处理blocking finding; 远程CI新增Java依赖安全阻塞main交付, cutover Linux SIGPIPE已修复且远程复验成功。
 已形成SECURITY_MIGRATION_PROPOSAL; 不绕过扫描。生产结论仍NO-GO。
+
+## 本次合并决定
+
+用户2026-10-02接受已披露框架/依赖版本扫描记录, 明确要求合并main; 详见MERGE_EXCEPTION。
+本次不升级框架, 不声称85条漏洞已修复或CI扫描通过; 功能与恢复验收证据保持。
