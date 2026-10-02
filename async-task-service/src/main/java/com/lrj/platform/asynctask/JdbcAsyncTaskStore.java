@@ -350,6 +350,7 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
         List<String> ids = jdbc.queryForList("""
                 SELECT TASK_ID FROM ASYNC_TASK
                 WHERE KIND IN (%s)
+                  AND KIND NOT LIKE 'agent.readonly.%%'
                   AND ((STATUS=? AND CREATED_AT < ?)
                     OR (STATUS=? AND
                       ((LEASE_EXPIRES_AT IS NOT NULL AND LEASE_EXPIRES_AT < ?)

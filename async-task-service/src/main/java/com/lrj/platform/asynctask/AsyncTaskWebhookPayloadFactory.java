@@ -19,7 +19,7 @@ final class AsyncTaskWebhookPayloadFactory {
     }
 
     static Object payload(AsyncTask task) {
-        if (!AGENT_KINDS.contains(task.kind())) {
+        if (!(AGENT_KINDS.contains(task.kind()) || ReadOnlyTaskDispatch.KINDS.contains(task.kind()))) {
             return task;
         }
         Map<String, Object> input = new LinkedHashMap<>(task.input());
@@ -45,7 +45,7 @@ final class AsyncTaskWebhookPayloadFactory {
         headers.set("X-Async-Task-Id", task.taskId());
         headers.set("X-Async-Task-Status", task.status().name());
         headers.set("X-Tenant-Id", task.tenantId());
-        if (AGENT_KINDS.contains(task.kind())) {
+        if ((AGENT_KINDS.contains(task.kind()) || ReadOnlyTaskDispatch.KINDS.contains(task.kind()))) {
             headers.set("X-Agent-Task-Id", task.taskId());
             headers.set("X-Agent-Task-Status", task.status().name());
         }

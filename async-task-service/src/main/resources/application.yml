@@ -30,6 +30,12 @@ platform:
 
 app:
   async-task:
+    dispatch:
+      enabled: ${ASYNC_TASK_DISPATCH_ENABLED:false}
+      service-id: ${ASYNC_TASK_DISPATCH_SERVICE_ID:agentscope-platform}
+      global-limit: ${ASYNC_TASK_DISPATCH_GLOBAL_LIMIT:32}
+      tenant-limit: ${ASYNC_TASK_DISPATCH_TENANT_LIMIT:2}
+      lease-seconds: ${ASYNC_TASK_LEASE_SECONDS:60}
     store: ${ASYNC_TASK_STORE:jdbc}
     task-ttl: ${ASYNC_TASK_TTL:PT24H}
     cleanup-delay-ms: ${ASYNC_TASK_CLEANUP_DELAY_MS:60000}

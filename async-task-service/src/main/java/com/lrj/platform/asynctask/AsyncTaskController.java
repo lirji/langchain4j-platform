@@ -54,6 +54,12 @@ public class AsyncTaskController {
     private final AsyncTaskWebhookOutbox webhookOutbox;
     private final AsyncTaskEventJournal eventJournal;
     private final OutboundCallbackPolicy callbackPolicy;
+    private ReadOnlyTaskDispatch dispatch;
+
+    /** 调度只在显式启用时装配，关闭时拒绝专用 kind，避免无人处理的假接单。 */
+    @Autowired(required = false)
+    void setDispatch(ReadOnlyTaskDispatch dispatch) { this.dispatch = dispatch; }
+
     private int eventMaxBytes = 262_144;
 
     public AsyncTaskController(AsyncTaskStore store,
@@ -151,7 +157,14 @@ public class AsyncTaskController {
                 now,
                 now,
                 null);
-        store.put(task);
+        if (request.kind().startsWith("agent.readonly.")) {
+            if (dispatch == null) return ResponseEntity.status(503).body(Map.of("error", "durable worker is disabled"));
+            if (!ReadOnlyTaskDispatch.KINDS.contains(task.kind()) || !tenant.hasScope("agent"))
+                return ResponseEntity.status(403).body(Map.of("error", "read-only task permission required"));
+            dispatch.create(task, tenant, org.slf4j.MDC.get("traceId"));
+        } else {
+            store.put(task);
+        }
         publishLifecycle(task);
         audit.record(AuditEventType.ASYNC_TASK_SUBMITTED,
                 Map.of("taskId", task.taskId(), "kind", task.kind(), "service", "async-task-service"));
@@ -294,7 +307,7 @@ public class AsyncTaskController {
             return ResponseEntity.status(403).body(Map.of("error", "worker identity mismatch"));
         }
         Optional<AsyncTask> scoped = workerScoped(taskId, worker);
-        if (scoped.isEmpty() || !AGENT_KINDS.contains(scoped.get().kind())) {
+        if (scoped.isEmpty() || !(AGENT_KINDS.contains(scoped.get().kind()) || ReadOnlyTaskDispatch.KINDS.contains(scoped.get().kind()))) {
             return ResponseEntity.notFound().build();
         }
         AsyncTask task = scoped.get();

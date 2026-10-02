@@ -22,7 +22,7 @@ public final class AsyncTaskWorkerToken {
 
     private static final String TOKEN_USE = "async_task_worker";
     private static final String SCOPE = "async.task.worker";
-    private static final Set<String> ACTIONS = Set.of("lease", "status", "event");
+    private static final Set<String> ACTIONS = Set.of("lease", "status", "event", "dispatch");
     private static final int MAX_TOKEN_LENGTH = 8_192;
 
     private final SecretKey key;

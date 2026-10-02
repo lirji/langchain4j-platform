@@ -1,0 +1,34 @@
+# 使用 -f deploy/docker-compose.yml -f deploy/docker-compose.readonly-worker.yml.
+# 独立worker只运行恢复安全的只读能力; 默认部署不加载本overlay.
+services:
+  async-task-service:
+    environment:
+      ASYNC_TASK_DISPATCH_ENABLED: "true"
+      ASYNC_TASK_DISPATCH_SERVICE_ID: ${AGENTSCOPE_ASYNC_TASK_WORKER_ID:-agentscope-platform}
+  agentscope-orchestrator:
+    environment:
+      ASYNC_TASK_ROLE: api
+      ASYNC_TASK_WORKER_ID: ${AGENTSCOPE_ASYNC_TASK_WORKER_ID:-agentscope-platform}
+      AGENT_REFUND_START_ENABLED: "false"
+      AGENT_MCP_ENABLED: "false"
+      AGENT_BROWSER_ENABLED: "false"
+      AGENT_CODE_EXEC_ENABLED: "false"
+  agentscope-worker:
+    extends:
+      file: docker-compose.yml
+      service: agentscope-orchestrator
+    command: ["python", "-m", "agentscope_platform.worker"]
+    healthcheck:
+      test: ["CMD", "python", "-m", "agentscope_platform.worker", "--health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    ports: !override []
+    environment:
+      ASYNC_TASK_ROLE: worker
+      ASYNC_TASK_WORKER_ID: ${AGENTSCOPE_ASYNC_TASK_WORKER_ID:-agentscope-platform}
+      AGENT_REFUND_START_ENABLED: "false"
+      AGENT_MCP_ENABLED: "false"
+      AGENT_BROWSER_ENABLED: "false"
+      AGENT_CODE_EXEC_ENABLED: "false"

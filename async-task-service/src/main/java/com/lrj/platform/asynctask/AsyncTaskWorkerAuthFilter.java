@@ -66,6 +66,9 @@ final class AsyncTaskWorkerAuthFilter extends OncePerRequestFilter {
 
     private static Target target(HttpServletRequest request) {
         String path = request.getRequestURI();
+        if ("POST".equals(request.getMethod()) && "/async/tasks/dispatch/claim".equals(path)) {
+            return new Target("dispatch", "readonly-dispatch");
+        }
         if (path == null || !path.startsWith(PREFIX)) return null;
         String action;
         String suffix;

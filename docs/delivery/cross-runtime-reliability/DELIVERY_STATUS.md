@@ -18,7 +18,7 @@
 | S3 | LOCAL_PASS | Java reactor 1403/0 fail（最新修改聚焦复验）；Python 492 pass；Redis 4 项；真实本地 OpenAI HTTP/SSE 5 工厂出口单次计费；部署门禁/Compose/Helm PASS；见 S3_SHARED_BUDGET.md |
 | S4 | TODO | 固定 producer revision 与契约制品 |
 | S5 | LOCAL_PASS | 原实例只读回执、用户/参数/租户绑定；真实 MySQL lost-response PASS；Python 9 项；见 S5_REFUND_RECEIPTS.md |
-| S6 | TODO | worker 分派与可信上下文恢复 |
+| S6 | LOCAL_PASS | Java 75、Python 507；MySQL 5；独立 API退出/worker崩溃/接管/DAG/旧epoch恢复 PASS；见 S6_DURABLE_WORKER.md |
 | S7 | TODO | 流式 shadow 与独立进程验证 |
 | S8 | TODO | 聚合回归、对抗复审、文档、发布 |
 
