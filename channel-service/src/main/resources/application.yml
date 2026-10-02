@@ -29,6 +29,15 @@ platform:
     processed-event-store: ${CHANNEL_DEDUP_STORE:memory}
 
 channel:
+  inbox:
+    # 沿用现有生产 JDBC 选择，开发 memory 不保证跨重启恢复。
+    store: ${CHANNEL_INBOX_STORE:${CHANNEL_DEDUP_STORE:memory}}
+    concurrency: ${CHANNEL_INBOX_CONCURRENCY:4}
+    max-attempts: ${CHANNEL_INBOX_MAX_ATTEMPTS:5}
+    lease-millis: ${CHANNEL_INBOX_LEASE_MILLIS:60000}
+    retry-millis: ${CHANNEL_INBOX_RETRY_MILLIS:5000}
+    execution-millis: ${CHANNEL_INBOX_EXECUTION_MILLIS:180000}
+    success-retention-millis: ${CHANNEL_INBOX_SUCCESS_RETENTION_MILLIS:0}
   dedup:
     datasource:
       url: ${CHANNEL_DEDUP_DB_URL:jdbc:mysql://mysql:3306/channel?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}

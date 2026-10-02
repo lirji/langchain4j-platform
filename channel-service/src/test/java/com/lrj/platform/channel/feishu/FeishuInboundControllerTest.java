@@ -88,4 +88,18 @@ class FeishuInboundControllerTest {
 
         verify(bridge, never()).handle(org.mockito.ArgumentMatchers.any());
     }
+    @Test
+    void storageUnavailableMustNotAck() {
+        FeishuMessageBridge bridge = mock(FeishuMessageBridge.class);
+        org.mockito.Mockito.doThrow(new com.lrj.platform.channel.inbox.InboundInbox.UnavailableException(
+                new IllegalStateException("storage down"))).when(bridge).handle(org.mockito.ArgumentMatchers.any());
+        String body = """
+                {"header":{"event_type":"im.message.receive_v1","token":"vt"},
+                 "event":{"sender":{"sender_id":{"open_id":"ou_1"}},
+                   "message":{"message_id":"om_9","chat_id":"oc_2","message_type":"text","content":"{\\"text\\":\\"hi\\"}"}}}""";
+        var response = controller(props("vt"), bridge).onEvent(body, null, null, null);
+        assertThat(response.getStatusCode().value()).isEqualTo(503);
+        assertThat(response.getHeaders().getFirst("Retry-After")).isEqualTo("5");
+    }
+
 }

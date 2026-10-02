@@ -1,7 +1,9 @@
 package com.lrj.platform.channel.dingtalk;
 
-import com.lrj.platform.eventbus.InMemoryProcessedEventStore;
-import com.lrj.platform.eventbus.ProcessedEventStore;
+import com.lrj.platform.channel.inbox.InMemoryInboundInboxStore;
+import com.lrj.platform.channel.inbox.TestInbox;
+import com.lrj.platform.channel.inbox.InboundInbox;
+import com.lrj.platform.channel.inbox.InboundInboxStore;
 import com.lrj.platform.protocol.knowledge.KnowledgeHit;
 import com.lrj.platform.protocol.knowledge.KnowledgeQueryReply;
 import com.lrj.platform.security.TenantContext;
@@ -24,6 +26,7 @@ import static org.mockito.Mockito.when;
  * 处理失败归还抢占使渠道重投能重来、空白文本 no-op，以及命中但 LLM 回复为空时跳过回复调用。
  */
 class DingtalkMessageBridgeTest {
+    private final InboundInbox inbox = TestInbox.immediate();
 
     @AfterEach
     void clear() {
@@ -59,9 +62,10 @@ class DingtalkMessageBridgeTest {
         when(knowledge.query(any())).thenReturn(reply(hit(0.9, "退款需主管审批")));
         when(conversation.chat(eq("退款怎么审批？"), eq("staff_1"))).thenReturn("需主管审批，3 个工作日到账");
         DingtalkMessageBridge bridge = new DingtalkMessageBridge(
-                conversation, knowledge, reply, Runnable::run, props(), new InMemoryProcessedEventStore());
+                conversation, knowledge, reply, props(), inbox);
 
         bridge.handle(msg("m_1", "退款怎么审批？"));
+        inbox.tick();
 
         verify(conversation).chat(eq("退款怎么审批？"), eq("staff_1"));
         verify(reply).replyText(eq("cid_2"), eq("需主管审批，3 个工作日到账"));
@@ -75,9 +79,10 @@ class DingtalkMessageBridgeTest {
         HttpDingtalkReplyClient reply = mock(HttpDingtalkReplyClient.class);
         when(knowledge.query(any())).thenReturn(reply()); // 空命中
         DingtalkMessageBridge bridge = new DingtalkMessageBridge(
-                conversation, knowledge, reply, Runnable::run, props(), new InMemoryProcessedEventStore());
+                conversation, knowledge, reply, props(), inbox);
 
         bridge.handle(msg("m_2", "今天午饭吃什么？"));
+        inbox.tick();
 
         verify(reply).replyAtUsers(eq("cid_2"),
                 eq("知识库暂未收录该问题，已为您转接人工客服，请稍候。"),
@@ -93,9 +98,10 @@ class DingtalkMessageBridgeTest {
         HttpDingtalkReplyClient reply = mock(HttpDingtalkReplyClient.class);
         when(knowledge.query(any())).thenReturn(reply(hit(0.3, "勉强相关"))); // 分数 < minScore 0.5
         DingtalkMessageBridge bridge = new DingtalkMessageBridge(
-                conversation, knowledge, reply, Runnable::run, props(), new InMemoryProcessedEventStore());
+                conversation, knowledge, reply, props(), inbox);
 
         bridge.handle(msg("m_3", "边缘问题"));
+        inbox.tick();
 
         verify(reply).replyAtUsers(any(), any(), any());
         verify(conversation, never()).chat(any(), any());
@@ -109,10 +115,12 @@ class DingtalkMessageBridgeTest {
         when(knowledge.query(any())).thenReturn(reply(hit(0.9, "命中")));
         when(conversation.chat(any(), any())).thenReturn("r");
         DingtalkMessageBridge bridge = new DingtalkMessageBridge(
-                conversation, knowledge, reply, Runnable::run, props(), new InMemoryProcessedEventStore());
+                conversation, knowledge, reply, props(), inbox);
 
         bridge.handle(msg("m_dup", "hi"));
+        inbox.tick();
         bridge.handle(msg("m_dup", "hi"));
+        inbox.tick();
 
         verify(knowledge, times(1)).query(any());
     }
@@ -120,19 +128,23 @@ class DingtalkMessageBridgeTest {
     @Test
     void deduplicatesAcrossBridgeInstancesSharingTheSameStore() {
         // 多副本部署：两个进程各持一个 bridge，共享 JDBC 去重存储时同一条钉钉重投只应处理一次
-        ProcessedEventStore shared = new InMemoryProcessedEventStore();
+        InboundInboxStore shared = new InMemoryInboundInboxStore(100);
+        var inboxA = TestInbox.immediate(shared);
+        var inboxB = TestInbox.immediate(shared);
         DingtalkConversationClient conversation = mock(DingtalkConversationClient.class);
         DingtalkKnowledgeClient knowledge = mock(DingtalkKnowledgeClient.class);
         HttpDingtalkReplyClient reply = mock(HttpDingtalkReplyClient.class);
         when(knowledge.query(any())).thenReturn(reply(hit(0.9, "命中")));
         when(conversation.chat(any(), any())).thenReturn("r");
         DingtalkMessageBridge replicaA = new DingtalkMessageBridge(
-                conversation, knowledge, reply, Runnable::run, props(), shared);
+                conversation, knowledge, reply, props(), inboxA);
         DingtalkMessageBridge replicaB = new DingtalkMessageBridge(
-                conversation, knowledge, reply, Runnable::run, props(), shared);
+                conversation, knowledge, reply, props(), inboxB);
 
         replicaA.handle(msg("m_shared", "hi"));
+        inboxA.tick();
         replicaB.handle(msg("m_shared", "hi"));
+        inboxB.tick();
 
         verify(knowledge, times(1)).query(any());
     }
@@ -148,10 +160,12 @@ class DingtalkMessageBridgeTest {
                 .thenReturn(reply(hit(0.9, "命中")));
         when(conversation.chat(any(), any())).thenReturn("r");
         DingtalkMessageBridge bridge = new DingtalkMessageBridge(
-                conversation, knowledge, reply, Runnable::run, props(), new InMemoryProcessedEventStore());
+                conversation, knowledge, reply, props(), inbox);
 
         bridge.handle(msg("m_retry", "hi"));
+        inbox.tick();
         bridge.handle(msg("m_retry", "hi"));
+        inbox.tick();
 
         verify(knowledge, times(2)).query(any());
         verify(reply).replyText(any(), eq("r"));
@@ -163,9 +177,10 @@ class DingtalkMessageBridgeTest {
         DingtalkKnowledgeClient knowledge = mock(DingtalkKnowledgeClient.class);
         HttpDingtalkReplyClient reply = mock(HttpDingtalkReplyClient.class);
         DingtalkMessageBridge bridge = new DingtalkMessageBridge(
-                conversation, knowledge, reply, Runnable::run, props(), new InMemoryProcessedEventStore());
+                conversation, knowledge, reply, props(), inbox);
 
         bridge.handle(msg("m_4", "   "));
+        inbox.tick();
 
         verify(knowledge, never()).query(any());
         verify(conversation, never()).chat(any(), any());
@@ -179,9 +194,10 @@ class DingtalkMessageBridgeTest {
         when(knowledge.query(any())).thenReturn(reply(hit(0.9, "命中")));
         when(conversation.chat(any(), any())).thenReturn("");
         DingtalkMessageBridge bridge = new DingtalkMessageBridge(
-                conversation, knowledge, reply, Runnable::run, props(), new InMemoryProcessedEventStore());
+                conversation, knowledge, reply, props(), inbox);
 
         bridge.handle(msg("m_5", "hi"));
+        inbox.tick();
 
         verify(reply, never()).replyText(any(), any());
     }

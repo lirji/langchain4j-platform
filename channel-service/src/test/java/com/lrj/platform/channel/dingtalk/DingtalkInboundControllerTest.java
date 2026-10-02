@@ -97,4 +97,15 @@ class DingtalkInboundControllerTest {
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         verify(bridge).handle(org.mockito.ArgumentMatchers.any());
     }
+    @Test
+    void storageUnavailableMustNotAck() {
+        DingtalkMessageBridge bridge = mock(DingtalkMessageBridge.class);
+        org.mockito.Mockito.doThrow(new com.lrj.platform.channel.inbox.InboundInbox.UnavailableException(
+                new IllegalStateException("storage down"))).when(bridge).handle(org.mockito.ArgumentMatchers.any());
+        String body = textEvent();
+        var response = controller(props(false), bridge).onEvent(body, null, null);
+        assertThat(response.getStatusCode().value()).isEqualTo(503);
+        assertThat(response.getHeaders().getFirst("Retry-After")).isEqualTo("5");
+    }
+
 }

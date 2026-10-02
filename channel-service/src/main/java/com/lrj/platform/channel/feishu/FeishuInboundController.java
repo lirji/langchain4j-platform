@@ -2,6 +2,8 @@ package com.lrj.platform.channel.feishu;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lrj.platform.channel.inbox.InboundInbox;
+import com.lrj.platform.channel.inbox.InboundInboxStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -75,9 +77,15 @@ public class FeishuInboundController {
                 bridge.handle(msg);
             }
             return ResponseEntity.ok(ACK);
+        } catch (InboundInbox.UnavailableException e) {
+            return ResponseEntity.status(503).header("Retry-After", "5").body(Map.of("error", "inbox unavailable"));
+        } catch (InboundInboxStore.PayloadConflictException e) {
+            return ResponseEntity.status(409).body(Map.of("error", "message key conflict"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "invalid inbound message"));
         } catch (Exception e) {
             log.warn("feishu event handling failed: {}", e.toString());
-            return ResponseEntity.ok(ACK); // 对飞书恒 ack，避免重投风暴；错误已记日志
+            return ResponseEntity.ok(ACK); // 非可处理消息保持 ACK；持久化错误已独立返回 503
         }
     }
 

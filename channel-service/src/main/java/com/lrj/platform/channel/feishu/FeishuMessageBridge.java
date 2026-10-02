@@ -1,13 +1,11 @@
 package com.lrj.platform.channel.feishu;
 
-import com.lrj.platform.eventbus.InboundIdempotency;
-import com.lrj.platform.eventbus.ProcessedEventStore;
+import com.lrj.platform.channel.inbox.InboundInbox;
 import com.lrj.platform.security.TenantContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Set;
-import java.util.concurrent.Executor;
 
 /**
  * 飞书入站消息桥：把用户消息转成一次 {@code /chat} 并把回复发回飞书。
@@ -16,10 +14,8 @@ import java.util.concurrent.Executor;
  * 处理链：按 {@code messageId} 去重（飞书会重投）→ 设 {@link TenantContext}（飞书应用配置的租户）→
  * 调 conversation {@code /chat}（内部 JWT 由 RestTemplate 转发器铸发）→ 经 {@link HttpFeishuReplyClient} 回复。
  *
- * <p>去重走平台统一的 {@link InboundIdempotency}（底层 {@link ProcessedEventStore}，与本服务两个 Kafka
- * listener 同一套存储）：多副本部署把 {@code platform.eventbus.processed-event-store} 设为 {@code jdbc}
- * 即跨副本、跨重启生效。处理失败会归还抢占，让飞书重投能重来；退款工单另有 workflow 侧
- * {@code dedupeId} 幂等兜底，因此重投不会起出第二个流程。
+ * <p>ACK 前提交到渠道 inbox；后台领取与失败重试由租约驱动，进程退出后可恢复。
+ * 远程回复属于至少一次；退款由原 messageId 在 workflow 侧幂等，不能用 ACK 当处理成功。
  *
  * <p><b>骨架说明</b>：回复需飞书应用凭据，{@code reply.enabled=false} 时只收不回，便于先验证入站链路。
  */
@@ -30,36 +26,35 @@ public class FeishuMessageBridge {
     private final HttpConversationClient conversation;
     private final HttpFeishuReplyClient reply;
     private final HttpWorkflowClient workflow;
-    private final Executor executor;
     private final String tenantId;
     private final boolean intentRoutingEnabled;
-    private final InboundIdempotency idempotency;
+    private final InboundInbox inbox;
 
     public FeishuMessageBridge(HttpConversationClient conversation, HttpFeishuReplyClient reply,
                                HttpWorkflowClient workflow,
-                               Executor feishuBridgeExecutor, FeishuProperties props,
-                               ProcessedEventStore processedEvents) {
+                               FeishuProperties props,
+                               InboundInbox inbox) {
         this.conversation = conversation;
         this.reply = reply;
         this.workflow = workflow;
-        this.executor = feishuBridgeExecutor;
         this.tenantId = props.getTenantId();
         this.intentRoutingEnabled = props.getIntentRouting().isEnabled();
-        this.idempotency = new InboundIdempotency(processedEvents, "feishu");
+        this.inbox = inbox;
+        inbox.register(props.getTenantId(), "feishu", FeishuInboundMessage.class, this::process);
     }
 
-    /** 异步处理一条入站消息（控制器已 ack）。 */
+    /** 异步处理一条入站消息（ACK 前写入收件箱）。 */
     public void handle(FeishuInboundMessage msg) {
         if (msg == null || msg.text() == null || msg.text().isBlank()) {
             return;
         }
-        idempotency.submitOnce(msg.messageId(), executor, () -> process(msg));
+        inbox.receive(tenantId, "feishu", msg.messageId(), msg);
     }
 
     /**
      * 同步处理（抽出便于单测：不经 executor 直接跑）。
      *
-     * <p>失败<b>向上抛</b>：由 {@link InboundIdempotency#submitOnce} 归还抢占并记日志，飞书重投才能重来。
+     * <p>失败<b>向上抛</b>：由 inbox 记录失败并执行有界重试，飞书重投才能重来。
      * 这里自己吞掉异常会让消息被永久标记为已处理。
      */
     void process(FeishuInboundMessage msg) {

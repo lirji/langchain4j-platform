@@ -1,7 +1,7 @@
 package com.lrj.platform.channel.dingtalk;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.lrj.platform.eventbus.ProcessedEventStore;
+import com.lrj.platform.channel.inbox.InboundInbox;
 import com.lrj.platform.observability.OutboundTraceForwarder;
 import com.lrj.platform.security.OutboundTenantForwarder;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -11,8 +11,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 
 /**
  * 钉钉知识库客服桥装配。仅 {@code app.channel.dingtalk.enabled=true} 时生效——默认关，对现有 channel 零影响。
@@ -81,22 +79,12 @@ public class DingtalkConfig {
     }
 
     @Bean
-    Executor dingtalkBridgeExecutor() {
-        return Executors.newFixedThreadPool(4, r -> {
-            Thread t = new Thread(r, "dingtalk-bridge");
-            t.setDaemon(true);
-            return t;
-        });
-    }
-
-    @Bean
     DingtalkMessageBridge dingtalkMessageBridge(DingtalkConversationClient dingtalkConversationClient,
                                                 DingtalkKnowledgeClient dingtalkKnowledgeClient,
                                                 HttpDingtalkReplyClient httpDingtalkReplyClient,
-                                                Executor dingtalkBridgeExecutor,
-                                                DingtalkProperties props,
-                                                ProcessedEventStore processedEvents) {
+                                                    DingtalkProperties props,
+                                                InboundInbox inbox) {
         return new DingtalkMessageBridge(dingtalkConversationClient, dingtalkKnowledgeClient,
-                httpDingtalkReplyClient, dingtalkBridgeExecutor, props, processedEvents);
+                httpDingtalkReplyClient, props, inbox);
     }
 }

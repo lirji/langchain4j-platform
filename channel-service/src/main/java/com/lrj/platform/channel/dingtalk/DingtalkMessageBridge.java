@@ -1,7 +1,6 @@
 package com.lrj.platform.channel.dingtalk;
 
-import com.lrj.platform.eventbus.InboundIdempotency;
-import com.lrj.platform.eventbus.ProcessedEventStore;
+import com.lrj.platform.channel.inbox.InboundInbox;
 import com.lrj.platform.protocol.knowledge.KnowledgeHit;
 import com.lrj.platform.protocol.knowledge.KnowledgeQueryReply;
 import com.lrj.platform.protocol.knowledge.KnowledgeQueryRequest;
@@ -10,7 +9,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Set;
-import java.util.concurrent.Executor;
 
 /**
  * 钉钉入站消息桥：客服在群里 @机器人 提问 → 查知识库 → 机器人在群里回复。
@@ -20,9 +18,8 @@ import java.util.concurrent.Executor;
  * <b>兜底闸门</b>：先查 knowledge {@code /rag/query}，命中不足则发转人工话术 + @人工客服、<b>不调 LLM</b>；
  * 命中充分才调 conversation {@code /chat}（内部透明 RAG + LLM，命中相同知识块）→ 经 {@link HttpDingtalkReplyClient} 回复。
  *
- * <p>去重走平台统一的 {@link InboundIdempotency}（底层 {@link ProcessedEventStore}，与本服务两个 Kafka
- * listener 同一套存储）：多副本部署把 {@code platform.eventbus.processed-event-store} 设为 {@code jdbc}
- * 即跨副本、跨重启生效。处理失败会归还抢占，让钉钉重投能重来——重复回复只是冗余，静默丢客服提问是可见故障。
+ * <p>ACK 前提交到渠道 inbox；后台领取与失败重试由租约驱动，进程退出后可恢复。
+ * 远程回复属于至少一次；退款由原 messageId 在 workflow 侧幂等，不能用 ACK 当处理成功。
  *
  * <p><b>骨架说明</b>：回复需钉钉应用凭据，凭据未配时只收不回，便于先验证入站链路。
  */
@@ -33,36 +30,34 @@ public class DingtalkMessageBridge {
     private final DingtalkConversationClient conversation;
     private final DingtalkKnowledgeClient knowledge;
     private final HttpDingtalkReplyClient reply;
-    private final Executor executor;
     private final DingtalkProperties props;
-    private final InboundIdempotency idempotency;
+    private final InboundInbox inbox;
 
     public DingtalkMessageBridge(DingtalkConversationClient conversation,
                                  DingtalkKnowledgeClient knowledge,
                                  HttpDingtalkReplyClient reply,
-                                 Executor dingtalkBridgeExecutor,
                                  DingtalkProperties props,
-                                 ProcessedEventStore processedEvents) {
+                                 InboundInbox inbox) {
         this.conversation = conversation;
         this.knowledge = knowledge;
         this.reply = reply;
-        this.executor = dingtalkBridgeExecutor;
         this.props = props;
-        this.idempotency = new InboundIdempotency(processedEvents, "dingtalk");
+        this.inbox = inbox;
+        inbox.register(props.getTenantId(), "dingtalk", DingtalkInboundMessage.class, this::process);
     }
 
-    /** 异步处理一条入站消息（控制器已 ack）。 */
+    /** 异步处理一条入站消息（ACK 前写入收件箱）。 */
     public void handle(DingtalkInboundMessage msg) {
         if (msg == null || msg.text() == null || msg.text().isBlank()) {
             return;
         }
-        idempotency.submitOnce(msg.msgId(), executor, () -> process(msg));
+        inbox.receive(props.getTenantId(), "dingtalk", msg.msgId(), msg);
     }
 
     /**
      * 同步处理（抽出便于单测：不经 executor 直接跑）。
      *
-     * <p>失败<b>向上抛</b>：由 {@link InboundIdempotency#submitOnce} 归还抢占并记日志，钉钉重投才能重来。
+     * <p>失败<b>向上抛</b>：由 inbox 记录失败并执行有界重试，钉钉重投才能重来。
      * 这里自己吞掉异常会让消息被永久标记为已处理。
      */
     void process(DingtalkInboundMessage msg) {

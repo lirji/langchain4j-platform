@@ -2,6 +2,8 @@ package com.lrj.platform.channel.dingtalk;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lrj.platform.channel.inbox.InboundInbox;
+import com.lrj.platform.channel.inbox.InboundInboxStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -18,7 +20,7 @@ import java.util.Map;
  *
  * <p>该端点<b>不带平台 api-key</b>（钉钉不知道），需在 edge-gateway 免鉴权放行、靠钉钉 timestamp/sign 验真。
  * 处理：验签 → 解析群内 @机器人 的 text 消息 → 交 {@link DingtalkMessageBridge} 异步处理并立即 ack
- * （钉钉要求 3s 内响应）。非 text 消息忽略。对钉钉恒 ack，避免验签外的异常触发重投风暴。
+ * （钉钉要求 3s 内响应）。非 text 消息忽略。规范化消息持久化失败返回 503，允许渠道重投。
  */
 @RestController
 @ConditionalOnProperty(prefix = "app.channel.dingtalk", name = "enabled", havingValue = "true")
@@ -57,9 +59,15 @@ public class DingtalkInboundController {
                 bridge.handle(msg);
             }
             return ResponseEntity.ok(ACK);
+        } catch (InboundInbox.UnavailableException e) {
+            return ResponseEntity.status(503).header("Retry-After", "5").body(Map.of("error", "inbox unavailable"));
+        } catch (InboundInboxStore.PayloadConflictException e) {
+            return ResponseEntity.status(409).body(Map.of("error", "message key conflict"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "invalid inbound message"));
         } catch (Exception e) {
             log.warn("dingtalk event handling failed: {}", e.toString());
-            return ResponseEntity.ok(ACK); // 已验签，解析/处理异常只记日志，对钉钉恒 ack
+            return ResponseEntity.ok(ACK); // 非可处理消息保持 ACK；持久化错误已独立返回 503
         }
     }
 

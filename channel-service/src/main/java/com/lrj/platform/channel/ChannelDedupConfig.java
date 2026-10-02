@@ -6,20 +6,31 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Conditional;
+import org.springframework.boot.autoconfigure.condition.AnyNestedCondition;
 
 import javax.sql.DataSource;
 
 /**
- * 消费侧跨重启去重的独立 DataSource。仅当 {@code platform.eventbus.processed-event-store=jdbc} 时装配，
+ * 消费侧跨重启去重的独立 DataSource。Kafka 去重或入站 inbox 任一选择 JDBC 时装配，
  * 供 platform-eventbus 的 {@code JdbcProcessedEventStore}（{@code PROCESSED_EVENT} 表）跨重启去重使用。
  *
  * <p>默认（{@code memory}）不创建本 bean、不连库——{@link ChannelServiceApplication} 已排除
- * {@code DataSourceAutoConfiguration}，故 dev/test 零 SQL 依赖照常启动，去重走内存实现。
+ * {@code DataSourceAutoConfiguration}，故 dev/test 零 SQL 依赖照常启动，去重和 inbox 走内存实现。
  * 生产 Kafka 部署下设 {@code CHANNEL_DEDUP_STORE=jdbc} + 数据源 env 即启用。
  */
 @Configuration
-@ConditionalOnProperty(prefix = "platform.eventbus", name = "processed-event-store", havingValue = "jdbc")
+@Conditional(ChannelDedupConfig.JdbcRequired.class)
 public class ChannelDedupConfig {
+
+    /** Kafka 去重或回调 inbox 任一选择 JDBC，都复用同一渠道 DataSource。 */
+    static class JdbcRequired extends AnyNestedCondition {
+        JdbcRequired() { super(ConfigurationPhase.REGISTER_BEAN); }
+        @ConditionalOnProperty(prefix = "platform.eventbus", name = "processed-event-store", havingValue = "jdbc")
+        static class Dedup {}
+        @ConditionalOnProperty(prefix = "channel.inbox", name = "store", havingValue = "jdbc")
+        static class Inbox {}
+    }
 
     @Bean
     public DataSource channelDedupDataSource(

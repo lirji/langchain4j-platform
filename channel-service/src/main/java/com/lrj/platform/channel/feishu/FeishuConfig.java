@@ -1,7 +1,7 @@
 package com.lrj.platform.channel.feishu;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.lrj.platform.eventbus.ProcessedEventStore;
+import com.lrj.platform.channel.inbox.InboundInbox;
 import com.lrj.platform.observability.OutboundTraceForwarder;
 import com.lrj.platform.security.OutboundTenantForwarder;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -11,8 +11,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 
 /**
  * 飞书事件桥装配。仅 {@code app.channel.feishu.enabled=true} 时生效——默认关，对现有 channel 零影响。
@@ -81,22 +79,12 @@ public class FeishuConfig {
     }
 
     @Bean
-    Executor feishuBridgeExecutor() {
-        return Executors.newFixedThreadPool(4, r -> {
-            Thread t = new Thread(r, "feishu-bridge");
-            t.setDaemon(true);
-            return t;
-        });
-    }
-
-    @Bean
     FeishuMessageBridge feishuMessageBridge(HttpConversationClient conversation,
                                             HttpFeishuReplyClient reply,
                                             HttpWorkflowClient workflow,
-                                            Executor feishuBridgeExecutor,
                                             FeishuProperties props,
-                                            ProcessedEventStore processedEvents) {
-        return new FeishuMessageBridge(conversation, reply, workflow, feishuBridgeExecutor, props,
-                processedEvents);
+                                            InboundInbox inbox) {
+        return new FeishuMessageBridge(conversation, reply, workflow, props,
+                inbox);
     }
 }
