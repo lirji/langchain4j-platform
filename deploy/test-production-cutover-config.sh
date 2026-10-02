@@ -7,6 +7,12 @@ trap 'printf "cutover config gate failed at line %s\n" "$LINENO" >&2' ERR
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_dir"
 
+# grep -q 提前退出会使 Linux 管道写端收到 SIGPIPE; pipefail 会将正确匹配误判为失败.
+# 完整消费输入后再返回匹配状态, 保留安全断言且不输出匹配到的凭据.
+matches_stream() {
+  grep "$@" >/dev/null
+}
+
 compose=(docker compose
   -f deploy/docker-compose.yml
   -f deploy/docker-compose.knowledge-split.yml)
@@ -228,9 +234,9 @@ workflow_callback_deployment="$(deployment_document workflow-service)"
 interop_callback_deployment="$(deployment_document interop-service)"
 
 grep -A2 'name: INTEROP_STATE_STORE' <<<"$interop_callback_deployment" \
-  | grep -Eq 'value: "?redis"?$'
+  | matches_stream -E 'value: "?redis"?$'
 grep -A2 'name: SPRING_DATA_REDIS_URL' <<<"$interop_callback_deployment" \
-  | grep -Eq 'value: "?redis://redis:6379/0"?$'
+  | matches_stream -E 'value: "?redis://redis:6379/0"?$'
 
 for callback_deployment in \
   "$async_callback_deployment" \
@@ -249,7 +255,7 @@ grep -q 'name: PLATFORM_SECURITY_CALLBACK_TRUSTED_INTERNAL_URLS' \
   <<<"$async_callback_deployment"
 grep -A2 'name: PLATFORM_SECURITY_CALLBACK_TRUSTED_INTERNAL_URLS' \
   <<<"$async_callback_deployment" \
-  | grep -q 'http://interop-service:8088/interop/a2a/push-callback'
+  | matches_stream 'http://interop-service:8088/interop/a2a/push-callback'
 if grep -q 'PLATFORM_SECURITY_CALLBACK_TRUSTED_INTERNAL_URLS' \
   <<<"$workflow_callback_deployment$interop_callback_deployment"; then
   echo "only async-task-service may receive the exact private A2A callback exception" >&2
@@ -259,7 +265,7 @@ fi
 for callback_secret in async-task-callback workflow-callback interop-callback; do
   recipients="$(
     for service in async-task-service workflow-service interop-service; do
-      if deployment_document "$service" | grep -q "name: $callback_secret"; then
+      if deployment_document "$service" | matches_stream "name: $callback_secret"; then
         echo "$service"
       fi
     done
@@ -287,9 +293,9 @@ if grep -q 'RAG_SOURCE_S3_ACCESS_KEY' <<<"$query_deployment"; then
 fi
 
 grep -A120 'name: knowledge-ingest-api' "$rendered" \
-  | grep -q 'name: knowledge-source-ingest'
+  | matches_stream 'name: knowledge-source-ingest'
 grep -A140 'name: knowledge-ingest-worker' "$rendered" \
-  | grep -q 'name: knowledge-source-worker'
+  | matches_stream 'name: knowledge-source-worker'
 
 agentscope_deployment="$(
   awk '
@@ -302,15 +308,15 @@ agentscope_deployment="$(
   ' "$rendered"
 )"
 grep -A2 'name: AGENT_SESSION_STORE' <<<"$agentscope_deployment" \
-  | grep -Eq 'value: "?redis"?$'
+  | matches_stream -E 'value: "?redis"?$'
 grep -A2 'name: AGENT_SESSION_REDIS_URL' <<<"$agentscope_deployment" \
-  | grep -Eq 'value: "?redis://redis:6379/0"?$'
+  | matches_stream -E 'value: "?redis://redis:6379/0"?$'
 grep -q 'name: AGENT_CONFIRMATION_SECRET' <<<"$agentscope_deployment"
 grep -A5 'name: AGENT_CONFIRMATION_SECRET' <<<"$agentscope_deployment" \
-  | grep -q 'name: agentscope-confirmation'
+  | matches_stream 'name: agentscope-confirmation'
 grep -q 'name: AGENT_DOWNSTREAM_JWT_SECRET' <<<"$agentscope_deployment"
 grep -A5 'name: AGENT_DOWNSTREAM_JWT_SECRET' <<<"$agentscope_deployment" \
-  | grep -q 'name: agentscope-downstream'
+  | matches_stream 'name: agentscope-downstream'
 
 if awk '
   /^kind: Deployment$/ { document = $0 ORS; capture = 1; next }
@@ -320,7 +326,7 @@ if awk '
         document ~ /agentscope-(confirmation|downstream)/) print document
     document = ""; capture = 0
   }
-' "$rendered" | grep -q .; then
+' "$rendered" | matches_stream .; then
   echo "only agentscope-orchestrator may receive AgentScope signing secrets" >&2
   exit 1
 fi
@@ -336,7 +342,7 @@ for worker_deployment in agentscope-orchestrator async-task-service workflow-ser
     END {
       if (capture && document ~ ("name: " expected)) print document
     }
-  ' "$rendered" | grep -q 'name: async-task-worker'
+  ' "$rendered" | matches_stream 'name: async-task-worker'
 done
 
 if awk '
@@ -355,7 +361,7 @@ if awk '
       print document
     }
   }
-' "$rendered" | grep -q .; then
+' "$rendered" | matches_stream .; then
   echo "async worker signing key reached a non-worker deployment" >&2
   exit 1
 fi
