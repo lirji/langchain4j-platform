@@ -50,6 +50,12 @@ public class WorkflowController {
                 body.get("webhookUrl"));
     }
 
+    /** 原请求只读回执；404 表示尚未确认，不能据此无确认地重发写请求。 */
+    @PostMapping("/workflow/refund/receipt")
+    public WorkflowService.StartResult refundReceipt(@RequestBody com.lrj.platform.protocol.workflow.RefundReceiptRequest body) {
+        return workflowService.refundReceipt(body.chatId(), body.message(), body.dedupeId(), body.webhookUrl());
+    }
+
     /** 本租户待审任务列表。 */
     @GetMapping("/workflow/tasks")
     public List<WorkflowService.TaskView> tasks() {

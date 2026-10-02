@@ -14,9 +14,14 @@ final class WorkflowTestDatabase {
     }
 
     static DriverManagerDataSource migrated(String name, String extraOptions) {
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                "jdbc:h2:mem:" + name + ";MODE=MySQL;DB_CLOSE_DELAY=-1" + extraOptions,
-                "sa", "");
+        String integrationUrl = System.getenv("WORKFLOW_RECEIPT_TEST_DB_URL");
+        if (integrationUrl != null && !integrationUrl.matches(
+                "jdbc:mysql://127\\.0\\.0\\.1:[0-9]+/lc4j_workflow_it_[a-z0-9_]+(?:\\?.*)?"))
+            throw new IllegalArgumentException("receipt integration requires an isolated lc4j_workflow_it database");
+        DriverManagerDataSource dataSource = integrationUrl == null
+                ? new DriverManagerDataSource("jdbc:h2:mem:" + name + ";MODE=MySQL;DB_CLOSE_DELAY=-1" + extraOptions, "sa", "")
+                : new DriverManagerDataSource(integrationUrl, System.getenv("WORKFLOW_RECEIPT_TEST_DB_USER"),
+                    System.getenv("WORKFLOW_RECEIPT_TEST_DB_PASSWORD"));
         SchemaMigrationRunner.migrate(dataSource, SchemaName.WORKFLOW);
         return dataSource;
     }

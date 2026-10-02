@@ -94,6 +94,21 @@ class JdbcWorkflowIdempotencyStoreTest {
     }
 
     @Test
+    void receiptLookupNeverCreatesOrRebindsClaims() {
+        assertThat(store.findCommitted("acme", "refund_start", "key", "request")).isEmpty();
+        assertThat(rowCount()).isZero();
+        transaction.executeWithoutResult(status -> {
+            store.claim("acme", "refund_start", "key", "request", "business");
+            store.attachInstance("acme", "refund_start", "key", "request", "process-1");
+        });
+        assertThat(store.findCommitted("acme", "refund_start", "key", "request")).contains("process-1");
+        assertThat(store.findCommitted("other", "refund_start", "key", "request")).isEmpty();
+        assertThatThrownBy(() -> store.findCommitted("acme", "refund_start", "key", "changed"))
+                .isInstanceOf(WorkflowIdempotencyStore.IdempotencyConflictException.class);
+        assertThat(rowCount()).isOne();
+    }
+
+    @Test
     void missingSchemaFailsWithoutCreatingTables() {
         DataSource dataSource = new DriverManagerDataSource(
                 "jdbc:h2:mem:workflow_missing_schema;MODE=MySQL;DB_CLOSE_DELAY=-1", "sa", "");

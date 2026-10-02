@@ -216,6 +216,25 @@ class WorkflowIdempotencyAtomicityTest {
         assertThat(ledgerCount()).isZero();
     }
 
+    @Test
+    void lostStartResponseCanReadReceiptWithoutAnotherCreation() {
+        var original = start("acme", "alice", "chat-1", "退款订单 101", "refund-101");
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
+        try {
+            var receipt = service.refundReceipt("chat-1", "退款订单 101", "refund-101", null);
+            assertThat(receipt.instanceId()).isEqualTo(original.instanceId());
+            assertThat(receipt.deduplicated()).isTrue();
+            assertThat(engine.getHistoryService().createHistoricProcessInstanceQuery().count()).isEqualTo(1);
+            TenantContext.set(new TenantContext.Tenant("acme", "bob", Set.of("chat")));
+            assertThatThrownBy(() -> service.refundReceipt("chat-1", "退款订单 101", "refund-101", null))
+                    .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                    .hasMessageContaining("409");
+            TenantContext.set(new TenantContext.Tenant("other", "alice", Set.of("chat")));
+            assertThatThrownBy(() -> service.refundReceipt("chat-1", "退款订单 101", "refund-101", null))
+                    .hasMessageContaining("404");
+        } finally { TenantContext.clear(); }
+    }
+
     private WorkflowService.StartResult start(String tenantId,
                                                String userId,
                                                String chatId,
@@ -338,6 +357,11 @@ class WorkflowIdempotencyAtomicityTest {
                                    String requestHash,
                                    String instanceId) {
             delegate.attachInstance(tenantId, operation, keyHash, requestHash, instanceId);
+        }
+
+        @Override
+        public java.util.Optional<String> findCommitted(String tenant, String operation, String keyHash, String requestHash) {
+            return delegate.findCommitted(tenant, operation, keyHash, requestHash);
         }
 
         @Override

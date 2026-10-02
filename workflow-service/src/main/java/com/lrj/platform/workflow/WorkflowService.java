@@ -160,6 +160,35 @@ public class WorkflowService {
         }
     }
 
+    /**
+     * 查询原退款请求的已提交回执。查询不竞争 claim、不创建 Flowable 实例，也不消费新的确认。
+     * REQUEST_HASH 已绑定验签用户与原规范化参数，因此同租户其他用户也不能读取回执。
+     * 没找到可能是原事务仍在途或历史已清理，不能据此宣称退款未发生。
+     */
+    public StartResult refundReceipt(String chatId, String message, String dedupeId, String webhookUrl) {
+        var t = TenantContext.current();
+        String key = normalizeDedupeId(dedupeId);
+        if (key == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "dedupeId is required for receipt lookup");
+        String cid = chatId == null ? "default" : chatId;
+        String normalizedMessage = message == null ? "" : message;
+        String webhook = null;
+        if (webhookUrl != null && !webhookUrl.isBlank()) {
+            try { webhook = callbackPolicy.requireAllowed(webhookUrl).toString(); }
+            catch (OutboundCallbackPolicy.UnsafeCallbackException invalid) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "webhookUrl is not allowed");
+            }
+        }
+        String requestHash = sha256(REFUND_START_OPERATION, t.tenantId(), t.userId(), cid, normalizedMessage, nz(webhook));
+        try {
+            String instanceId = idempotencyStore.findCommitted(t.tenantId(), REFUND_START_OPERATION,
+                    sha256(cid, key), requestHash).orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.NOT_FOUND, "committed receipt not available"));
+            return describeExisting(instanceId, true);
+        } catch (WorkflowIdempotencyStore.IdempotencyConflictException conflict) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "receipt does not match this request");
+        }
+    }
+
     private StartResult startAtomically(TenantContext.Tenant t,
                                         String cid,
                                         String message,

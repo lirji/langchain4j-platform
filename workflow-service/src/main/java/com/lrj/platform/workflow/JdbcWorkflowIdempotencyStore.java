@@ -95,6 +95,19 @@ public class JdbcWorkflowIdempotencyStore implements WorkflowIdempotencyStore {
     }
 
     @Override
+    public java.util.Optional<String> findCommitted(String tenant, String operation, String keyHash, String requestHash) {
+        List<Row> rows = jdbc.query("""
+                SELECT REQUEST_HASH, INSTANCE_ID FROM WF_IDEMPOTENCY
+                WHERE TENANT_ID=? AND OPERATION_NAME=? AND IDEMPOTENCY_KEY_HASH=?""",
+                (rs, row) -> new Row(rs.getString("REQUEST_HASH"), rs.getString("INSTANCE_ID")), tenant, operation, keyHash);
+        if (rows.isEmpty()) return java.util.Optional.empty();
+        Row row = rows.getFirst();
+        if (!requestHash.equals(row.requestHash()) || row.instanceId() == null || row.instanceId().isBlank())
+            throw new IdempotencyConflictException("receipt is not bound to this committed request");
+        return java.util.Optional.of(row.instanceId());
+    }
+
+    @Override
     public void deleteByInstance(String instanceId) {
         jdbc.update("DELETE FROM WF_IDEMPOTENCY WHERE INSTANCE_ID = ?", instanceId);
     }

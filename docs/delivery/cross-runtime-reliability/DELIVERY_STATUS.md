@@ -17,7 +17,7 @@
 | S2 | LOCAL_PASS | 渠道 84 项通过；内存/H2 恢复、ACK 503、管理员隔离；MySQL 8.4 独立临时库 10 项通过；见 S2_CHANNEL_INBOX.md |
 | S3 | LOCAL_PASS | Java reactor 1403/0 fail（最新修改聚焦复验）；Python 492 pass；Redis 4 项；真实本地 OpenAI HTTP/SSE 5 工厂出口单次计费；部署门禁/Compose/Helm PASS；见 S3_SHARED_BUDGET.md |
 | S4 | TODO | 固定 producer revision 与契约制品 |
-| S5 | TODO | 租户/用户绑定的退款回执查询 |
+| S5 | LOCAL_PASS | 原实例只读回执、用户/参数/租户绑定；真实 MySQL lost-response PASS；Python 9 项；见 S5_REFUND_RECEIPTS.md |
 | S6 | TODO | worker 分派与可信上下文恢复 |
 | S7 | TODO | 流式 shadow 与独立进程验证 |
 | S8 | TODO | 聚合回归、对抗复审、文档、发布 |
@@ -35,4 +35,4 @@
 
 ## 下一步
 
-S1/S2 已通过本地验证；继续 S3 的预算协议与模型边界实现。
+S1/S2/S3/S5 已完成本地验证；继续 S6 独立只读 worker，协议稳定后完成 S4 与 S7/S8。

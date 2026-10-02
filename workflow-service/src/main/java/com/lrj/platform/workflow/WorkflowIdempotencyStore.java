@@ -29,6 +29,9 @@ public interface WorkflowIdempotencyStore {
                         String requestHash,
                         String instanceId);
 
+    /** 只读查询已提交绑定，同键异请求拒绝；没有收据不证明原写请求已经失败。 */
+    java.util.Optional<String> findCommitted(String tenantId, String operation, String keyHash, String requestHash);
+
     /** 数据清除/保留期清理时移除实例对应的幂等绑定，使账本不会指向已删除流程。 */
     void deleteByInstance(String instanceId);
 
