@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# 只报告失败行号, 避免 xtrace 将展开后的凭据写入 CI 日志.
+trap 'printf "cutover config gate failed at line %s\n" "$LINENO" >&2' ERR
+
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_dir"
 
