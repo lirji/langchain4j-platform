@@ -26,6 +26,8 @@ import java.util.Map;
 @RestController
 public class ConversationController {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ConversationController.class);
+
     private final Assistant assistant;
     private final RagPromptAugmenter ragPromptAugmenter;
     private final SemanticCache semanticCache;
@@ -133,7 +135,8 @@ public class ConversationController {
                                 history),
                         answer);
             } catch (RuntimeException ignored) {
-                // 影子观察失败不改变已完成的主结果.
+                // 影子观察失败不改变已完成的主结果; 日志不带候选输入或凭据.
+                log.warn("conversation shadow observation failed");
             }
             return guardrail.redactOutput(grounded.answer());
         });

@@ -9,12 +9,14 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.LocalDate;
-import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
 
 /** 原子预留/结算复用既有 token 日计数；Redis 不可用时抛错并拒绝模型调用。 */
 public final class RedisBudgetLedger implements BudgetLedger {
+    // Lua返回值是内部固定协议, 与业务额度区分.
+    private static final long LUA_ACCEPTED = 1;
+    private static final long LUA_QUOTA_EXCEEDED = -1;
     private static final DefaultRedisScript<Long> RESERVE = new DefaultRedisScript<>("""
             local existing = redis.call('HGET', KEYS[3], 'reserved')
             if existing then
@@ -64,8 +66,8 @@ public final class RedisBudgetLedger implements BudgetLedger {
         Long status = redis.execute(RESERVE, keys(r), Long.toString(tokens),
                 Long.toString(props.resolveDailyBudget(tenant)), Long.toString(expires(r)));
         if (status == null) throw new IllegalStateException("budget store unavailable");
-        if (status == -1) throw new Exceeded();
-        if (status != 1) throw new Conflict();
+        if (status == LUA_QUOTA_EXCEEDED) throw new Exceeded();
+        if (status != LUA_ACCEPTED) throw new Conflict();
         return r;
     }
 
@@ -80,7 +82,7 @@ public final class RedisBudgetLedger implements BudgetLedger {
         Long status = redis.execute(SETTLE, keys(r), Long.toString(r.reservedTokens()),
                 Long.toString(actual), Long.toString(expires(r)));
         if (status == null) throw new IllegalStateException("budget store unavailable");
-        if (status != 1) throw new Conflict();
+        if (status != LUA_ACCEPTED) throw new Conflict();
     }
 
     private List<String> keys(Reservation r) {

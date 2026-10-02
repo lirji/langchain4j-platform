@@ -168,7 +168,9 @@ public class StreamingConversationController {
             if (control.closed() || !control.tryTerminal()) return;
             // 主模型与grounding均完成后才预留候选预算, 不抢占本次主请求的后续模型额度.
             control.beginShadow();
-            try { control.shadow.finish(answer); } catch (RuntimeException ignored) { }
+            try { control.shadow.finish(answer); } catch (RuntimeException ignored) {
+                log.warn("conversation stream shadow completion failed");
+            }
             complete(emitter, control);
         } catch (IOException error) {
             control.transportFailed("write_failed");
@@ -207,7 +209,9 @@ public class StreamingConversationController {
     private static void fail(SseEmitter emitter, Throwable error, StreamControl control) {
         log.warn("chat stream failed errorType={}", error.getClass().getSimpleName());
         if (control.closed() || !control.tryTerminal()) return;
-        try { control.shadow.cancel(); } catch (RuntimeException ignored) { }
+        try { control.shadow.cancel(); } catch (RuntimeException ignored) {
+            log.warn("conversation stream shadow cancellation failed");
+        }
         control.cancelUpstream();
         try {
             emitter.send(SseEmitter.event().name("error").data(Map.of(
@@ -294,7 +298,9 @@ public class StreamingConversationController {
         void transportFailed(String reason) {
             if (closed.compareAndSet(false, true)) {
                 cancelUpstream();
-                try { shadow.cancel(); } catch (RuntimeException ignored) { }
+                try { shadow.cancel(); } catch (RuntimeException ignored) {
+                    log.warn("conversation stream shadow cancellation failed");
+                }
                 log.info("chat stream downstream closed reason={} cancellationRequested=true", reason);
             }
         }

@@ -28,6 +28,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /** 有界独立SSE观察. 超时覆盖body读取, 断连显式关闭HTTP流, 不把回复/凭据写日志或状态. */
 public final class HttpConversationStreamShadowObserver implements ConversationStreamShadowObserver {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(HttpConversationStreamShadowObserver.class);
+    private static final String STREAM_TYPE_TOKEN = "token";
+    private static final String STREAM_TYPE_DONE = "done";
     private static final int MAX_FRAME_BYTES = 262_144;
     private static final int MAX_REPLY_CHARS = 65_536;
     private static final int MAX_LINES = 32_768;
@@ -125,6 +128,7 @@ public final class HttpConversationStreamShadowObserver implements ConversationS
                 String text = validateStream(new BufferedInputStream(response.body()));
                 if (!closed.get()) { record("stream_success"); reply.complete(text); }
             } catch (Exception failure) {
+                if (failure instanceof InterruptedException) Thread.currentThread().interrupt();
                 if (!closed.get()) {
                     record("stream_failure");
                     reply.completeExceptionally(new IllegalStateException("candidate stream failed"));
@@ -138,7 +142,9 @@ public final class HttpConversationStreamShadowObserver implements ConversationS
 
         private void closeInput() {
             InputStream body = input.getAndSet(null);
-            if (body != null) try { body.close(); } catch (IOException ignored) { }
+            if (body != null) try { body.close(); } catch (IOException ignored) {
+                log.debug("conversation shadow HTTP body close failed");
+            }
         }
 
         private void record(String result) {
@@ -174,10 +180,10 @@ public final class HttpConversationStreamShadowObserver implements ConversationS
                         || !event.path("type").isTextual() || !event.path("data").isTextual())
                     throw new IOException("invalid stream envelope");
                 String type = event.path("type").textValue(), text = event.path("data").textValue();
-                if ("token".equals(type)) {
+                if (STREAM_TYPE_TOKEN.equals(type)) {
                     if (text.isEmpty() || answer.length() + text.length() > MAX_REPLY_CHARS) throw new IOException("invalid token");
                     answer.append(text);
-                } else if ("done".equals(type) && text.isEmpty() && !answer.isEmpty()) {
+                } else if (STREAM_TYPE_DONE.equals(type) && text.isEmpty() && !answer.isEmpty()) {
                     terminal = true;
                 } else {
                     throw new IOException("candidate stream error");

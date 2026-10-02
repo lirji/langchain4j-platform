@@ -9,6 +9,7 @@ import javax.crypto.SecretKey;
 
 /** 独立预算服务凭据，不能签发普通用户令牌；短 TTL 与 RPC 参数绑定缩小重放面。 */
 final class BudgetServiceTokens {
+    private static final String SERVICE_JWT_TYPE = "JWT";
     private final SecretKey key;
     BudgetServiceTokens(String secret) {
         if (secret == null || secret.getBytes(StandardCharsets.UTF_8).length < 32)
@@ -25,7 +26,7 @@ final class BudgetServiceTokens {
             var c = signed.getPayload();
             if (!"HS256".equals(signed.getHeader().getAlgorithm())
                     || !"metering-v1".equals(signed.getHeader().getKeyId())
-                    || !"JWT".equals(signed.getHeader().getType())
+                    || !SERVICE_JWT_TYPE.equals(signed.getHeader().getType())
                     || c.getIssuedAt() == null || c.getExpiration() == null || c.getId() == null || c.getId().isBlank()
                     || c.getExpiration().getTime() - c.getIssuedAt().getTime() > 30000
                     || c.getIssuedAt().toInstant().isAfter(Instant.now().plusSeconds(5))

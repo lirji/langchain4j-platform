@@ -4,8 +4,11 @@ import importlib.util
 import json
 import subprocess
 import tempfile
+import sys
 import unittest
 from pathlib import Path
+
+sys.dont_write_bytecode = True
 
 spec = importlib.util.spec_from_file_location('gate', Path(__file__).with_name('verify-agent-contracts.py'))
 gate = importlib.util.module_from_spec(spec)
