@@ -94,6 +94,13 @@ config:
   # --- LLM 网关（LiteLLM）与模型 ---
   GATEWAY_BASE_URL: "http://litellm:4000/v1"
   GATEWAY_MODEL: "chat-default"
+  # 单一 Redis 日额度权威；预留模式默认关，灰度需同时开启 Java 与 Python。
+  APP_TOKEN_BUDGET_RESERVATIONS_ENABLED: "false"
+  APP_TOKEN_BUDGET_STORE: "redis"
+  APP_TOKEN_BUDGET_TIMEZONE: "Asia/Shanghai"
+  TOKEN_BUDGET_ENABLED: "false"
+  TOKEN_BUDGET_BASE_URL: "http://conversation-service:8081"
+
 
   # --- 内部 JWT：RS256（algorithm 非敏感入 ConfigMap；公钥/私钥入 Secret） ---
   # edge-gateway 用私钥签发、下游用公钥验签 → 缩小密钥轮转爆炸半径。
@@ -420,6 +427,8 @@ secrets:
       -----END PUBLIC KEY-----
     # HS256 兼容兜底（algorithm=HS256 时使用）；RS256 下不生效，但保留以便回退。必须 >=32 字节。
     INTERNAL_JWT_SECRET: "dev-only-internal-secret-change-me-please-32b"
+    # 预算 RPC 独立凭据，仅 conversation authority 与 Python 按 key 引用；启用前由 ESO 注入。
+    TOKEN_BUDGET_SERVICE_SECRET: ""
     # LiteLLM 网关 master key（各服务调 LLM 用）。
     GATEWAY_API_KEY: "sk-litellm-master"
     # 百炼 API Key：embedding 与 rerank 可共用同一值；占位值必须由 ESO/Secret 覆盖。
@@ -638,6 +647,10 @@ services:
     port: 8081
     replicaCount: 1
     env:
+      - name: APP_TOKEN_BUDGET_RESERVATIONS_API_ENABLED
+        value: "false"
+      - name: APP_TOKEN_BUDGET_RESERVATIONS_SERVICE_SECRET
+        secret: TOKEN_BUDGET_SERVICE_SECRET
       - name: GATEWAY_API_KEY
         secret: GATEWAY_API_KEY
     hpa:
@@ -881,6 +894,8 @@ services:
     envFrom:
       - secret: async-task-worker
     env:
+      - name: TOKEN_BUDGET_SERVICE_SECRET
+        secret: TOKEN_BUDGET_SERVICE_SECRET
       - name: GATEWAY_API_KEY
         secret: GATEWAY_API_KEY
       - name: APP_ENV

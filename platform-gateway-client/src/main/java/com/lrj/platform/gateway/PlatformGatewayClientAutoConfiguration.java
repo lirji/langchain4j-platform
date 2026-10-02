@@ -50,7 +50,8 @@ public class PlatformGatewayClientAutoConfiguration {
                                                            ObjectProvider<TenantIdentityProvider> identityProvider,
                                                            TenantVirtualKeyResolver keyResolver,
                                                            ObjectProvider<Tracer> tracer,
-                                                           ObjectProvider<Propagator> propagator) {
+                                                           ObjectProvider<Propagator> propagator,
+                                                           ObjectProvider<ChatModelDecorator> decorators) {
         TenantAttributionMode mode = props.getTenantAttribution();
         TenantIdentityProvider identities = identityProvider.getIfAvailable();
         if (identities == null) {
@@ -64,7 +65,7 @@ public class PlatformGatewayClientAutoConfiguration {
         }
         GatewayRequestHeadersSupplier headersSupplier = new GatewayRequestHeadersSupplier(
                 mode, identities, keyResolver, tracer.getIfUnique(), propagator.getIfUnique());
-        return new GatewayChatModelFactory(props, listeners, identities, headersSupplier);
+        return new GatewayChatModelFactory(props, listeners, identities, headersSupplier, decorators.orderedStream().toList());
     }
 
     @Bean

@@ -32,6 +32,7 @@ public class GatewayChatModelFactory {
     /** 无 security 依赖时的身份兜底 —— 与 TenantContext.ANONYMOUS 的 tenantId 约定一致。 */
     public static final TenantIdentityProvider ANONYMOUS_IDENTITY = () -> "anonymous";
 
+    private final List<ChatModelDecorator> decorators;
     private final GatewayClientProperties props;
     private final List<ChatModelListener> listeners;
     private final TenantIdentityProvider identities;
@@ -45,6 +46,14 @@ public class GatewayChatModelFactory {
     public GatewayChatModelFactory(GatewayClientProperties props, List<ChatModelListener> listeners,
                                    TenantIdentityProvider identities,
                                    Supplier<Map<String, String>> requestHeadersSupplier) {
+        this(props, listeners, identities, requestHeadersSupplier, List.of());
+    }
+
+    /** 统一出口装饰，覆盖主模型、JSON、确定性、cascade 和流式模型。 */
+    public GatewayChatModelFactory(GatewayClientProperties props, List<ChatModelListener> listeners,
+                                   TenantIdentityProvider identities, Supplier<Map<String, String>> requestHeadersSupplier,
+                                   List<ChatModelDecorator> decorators) {
+        this.decorators = List.copyOf(decorators);
         // fail-fast：virtual-key 档但没有动态 header 通道（如误用两参兼容构造）时，底层会静默
         // 沿用静态 master key —— 恰是业务规则禁止的"缺 key 回退 master key"。宁可构造期就炸。
         if (props.getTenantAttribution() == TenantAttributionMode.VIRTUAL_KEY && requestHeadersSupplier == null) {
@@ -53,7 +62,8 @@ public class GatewayChatModelFactory {
                     + "GatewayRequestHeadersSupplier（Spring 装配路径自动满足）");
         }
         this.props = props;
-        this.listeners = listeners == null ? List.of() : listeners;
+        this.listeners = listeners == null ? List.of() : listeners.stream()
+                .filter(listener -> decorators.stream().noneMatch(d -> d.replaces(listener))).toList();
         this.identities = identities == null ? ANONYMOUS_IDENTITY : identities;
         this.requestHeadersSupplier = requestHeadersSupplier;
     }
@@ -74,14 +84,14 @@ public class GatewayChatModelFactory {
      * Jackson 解析。要求端点/上游模型支持 OpenAI json_object（DeepSeek 支持，LiteLLM 透传）。
      */
     public ChatModel buildJsonMode() {
-        return new TenantAwareChatModel(buildBase(props.getModelName(), props.getTemperature(), true),
-                props.getTenantAttribution(), identities);
+        return decorate(new TenantAwareChatModel(buildBase(props.getModelName(), props.getTemperature(), true),
+                props.getTenantAttribution(), identities));
     }
 
     /** 指定逻辑模型名 + 温度（模型名对应 LiteLLM model_list 里的 model_name）。 */
     public ChatModel build(String modelName, Double temperature) {
-        return new TenantAwareChatModel(buildBase(modelName, temperature),
-                props.getTenantAttribution(), identities);
+        return decorate(new TenantAwareChatModel(buildBase(modelName, temperature),
+                props.getTenantAttribution(), identities));
     }
 
     /**
@@ -95,8 +105,18 @@ public class GatewayChatModelFactory {
 
     /** 指定逻辑模型名 + 温度的流式变体。 */
     public StreamingChatModel buildStreaming(String modelName, Double temperature) {
-        return new TenantAwareStreamingChatModel(buildStreamingBase(modelName, temperature),
-                props.getTenantAttribution(), identities);
+        return decorate(new TenantAwareStreamingChatModel(buildStreamingBase(modelName, temperature),
+                props.getTenantAttribution(), identities));
+    }
+
+    private ChatModel decorate(ChatModel model) {
+        for (ChatModelDecorator decorator : decorators) model = decorator.decorate(model);
+        return model;
+    }
+
+    private StreamingChatModel decorate(StreamingChatModel model) {
+        for (ChatModelDecorator decorator : decorators) model = decorator.decorate(model);
+        return model;
     }
 
     private OpenAiChatModel buildBase(String modelName, Double temperature) {

@@ -252,6 +252,12 @@ services:
     build:
       context: ../conversation-service
     environment:
+      # 跨语言共用预留模式；所有 Java 实例必须一致的 Redis、前缀、日时区。
+      APP_TOKEN_BUDGET_RESERVATIONS_ENABLED: ${TOKEN_BUDGET_RESERVATIONS_ENABLED:-false}
+      APP_TOKEN_BUDGET_STORE: ${TOKEN_BUDGET_STORE:-redis}
+      APP_TOKEN_BUDGET_TIMEZONE: ${TOKEN_BUDGET_TIMEZONE:-Asia/Shanghai}
+      APP_TOKEN_BUDGET_RESERVATIONS_API_ENABLED: ${TOKEN_BUDGET_RESERVATIONS_ENABLED:-false}
+      APP_TOKEN_BUDGET_RESERVATIONS_SERVICE_SECRET: ${TOKEN_BUDGET_SERVICE_SECRET:-}
       GATEWAY_BASE_URL: http://litellm:4000/v1
       GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
       GATEWAY_MODEL: chat-default
@@ -302,6 +308,10 @@ services:
     build:
       context: ../workflow-service
     environment:
+      # 跨语言共用预留模式；所有 Java 实例必须一致的 Redis、前缀、日时区。
+      APP_TOKEN_BUDGET_RESERVATIONS_ENABLED: ${TOKEN_BUDGET_RESERVATIONS_ENABLED:-false}
+      APP_TOKEN_BUDGET_STORE: ${TOKEN_BUDGET_STORE:-redis}
+      APP_TOKEN_BUDGET_TIMEZONE: ${TOKEN_BUDGET_TIMEZONE:-Asia/Shanghai}
       WORKFLOW_ENABLED: "true"
       WORKFLOW_DB_URL: jdbc:mysql://mysql:3306/flowable?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       WORKFLOW_DB_USER: workflow_app
@@ -349,6 +359,10 @@ services:
     build:
       context: ../analytics-service
     environment:
+      # 跨语言共用预留模式；所有 Java 实例必须一致的 Redis、前缀、日时区。
+      APP_TOKEN_BUDGET_RESERVATIONS_ENABLED: ${TOKEN_BUDGET_RESERVATIONS_ENABLED:-false}
+      APP_TOKEN_BUDGET_STORE: ${TOKEN_BUDGET_STORE:-redis}
+      APP_TOKEN_BUDGET_TIMEZONE: ${TOKEN_BUDGET_TIMEZONE:-Asia/Shanghai}
       NL2SQL_ENABLED: "true"
       NL2SQL_DB_URL: jdbc:mysql://mysql:3306/nl2sql_demo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useInformationSchema=true
       NL2SQL_DB_READONLY_URL: jdbc:mysql://mysql:3306/nl2sql_demo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useInformationSchema=true
@@ -380,6 +394,10 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"   # 仅切回可选 Ollama embedding provider 时使用
     environment:
+      # 跨语言共用预留模式；所有 Java 实例必须一致的 Redis、前缀、日时区。
+      APP_TOKEN_BUDGET_RESERVATIONS_ENABLED: ${TOKEN_BUDGET_RESERVATIONS_ENABLED:-false}
+      APP_TOKEN_BUDGET_STORE: ${TOKEN_BUDGET_STORE:-redis}
+      APP_TOKEN_BUDGET_TIMEZONE: ${TOKEN_BUDGET_TIMEZONE:-Asia/Shanghai}
       GATEWAY_BASE_URL: http://litellm:4000/v1
       GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
       PLATFORM_GATEWAY_TENANT_ATTRIBUTION: ${PLATFORM_GATEWAY_TENANT_ATTRIBUTION:-none}
@@ -494,6 +512,10 @@ services:
     build:
       context: ../agent-service
     environment:
+      # 跨语言共用预留模式；所有 Java 实例必须一致的 Redis、前缀、日时区。
+      APP_TOKEN_BUDGET_RESERVATIONS_ENABLED: ${TOKEN_BUDGET_RESERVATIONS_ENABLED:-false}
+      APP_TOKEN_BUDGET_STORE: ${TOKEN_BUDGET_STORE:-redis}
+      APP_TOKEN_BUDGET_TIMEZONE: ${TOKEN_BUDGET_TIMEZONE:-Asia/Shanghai}
       GATEWAY_BASE_URL: http://litellm:4000/v1
       GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
       GATEWAY_MODEL: chat-default
@@ -555,6 +577,9 @@ services:
     <<: *app-security
     image: ${AGENTSCOPE_IMAGE:-agentscope-platform:local}
     environment:
+      TOKEN_BUDGET_ENABLED: ${TOKEN_BUDGET_RESERVATIONS_ENABLED:-false}
+      TOKEN_BUDGET_BASE_URL: http://conversation-service:8081
+      TOKEN_BUDGET_SERVICE_SECRET: ${TOKEN_BUDGET_SERVICE_SECRET:-}
       APP_HOST: 0.0.0.0
       APP_PORT: 8085
       APP_ENV: ${APP_ENV:-local}
@@ -778,6 +803,10 @@ services:
     build:
       context: ../eval-service
     environment:
+      # 跨语言共用预留模式；所有 Java 实例必须一致的 Redis、前缀、日时区。
+      APP_TOKEN_BUDGET_RESERVATIONS_ENABLED: ${TOKEN_BUDGET_RESERVATIONS_ENABLED:-false}
+      APP_TOKEN_BUDGET_STORE: ${TOKEN_BUDGET_STORE:-redis}
+      APP_TOKEN_BUDGET_TIMEZONE: ${TOKEN_BUDGET_TIMEZONE:-Asia/Shanghai}
       EVAL_TARGET_BASE_URL: http://edge-gateway:8080
       # Eval 沿调用者租户签发短时内部 service token 回流 edge；Casdoor-only 不再依赖 legacy API key。
       INTERNAL_JWT_SECRET: ${INTERNAL_JWT_SECRET:-dev-only-internal-secret-change-me-please-32b}
@@ -800,6 +829,10 @@ services:
     build:
       context: ../vision-service
     environment:
+      # 跨语言共用预留模式；所有 Java 实例必须一致的 Redis、前缀、日时区。
+      APP_TOKEN_BUDGET_RESERVATIONS_ENABLED: ${TOKEN_BUDGET_RESERVATIONS_ENABLED:-false}
+      APP_TOKEN_BUDGET_STORE: ${TOKEN_BUDGET_STORE:-redis}
+      APP_TOKEN_BUDGET_TIMEZONE: ${TOKEN_BUDGET_TIMEZONE:-Asia/Shanghai}
       GATEWAY_BASE_URL: http://litellm:4000/v1
       GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
       PLATFORM_GATEWAY_TENANT_ATTRIBUTION: ${PLATFORM_GATEWAY_TENANT_ATTRIBUTION:-none}
@@ -918,6 +951,10 @@ services:
     build:
       context: ../tax-service
     environment:
+      # 跨语言共用预留模式；所有 Java 实例必须一致的 Redis、前缀、日时区。
+      APP_TOKEN_BUDGET_RESERVATIONS_ENABLED: ${TOKEN_BUDGET_RESERVATIONS_ENABLED:-false}
+      APP_TOKEN_BUDGET_STORE: ${TOKEN_BUDGET_STORE:-redis}
+      APP_TOKEN_BUDGET_TIMEZONE: ${TOKEN_BUDGET_TIMEZONE:-Asia/Shanghai}
       GATEWAY_BASE_URL: http://litellm:4000/v1
       GATEWAY_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master}
       GATEWAY_MODEL: chat-default

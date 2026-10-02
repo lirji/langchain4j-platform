@@ -48,5 +48,13 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Servlet 使用方提供 Web 运行时，非 Web 计量库不传递 MVC。 -->
+        <dependency>
+            <groupId>org.springframework</groupId><artifactId>spring-web</artifactId><scope>provided</scope>
+        </dependency>
+        <!-- 模型调用边界 SPI，gateway 模块不反向依赖计量实现。 -->
+        <dependency>
+            <groupId>com.lrj.platform</groupId><artifactId>platform-gateway-client</artifactId>
+        </dependency>
     </dependencies>
 </project>

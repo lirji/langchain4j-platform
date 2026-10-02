@@ -46,6 +46,8 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- 模型调用共用租户额度；装饰器只在预留灰度开关开启时做准入。 -->
+        <dependency><groupId>com.lrj.platform</groupId><artifactId>platform-metering</artifactId></dependency>
     </dependencies>
 
     <build>

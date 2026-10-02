@@ -1,2 +1,4 @@
 com.lrj.platform.metering.PlatformMeteringAutoConfiguration
 com.lrj.platform.metering.CostConfig
+
+com.lrj.platform.metering.budget.ReservationBudgetAutoConfiguration
