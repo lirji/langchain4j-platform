@@ -32,6 +32,11 @@ jobs:
           java-version: "21"
           cache: maven
 
+      - name: Install static verification CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+
       - name: Verify supply-chain policy
         run: bash deploy/test-supply-chain-config.sh
 
@@ -54,12 +59,12 @@ jobs:
         with:
           repository: lirji/auth-platform
           ref: ${{ steps.auth-sdk.outputs.revision }}
-          path: _auth-sdk-source
+          path: .ci-sources/auth-platform
           persist-credentials: false
 
       - name: Build and test pinned IAM SDK dependencies
         env:
-          AUTH_PLATFORM_REPO: ${{ github.workspace }}/_auth-sdk-source
+          AUTH_PLATFORM_REPO: ${{ github.workspace }}/.ci-sources/auth-platform
         run: bash deploy/install-auth-sdk.sh
 
       - name: Test the complete reactor

@@ -157,3 +157,6 @@ deploy/.dev-infra.env
 deploy/.dev-infra-state/
 
 deploy/dev-infra/__pycache__/
+
+# CI-only pinned dependency checkouts, outside native module inventory.
+.ci-sources/

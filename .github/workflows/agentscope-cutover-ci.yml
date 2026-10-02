@@ -103,6 +103,11 @@ jobs:
           java-version: '21'
           cache: maven
 
+      - name: Install static verification CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
 
       - name: Read immutable producer lock
@@ -121,7 +126,7 @@ jobs:
         with:
           repository: lirji/platform-agentscope
           ref: ${{ steps.producer.outputs.revision }}
-          path: _contract-producer
+          path: .ci-sources/agentscope
           persist-credentials: false
 
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
@@ -130,14 +135,14 @@ jobs:
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
-          python-version-file: _contract-producer/.python-version
+          python-version-file: .ci-sources/agentscope/.python-version
 
       - name: Verify generated producer snapshots and fixed consumer combination
         env:
-          AGENTSCOPE_REPO: ${{ github.workspace }}/_contract-producer
+          AGENTSCOPE_REPO: ${{ github.workspace }}/.ci-sources/agentscope
         run: |
-          uv sync --directory _contract-producer --frozen --dev
-          uv run --directory _contract-producer python scripts/export_contracts.py --check
+          uv sync --directory .ci-sources/agentscope --frozen --dev
+          uv run --directory .ci-sources/agentscope python scripts/export_contracts.py --check
           bash deploy/sync-agent-contracts.sh
           python3 deploy/test-agent-contract-pin.py
 
@@ -156,12 +161,12 @@ jobs:
         with:
           repository: lirji/auth-platform
           ref: ${{ steps.auth-sdk.outputs.revision }}
-          path: _auth-sdk-source
+          path: .ci-sources/auth-platform
           persist-credentials: false
 
       - name: Build and test pinned IAM SDK dependencies
         env:
-          AUTH_PLATFORM_REPO: ${{ github.workspace }}/_auth-sdk-source
+          AUTH_PLATFORM_REPO: ${{ github.workspace }}/.ci-sources/auth-platform
         run: bash deploy/install-auth-sdk.sh
 
       - name: Verify full native reactor including reliability slices
