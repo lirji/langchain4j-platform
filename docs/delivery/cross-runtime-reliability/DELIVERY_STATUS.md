@@ -20,7 +20,7 @@
 | S5 | LOCAL_PASS | 原实例只读回执、用户/参数/租户绑定；真实 MySQL lost-response PASS；Python 9 项；见 S5_REFUND_RECEIPTS.md |
 | S6 | LOCAL_PASS | Java 75、Python 507；MySQL 5；独立 API退出/worker崩溃/接管/DAG/旧epoch恢复 PASS；见 S6_DURABLE_WORKER.md |
 | S7 | LOCAL_PASS | 原生取消、背压/上下文清理、真实跨进程JWT/SSE/TCP取消 PASS；见 S7_STREAM_SHADOW.md |
-| S8 | DELIVERY_BLOCKED | 全量/真实集成/自复审/Code Hygiene完成; Python CI成功; Java cutover SIGPIPE已修复待远程结果; 85条依赖安全记录阻止main合并 |
+| S8 | DELIVERY_BLOCKED | 全量/真实集成/自复审/Code Hygiene完成; Python CI成功; Java cutover36980014838成功; 85条依赖安全记录阻止main合并 |
 
 ## 验证与交付门禁
 
@@ -30,9 +30,9 @@
 | 实现／聚焦验证／真实本地集成 | PASS | Java1406/0fail、Python518pass; MySQL/Redis/独立worker/SSE见QA_REPORT |
 | 文档／Code Hygiene／复审 | PASS_WITH_LIMITATIONS | 文档闭合、无blocking hygiene; 主Agent自复审, 非独立评审 |
 | Git main 发布 | BLOCKED | 任务分支已推送, 必要Java CI失败, 不合并main |
-| 远程 CI | PARTIAL_PASS | Python34df909成功; Java1ac14a0测试成功但Compose/SBOM未过 |
+| 远程 CI | PARTIAL_PASS | Python34df909成功; Java deba7bc cutover成功; Java1ac14a0 SBOM未过 |
 | 生产部署／真实模型质量／目标容量 | NOT_APPLICABLE | 本轮本地工程范围外；生产 NO-GO 保持 |
 
 ## 下一步
 
-等待cutover修复deba7bc的远程重跑36980014838; 85条依赖安全记录需要新增框架升级切片, 已给用户技术范围选择, 见SECURITY_MIGRATION_PROPOSAL.md。
+cutover36980014838已成功; 85条依赖安全记录需要新增框架升级切片, 已给用户技术范围选择, 见SECURITY_MIGRATION_PROPOSAL.md。

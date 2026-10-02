@@ -15,7 +15,7 @@
 | R6 | 新readonly kind未进入progress/webhook允许集合；补齐协议集合 | 独立worker RUN/DAG真实恢复链路 |
 | R7 | RS256仅验签节点无法mint候选；显式启用时启动失败，不自动给验签服务发私钥 | RSA公钥节点配置测试 |
 | R9 | 既有远程CI无法取IAM SNAPSHOT，补固定公开源码构建；依赖审计升级3个已有包，0漏洞 | SDK源/consumer测试、uv audit |
-| R10 | cutover grep-q早退使Linux管道SIGPIPE误报; 完整消费输入, 保留安全断言 | 141→0复现、clean gate PASS、远程重跑 |
+| R10 | cutover grep-q早退使Linux管道SIGPIPE误报; 完整消费输入, 保留安全断言 | 141→0复现、clean gate PASS、远程36980014838 SUCCESS |
 | R8 | worker字符串分支、空catch和未用import；使用既有kind枚举、固定协议常量和无敏感信息诊断 | 两仓Code Hygiene无blocking |
 
 ## 核对的不变量
@@ -38,5 +38,5 @@
 5. S6/S7提供显式Compose拓扑；生产Helm worker/candidate拓扑、RS256委托签发方案、真实模型质量、容量、恢复演练与切流仍需外部证据。
 6. 本轮不改历史ESS阻塞、生产runbook NO-GO或用户原有未提交安全/缓存调整。
 
-结论：七项本地实现无未处理blocking finding; 远程CI新增Java依赖安全阻塞main交付, cutover Linux SIGPIPE已修复待远程复验。
+结论：七项本地实现无未处理blocking finding; 远程CI新增Java依赖安全阻塞main交付, cutover Linux SIGPIPE已修复且远程复验成功。
 已形成SECURITY_MIGRATION_PROPOSAL; 不绕过扫描。生产结论仍NO-GO。

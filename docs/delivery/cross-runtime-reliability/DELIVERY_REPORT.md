@@ -4,7 +4,7 @@
 
 S1–S7的七类可靠性缺口已实现并通过本地验收, Python远程CI通过。
 S8尚未完成main交付: Java安全门禁报告85条既有HIGH/CRITICAL,
-cutover已修复Linux SIGPIPE误报, 远程重跑中。两仓仅推送任务分支, main尚未合并。
+cutover已修复Linux SIGPIPE误报, 远程36980014838 SUCCESS。两仓仅推送任务分支, main尚未合并。
 技术升级取舍详见SECURITY_MIGRATION_PROPOSAL.md; 不绕过安全门禁完成发布。
 生产结论保持NO-GO。
 
@@ -43,7 +43,7 @@ IAM SDK源码固定auth-platform929e9caf394b98b3030357746c0ff396cc0806db。
 | CI | revision | 实际结论 |
 |---|---|---|
 | [Python quality](https://github.com/lirji/platform-agentscope/actions/runs/36979153821) | 34df909 | SUCCESS, 包含审计/契约/测试/构建/镜像扫描 |
-| [Java cutover](https://github.com/lirji/langchain4j-platform/actions/runs/36978970189) | 1ac14a0 | 全reactor通过, Validate Compose失败; 诊断36979656590定位Linux SIGPIPE; 修复deba7bc重跑36980014838 |
+| [Java cutover](https://github.com/lirji/langchain4j-platform/actions/runs/36980014838) | deba7bc | SUCCESS, 包含固定契约/SDK、全reactor、Compose/安全配置/Helm校验; 已关闭早期Linux SIGPIPE误报 |
 | [Java supply chain](https://github.com/lirji/langchain4j-platform/actions/runs/36978975220) | 1ac14a0 | 测试/打包通过, 聚合SBOM扫描FAIL, 85条HIGH/CRITICAL; 未进入18镜像扫描 |
 
 main发布必须先完成必要门禁; Python→Java为producer/consumer发布顺序。
@@ -60,3 +60,6 @@ Python原工作树新增未提交测试预期非规范JWT编码先decode成功; 
 仅两处本轮验证worktree保留: ~/.local/share/git-worktrees/{langchain4j-platform,agentscope-platform}/cross-runtime-verification。
 用于干净验证与避免合并污染用户工作树; 未获清理授权, 不删除。
 其他既有worktree和共享infra不清理。UUID试验库/key和本轮测试进程已清理。
+
+最终Git核对: 报告提交后任务分支已推送; Java main仍e8f11cb, Python main仍c4fc90d。
+恢复入口为两仓CODEX_PROGRESS与本目录DELIVERY_STATUS; 仅框架升级路线待用户技术选择。

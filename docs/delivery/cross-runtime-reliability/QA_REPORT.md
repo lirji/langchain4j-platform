@@ -47,6 +47,6 @@ Java runner补装已有静态门禁所需ripgrep；CI供应方源码放.ci-sourc
 避免其Dockerfile污染本仓18镜像清单。
 
 远程Java cutover在1ac14a0 Validate Compose失败, 与本地PASS分开; 行号诊断53ee6f5定位Linux管道SIGPIPE, deba7bc改为完整消费输入;
-复现实验早退141→完整消费0, clean cutover PASS, 远程重跑36980014838。
+复现实验早退141→完整消费0, clean cutover PASS, 远程重跑36980014838 SUCCESS, 包含全reactor/Compose/安全配置/Helm。
 JavaSBOM固定提交扫描85条HIGH/CRITICAL, 31依赖坐标; 全reactor通过不代表安全门禁通过。
 Python34df909远程quality SUCCESS, 包含修复后的镜像扫描。详见DELIVERY_REPORT。
