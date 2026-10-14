@@ -15,6 +15,7 @@
     <description>Knowledge 限界上下文：RAG 文档、分块、检索与知识库生命周期</description>
 
     <dependencies>
+        <dependency><groupId>com.lrj.platform</groupId><artifactId>platform-persistence</artifactId></dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>

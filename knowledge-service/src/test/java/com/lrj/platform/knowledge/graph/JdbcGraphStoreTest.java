@@ -65,8 +65,12 @@ class JdbcGraphStoreTest {
     }
 
     private static JdbcGraphStore store() {
-        DriverManagerDataSource dataSource = dataSource("graph-" + java.util.UUID.randomUUID());
+        String url = System.getenv("MP_GRAPH_TEST_DB_URL");
+        if (url != null && !url.contains("/lc4j_mp_it_")) throw new IllegalArgumentException("isolated test schema required");
+        DriverManagerDataSource dataSource = url == null ? dataSource("graph-" + java.util.UUID.randomUUID())
+                : new DriverManagerDataSource(url, System.getenv("MP_TEST_DB_USER"), System.getenv("MP_TEST_DB_PASSWORD"));
         SchemaMigrationRunner.migrate(dataSource, SchemaName.KNOWLEDGE_GRAPH);
+        if (url != null) new JdbcTemplate(dataSource).update("DELETE FROM RAG_GRAPH_TRIPLE");
         return new JdbcGraphStore(dataSource);
     }
 

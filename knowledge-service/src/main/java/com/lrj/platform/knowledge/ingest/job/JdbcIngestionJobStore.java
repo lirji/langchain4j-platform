@@ -1,16 +1,17 @@
 package com.lrj.platform.knowledge.ingest.job;
 
+import com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreMapper;
+import com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreRow;
+import com.lrj.platform.persistence.PlusMapperFactory;
+import com.lrj.platform.persistence.Rows;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.RowMapper;
 
 import javax.sql.DataSource;
 import java.sql.Timestamp;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.time.Instant;
 import java.util.EnumMap;
 import java.util.List;
@@ -30,50 +31,50 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
     private static final TypeReference<Set<String>> STRING_SET = new TypeReference<>() {
     };
 
-    private final JdbcTemplate jdbc;
+    private final IngestionJobStoreMapper db;
     private final ObjectMapper mapper;
-    private final RowMapper<IngestionJob> rowMapper = (rs, rowNum) -> {
-        Map<String, String> rawSinks = read(rs.getString("SINKS_JSON"), STRING_MAP);
+    private final java.util.function.BiFunction<IngestionJobStoreRow, Integer, IngestionJob> rowMapper = (rs, rowNum) -> {
+        Map<String, String> rawSinks = read(rs.sinksJson, STRING_MAP);
         EnumMap<IngestionSink, IngestionSinkState> sinks = new EnumMap<>(IngestionSink.class);
         rawSinks.forEach((sink, state) ->
                 sinks.put(IngestionSink.valueOf(sink), IngestionSinkState.valueOf(state)));
-        Set<IngestionSink> required = read(rs.getString("REQUIRED_SINKS_JSON"), STRING_SET)
+        Set<IngestionSink> required = read(rs.requiredSinksJson, STRING_SET)
                 .stream()
                 .map(IngestionSink::valueOf)
                 .collect(Collectors.toUnmodifiableSet());
         return new IngestionJob(
-                rs.getString("JOB_ID"),
-                rs.getString("IDEMPOTENCY_KEY"),
-                rs.getString("TENANT_ID"),
-                rs.getString("USER_ID"),
-                read(rs.getString("SCOPES_JSON"), STRING_SET),
-                rs.getString("DEPARTMENT"),
-                rs.getString("TRACE_ID"),
-                rs.getString("DOCUMENT_ID"),
-                rs.getString("DISPLAY_NAME"),
-                rs.getString("CATEGORY"),
-                rs.getLong("DOCUMENT_VERSION"),
-                rs.getBoolean("NEW_DOCUMENT"),
-                rs.getLong("REVISION"),
+                rs.jobId,
+                rs.idempotencyKey,
+                rs.tenantId,
+                rs.userId,
+                read(rs.scopesJson, STRING_SET),
+                rs.department,
+                rs.traceId,
+                rs.documentId,
+                rs.displayName,
+                rs.category,
+                Rows.longValue(rs.documentVersion),
+                Boolean.TRUE.equals(rs.newDocument),
+                Rows.longValue(rs.revision),
                 new DocumentSourceRef(
-                        rs.getString("SOURCE_BUCKET"),
-                        rs.getString("SOURCE_OBJECT_KEY"),
-                        rs.getString("SOURCE_HASH"),
-                        rs.getString("SOURCE_CONTENT_TYPE"),
-                        rs.getLong("SOURCE_SIZE")),
-                IngestionStatus.valueOf(rs.getString("STATUS")),
+                        rs.sourceBucket,
+                        rs.sourceObjectKey,
+                        rs.sourceHash,
+                        rs.sourceContentType,
+                        Rows.longValue(rs.sourceSize)),
+                IngestionStatus.valueOf(rs.status),
                 sinks,
                 required,
-                rs.getString("ERROR_TEXT"),
-                rs.getTimestamp("CREATED_AT").toInstant(),
-                rs.getTimestamp("UPDATED_AT").toInstant(),
-                new IngestionExecution(rs.getInt("RETRY_COUNT"), instant(rs, "NEXT_RETRY_AT"),
-                        rs.getString("ERROR_CODE"), rs.getString("FAILED_STAGE"),
-                        rs.getString("LEASE_OWNER"), instant(rs, "LEASE_UNTIL")));
+                rs.errorText,
+                rs.createdAt.toInstant(),
+                rs.updatedAt.toInstant(),
+                new IngestionExecution(Rows.intValue(rs.retryCount), instant(rs.nextRetryAt),
+                        rs.errorCode, rs.failedStage,
+                        rs.leaseOwner, instant(rs.leaseUntil)));
     };
 
     public JdbcIngestionJobStore(DataSource dataSource, ObjectMapper mapper) {
-        this.jdbc = new JdbcTemplate(dataSource);
+        this.db = PlusMapperFactory.create(dataSource, IngestionJobStoreMapper.class);
         this.mapper = mapper;
         initialize();
     }
@@ -81,27 +82,38 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
     @Override
     public IngestionJob createOrGet(IngestionJob job) {
         try {
-            jdbc.update("""
-                    INSERT INTO KNOWLEDGE_INGESTION_JOB (
-                      TENANT_ID, JOB_ID, IDEMPOTENCY_KEY, USER_ID, SCOPES_JSON,
-                      DEPARTMENT, TRACE_ID, DOCUMENT_ID, DISPLAY_NAME, CATEGORY,
-                      DOCUMENT_VERSION, NEW_DOCUMENT, REVISION, SOURCE_BUCKET, SOURCE_OBJECT_KEY,
-                      SOURCE_HASH, SOURCE_CONTENT_TYPE, SOURCE_SIZE, STATUS, SINKS_JSON,
-                      REQUIRED_SINKS_JSON, ERROR_TEXT, CREATED_AT, UPDATED_AT,
-                      RETRY_COUNT, NEXT_RETRY_AT, ERROR_CODE, FAILED_STAGE, LEASE_OWNER, LEASE_UNTIL
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                    """,
-                    job.tenantId(), job.jobId(), job.idempotencyKey(), job.userId(),
-                    write(job.scopes()), job.department(), job.traceId(), job.documentId(),
-                    job.displayName(), job.category(), job.documentVersion(), job.newDocument(),
+            db.writeCreateOrGet1(
+                    job.tenantId(),
+                    job.jobId(),
+                    job.idempotencyKey(),
+                    job.userId(),
+                    write(job.scopes()),
+                    job.department(),
+                    job.traceId(),
+                    job.documentId(),
+                    job.displayName(),
+                    job.category(),
+                    job.documentVersion(),
+                    job.newDocument(),
                     job.revision(),
-                    job.source().bucket(), job.source().objectKey(), job.source().contentHash(),
-                    job.source().contentType(), job.source().size(), job.status().name(),
-                    writeSinks(job.sinks()), write(job.requiredSinks().stream()
+                    job.source().bucket(),
+                    job.source().objectKey(),
+                    job.source().contentHash(),
+                    job.source().contentType(),
+                    job.source().size(),
+                    job.status().name(),
+                    writeSinks(job.sinks()),
+                    write(job.requiredSinks().stream()
                             .map(Enum::name).collect(Collectors.toUnmodifiableSet())),
-                    job.error(), Timestamp.from(job.createdAt()), Timestamp.from(job.updatedAt()),
-                    job.execution().retries(), timestamp(job.execution().nextRetryAt()), job.execution().errorCode(),
-                    job.execution().failedStage(), job.execution().leaseOwner(), timestamp(job.execution().leaseUntil()));
+                    job.error(),
+                    Timestamp.from(job.createdAt()),
+                    Timestamp.from(job.updatedAt()),
+                    job.execution().retries(),
+                    timestamp(job.execution().nextRetryAt()),
+                    job.execution().errorCode(),
+                    job.execution().failedStage(),
+                    job.execution().leaseOwner(),
+                    timestamp(job.execution().leaseUntil()));
             return job;
         } catch (DuplicateKeyException ex) {
             return findByIdempotency(job.tenantId(), job.idempotencyKey())
@@ -111,10 +123,7 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
 
     @Override
     public Optional<IngestionJob> find(String tenantId, String jobId) {
-        return jdbc.query("""
-                        SELECT * FROM KNOWLEDGE_INGESTION_JOB
-                        WHERE TENANT_ID=? AND JOB_ID=?
-                        """, rowMapper, tenantId, jobId)
+        return Rows.map(db.readFind1(tenantId, jobId), rowMapper)
                 .stream().findFirst();
     }
 
@@ -124,18 +133,22 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
             throw new IngestionJobConflictException("stale ingestion job revision");
         }
         long nextRevision = expectedRevision + 1;
-        int updated = jdbc.update("""
-                        UPDATE KNOWLEDGE_INGESTION_JOB
-                        SET REVISION=?, STATUS=?, SINKS_JSON=?, REQUIRED_SINKS_JSON=?,
-                            ERROR_TEXT=?, UPDATED_AT=?, RETRY_COUNT=?, NEXT_RETRY_AT=?, ERROR_CODE=?, FAILED_STAGE=?, LEASE_OWNER=?, LEASE_UNTIL=?
-                        WHERE TENANT_ID=? AND JOB_ID=? AND REVISION=?
-                        """,
-                nextRevision, job.status().name(), writeSinks(job.sinks()),
+        int updated = db.writeSave1(
+                nextRevision,
+                job.status().name(),
+                writeSinks(job.sinks()),
                 write(job.requiredSinks().stream()
                         .map(Enum::name).collect(Collectors.toUnmodifiableSet())),
-                job.error(), Timestamp.from(job.updatedAt()),
-                job.execution().retries(), timestamp(job.execution().nextRetryAt()), job.execution().errorCode(),
-                job.execution().failedStage(), job.execution().leaseOwner(), timestamp(job.execution().leaseUntil()), job.tenantId(), job.jobId(),
+                job.error(),
+                Timestamp.from(job.updatedAt()),
+                job.execution().retries(),
+                timestamp(job.execution().nextRetryAt()),
+                job.execution().errorCode(),
+                job.execution().failedStage(),
+                job.execution().leaseOwner(),
+                timestamp(job.execution().leaseUntil()),
+                job.tenantId(),
+                job.jobId(),
                 expectedRevision);
         if (updated != 1) {
             throw new IngestionJobConflictException("stale ingestion job revision");
@@ -148,13 +161,7 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
         if (limit < 1) {
             return List.of();
         }
-        return jdbc.query("""
-                        SELECT * FROM KNOWLEDGE_INGESTION_JOB
-                        WHERE STATUS IN ('RECEIVED','PROCESSING') AND LEASE_OWNER IS NULL
-                        ORDER BY UPDATED_AT
-                        LIMIT ?
-                        """,
-                rowMapper, limit);
+        return Rows.map(db.readFindRunnable1(limit), rowMapper);
     }
 
     @Override
@@ -167,44 +174,29 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
         if (limit < 1) {
             return List.of();
         }
-        return jdbc.query("""
-                        SELECT * FROM KNOWLEDGE_INGESTION_JOB
-                        WHERE (STATUS IN ('PARTIAL','FAILED') AND (NEXT_RETRY_AT IS NULL OR NEXT_RETRY_AT <= ?))
-                           OR (STATUS='PROCESSING' AND ((LEASE_UNTIL IS NOT NULL AND LEASE_UNTIL <= ?)
-                               OR (LEASE_UNTIL IS NULL AND UPDATED_AT < ?)))
-                        ORDER BY UPDATED_AT
-                        LIMIT ?
-                        """,
-                rowMapper, Timestamp.from(now), Timestamp.from(now), Timestamp.from(processingStaleBefore), limit);
+        return Rows.map(db.readFindRecoverable1(Timestamp.from(now), Timestamp.from(now), Timestamp.from(processingStaleBefore), limit), rowMapper);
     }
 
     @Override
     public Optional<IngestionJob> findByIdempotency(String tenantId, String idempotencyKey) {
-        return jdbc.query("""
-                        SELECT * FROM KNOWLEDGE_INGESTION_JOB
-                        WHERE TENANT_ID=? AND IDEMPOTENCY_KEY=?
-                        """, rowMapper, tenantId, idempotencyKey)
+        return Rows.map(db.readFindByIdempotency1(tenantId, idempotencyKey), rowMapper)
                 .stream().findFirst();
     }
 
     @Override
     public Map<IngestionStatus, Long> countsByStatus() {
         Map<IngestionStatus, Long> result = new EnumMap<>(IngestionStatus.class);
-        jdbc.query("SELECT STATUS, COUNT(*) FROM KNOWLEDGE_INGESTION_JOB GROUP BY STATUS",
-                (org.springframework.jdbc.core.RowCallbackHandler) rs -> result.put(
-                        IngestionStatus.valueOf(rs.getString(1)), rs.getLong(2)));
+        db.countsByStatus().forEach(row -> result.put(IngestionStatus.valueOf(row.status), row.total));
         return result;
     }
 
     @Override
     public Optional<Instant> oldestPending() {
-        Timestamp oldest = jdbc.queryForObject("SELECT MIN(CREATED_AT) FROM KNOWLEDGE_INGESTION_JOB "
-                + "WHERE STATUS IN ('RECEIVED','PROCESSING','PARTIAL','FAILED')", Timestamp.class);
+        Timestamp oldest = Rows.one(db.readOldestPending1());
         return Optional.ofNullable(oldest).map(Timestamp::toInstant);
     }
 
-    private static Instant instant(ResultSet rs, String column) throws SQLException {
-        Timestamp value = rs.getTimestamp(column);
+    private static Instant instant(Timestamp value) {
         return value == null ? null : value.toInstant();
     }
 
@@ -213,13 +205,7 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
     }
 
     private void initialize() {
-        jdbc.queryForList("""
-                SELECT TENANT_ID, JOB_ID, IDEMPOTENCY_KEY, USER_ID, SCOPES_JSON, DEPARTMENT,
-                       TRACE_ID, DOCUMENT_ID, DISPLAY_NAME, CATEGORY, DOCUMENT_VERSION,
-                       NEW_DOCUMENT, REVISION, SOURCE_BUCKET, SOURCE_OBJECT_KEY, SOURCE_HASH,
-                       SOURCE_CONTENT_TYPE, SOURCE_SIZE, STATUS, SINKS_JSON, REQUIRED_SINKS_JSON,
-                       ERROR_TEXT, CREATED_AT, UPDATED_AT, RETRY_COUNT, NEXT_RETRY_AT, ERROR_CODE, FAILED_STAGE, LEASE_OWNER, LEASE_UNTIL
-                FROM KNOWLEDGE_INGESTION_JOB WHERE 1=0""");
+        db.readInitialize1();
     }
 
     private String writeSinks(Map<IngestionSink, IngestionSinkState> sinks) {

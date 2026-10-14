@@ -1,7 +1,10 @@
 package com.lrj.platform.conversation.memory.profile;
 
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.RowMapper;
+import com.lrj.platform.conversation.memory.profile.mapper.UserProfileStoreMapper;
+import com.lrj.platform.conversation.memory.profile.mapper.UserProfileStoreRow;
+import com.lrj.platform.persistence.PlusMapperFactory;
+import com.lrj.platform.persistence.Rows;
+
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -16,13 +19,11 @@ import java.util.Objects;
 /** MySQL 权威画像存储；所有者锁统一保护候选、代次、容量、状态与审计。 */
 public final class JdbcUserProfileStore implements GovernedProfileStore {
     private static final int MAX_ITEMS = 1000;
-    private static final String COLUMNS = "RECORD_ID, MEMORY_ID, MEMORY_TEXT, MEMORY_TYPE, CREATED_AT, "
-            + "SOURCE_CHAT_ID, MEMORY_STATE, REVISION, PINNED, EXPIRES_AT";
-    private static final RowMapper<Entry> ENTRY = (rs, row) -> new Entry(rs.getLong("RECORD_ID"),
-            rs.getString("MEMORY_ID"), rs.getString("MEMORY_TEXT"), rs.getString("MEMORY_TYPE"),
-            rs.getLong("CREATED_AT"), rs.getString("SOURCE_CHAT_ID"), rs.getString("MEMORY_STATE"),
-            rs.getLong("REVISION"), rs.getBoolean("PINNED"), rs.getObject("EXPIRES_AT", Long.class));
-    private final JdbcTemplate jdbc;
+    private static final java.util.function.BiFunction<UserProfileStoreRow, Integer, Entry> ENTRY = (rs, row) -> new Entry(Rows.longValue(rs.recordId),
+            rs.memoryId, rs.memoryText, rs.memoryType,
+            Rows.longValue(rs.createdAt), rs.sourceChatId, rs.memoryState,
+            Rows.longValue(rs.revision), Boolean.TRUE.equals(rs.pinned), rs.expiresAt);
+    private final UserProfileStoreMapper db;
     private final TransactionTemplate transactions;
     private final int maxItems;
 
@@ -30,13 +31,13 @@ public final class JdbcUserProfileStore implements GovernedProfileStore {
     public JdbcUserProfileStore(DataSource dataSource, int maxItems) {
         if (maxItems < 1 || maxItems > MAX_ITEMS) throw new IllegalArgumentException("profile max-items must be between 1 and 1000");
         this.maxItems = maxItems;
-        jdbc = new JdbcTemplate(dataSource);
-        jdbc.setQueryTimeout(10);
+        this.db = PlusMapperFactory.create(dataSource, UserProfileStoreMapper.class, 10);
+
         transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
         transactions.setTimeout(10);
-        jdbc.queryForList("SELECT GENERATION, MEMORY_ENABLED FROM USER_PROFILE_OWNER WHERE 1=0");
-        jdbc.queryForList("SELECT " + COLUMNS + " FROM USER_PROFILE_MEMORY WHERE 1=0");
-        jdbc.queryForList("SELECT AUDIT_ID FROM USER_PROFILE_AUDIT WHERE 1=0");
+        db.readContract1();
+        db.readContract2();
+        db.readContract3();
     }
 
     /** 保留内部已确认写入口用于迁移/兼容；模型抽取必须使用 offer。 */
@@ -67,13 +68,15 @@ public final class JdbcUserProfileStore implements GovernedProfileStore {
                 if (victim.isEmpty()) return false;
                 delete(owner, victim.get(), "EVICT");
             }
-            jdbc.update("""
-                    INSERT INTO USER_PROFILE_MEMORY
-                    (OWNER_KEY, MEMORY_ID, MEMORY_TEXT, MEMORY_TYPE, CREATED_AT, SOURCE_CHAT_ID, MEMORY_STATE)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, owner, item.id(), item.text(), item.type(), item.createdAtEpochMs(), item.sourceChatId(),
+            db.writeInsert1(
+                    owner,
+                    item.id(),
+                    item.text(),
+                    item.type(),
+                    item.createdAtEpochMs(),
+                    item.sourceChatId(),
                     expectedGeneration == null ? "ACTIVE" : "PENDING");
-            Long id = jdbc.queryForObject("SELECT MAX(RECORD_ID) FROM USER_PROFILE_MEMORY WHERE OWNER_KEY=?", Long.class, owner);
+            Long id = Rows.one(db.readInsert1(owner));
             audit(owner, Objects.requireNonNull(id), expectedGeneration == null ? "ADD" : "PROPOSE", 0);
             return true;
         }));
@@ -96,7 +99,7 @@ public final class JdbcUserProfileStore implements GovernedProfileStore {
         String owner = ownerKey(tenant, user);
         return Objects.requireNonNull(transactions.execute(status -> {
             Owner state = lockOwner(owner, tenant, user);
-            int count = jdbc.update("DELETE FROM USER_PROFILE_MEMORY WHERE OWNER_KEY=?", owner);
+            int count = db.writeClear1(owner);
             bump(owner);
             audit(owner, 0, "CLEAR", state.generation() + 1);
             return count;
@@ -145,10 +148,7 @@ public final class JdbcUserProfileStore implements GovernedProfileStore {
             Long expires = action == Action.UPDATE ? decision.expiresAtEpochMs() : row.expiresAtEpochMs();
             if (expires != null && expires < 0) throw new IllegalArgumentException("expiry must be a non-negative UTC epoch value");
             boolean pinned = action == Action.PIN || (action != Action.UNPIN && row.pinned());
-            int changed = jdbc.update("""
-                    UPDATE USER_PROFILE_MEMORY SET MEMORY_TEXT=?, MEMORY_TYPE=?, MEMORY_STATE='ACTIVE',
-                    REVISION=REVISION+1, PINNED=?, EXPIRES_AT=? WHERE OWNER_KEY=? AND RECORD_ID=? AND REVISION=?
-                    """, text, type, pinned, expires, owner, recordId, row.version());
+            int changed = db.writeDecide1(text, type, pinned, expires, owner, recordId, row.version());
             if (changed != 1) throw conflict();
             audit(owner, recordId, action.name(), row.version() + 1);
         });
@@ -161,7 +161,7 @@ public final class JdbcUserProfileStore implements GovernedProfileStore {
         transactions.executeWithoutResult(status -> {
             Owner state = lockOwner(owner, tenant, user);
             if (state.generation() != expectedGeneration) throw conflict();
-            jdbc.update("UPDATE USER_PROFILE_OWNER SET MEMORY_ENABLED=?, GENERATION=GENERATION+1 WHERE OWNER_KEY=?", enabled, owner);
+            db.writeSettings1(enabled, owner);
             audit(owner, 0, enabled ? "ENABLE" : "DISABLE", state.generation() + 1);
         });
     }
@@ -170,40 +170,31 @@ public final class JdbcUserProfileStore implements GovernedProfileStore {
     @Override
     public List<Audit> audit(String tenant, String user, long beforeId, int limit) {
         if (limit < 1 || limit > 100 || beforeId < 1) throw new IllegalArgumentException("invalid audit page");
-        return jdbc.query("""
-                SELECT AUDIT_ID, RECORD_ID, ACTION_CODE, REVISION, OCCURRED_AT FROM USER_PROFILE_AUDIT
-                WHERE OWNER_KEY=? AND AUDIT_ID<? ORDER BY AUDIT_ID DESC LIMIT ?
-                """, (rs, row) -> new Audit(rs.getLong(1), rs.getLong(2), rs.getString(3), rs.getLong(4), rs.getLong(5)),
-                ownerKey(tenant, user), beforeId, limit);
+        return Rows.map(db.readAudit1(ownerKey(tenant, user), beforeId, limit), (rs, row) -> new Audit(Rows.longValue(rs.auditId), Rows.longValue(rs.recordId), rs.actionCode, Rows.longValue(rs.revision), Rows.longValue(rs.occurredAt)));
     }
 
     private Owner lockOwner(String owner, String tenant, String user) {
-        jdbc.update("INSERT INTO USER_PROFILE_OWNER (OWNER_KEY, TENANT_ID, USER_ID) VALUES (?, ?, ?) "
-                + "ON DUPLICATE KEY UPDATE OWNER_KEY=OWNER_KEY", owner, tenant, user);
-        return jdbc.queryForObject("SELECT GENERATION, MEMORY_ENABLED FROM USER_PROFILE_OWNER WHERE OWNER_KEY=? FOR UPDATE",
-                (rs, row) -> new Owner(rs.getLong(1), rs.getBoolean(2)), owner);
+        db.writeLockOwner1(owner, tenant, user);
+        return Rows.one(Rows.map(db.readLockOwner1(owner), (rs, row) -> new Owner(Rows.longValue(rs.generation), Boolean.TRUE.equals(rs.memoryEnabled))));
     }
 
     private List<Entry> read(String owner, boolean locked) {
-        List<Entry> rows = jdbc.query("SELECT " + COLUMNS + " FROM USER_PROFILE_MEMORY WHERE OWNER_KEY=? "
-                + "ORDER BY RECORD_ID LIMIT ?" + (locked ? " FOR UPDATE" : ""), ENTRY, owner, MAX_ITEMS + 1);
+        List<Entry> rows = Rows.map(db.entries(owner, MAX_ITEMS + 1, locked), ENTRY);
         if (rows.size() > MAX_ITEMS) throw new IllegalStateException("persisted profile exceeds supported capacity");
         return rows;
     }
 
     private void bump(String owner) {
-        if (jdbc.update("UPDATE USER_PROFILE_OWNER SET GENERATION=GENERATION+1 WHERE OWNER_KEY=?", owner) != 1) throw conflict();
+        if (db.writeBump1(owner) != 1) throw conflict();
     }
 
     private void delete(String owner, Entry row, String action) {
-        if (jdbc.update("DELETE FROM USER_PROFILE_MEMORY WHERE OWNER_KEY=? AND RECORD_ID=? AND REVISION=?",
-                owner, row.recordId(), row.version()) != 1) throw conflict();
+        if (db.writeDelete1(owner, row.recordId(), row.version()) != 1) throw conflict();
         audit(owner, row.recordId(), action, row.version() + 1);
     }
 
     private void audit(String owner, long recordId, String action, long version) {
-        jdbc.update("INSERT INTO USER_PROFILE_AUDIT (OWNER_KEY, RECORD_ID, ACTION_CODE, REVISION, OCCURRED_AT) VALUES (?, ?, ?, ?, ?)",
-                owner, recordId, action, version, System.currentTimeMillis());
+        db.writeAudit1(owner, recordId, action, version, System.currentTimeMillis());
     }
 
     private static void validateText(String text, String type) {

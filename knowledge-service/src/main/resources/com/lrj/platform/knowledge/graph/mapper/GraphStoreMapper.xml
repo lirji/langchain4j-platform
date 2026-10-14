@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lrj.platform.knowledge.graph.mapper.GraphStoreMapper">
+    <select id="readInit1" resultType="com.lrj.platform.knowledge.graph.mapper.GraphStoreRow">
+        SELECT GRAPH_ID, TENANT_ID, CATEGORY, SUBJECT_TEXT, SUBJECT_KEY, RELATION_TEXT,
+               OBJECT_TEXT, OBJECT_KEY, SOURCE_ID, CREATED_AT
+        FROM RAG_GRAPH_TRIPLE WHERE 1=0
+    </select>
+    <delete id="writeAdd1">
+        DELETE FROM RAG_GRAPH_TRIPLE WHERE GRAPH_ID=#{graphId}
+    </delete>
+    <insert id="writeAdd2">
+        INSERT INTO RAG_GRAPH_TRIPLE
+        (GRAPH_ID, TENANT_ID, CATEGORY, SUBJECT_TEXT, SUBJECT_KEY, RELATION_TEXT,
+         OBJECT_TEXT, OBJECT_KEY, SOURCE_ID, CREATED_AT)
+        VALUES (#{graphId}, #{tenantId}, #{category}, #{subjectText}, #{subjectKey}, #{relationText}, #{objectText}, #{objectKey}, #{sourceId}, #{createdAt})
+    </insert>
+    <select id="readEntities1" resultType="com.lrj.platform.knowledge.graph.mapper.GraphStoreRow">
+        SELECT SUBJECT_TEXT, RELATION_TEXT, OBJECT_TEXT, SOURCE_ID, TENANT_ID, CATEGORY
+        FROM RAG_GRAPH_TRIPLE
+        WHERE TENANT_ID=#{tenantId}
+        ORDER BY CREATED_AT ASC, GRAPH_ID ASC
+    </select>
+    <select id="readEntities2" resultType="com.lrj.platform.knowledge.graph.mapper.GraphStoreRow">
+        SELECT SUBJECT_TEXT, RELATION_TEXT, OBJECT_TEXT, SOURCE_ID, TENANT_ID, CATEGORY
+        FROM RAG_GRAPH_TRIPLE
+        WHERE TENANT_ID=#{tenantId} AND CATEGORY=#{category}
+        ORDER BY CREATED_AT ASC, GRAPH_ID ASC
+    </select>
+    <delete id="writeRemoveBySourcePrefix1">
+        DELETE FROM RAG_GRAPH_TRIPLE WHERE TENANT_ID=#{tenantId} AND SOURCE_ID LIKE #{sourceId}
+    </delete>
+    <select id="readSize1" resultType="java.lang.Integer">
+        SELECT COUNT(*) FROM RAG_GRAPH_TRIPLE
+    </select>
+    <select id="readTriplesForEntity1" resultType="com.lrj.platform.knowledge.graph.mapper.GraphStoreRow">
+        SELECT SUBJECT_TEXT, RELATION_TEXT, OBJECT_TEXT, SOURCE_ID, TENANT_ID, CATEGORY
+        FROM RAG_GRAPH_TRIPLE
+        WHERE TENANT_ID=#{tenantId} AND (SUBJECT_KEY=#{subjectKey} OR OBJECT_KEY=#{objectKey})
+        ORDER BY CREATED_AT ASC, GRAPH_ID ASC
+    </select>
+    <select id="readTriplesForEntity2" resultType="com.lrj.platform.knowledge.graph.mapper.GraphStoreRow">
+        SELECT SUBJECT_TEXT, RELATION_TEXT, OBJECT_TEXT, SOURCE_ID, TENANT_ID, CATEGORY
+        FROM RAG_GRAPH_TRIPLE
+        WHERE TENANT_ID=#{tenantId} AND CATEGORY=#{category} AND (SUBJECT_KEY=#{subjectKey} OR OBJECT_KEY=#{objectKey})
+        ORDER BY CREATED_AT ASC, GRAPH_ID ASC
+    </select>
+</mapper>

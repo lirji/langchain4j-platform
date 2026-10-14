@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreMapper">
+    <insert id="writeCreateOrGet1">
+        INSERT INTO KNOWLEDGE_INGESTION_JOB (
+          TENANT_ID, JOB_ID, IDEMPOTENCY_KEY, USER_ID, SCOPES_JSON,
+          DEPARTMENT, TRACE_ID, DOCUMENT_ID, DISPLAY_NAME, CATEGORY,
+          DOCUMENT_VERSION, NEW_DOCUMENT, REVISION, SOURCE_BUCKET, SOURCE_OBJECT_KEY,
+          SOURCE_HASH, SOURCE_CONTENT_TYPE, SOURCE_SIZE, STATUS, SINKS_JSON,
+          REQUIRED_SINKS_JSON, ERROR_TEXT, CREATED_AT, UPDATED_AT,
+          RETRY_COUNT, NEXT_RETRY_AT, ERROR_CODE, FAILED_STAGE, LEASE_OWNER, LEASE_UNTIL
+        ) VALUES (#{tenantId},#{jobId},#{idempotencyKey},#{userId},#{scopesJson},#{department},#{traceId},#{documentId},#{displayName},#{category},#{documentVersion},#{newDocument},#{revision},#{sourceBucket},#{sourceObjectKey},#{sourceHash},#{sourceContentType},#{sourceSize},#{status},#{sinksJson},#{requiredSinksJson},#{errorText},#{createdAt},#{updatedAt},#{retryCount},#{nextRetryAt},#{errorCode},#{failedStage},#{leaseOwner},#{leaseUntil})
+    </insert>
+    <select id="readFind1" resultType="com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreRow">
+        SELECT * FROM KNOWLEDGE_INGESTION_JOB
+        WHERE TENANT_ID=#{tenantId} AND JOB_ID=#{jobId}
+    </select>
+    <update id="writeSave1">
+        UPDATE KNOWLEDGE_INGESTION_JOB
+        SET REVISION=#{revision}, STATUS=#{status}, SINKS_JSON=#{sinksJson}, REQUIRED_SINKS_JSON=#{requiredSinksJson},
+            ERROR_TEXT=#{errorText}, UPDATED_AT=#{updatedAt}, RETRY_COUNT=#{retryCount}, NEXT_RETRY_AT=#{nextRetryAt}, ERROR_CODE=#{errorCode}, FAILED_STAGE=#{failedStage}, LEASE_OWNER=#{leaseOwner}, LEASE_UNTIL=#{leaseUntil}
+        WHERE TENANT_ID=#{tenantId} AND JOB_ID=#{jobId} AND REVISION=#{revision2}
+    </update>
+    <select id="readFindRunnable1" resultType="com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreRow">
+        SELECT * FROM KNOWLEDGE_INGESTION_JOB
+        WHERE STATUS IN ('RECEIVED','PROCESSING') AND LEASE_OWNER IS NULL
+        ORDER BY UPDATED_AT
+        LIMIT #{limit}
+    </select>
+    <select id="readFindRecoverable1" resultType="com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreRow">
+        SELECT * FROM KNOWLEDGE_INGESTION_JOB
+        WHERE (STATUS IN ('PARTIAL','FAILED') AND (NEXT_RETRY_AT IS NULL OR NEXT_RETRY_AT &lt;= #{nextRetryAt}))
+           OR (STATUS='PROCESSING' AND ((LEASE_UNTIL IS NOT NULL AND LEASE_UNTIL &lt;= #{leaseUntil})
+               OR (LEASE_UNTIL IS NULL AND UPDATED_AT &lt; #{updatedAt})))
+        ORDER BY UPDATED_AT
+        LIMIT #{limit}
+    </select>
+    <select id="readFindByIdempotency1" resultType="com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreRow">
+        SELECT * FROM KNOWLEDGE_INGESTION_JOB
+        WHERE TENANT_ID=#{tenantId} AND IDEMPOTENCY_KEY=#{idempotencyKey}
+    </select>
+    <select id="readOldestPending1" resultType="java.sql.Timestamp">
+        SELECT MIN(CREATED_AT) FROM KNOWLEDGE_INGESTION_JOB WHERE STATUS IN ('RECEIVED','PROCESSING','PARTIAL','FAILED')
+    </select>
+    <select id="readInitialize1" resultType="com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreRow">
+        SELECT TENANT_ID, JOB_ID, IDEMPOTENCY_KEY, USER_ID, SCOPES_JSON, DEPARTMENT,
+               TRACE_ID, DOCUMENT_ID, DISPLAY_NAME, CATEGORY, DOCUMENT_VERSION,
+               NEW_DOCUMENT, REVISION, SOURCE_BUCKET, SOURCE_OBJECT_KEY, SOURCE_HASH,
+               SOURCE_CONTENT_TYPE, SOURCE_SIZE, STATUS, SINKS_JSON, REQUIRED_SINKS_JSON,
+               ERROR_TEXT, CREATED_AT, UPDATED_AT, RETRY_COUNT, NEXT_RETRY_AT, ERROR_CODE, FAILED_STAGE, LEASE_OWNER, LEASE_UNTIL
+        FROM KNOWLEDGE_INGESTION_JOB WHERE 1=0
+    </select>
+    <select id="countsByStatus" resultType="com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreRow">
+        SELECT STATUS, COUNT(*) AS TOTAL FROM KNOWLEDGE_INGESTION_JOB GROUP BY STATUS
+    </select>
+</mapper>

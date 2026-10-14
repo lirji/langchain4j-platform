@@ -1,15 +1,15 @@
 package com.lrj.platform.knowledge.graph;
 
-import org.springframework.jdbc.core.JdbcTemplate;
+import com.lrj.platform.knowledge.graph.mapper.GraphStoreMapper;
+import com.lrj.platform.knowledge.graph.mapper.GraphStoreRow;
+import com.lrj.platform.persistence.PlusMapperFactory;
+import com.lrj.platform.persistence.Rows;
 
 import javax.sql.DataSource;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.LinkedHashSet;
@@ -27,18 +27,15 @@ import java.util.Set;
  */
 public class JdbcGraphStore implements GraphStore {
 
-    private final JdbcTemplate jdbc;
+    private final GraphStoreMapper db;
 
     public JdbcGraphStore(DataSource dataSource) {
-        this.jdbc = new JdbcTemplate(dataSource);
+        this.db = PlusMapperFactory.create(dataSource, GraphStoreMapper.class);
         init();
     }
 
     private void init() {
-        jdbc.queryForList("""
-                SELECT GRAPH_ID, TENANT_ID, CATEGORY, SUBJECT_TEXT, SUBJECT_KEY, RELATION_TEXT,
-                       OBJECT_TEXT, OBJECT_KEY, SOURCE_ID, CREATED_AT
-                FROM RAG_GRAPH_TRIPLE WHERE 1=0""");
+        db.readInit1();
     }
 
     @Override
@@ -49,12 +46,8 @@ public class JdbcGraphStore implements GraphStore {
         long now = Instant.now().toEpochMilli();
         for (Triple triple : triples) {
             String graphId = graphId(triple);
-            jdbc.update("DELETE FROM RAG_GRAPH_TRIPLE WHERE GRAPH_ID=?", graphId);
-            jdbc.update("""
-                            INSERT INTO RAG_GRAPH_TRIPLE
-                            (GRAPH_ID, TENANT_ID, CATEGORY, SUBJECT_TEXT, SUBJECT_KEY, RELATION_TEXT,
-                             OBJECT_TEXT, OBJECT_KEY, SOURCE_ID, CREATED_AT)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            db.writeAdd1(graphId);
+            db.writeAdd2(
                     graphId,
                     triple.tenantId(),
                     triple.category(),
@@ -108,17 +101,9 @@ public class JdbcGraphStore implements GraphStore {
         }
         List<Triple> triples;
         if (category == null || category.isBlank()) {
-            triples = jdbc.query("""
-                    SELECT SUBJECT_TEXT, RELATION_TEXT, OBJECT_TEXT, SOURCE_ID, TENANT_ID, CATEGORY
-                    FROM RAG_GRAPH_TRIPLE
-                    WHERE TENANT_ID=?
-                    ORDER BY CREATED_AT ASC, GRAPH_ID ASC""", this::mapTriple, tenantId);
+            triples = Rows.map(db.readEntities1(tenantId), this::mapTriple);
         } else {
-            triples = jdbc.query("""
-                    SELECT SUBJECT_TEXT, RELATION_TEXT, OBJECT_TEXT, SOURCE_ID, TENANT_ID, CATEGORY
-                    FROM RAG_GRAPH_TRIPLE
-                    WHERE TENANT_ID=? AND CATEGORY=?
-                    ORDER BY CREATED_AT ASC, GRAPH_ID ASC""", this::mapTriple, tenantId, category);
+            triples = Rows.map(db.readEntities2(tenantId, category), this::mapTriple);
         }
         Set<String> result = new LinkedHashSet<>();
         for (Triple triple : triples) {
@@ -133,39 +118,30 @@ public class JdbcGraphStore implements GraphStore {
         if (tenantId == null || tenantId.isBlank() || sourceIdPrefix == null || sourceIdPrefix.isBlank()) {
             return 0;
         }
-        return jdbc.update("DELETE FROM RAG_GRAPH_TRIPLE WHERE TENANT_ID=? AND SOURCE_ID LIKE ?",
-                tenantId, escapeLike(sourceIdPrefix) + "%");
+        return db.writeRemoveBySourcePrefix1(tenantId, escapeLike(sourceIdPrefix) + "%");
     }
 
     @Override
     public int size() {
-        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM RAG_GRAPH_TRIPLE", Integer.class);
+        Integer count = Rows.one(db.readSize1());
         return count == null ? 0 : count;
     }
 
     private List<Triple> triplesForEntity(String tenantId, String entityKey, String category) {
         if (category == null || category.isBlank()) {
-            return jdbc.query("""
-                    SELECT SUBJECT_TEXT, RELATION_TEXT, OBJECT_TEXT, SOURCE_ID, TENANT_ID, CATEGORY
-                    FROM RAG_GRAPH_TRIPLE
-                    WHERE TENANT_ID=? AND (SUBJECT_KEY=? OR OBJECT_KEY=?)
-                    ORDER BY CREATED_AT ASC, GRAPH_ID ASC""", this::mapTriple, tenantId, entityKey, entityKey);
+            return Rows.map(db.readTriplesForEntity1(tenantId, entityKey, entityKey), this::mapTriple);
         }
-        return jdbc.query("""
-                SELECT SUBJECT_TEXT, RELATION_TEXT, OBJECT_TEXT, SOURCE_ID, TENANT_ID, CATEGORY
-                FROM RAG_GRAPH_TRIPLE
-                WHERE TENANT_ID=? AND CATEGORY=? AND (SUBJECT_KEY=? OR OBJECT_KEY=?)
-                ORDER BY CREATED_AT ASC, GRAPH_ID ASC""", this::mapTriple, tenantId, category, entityKey, entityKey);
+        return Rows.map(db.readTriplesForEntity2(tenantId, category, entityKey, entityKey), this::mapTriple);
     }
 
-    private Triple mapTriple(ResultSet rs, int rowNum) throws SQLException {
+    private Triple mapTriple(GraphStoreRow rs, int rowNum) {
         return new Triple(
-                rs.getString("SUBJECT_TEXT"),
-                rs.getString("RELATION_TEXT"),
-                rs.getString("OBJECT_TEXT"),
-                rs.getString("SOURCE_ID"),
-                rs.getString("TENANT_ID"),
-                rs.getString("CATEGORY"));
+                rs.subjectText,
+                rs.relationText,
+                rs.objectText,
+                rs.sourceId,
+                rs.tenantId,
+                rs.category);
     }
 
     private static void enqueue(String surface, int depth, Set<String> visitedEntities, Queue<Node> queue) {

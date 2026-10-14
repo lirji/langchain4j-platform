@@ -15,6 +15,7 @@
     <description>Conversation 限界上下文：/chat（对话 + 记忆）。Phase 0 最小版：/chat 直连网关 ChatModel。</description>
 
     <dependencies>
+        <dependency><groupId>com.lrj.platform</groupId><artifactId>platform-persistence</artifactId></dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>

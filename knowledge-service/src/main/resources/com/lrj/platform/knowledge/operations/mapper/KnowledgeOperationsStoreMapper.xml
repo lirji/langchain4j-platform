@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lrj.platform.knowledge.operations.mapper.KnowledgeOperationsStoreMapper">
+    <select id="readContract1" resultType="com.lrj.platform.knowledge.operations.mapper.KnowledgeOperationsStoreRow">
+        SELECT ID FROM KNOWLEDGE_OPERATION_CANDIDATE WHERE 1=0
+    </select>
+    <select id="readContract2" resultType="com.lrj.platform.knowledge.operations.mapper.KnowledgeOperationsStoreRow">
+        SELECT ID FROM KNOWLEDGE_OPERATION_FEEDBACK WHERE 1=0
+    </select>
+    <select id="readContract3" resultType="com.lrj.platform.knowledge.operations.mapper.KnowledgeOperationsStoreRow">
+        SELECT ID FROM KNOWLEDGE_OPERATION_AUDIT WHERE 1=0
+    </select>
+    <select id="readContract4" resultType="com.lrj.platform.knowledge.operations.mapper.KnowledgeOperationsStoreRow">
+        SELECT CANDIDATE_ID FROM KNOWLEDGE_OPERATION_RELEASE WHERE 1=0
+    </select>
+    <insert id="writeFeedback1">
+        INSERT INTO KNOWLEDGE_OPERATION_FEEDBACK (ID,TENANT_KEY,AUTHOR_KEY,REQUEST_KEY,REQUEST_HASH,BODY_JSON,DOCUMENT_ID,REASON_CODE) VALUES (#{id},#{tenantKey},#{authorKey},#{requestKey},#{requestHash},#{bodyJson},#{documentId},#{reasonCode})
+    </insert>
+    <select id="readFeedback1" resultType="com.lrj.platform.knowledge.operations.mapper.KnowledgeOperationsStoreRow">
+        SELECT REQUEST_HASH,BODY_JSON FROM KNOWLEDGE_OPERATION_FEEDBACK WHERE TENANT_KEY=#{tenantKey} AND REQUEST_KEY=#{requestKey}
+    </select>
+    <select id="readFeedback2" resultType="com.lrj.platform.knowledge.operations.mapper.KnowledgeOperationsStoreRow">
+        SELECT BODY_JSON FROM KNOWLEDGE_OPERATION_FEEDBACK WHERE TENANT_KEY=#{tenantKey} AND ID=#{id}
+    </select>
+    <insert id="writeCreate1">
+        INSERT INTO KNOWLEDGE_OPERATION_CANDIDATE (ID,TENANT_KEY,REQUEST_KEY,REQUEST_HASH,REVISION,BODY_JSON) VALUES (#{id},#{tenantKey},#{requestKey},#{requestHash},#{revision},#{bodyJson})
+    </insert>
+    <select id="readCreate1" resultType="com.lrj.platform.knowledge.operations.mapper.KnowledgeOperationsStoreRow">
+        SELECT REQUEST_HASH,BODY_JSON FROM KNOWLEDGE_OPERATION_CANDIDATE WHERE TENANT_KEY=#{tenantKey} AND REQUEST_KEY=#{requestKey}
+    </select>
+    <select id="readGet1" resultType="com.lrj.platform.knowledge.operations.mapper.KnowledgeOperationsStoreRow">
+        SELECT BODY_JSON FROM KNOWLEDGE_OPERATION_CANDIDATE WHERE TENANT_KEY=#{tenantKey} AND ID=#{id}
+    </select>
+    <insert id="writeClaim1">
+        INSERT INTO KNOWLEDGE_OPERATION_RELEASE (TENANT_KEY,DOCUMENT_ID,DOCUMENT_VERSION,CANDIDATE_ID) VALUES (#{tenantKey},#{documentId},#{documentVersion},#{candidateId})
+    </insert>
+    <select id="readAudit1" resultType="com.lrj.platform.knowledge.operations.mapper.KnowledgeOperationsStoreRow">
+        SELECT ID,CANDIDATE_ID,ACTOR,ACTION_CODE,REVISION,OCCURRED_AT FROM KNOWLEDGE_OPERATION_AUDIT WHERE TENANT_KEY=#{tenantKey} AND CANDIDATE_ID=#{candidateId} ORDER BY ID DESC LIMIT #{limit}
+    </select>
+    <update id="writeUpdate1">
+        UPDATE KNOWLEDGE_OPERATION_CANDIDATE SET BODY_JSON=#{bodyJson},REVISION=#{revision} WHERE TENANT_KEY=#{tenantKey} AND ID=#{id} AND REVISION=#{revision2}
+    </update>
+    <insert id="writeAudit1">
+        INSERT INTO KNOWLEDGE_OPERATION_AUDIT (TENANT_KEY,CANDIDATE_ID,ACTOR,ACTION_CODE,REVISION,OCCURRED_AT) VALUES (#{tenantKey},#{candidateId},#{actor},#{actionCode},#{revision},#{occurredAt})
+    </insert>
+    <select id="feedbackPage" resultType="com.lrj.platform.knowledge.operations.mapper.KnowledgeOperationsStoreRow">
+        SELECT BODY_JSON FROM KNOWLEDGE_OPERATION_FEEDBACK WHERE TENANT_KEY=#{tenant}
+        <if test='before != "~"'>AND ID &lt; #{before}</if>
+        <if test="actor != null">AND AUTHOR_KEY=#{actor}</if>
+        ORDER BY ID DESC LIMIT #{limit}
+    </select>
+    <select id="candidatePage" resultType="com.lrj.platform.knowledge.operations.mapper.KnowledgeOperationsStoreRow">
+        SELECT BODY_JSON FROM KNOWLEDGE_OPERATION_CANDIDATE WHERE TENANT_KEY=#{tenant}
+        <if test='before != "~"'>AND ID &lt; #{before}</if>
+        ORDER BY ID DESC LIMIT #{limit}
+    </select>
+    <select id="feedbackSummary" resultType="com.lrj.platform.knowledge.operations.mapper.KnowledgeOperationsStoreRow">
+        SELECT REASON_CODE,COUNT(*) AS TOTAL FROM KNOWLEDGE_OPERATION_FEEDBACK
+        WHERE TENANT_KEY=#{tenant} AND DOCUMENT_ID=#{document} GROUP BY REASON_CODE
+    </select>
+</mapper>

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lrj.platform.channel.inbox.mapper.InboundInboxStoreMapper">
+    <select id="readContract1" resultType="com.lrj.platform.channel.inbox.mapper.InboundInboxStoreRow">
+        SELECT INBOX_ID, LEASE_EPOCH, PAYLOAD_JSON FROM CHANNEL_INBOUND_INBOX WHERE 1=0
+    </select>
+    <insert id="writeReceive1">
+        INSERT INTO CHANNEL_INBOUND_INBOX
+        (INBOX_ID, TENANT_ID, SOURCE_NAME, MESSAGE_ID, PAYLOAD_HASH, PAYLOAD_JSON, TRACE_ID,
+         STATUS_CODE, ATTEMPTS, LEASE_EPOCH, LEASE_UNTIL, NEXT_ATTEMPT_AT, CREATED_AT, UPDATED_AT)
+        VALUES (#{inboxId}, #{tenantId}, #{sourceName}, #{messageId}, #{payloadHash}, #{payloadJson}, #{traceId}, 'PENDING', 0, 0, 0, #{nextAttemptAt}, #{createdAt}, #{updatedAt})
+    </insert>
+    <select id="readReceive1" resultType="com.lrj.platform.channel.inbox.mapper.InboundInboxStoreRow">
+        SELECT PAYLOAD_HASH FROM CHANNEL_INBOUND_INBOX
+        WHERE INBOX_ID=#{inboxId} AND TENANT_ID=#{tenantId} AND SOURCE_NAME=#{sourceName}
+    </select>
+    <select id="readClaimDue1" resultType="com.lrj.platform.channel.inbox.mapper.InboundInboxStoreRow">
+        SELECT * FROM CHANNEL_INBOUND_INBOX WHERE TENANT_ID=#{tenantId} AND SOURCE_NAME=#{sourceName}
+         AND ((STATUS_CODE='PENDING' AND NEXT_ATTEMPT_AT&lt;=#{nextAttemptAt})
+              OR (STATUS_CODE='RUNNING' AND LEASE_UNTIL&lt;=#{leaseUntil}))
+        ORDER BY CREATED_AT, INBOX_ID LIMIT #{limit}
+    </select>
+    <update id="writeClaimDue1">
+        UPDATE CHANNEL_INBOUND_INBOX SET STATUS_CODE='RUNNING', ATTEMPTS=ATTEMPTS+1,
+          LEASE_OWNER=#{leaseOwner}, LEASE_EPOCH=LEASE_EPOCH+1, LEASE_UNTIL=#{leaseUntil}, UPDATED_AT=#{updatedAt}, ERROR_CODE=NULL
+        WHERE INBOX_ID=#{inboxId} AND TENANT_ID=#{tenantId} AND LEASE_EPOCH=#{leaseEpoch}
+         AND ((STATUS_CODE='PENDING' AND NEXT_ATTEMPT_AT&lt;=#{nextAttemptAt})
+              OR (STATUS_CODE='RUNNING' AND LEASE_UNTIL&lt;=#{leaseUntil2}))
+    </update>
+    <update id="writeRenew1">
+        UPDATE CHANNEL_INBOUND_INBOX SET LEASE_UNTIL=#{leaseUntil}, UPDATED_AT=#{updatedAt}
+        WHERE INBOX_ID=#{inboxId} AND TENANT_ID=#{tenantId} AND STATUS_CODE='RUNNING'
+          AND LEASE_OWNER=#{leaseOwner} AND LEASE_EPOCH=#{leaseEpoch} AND LEASE_UNTIL&gt;#{leaseUntil2}
+    </update>
+    <update id="writeFinish1">
+        UPDATE CHANNEL_INBOUND_INBOX SET STATUS_CODE=#{statusCode}, NEXT_ATTEMPT_AT=#{nextAttemptAt}, UPDATED_AT=#{updatedAt},
+          ERROR_CODE=#{errorCode}, LEASE_OWNER=NULL, LEASE_UNTIL=0
+        WHERE INBOX_ID=#{inboxId} AND TENANT_ID=#{tenantId} AND STATUS_CODE='RUNNING'
+          AND LEASE_OWNER=#{leaseOwner} AND LEASE_EPOCH=#{leaseEpoch} AND LEASE_UNTIL&gt;#{leaseUntil}
+    </update>
+    <select id="readList1" resultType="com.lrj.platform.channel.inbox.mapper.InboundInboxStoreRow">
+        SELECT * FROM CHANNEL_INBOUND_INBOX WHERE TENANT_ID=#{tenantId}
+        ORDER BY CREATED_AT DESC, INBOX_ID LIMIT #{limit}
+    </select>
+    <update id="writeReplay1">
+        UPDATE CHANNEL_INBOUND_INBOX SET STATUS_CODE='PENDING', ATTEMPTS=0,
+          NEXT_ATTEMPT_AT=#{nextAttemptAt}, UPDATED_AT=#{updatedAt}, ERROR_CODE=NULL
+        WHERE INBOX_ID=#{inboxId} AND TENANT_ID=#{tenantId} AND STATUS_CODE='DEAD'
+    </update>
+    <select id="readCleanupSucceeded1" resultType="com.lrj.platform.channel.inbox.mapper.InboundInboxStoreRow">
+        SELECT INBOX_ID FROM CHANNEL_INBOUND_INBOX WHERE STATUS_CODE='SUCCEEDED' AND UPDATED_AT&lt;#{updatedAt}
+        ORDER BY UPDATED_AT, INBOX_ID LIMIT #{limit}
+    </select>
+    <delete id="writeCleanupSucceeded1">
+        DELETE FROM CHANNEL_INBOUND_INBOX WHERE INBOX_ID=#{inboxId} AND STATUS_CODE='SUCCEEDED'
+          AND UPDATED_AT&lt;#{updatedAt}
+    </delete>
+</mapper>
