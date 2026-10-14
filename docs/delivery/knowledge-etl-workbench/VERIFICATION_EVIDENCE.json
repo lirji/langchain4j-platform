@@ -1,0 +1,62 @@
+{
+  "result": "PASS",
+  "date": "2026-10-14",
+  "base": "4e6553962e15c7a30c931b42547f90fcd2ad7dec",
+  "source_sha256": {
+    "capability-showcase-frontend/src/api/knowledgeSync.ts": "f56d4076b998c0237beff69ca0cd127180987d4df9e8b905d39ff6cf1cabb0a9",
+    "capability-showcase-frontend/src/modules/rag/KnowledgeSyncPanel.test.ts": "718ac71e4e4d6c0cc9def09029a1419ff5f63acbbc0c59723cfe5be77e6f6c67",
+    "capability-showcase-frontend/src/modules/rag/KnowledgeSyncPanel.vue": "ba6d98c5cbd0d77aacce633ef52be96c3419ab4f2d7ffa942c14a449788cca9b",
+    "capability-showcase-frontend/src/modules/rag/RagWorkspaceView.vue": "c2f4c8ae0b40e1d5e4fa3f5baf7a9b53486bcffcff97d01a6070ba14435ad0f9",
+    "database-migrations/src/main/resources/db/migration/knowledge-ingestion/V8__knowledge_sync_operations.sql": "649420dee6531b53fbc5305fb39f7d64f41b13db574c14b596fa799a669e94a6",
+    "deploy/knowledge-http-sync.example.yml": "7fd548a7a559181cc7ca9be8e888836bd75868d39311d706e363b777828e82c6",
+    "deploy/test-knowledge-http-sync-mysql.py": "5da8b64e44bfcc523e7ec39e086b1f3b496bf0936aabb70c5549497ab87e8ddd",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/sync/KnowledgeSyncController.java": "18478045aec0d503120fa66c6ac34c6fb3fe0275e13ea7afca51e7aa5b06b3ea",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/sync/KnowledgeSyncProperties.java": "74613ff6966f721823ee2a660284b233fc5b1f892e138db7dd645659abed9554",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/sync/KnowledgeSyncService.java": "0f6b4fcbfbb6c64e4c6813dc8a10e49103f38d5f6f23385d84676f95b1a9226e",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/sync/KnowledgeSyncStore.java": "f548bbbcd396c8593e79938b2fb66a2b715f97cf47fdb0a976e02bac08a6c224",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/sync/SyncData.java": "1429bf4c3d1373cdc41739676222e3e36552544d63ee43a2d645b168dc324cc6",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/sync/mapper/SyncMapper.java": "d31c1bc182cbfc7296ee209afa3a0bd42b3ddb319386a9680b36573cfeb30d1b",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/sync/mapper/SyncRow.java": "172ea9364e08f214e1699820358c6c580a5026936b8f7ac94b9253833f18a799",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/sync/mapper/SyncRunRow.java": "eafbd0a843b3c2130b9f9143e2669cfad36d5245f241339100d775459d9ed69a",
+    "knowledge-service/src/main/resources/com/lrj/platform/knowledge/ingest/sync/mapper/SyncMapper.xml": "9d6c48271aa4f2e94ff809e9a100e19426e29fe0ae8aa5a6f3be0096d8e19a1a",
+    "knowledge-service/src/test/java/com/lrj/platform/knowledge/ingest/sync/KnowledgeSyncConfigTest.java": "0a208542716a426ede30b82a25193894482d0f10732ea8d280b97277a169279b",
+    "knowledge-service/src/test/java/com/lrj/platform/knowledge/ingest/sync/KnowledgeSyncControllerTest.java": "ad38f9f6a657ff7885032f581bdbc47b959fe6b291567f7926c3dbd4383508e0",
+    "knowledge-service/src/test/java/com/lrj/platform/knowledge/ingest/sync/KnowledgeSyncOperationsTest.java": "7c4a4e2073594eced82ed13c3f455e5948ad18e2a2f215f4082770d00178a725",
+    "knowledge-service/src/test/java/com/lrj/platform/knowledge/ingest/sync/KnowledgeSyncServiceTest.java": "7bad82e426f28a90b00de76860801adf4630876288f855cc43ee9cb80ffa622e",
+    "platform-audit/src/main/java/com/lrj/platform/audit/AuditEventType.java": "a227036a5423ed2236a45a545c03b527bfc97914d070bbfa941f6af2a3ad26e9",
+    "platform-protocol/src/main/java/com/lrj/platform/protocol/knowledge/KnowledgeSyncOperations.java": "626ce0c11e3f7fcb13b34540cce71adc145df1e95899bc355cc3c10b82efefa5"
+  },
+  "log_sha256": {
+    "/tmp/etl-workbench-all-backend.log": "631c33efbe76a8bbb46888e24f9219e0ffd993387e64c1f6c5562fd5849bb71e",
+    "/tmp/etl-workbench-backend.log": "0e98b59484e73194884258fa1d33557c58e8489cac06b4b8a8d2f50648419f0c",
+    "knowledge-service/target/knowledge-http-sync-mysql.log": "27b83b157fdb8beee2f741d323a9fe7d140da8d957364ae204ee2b4711e574c1",
+    "/tmp/etl-workbench-all-frontend.log": "d91d96c000d21d1271dcc080a3f0f69f46d18ae8aea8e88afd26859f9421bba2",
+    "/tmp/etl-workbench-final-frontend.log": "729956a7de44202bd0ac43a467b6b9bac3dc1fa77942835b7720cf794af31f1c",
+    "/tmp/etl-workbench-type.log": "a80913c583b5df2496a5e75d6e8a3b5e83b0f21b752b4e0e5f3cb52ae7b34836",
+    "/tmp/etl-workbench-build.log": "af5ff9ef2f1fe1f1791e1d637a72f01d1cf88ea4ca9dff887c876b675beca402"
+  },
+  "checks": {
+    "backend_full": {
+      "tests": 569,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9
+    },
+    "backend_final_focused": {
+      "tests": 41,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "mysql_final": {
+      "tests": 28,
+      "comments": "PASS",
+      "dml_account_ddl_denied": "PASS"
+    },
+    "frontend_full": 585,
+    "frontend_final_rag": 32,
+    "types": "PASS",
+    "build": "PASS",
+    "browser": "Chrome, 1180px/390px containers, isolated UI fixtures; not live backend E2E"
+  }
+}

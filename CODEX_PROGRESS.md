@@ -2,6 +2,46 @@
 
 ## 任务目标
 
+实现ETL数据接入工作台与持久化同步运行记录，验证后正常合并推送main，不部署。
+
+## 已完成
+
+- S1/S2：V8新增来源控制与运行记录；同租户显式operator-user-ids、暂停/恢复控制CAS、手动轮询和原任务重试、运行历史分页与逐条结果。
+- S3：RAG数据接入工作台接真实接口，身份/来源切换取消与清空，冲突恢复、失败明细、桌面与390px容器验证。
+- 最终验证：后端完整回归569项/0失败/0错误/9条件跳过；最终聚焦41项；真实MySQL28项；前端585项及最终RAG32项；类型/构建与Chrome桌面、390px容器检查通过。
+
+## 已修改文件
+
+- knowledge-service/ingest/sync及对应测试、platform-protocol的KnowledgeSyncOperations、platform-audit枚举。
+- database-migrations的V8、deploy配置示例与隔离MySQL验证脚本。
+- 前端knowledgeSync API、KnowledgeSyncPanel与测试、RagWorkspaceView挂载点。
+- HTTP接入指南、docs/delivery/knowledge-etl-workbench/、本文件。
+
+## 未完成
+
+- 源码、测试和验证记录已完成；正在执行分批提交及正常合并推送main。
+
+## 当前问题
+
+- 实际业务源仍未配置且功能默认关闭；浏览器用隔离测试夹具，后端用隔离MySQL，不等于真实业务接口已联调。
+- 升级前关闭全部旧协调器；旧版本不理解暂停/运行记录，不能混跑。运行历史尚无自动清理，需按实际容量与保留政策治理。
+
+## 下一步建议
+
+1. 验证已通过，证据见docs/delivery/knowledge-etl-workbench/TEST_RESULT.md和VERIFICATION_EVIDENCE.json。
+2. 完成测试证据、按task-git-delivery提交并正常合并推送main，不部署。
+
+## 恢复 Prompt
+
+读取本文件和docs/delivery/knowledge-etl-workbench/PLAN.md，继续feat/knowledge-etl-workbench的最终验证与Git交付，不重做HTTP连接器，不部署或清理已有工作树。
+
+---
+以下为历史记录：
+
+# Codex Progress
+
+## 任务目标
+
 完成用户图片所示知识接入ETL：HTTP产品说明/FAQ增量采集、质量校验、新增更新、删除传播、来源追溯和可靠恢复，并正常合并推送main。
 
 ## 已完成
