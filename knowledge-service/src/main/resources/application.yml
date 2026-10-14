@@ -42,6 +42,9 @@ platform:
 
 app:
   rag:
+    # 默认开放ETL入口；来源为空时不启动采集，也不要求同步专用持久化组件。
+    http-sync:
+      enabled: ${KNOWLEDGE_HTTP_SYNC_ENABLED:true}
     operations:
       query-base-url: ${KNOWLEDGE_OPERATIONS_QUERY_URL:}
     # combined 保持兼容 façade；query/ingest-api/ingest-worker 用同一 artifact 拆独立 Deployment。

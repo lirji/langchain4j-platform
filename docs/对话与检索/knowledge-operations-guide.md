@@ -42,4 +42,4 @@
 
 ## 外部知识源自动同步
 
-产品说明或客服FAQ可通过[HTTP知识源ETL](http-knowledge-sync-guide.md)增量入库，复用现有任务与worker，支持来源更新、显式删除传播和断点恢复。功能默认关闭。
+产品说明或客服FAQ可通过[HTTP知识源ETL](http-knowledge-sync-guide.md)增量入库，复用现有任务与worker，支持来源更新、显式删除传播和断点恢复。功能默认开启；未配置来源时显示空列表、不执行采集，配置来源后需满足持久化与升级要求。

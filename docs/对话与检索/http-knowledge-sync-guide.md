@@ -2,7 +2,7 @@
 
 HTTP产品说明/FAQ增量源 → 拉取和质量校验 → 持久化待处理页 → 既有知识入库任务 → 解析/切分/向量化/索引 → 成功后推进来源游标。
 
-协调器位于`knowledge-service/ingest/sync`，在`combined`或`ingest-api`角色中运行。`query`和`ingest-worker`不发起采集；worker继续处理已有入库任务。默认关闭，无新服务、中间件或依赖。
+协调器位于`knowledge-service/ingest/sync`，在`combined`或`ingest-api`角色中运行。`query`和`ingest-worker`不发起采集；worker继续处理已有入库任务。默认开启，无新服务、中间件或依赖。未配置来源时，管理列表返回空数组，不创建采集组件、不访问外部源，也不增加同步持久化要求。
 
 ## 外部源接口契约
 
@@ -30,13 +30,15 @@ HTTP产品说明/FAQ增量源 → 拉取和质量校验 → 持久化待处理�
 
 协议类型在`platform-protocol/.../KnowledgeSourceFeed.java`，来源凭据只用于外部API，内部JWT不会转发给外部源。
 
-## 配置与开启
+## 配置与采集
 
 先用独立迁移账号执行knowledge-ingestion的增量迁移`V7__knowledge_http_sync.sql`及`V8__knowledge_sync_operations.sql`。应用账号仅需`SELECT/INSERT/UPDATE`。检查点使用既有入库MySQL，必须同时配置`app.rag.ingestion.store=jdbc`、`app.rag.source.store=s3`、`app.rag.registry.store=redis`。
 
 复制`deploy/knowledge-http-sync.example.yml`到受控运行配置，设置来源端点、租户、执行用户、部门和外部Bearer token，再用Spring的`spring.config.additional-location`加载。Compose可把该文件只读挂入`knowledge-ingest-api`，将路径追加到现有额外配置位置，并显式传入相应环境变量；本次未改变运行中的Compose或部署服务。
 
-全部knowledge角色升级到支持文档墓碑的版本后，设置`KNOWLEDGE_HTTP_SYNC_ENABLED=true`。只开启在入库API角色，worker/query保持原配置。启用时至少需要一个来源，最多20个。
+功能开关`KNOWLEDGE_HTTP_SYNC_ENABLED`默认`true`，可显式设置`false`关闭管理接口与采集。来源允许为空，最多20个；配置有效来源后自动开始采集，并在启动时强制校验上述持久化依赖。只有`combined`和`ingest-api`角色开放入口和采集，worker/query保持原职责。
+
+升级已有环境时，若已配置来源且未显式关闭，升级后将自动采集。请在迁移/滚动升级期间显式设置`KNOWLEDGE_HTTP_SYNC_ENABLED=false`，完成V7/V8迁移并升级全部knowledge角色后再恢复`true`；仅新建且无来源的环境可以直接使用默认配置。
 
 - 来源绑定的服务用户由部署管理员授权；创建/更新/删除文档沿用已有知识授权规则。`enforce`模式需有效部门及编辑权限。
 - 来源配置只能由服务端维护，不提供用户任意URL注册入口。HTTPS默认必需；本地测试HTTP须显式设置`allow-insecure-http: true`。

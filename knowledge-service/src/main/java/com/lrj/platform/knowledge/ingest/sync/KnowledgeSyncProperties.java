@@ -7,10 +7,9 @@ import java.util.List;
 
 /** 数据源只能由服务端配置，调用者不能用同步接口指定任意URL或冒用其他租户。 */
 @ConfigurationProperties("app.rag.http-sync")
-public record KnowledgeSyncProperties(@DefaultValue("false") boolean enabled, List<Source> sources) {
+public record KnowledgeSyncProperties(@DefaultValue("true") boolean enabled, List<Source> sources) {
     public KnowledgeSyncProperties {
         sources = sources == null ? List.of() : List.copyOf(sources);
-        if (enabled && sources.isEmpty()) throw new IllegalArgumentException("enabled HTTP sync requires sources");
         if (sources.size() > 20) throw new IllegalArgumentException("at most 20 sync sources allowed");
         var identities = new java.util.HashSet<String>();
         for (Source source : sources) {

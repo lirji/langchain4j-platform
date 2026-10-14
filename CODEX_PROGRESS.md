@@ -1,6 +1,44 @@
 # Codex Progress
 
 ## 任务目标
+
+按用户要求将知识HTTP ETL默认开启，验证后正常合并推送main；不部署。
+
+## 已完成
+
+- 默认开放combined/ingest-api管理入口；无来源时空列表、不装配采集组件；配置来源后自动采集并强制持久化要求。
+- 显式关闭、权限/租户隔离及query/worker角色边界保持有效；配置示例和两份使用指南同步。
+- 最终模块及上游回归574项，0失败/0错误/9条件跳过；聚焦11项通过。
+
+## 已修改文件
+
+- knowledge-service：KnowledgeSyncConfig、KnowledgeSyncController、KnowledgeSyncProperties、application.yml、KnowledgeSyncConfigTest。
+- deploy/knowledge-http-sync.example.yml；HTTP接入与知识运营指南。
+- docs/delivery/knowledge-etl-default-enabled/DELIVERY_RESULT.md；本文件。
+
+## 未完成
+
+- 实现与验证完成，待提交并正常合入推送origin/main。
+
+## 当前问题
+
+- 无实现阻塞。实际来源尚未提供；默认开启不代表已有采集数据。未部署或重启服务。
+- 既有来源配置升级时需显式false，完成迁移及全部角色升级后恢复true。
+
+## 下一步建议
+
+1. 按task-git-delivery提交本任务，合并推送main并补记交付结果；保留历史工作树与忽略数据。
+
+## 恢复 Prompt
+
+读取docs/delivery/knowledge-etl-default-enabled/DELIVERY_RESULT.md及Git状态，从未完成交付继续。代码已验证，不重复实现；不部署、不清理历史工作树或用户数据。
+
+---
+以下为历史任务进度，默认开关事实以上述本轮记录与当前指南为准：
+
+# Codex Progress
+
+## 任务目标
 实现节点级持久恢复：中央契约、Python DAG接管、隔离演练及正常合入推送两仓main；不部署。
 
 ## 已完成

@@ -1,9 +1,10 @@
 # 作为额外Spring配置文件加载；只挂载到knowledge-ingest-api或combined角色。
-# 完成V7/V8迁移并升级所有knowledge角色后，再通过环境变量启用。
+# 功能默认开启；完成V7/V8迁移并升级所有knowledge角色后再加载来源。
+# 升级期间显式设置KNOWLEDGE_HTTP_SYNC_ENABLED=false，准备完成后恢复true。
 app:
   rag:
     http-sync:
-      enabled: ${KNOWLEDGE_HTTP_SYNC_ENABLED:false}
+      enabled: ${KNOWLEDGE_HTTP_SYNC_ENABLED:true}
       sources:
         - id: product-faq
           tenant-id: ${KNOWLEDGE_HTTP_SYNC_TENANT}
