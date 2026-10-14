@@ -57,6 +57,8 @@ app:
         grace-period: ${RAG_INGESTION_VERSION_GC_GRACE_PERIOD:P7D}
         poll-interval: ${RAG_INGESTION_VERSION_GC_POLL_INTERVAL:PT1H}
         batch-size: ${RAG_INGESTION_VERSION_GC_BATCH_SIZE:100}
+        max-versions-per-run: ${RAG_INGESTION_VERSION_GC_MAX_VERSIONS_PER_RUN:100}
+        max-versions-per-document: ${RAG_INGESTION_VERSION_GC_MAX_VERSIONS_PER_DOCUMENT:10}
       store: ${RAG_INGESTION_STORE:memory} # memory | jdbc
       processing-timeout: ${RAG_INGESTION_PROCESSING_TIMEOUT:15m}
       heartbeat-interval: ${RAG_INGESTION_HEARTBEAT_INTERVAL:30s}

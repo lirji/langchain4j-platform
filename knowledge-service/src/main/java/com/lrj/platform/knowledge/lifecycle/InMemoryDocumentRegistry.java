@@ -21,6 +21,8 @@ public class InMemoryDocumentRegistry implements DocumentRegistry {
 
     private final ConcurrentMap<String, ConcurrentMap<String, DocumentInfo>> map = new ConcurrentHashMap<>();
 
+    private final ConcurrentMap<String, ConcurrentMap<String, Long>> cleaned = new ConcurrentHashMap<>();
+
     @Override
     public void put(DocumentInfo info) {
         map.computeIfAbsent(info.tenantId(), k -> new ConcurrentHashMap<>())
@@ -58,7 +60,45 @@ public class InMemoryDocumentRegistry implements DocumentRegistry {
     public Optional<DocumentInfo> remove(String tenantId, String docId) {
         ConcurrentMap<String, DocumentInfo> tenantMap = map.get(tenantId);
         if (tenantMap == null) return Optional.empty();
-        return Optional.ofNullable(tenantMap.remove(docId));
+        var removed = new java.util.concurrent.atomic.AtomicReference<DocumentInfo>();
+        tenantMap.computeIfPresent(docId, (id, value) -> {
+            cleaned.computeIfAbsent(tenantId, ignored -> new ConcurrentHashMap<>()).remove(docId);
+            removed.set(value); return null;
+        });
+        return Optional.ofNullable(removed.get());
+    }
+
+    /** 弱一致迭代不会复制全量文档，新增项最迟在下一轮扫描处理。 */
+    @Override
+    public MaintenanceScan maintenanceScan(int pageSize) {
+        if (pageSize < 1) throw new IllegalArgumentException("positive page size required");
+        var iterator = map.values().stream().flatMap(docs -> docs.values().stream()).iterator();
+        return new MaintenanceScan() {
+            public List<DocumentInfo> nextPage() {
+                var page = new java.util.ArrayList<DocumentInfo>();
+                while (page.size() < pageSize && iterator.hasNext()) page.add(iterator.next());
+                return List.copyOf(page);
+            }
+            public boolean exhausted() { return !iterator.hasNext(); }
+        };
+    }
+
+    @Override
+    public long cleanedThrough(String tenant, String doc) {
+        return cleaned.getOrDefault(tenant, new ConcurrentHashMap<>()).getOrDefault(doc, 0L);
+    }
+
+    @Override
+    public boolean markCleaned(DocumentInfo observed, long previous, long next) {
+        var accepted = new java.util.concurrent.atomic.AtomicBoolean();
+        map.computeIfAbsent(observed.tenantId(), ignored -> new ConcurrentHashMap<>()).computeIfPresent(observed.docId(), (id, current) -> {
+            var progress = cleaned.computeIfAbsent(observed.tenantId(), ignored -> new ConcurrentHashMap<>());
+            if (current.equals(observed) && progress.getOrDefault(id, 0L) == previous && next == previous + 1) {
+                progress.put(id, next); accepted.set(true);
+            }
+            return current;
+        });
+        return accepted.get();
     }
 
     @Override

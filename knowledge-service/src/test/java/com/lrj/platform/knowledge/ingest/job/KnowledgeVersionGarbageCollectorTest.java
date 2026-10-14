@@ -113,6 +113,65 @@ class KnowledgeVersionGarbageCollectorTest {
         assertThat(indexer.deletedVersions).containsExactly(1L);
     }
 
+
+    @Test
+    void batchesEventuallyVisitEveryDocumentAndDoNotRepeatSuccessfulVersions() {
+        var registry = new InMemoryDocumentRegistry();
+        registry.put(info("acme", "a", 3, NOW.minus(Duration.ofDays(10))));
+        registry.put(info("acme", "b", 3, NOW.minus(Duration.ofDays(10))));
+        var router = mock(EmbeddingStoreRouter.class);
+        when(router.forTenant("acme", 64)).thenReturn(mock(EmbeddingStore.class));
+        var indexer = mock(SegmentIndexer.class);
+        var p = policy(true, 2, Duration.ofDays(7)); p.setBatchSize(1);
+        var collector = new KnowledgeVersionGarbageCollector(registry, router,
+                new KnowledgeEmbeddingConfig.HashEmbeddingModel(), new DocumentMirror(), indexer, null,
+                Clock.fixed(NOW, ZoneOffset.UTC), p);
+        for (int i = 0; i < 6; i++) collector.runOnce();
+        verify(indexer, times(1)).deleteByDocVersion("acme", "a", 1);
+        verify(indexer, times(1)).deleteByDocVersion("acme", "b", 1);
+    }
+
+    @Test
+    void workIsBoundedAndRestartContinuesFromSuccessfulCheckpoint() {
+        var registry = new InMemoryDocumentRegistry();
+        registry.put(info("acme", "large", 100, NOW.minus(Duration.ofDays(10))));
+        var router = mock(EmbeddingStoreRouter.class);
+        when(router.forTenant("acme", 64)).thenReturn(mock(EmbeddingStore.class));
+        var indexer = mock(SegmentIndexer.class);
+        var p = policy(true, 2, Duration.ofDays(7)); p.setMaxVersionsPerRun(2);
+        var collector = new KnowledgeVersionGarbageCollector(registry, router,
+                new KnowledgeEmbeddingConfig.HashEmbeddingModel(), new DocumentMirror(), indexer, null,
+                Clock.fixed(NOW, ZoneOffset.UTC), p);
+        assertThat(collector.runOnce().versions()).isEqualTo(2);
+        assertThat(registry.cleanedThrough("acme", "large")).isEqualTo(2);
+        var restarted = new KnowledgeVersionGarbageCollector(registry, router,
+                new KnowledgeEmbeddingConfig.HashEmbeddingModel(), new DocumentMirror(), indexer, null,
+                Clock.fixed(NOW, ZoneOffset.UTC), p);
+        assertThat(restarted.runOnce().versions()).isEqualTo(2);
+        verify(indexer, times(1)).deleteByDocVersion("acme", "large", 1);
+        verify(indexer).deleteByDocVersion("acme", "large", 4);
+    }
+
+    @Test
+    void failedDocumentDoesNotBlockOthersAndIsRetriedWithoutAdvancingCheckpoint() {
+        var registry = new InMemoryDocumentRegistry();
+        registry.put(info("acme", "a", 3, NOW.minus(Duration.ofDays(10))));
+        registry.put(info("acme", "b", 3, NOW.minus(Duration.ofDays(10))));
+        var router = mock(EmbeddingStoreRouter.class);
+        when(router.forTenant("acme", 64)).thenReturn(mock(EmbeddingStore.class));
+        var indexer = mock(SegmentIndexer.class);
+        org.mockito.Mockito.doThrow(new IllegalStateException("down")).doNothing().when(indexer).deleteByDocVersion("acme", "a", 1);
+        var collector = new KnowledgeVersionGarbageCollector(registry, router,
+                new KnowledgeEmbeddingConfig.HashEmbeddingModel(), new DocumentMirror(), indexer, null,
+                Clock.fixed(NOW, ZoneOffset.UTC), policy(true, 2, Duration.ofDays(7)));
+        assertThat(collector.runOnce().sinkFailures()).isEqualTo(1);
+        assertThat(registry.cleanedThrough("acme", "a")).isZero();
+        assertThat(registry.cleanedThrough("acme", "b")).isEqualTo(1);
+        collector.runOnce();
+        assertThat(registry.cleanedThrough("acme", "a")).isEqualTo(1);
+        verify(indexer, times(1)).deleteByDocVersion("acme", "b", 1);
+    }
+
     private static DocumentInfo info(
             String tenant, String docId, int version, Instant uploadedAt
     ) {

@@ -84,6 +84,13 @@ public class IngestionJobProperties {
         private Duration gracePeriod = Duration.ofDays(7);
         private Duration pollInterval = Duration.ofHours(1);
         private int batchSize = 100;
+        private int maxVersionsPerRun = 100;
+        private int maxVersionsPerDocument = 10;
+
+        public int getMaxVersionsPerRun() { return maxVersionsPerRun; }
+        public void setMaxVersionsPerRun(int value) { maxVersionsPerRun = value; }
+        public int getMaxVersionsPerDocument() { return maxVersionsPerDocument; }
+        public void setMaxVersionsPerDocument(int value) { maxVersionsPerDocument = value; }
 
         public boolean isEnabled() { return enabled; }
         public void setEnabled(boolean enabled) { this.enabled = enabled; }

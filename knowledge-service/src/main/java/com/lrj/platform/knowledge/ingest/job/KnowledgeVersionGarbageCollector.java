@@ -13,7 +13,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 
@@ -56,31 +56,43 @@ public class KnowledgeVersionGarbageCollector {
         this.policy = Objects.requireNonNull(policy);
     }
 
-    public GcReport runOnce() {
+    private DocumentRegistry.MaintenanceScan scan;
+    private Iterator<DocumentInfo> page = List.<DocumentInfo>of().iterator();
+
+    /** 同一实例串行推进游标；多实例可重复幂等删除，检查点仅在全部sink成功后条件递增。 */
+    public synchronized GcReport runOnce() {
         if (!policy.isEnabled()) {
             return new GcReport(0, 0, 0);
         }
         validatePolicy();
         Instant eligibleBefore = clock.instant().minus(policy.getGracePeriod());
-        List<DocumentInfo> eligible = registry.snapshotAll().values().stream()
-                .flatMap(items -> items.stream())
-                .filter(info -> info.uploadedAt() != null && !info.uploadedAt().isAfter(eligibleBefore))
-                .filter(info -> info.version() > policy.getRetainVersions())
-                .sorted(Comparator.comparing(DocumentInfo::tenantId)
-                        .thenComparing(DocumentInfo::docId))
-                .limit(policy.getBatchSize())
-                .toList();
-
-        int versions = 0;
-        int failures = 0;
-        for (DocumentInfo current : eligible) {
-            int deleteThrough = current.version() - policy.getRetainVersions();
-            for (int version = 1; version <= deleteThrough; version++) {
+        if (scan == null) scan = registry.maintenanceScan(policy.getBatchSize());
+        int documents = 0, examined = 0, reads = 0, versions = 0, failures = 0;
+        while (examined < policy.getBatchSize() && versions < policy.getMaxVersionsPerRun()) {
+            if (!page.hasNext()) {
+                if (scan.exhausted()) { scan = null; break; }
+                if (reads++ >= policy.getBatchSize()) break;
+                page = scan.nextPage().iterator();
+                if (!page.hasNext()) continue;
+            }
+            DocumentInfo current = page.next(); examined++;
+            // 扫描快照不授权删除：再次读取权威当前文档，重建、升级或删除后留待下一轮。
+            if (!registry.get(current.tenantId(), current.docId()).filter(current::equals).isPresent()
+                    || current.uploadedAt() == null || current.uploadedAt().isAfter(eligibleBefore)) continue;
+            long last = registry.cleanedThrough(current.tenantId(), current.docId());
+            long deleteThrough = (long) current.version() - policy.getRetainVersions();
+            if (last >= deleteThrough) continue;
+            documents++;
+            int allowance = Math.min(policy.getMaxVersionsPerDocument(), policy.getMaxVersionsPerRun() - versions);
+            for (int count = 0; count < allowance && last < deleteThrough; count++) {
                 versions++;
-                failures += purgeVersion(current, version);
+                int failed = purgeVersion(current, last + 1); failures += failed;
+                // 任一sink失败都保留当前版本供重试，但继续扫描其他文档，避免毒文档阻塞全局。
+                if (failed > 0 || !registry.markCleaned(current, last, last + 1)) break;
+                last++;
             }
         }
-        return new GcReport(eligible.size(), versions, failures);
+        return new GcReport(documents, versions, failures);
     }
 
     private int purgeVersion(DocumentInfo current, long version) {
@@ -96,10 +108,12 @@ public class KnowledgeVersionGarbageCollector {
             failures++;
             warn("vector", current, version, exception);
         }
+        try {
         mirror.removeWhere(segment -> segment.metadata() != null
                 && Objects.equals(current.tenantId(), segment.metadata().getString("tenantId"))
                 && Objects.equals(current.docId(), segment.metadata().getString("docId"))
                 && Objects.equals(Long.toString(version), segment.metadata().getString("version")));
+        } catch (RuntimeException exception) { failures++; warn("mirror", current, version, exception); }
         try {
             segmentIndexer.deleteByDocVersion(current.tenantId(), current.docId(), version);
         } catch (RuntimeException exception) {
@@ -119,7 +133,9 @@ public class KnowledgeVersionGarbageCollector {
     }
 
     private void validatePolicy() {
-        if (policy.getRetainVersions() < 1 || policy.getBatchSize() < 1
+        if (policy.getRetainVersions() < 1 || policy.getBatchSize() < 1 || policy.getBatchSize() > 10000
+                || policy.getMaxVersionsPerRun() < 1 || policy.getMaxVersionsPerRun() > 10000
+                || policy.getMaxVersionsPerDocument() < 1 || policy.getMaxVersionsPerDocument() > 10000
                 || policy.getGracePeriod() == null || policy.getGracePeriod().isNegative()) {
             throw new IllegalStateException("invalid knowledge version GC policy");
         }

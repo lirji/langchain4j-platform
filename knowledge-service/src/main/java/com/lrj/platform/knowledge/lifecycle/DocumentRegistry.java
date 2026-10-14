@@ -35,6 +35,20 @@ public interface DocumentRegistry {
 
     Optional<DocumentInfo> remove(String tenantId, String docId);
 
+    /** 维护扫描按页推进；空页不代表结束，游标不持有连接，可跨调度轮次使用。 */
+    MaintenanceScan maintenanceScan(int pageSize);
+
+    /** 只有全部sink成功的连续版本才记为已清理；检查点与registry采用同一持久化级别。 */
+    long cleanedThrough(String tenantId, String docId);
+
+    /** 条件推进避免并发worker、文档重建或版本变更写入过期检查点。 */
+    boolean markCleaned(DocumentInfo observed, long previous, long cleaned);
+
+    interface MaintenanceScan {
+        List<DocumentInfo> nextPage();
+        boolean exhausted();
+    }
+
     /** 仅给 actuator / debug 用 —— 返回全部租户的浅快照。 */
     Map<String, Collection<DocumentInfo>> snapshotAll();
 }

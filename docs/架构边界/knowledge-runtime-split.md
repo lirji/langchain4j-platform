@@ -149,3 +149,19 @@ External Secrets 覆盖占位值。
 本地 MinIO/Qdrant/ES/MySQL/Redis 环境已完成 IAM allow/deny、Qdrant 故障恢复、并发、
 有界 soak 和 query/combined 切换回滚。目标云 IAM、真实节点容量、完整高峰周期 soak 和
 生产 canary 仍必须在目标环境复验；本地结果不能替代生产放行。
+
+### 版本GC推进与检查点（2026-10）
+
+GC使用registry维护扫描：内存弱一致迭代，Redis按SCAN/HSCAN推进，不使用debug全量快照。
+每轮最多检查`RAG_INGESTION_VERSION_GC_BATCH_SIZE`个文档，尝试
+`RAG_INGESTION_VERSION_GC_MAX_VERSIONS_PER_RUN`个版本（默认100）；每文档最多
+`RAG_INGESTION_VERSION_GC_MAX_VERSIONS_PER_DOCUMENT`个版本（默认10），避免热点文档独占轮次。
+Redis COUNT仅为提示，返回页跨轮逐条消费；每轮扫描命令数同样不超过batch-size。
+
+只有向量、镜像、ES及启用的图sink全部清理成功才条件递增检查点；失败版本下一轮扫描重试，
+后续文档继续推进。Redis检查点位于项目隔离前缀下`rag:gc:<tenant>` hash，与文档移除原子清理；
+registry重启保留检查点。扫描游标仅在进程内，重启从头扫描但跳过已完成版本。
+多worker可能重复幂等删除，不宣称exactly-once。内存registry检查点同样仅在内存。
+
+已清理的历史版本无法通过调大retain-versions恢复；保留窗口只保护尚未清理的数据。
+S3原文、已删除文档的孤立投影和物理擦除政策不属于本GC。
