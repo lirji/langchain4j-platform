@@ -1,11 +1,20 @@
 #!/usr/bin/env python3
 """用独立租户验证真实 MySQL/S3/Redis/ES/Qdrant；不调用外部模型，不删除既有数据。"""
-import base64, hashlib, hmac, json, os, pathlib, secrets, socket, re, subprocess, sys, time, urllib.request
+import argparse, base64, hashlib, hmac, json, os, pathlib, secrets, socket, re, subprocess, time, urllib.request
 import manage as m
 
 def main():
     urllib.request.install_opener(urllib.request.build_opener(urllib.request.ProxyHandler({})))
-    host_mode='--host' in sys.argv
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--host', action='store_true')
+    parser.add_argument('--quality', action='store_true', help='验证检索评测基线和退化门禁；只删除本次随机租户新建的测试文档')
+    parser.add_argument('--image', default='langchain4j-platform-knowledge-service:latest')
+    parser.add_argument('--compose', type=pathlib.Path, default=m.DEPLOY/'dev-infra/compose.sh', help='发布时使用固定镜像的Compose包装脚本')
+    args=parser.parse_args()
+    host_mode=args.host
+    image=args.image
+    compose=args.compose.resolve()
+    quality=args.quality
     # 先验证检索基础设施就绪，避免初始化期间制造可重试失败任务。
     print('Waiting for Elasticsearch readiness (up to 10 minutes)',flush=True)
     deadline=time.monotonic()+600
@@ -17,7 +26,7 @@ def main():
         time.sleep(5)
     else:raise RuntimeError('Elasticsearch did not become ready within 10 minutes')
     print('Infrastructure ready; initializing isolated smoke database',flush=True)
-    model=json.loads(m.run(['bash',str(m.DEPLOY/'dev-infra/compose.sh'),'config','--format','json']))
+    model=json.loads(m.run(['bash',str(compose),'config','--format','json']))
     env={str(k):str(v) for k,v in model['services']['knowledge-service']['environment'].items()}
     tenant='infra-smoke-'+secrets.token_hex(6)
     env.update(RAG_RUNTIME_ROLE='combined',RAG_PRODUCTION='true',RAG_LEGACY_WRITE_ENABLED='false',
@@ -58,12 +67,12 @@ def main():
         with socket.socket() as reserved, socket.socket() as reserved_mgmt:
             reserved.bind(('127.0.0.1',0));port=reserved.getsockname()[1]
             reserved_mgmt.bind(('127.0.0.1',0));mgmt_port=reserved_mgmt.getsockname()[1]
-        m.run(['bash',str(m.DEPLOY/'dev-infra/compose.sh'),'run','--rm','--no-deps',
+        m.run(['bash',str(compose),'run','--rm','--no-deps',
                '-e','MIGRATION_DB_URL='+env['RAG_INGESTION_DB_URL'],'migrate-knowledge-ingestion'])
         args=['docker','run','-d','--name',name,'--network','dev-infra','--memory','768m',
               '-p',f'127.0.0.1:{port}:8084','-p',f'127.0.0.1:{mgmt_port}:9084']
         for key in env:args+=['-e',key]
-        args+=['langchain4j-platform-knowledge-service:latest']
+        args+=[image]
         m.run(args,env={**os.environ,**env})
     def enc(value):return base64.urlsafe_b64encode(json.dumps(value,separators=(',',':')).encode()).decode().rstrip('=')
     def mint_token():
@@ -72,8 +81,8 @@ def main():
         raw=enc({'alg':'HS256','typ':'JWT','kid':'platform-internal-v1'})+'.'+enc(claims)
         token=raw+'.'+base64.urlsafe_b64encode(hmac.new(env['INTERNAL_JWT_SECRET'].encode(),raw.encode(),hashlib.sha256).digest()).decode().rstrip('=')
         return token
-    def request(path,body=None,headers=None):
-        req=urllib.request.Request(f'http://127.0.0.1:{port}'+path,data=body,headers={'X-Internal-Token':mint_token(),**(headers or {})})
+    def request(path,body=None,headers=None,method=None):
+        req=urllib.request.Request(f'http://127.0.0.1:{port}'+path,data=body,method=method,headers={'X-Internal-Token':mint_token(),**(headers or {})})
         with urllib.request.urlopen(req,timeout=30) as response:return json.load(response)
     def probe(path):
         # management 端口不经过租户 filter，探测不带内部 token
@@ -106,9 +115,44 @@ def main():
         # 提高向量阈值后验证 ES 来源，防止融合查询只命中向量而掩盖全文分支故障。
         es_reply=request('/rag/query',json.dumps({'query':'可靠入库 MySQL S3 Redis','topK':5,'minScore':1.0}).encode(),{'Content-Type':'application/json'})
         m.private(m.STATE/'smoke.json',json.dumps({'tenant':tenant,'database':database,'job':status,'query':reply,'esQuery':es_reply},ensure_ascii=False,indent=2))
-        assert any(hit.get('source')=='es' for hit in es_reply.get('hits',[])), 'Elasticsearch source did not return smoke document'
+        # READY表示各写入已确认；ES刷新有独立可见性窗口，给全文检索有界等待。
+        for _ in range(20):
+            if any(hit.get('source')=='es' for hit in es_reply.get('hits',[])):break
+            time.sleep(1)
+            es_reply=request('/rag/query',json.dumps({'query':'可靠入库 MySQL S3 Redis','topK':5,'minScore':1.0}).encode(),{'Content-Type':'application/json'})
+        else:raise AssertionError('Elasticsearch source did not return smoke document after refresh budget')
+        m.private(m.STATE/'smoke.json',json.dumps({'tenant':tenant,'database':database,'job':status,'query':reply,'esQuery':es_reply},ensure_ascii=False,indent=2))
         assert 'infra-smoke-document' in json.dumps(reply),'query did not retrieve smoke document'
         print('PASS: idempotent ingestion, all required sinks, committed version and query; tenant='+tenant)
+        if quality:
+            def post(path, command):
+                return request(path,json.dumps(command).encode(),{'Content-Type':'application/json'})
+            prefix='/rag/operations/quality'
+            definition={'name':'Docker retrieval smoke','cases':[{'id':'real-document','question':'可靠入库 MySQL S3 Redis','relevant':[{'visibility':'tenant','docId':'infra-smoke-document'}]}],
+                        'settings':{'topK':5,'minScore':0,'allowedDrop':0,'allowedP95IncreaseMs':30000}}
+            dataset=post(prefix+'/datasets',{'idempotencyKey':tenant,'definition':definition})
+            path=prefix+'/datasets/'+dataset['id']
+            initial=post(path+'/runs',{'expectedRevision':dataset['revision'],'idempotencyKey':'initial','label':'docker-real-components'})
+            assert initial['status']=='SUCCEEDED' and initial['metrics']['recall']==1, initial
+            assert initial['gate']['verdict']=='BASELINE_REQUIRED', initial
+            dataset=post(path+'/baseline',{'expectedRevision':dataset['revision'],'runId':initial['id']})
+            command={'expectedRevision':dataset['revision'],'idempotencyKey':'compare','label':'same-index'}
+            passed=post(path+'/runs',command)
+            assert passed['gate']['verdict']=='PASS', passed
+            assert post(path+'/runs',command)['id']==passed['id'], 'evaluation idempotency mismatch'
+            assert request(prefix+'/runs/'+passed['id']+'/gate')['gate']['verdict']=='PASS'
+            # 删除本次随机租户中新建的文档，验证真实索引变化会触发退化门禁；不触及既有数据。
+            removed=request('/rag/documents/infra-smoke-document',method='DELETE')
+            assert removed['deleted']
+            regression=post(path+'/runs',{'expectedRevision':dataset['revision'],'idempotencyKey':'regression','label':'own-smoke-document-removed'})
+            assert regression['gate']['verdict']=='REGRESSION' and regression['metrics']['recall']==0, regression
+            try:
+                request(prefix+'/runs/'+regression['id']+'/gate')
+                raise AssertionError('regression gate incorrectly returned success')
+            except urllib.error.HTTPError as error:
+                assert error.code==422, error.code
+            m.private(m.STATE/'quality-smoke.json',json.dumps({'tenant':tenant,'database':database,'image':image if not host_mode else 'host-jar','dataset':dataset,'initial':initial,'passed':passed,'regression':regression},ensure_ascii=False,indent=2))
+            print('PASS: real MySQL/S3/Redis/Qdrant/ES ingestion + quality baseline + idempotency + PASS(200) + REGRESSION(422); tenant='+tenant,flush=True)
     finally:
         if process is not None:
             process.terminate()

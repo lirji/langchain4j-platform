@@ -61,3 +61,16 @@ curl --fail-with-body --silent --show-error \
 query响应新增可空`version`字段：先部署query，再部署ingest-api；combined形态随同一服务更新。旧query缺版本时发布复查不通过。
 
 历史运行持续保留，本轮没有自动清理策略；保留周期应按业务数据治理另行确定。
+
+## 真实组件冒烟
+
+共享 dev-infra 已启动且本地凭据已配置后，用已构建的固定知识服务镜像执行：
+
+```bash
+python3 deploy/dev-infra/smoke.py --quality \
+  --image langchain4j-platform-knowledge-service:<source-commit>
+```
+
+采用固定镜像的发布包装脚本时，追加 `--compose <compose-wrapper.sh>`；该包装脚本也必须为迁移镜像固定相应版本。脚本创建随机租户和独立测试库，用 HashEmbedding 避免付费模型调用，但实际经过 MySQL、S3、Redis、Qdrant、Elasticsearch 与生产检索管线。验证完整入库、全文可见性、基线、幂等、PASS/200，然后仅删除本次新建文档并验证 REGRESSION/422。结束停止测试容器；独立测试库、S3测试原文和运行记录保留供核查，不清理业务数据。
+
+原始证据在忽略的 `deploy/.dev-infra-state/quality-smoke.json`，不含调用令牌。它验证检索评测机制和真实组件集成，不代表正式知识库标注集质量或外部 Embedding 模型质量。

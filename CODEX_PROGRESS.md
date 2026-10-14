@@ -2,33 +2,42 @@
 
 ## 任务目标
 
-先修复知识发布复查版本校验与GC推进，再完成RAG检索质量评测闭环（用户确认仅检索质量和延迟）。计划：docs/delivery/rag-quality-loop/PLAN.md。
+完成发布复查版本校验、GC公平推进和RAG检索质量闭环，然后按用户追加授权在本地Docker发布启动。只评估检索质量与延迟，不含生成回答和模型费用。
 
 ## 已完成
 
-- 完成源码调查；远程复查缺版本、GC固定首批已确认。
-- S1已修复并通过knowledge-service及上游模块回归；兼容version字段缺失时复查不通过。
+- S1发布复查版本校验12cf1a2、S2版本GC与Redis检查点160f6bb、S3/S4评测后端及运营前端cfa1d5b；任务分支和main均已推送。
+- Maven1483项/零失败，前端580项、类型/构建通过；真实MySQL、Redis与配置门禁通过。
+- 固定cfa1d5b镜像构建并启动本地Java/前端；9项迁移退出0。12个Java服务readiness=UP，前端8093可访问，网关18080匿名评测请求401。
+- Docker真实MySQL/S3/Redis/Qdrant/ES检索评测冒烟：无基线→建立基线→PASS/200→移除本次测试文档→REGRESSION/422。自动脚本deploy/dev-infra/smoke.py新增--quality/--image/--compose。
+- 恢复环境async-task排序规则导致V3失败：保存局部锁表和history副本，保留恢复表，调整库默认排序规则后Flyway只移除1条失败记录、未改成功历史，重试至V4成功。
+- 远程功能CI四项通过；Java SBOM扫描仍失败（38509783445），后续attestation/image-scan/release-images跳过。
 
 ## 已修改文件
 
-- platform-protocol KnowledgeHit；knowledge query controller、retrieval probe和相关测试。
-- docs/delivery/rag-quality-loop/PLAN.md；本进度文件。
+- 三个源码提交的相关Java、数据库迁移、测试、前端和文档；详细见docs/delivery/rag-quality-loop/。
+- 本地Docker固定镜像包装脚本和恢复证据位于忽略目录deploy/.dev-infra-state/rag-quality-release/；凭据仅保存在本地忽略文件。
 
 ## 未完成
 
-S1/S2完成提交12cf1a2/160f6bb；S3/S4实现完成并通过全Maven1483、前端580、真实MySQL验证。待最终review、Git交付、Docker构建更新启动与运行验收。
+- AgentScope旧Python镜像readiness向Java业务端口请求actuator，返回404导致unhealthy。已向用户异步询问是否允许修改独立agentscope-platform仓库并发布；回答前不修改该仓库。当前整体Docker结果PARTIAL，Java/RAG发布及冒烟PASS。
+- 运行验证脚本和交付记录随feat/rag-retrieval-quality完成正常提交推送；最终文档提交以Git HEAD为准。
+- 浏览器工具超时，视觉验收UNVERIFIED。
 
 ## 当前问题
 
-历史供应链扫描失败；本次未改依赖。用户追加授权：完成后在本地Docker发布新代码并启动。既有栈来自恢复快照且未运行；当前Compose缺LC4J_CONVERSATION两个密码，需要安全补齐该新增库/账户，不重跑backup/migrate。Redis/MySQL已为测试启动，后续用于目标栈而保留。
+- AgentScope唯一整栈健康阻塞；不能通过禁用健康检查或放松权限伪造通过。
+- 供应链历史依赖债务未整改，不宣称生产发布就绪。
+- 保留恢复表lc4j_async_task.RECOVERY_DISPATCH_LOCK_20261014及私有备份；没有删除既有数据。
+- 三个既有worktree、忽略配置/缓存/本地证据保留；冒烟容器已停止，独立库/S3测试原文保留。
 
 ## 下一步建议
 
-从feat/rag-retrieval-quality继续最终交付与本地Docker更新。验证日志在/tmp/quality-*、/tmp/rag-quality-reactor.log，规范证据在docs/delivery/rag-quality-loop/。每项独立任务分支，后续基于已验证前序提交；不重复等待确认。
+若用户批准跨仓修复：为Python新增可配置management base URL（默认回退旧business URL以兼容），五项Java依赖分别9086/9084/9083/9082/9093；补聚焦测试，正常分支提交推送并重建AgentScope，当前JavaCompose同步配置。若拒绝，只记录独立依赖阻塞，不宣称全栈健康。部署包装脚本deploy/.dev-infra-state/rag-quality-release/compose.sh。
 
 ## 恢复 Prompt
 
-读取本文件与docs/delivery/rag-quality-loop/PLAN.md，核对Git和测试实际状态，从未完成项继续执行，不重做已通过实现。
+读取本文件及docs/delivery/rag-quality-loop/，从AgentScope独立仓库授权与Docker健康收尾继续，不重做已通过实现。保留用户改动、现有数据、工作树和供应链失败事实。
 
 ---
 以下为历史记录：
