@@ -2,6 +2,47 @@
 
 ## 任务目标
 
+按用户最新要求，将最新已提交代码部署到本机 Docker，复用 dev-infra，验证服务与入口。
+
+## 已完成
+
+- Java/前端3f31dfd、AgentScope69de7e9固定源码镜像部署；Python未提交diagnostics改动保留。
+- 全模块1539项测试，0失败/0错误/18跳过；打包、镜像构建、Compose等待成功。
+- 14项Java及AgentScope readiness UP；前端/Casdoor200，ETL授权200空列表、匿名401。
+- 9项迁移成功，knowledge-ingestion V8、async-task V5；17个常驻项目容器运行。
+
+## 已修改文件
+
+- docs/delivery/docker-latest-20261014/DEPLOYMENT_RESULT.md 与 RUNTIME_EVIDENCE.json。
+- 本文件。产品源码未修改；本地镜像包装与日志位于Git忽略的deploy/.dev-infra-state/latest-3f31dfd/。
+
+## 未完成
+
+- 本轮本地部署与冒烟已完成，无待部署项。Git交付结果以任务分支与远程main包含关系为准。
+- 真实知识源接入、回答质量评测尚未实施；本轮用户优先部署。
+
+## 当前问题
+
+- Java供应链38573320856的依赖SBOM扫描失败；不宣称生产发布门禁通过。
+- HTTP ETL无实际来源；AgentScope节点恢复实测仍关闭，没有额外启用。
+- 未执行付费模型推理或完整浏览器业务回归；旧镜像/数据卷/历史工作树保留。
+
+## 下一步建议
+
+1. 前端 http://localhost:8093 ，网关 http://localhost:18080 ，Casdoor http://localhost:8000 。
+2. 后续按实际知识源授权范围继续原计划；不重复迁移或清理数据。
+
+## 恢复 Prompt
+
+读取docs/delivery/docker-latest-20261014/DEPLOYMENT_RESULT.md和本文件。最新固定源码已部署到本机Docker；保持既有数据与Python未提交诊断改动。仅继续未完成项，不重复部署或重新启用额外功能。
+
+---
+以下是历史交付记录，运行状态以本轮部署记录为准：
+
+# Codex Progress
+
+## 任务目标
+
 按用户要求将知识HTTP ETL默认开启，验证后正常合并推送main；不部署。
 
 ## 已完成
