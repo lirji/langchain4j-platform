@@ -2,36 +2,38 @@
 
 ## 任务目标
 
-完成中央 DAG 诊断事件兼容，并按用户最新授权部署到本机 Docker。
+将本次项目优势、不足及业务接入评估落到仓库文档；随后按用户新目标评估相邻 `agentscope-platform` 项目。
 
 ## 已完成
 
-- 中央允许三个dag-diagnostic事件，原身份/租约/租户/幂等保护保持。
-- 新事件先测失败再实现；模块及上游199项测试通过，0失败/错误/跳过。
-- 代码风格与diff检查通过；Code Hygiene仅有未发现Java formatter的限制。
-- 2026-10-14 本机 Docker 已更新中央5cdb6f3和Python3cb39f6；14项Java/Python就绪、诊断事件持久化与SSE回放、安全和幂等烟测均通过。完整记录位于相邻 agentscope-platform 仓库 docs/delivery/docker-dag-diagnostics-20261014/。此前任务进度完整保存在docs/delivery/dag-diagnostics/PREVIOUS_PROGRESS.md（基线a23cc6c）。
+- 基于 `619d993` 完成源码、配置及既有验证记录的能力评估；六个 SQL 护栏隔离用例已运行，确认四类边界不足，未连接业务数据库。
+- 新增 `docs/平台工程/项目优势不足与业务接入评估-20261014.md`，记录优势、风险、现有业务缺口、候选业务、建设顺序、复现命令与验证范围；更新 `docs/README.md` 导航。
+- 使用原项目目录的任务分支 `docs/business-assessment-20261014`，不新建工作树；本次只改文档。
+- 30 个本地证据链接、索引与进度引用、文档内六用例复现命令均已核验；输出与记录完全一致，`git diff --check` 通过。
+- 上一任务 DAG 诊断已交付；源码 `e7410ed` 已进入远程 main。本机中央 `5cdb6f3`、Python `3cb39f6` 的部署与 14 项烟测记录保留在相邻仓库 `docs/delivery/docker-dag-diagnostics-20261014/`，本次不变更运行环境。
 
 ## 已修改文件
 
-- async-task-service/src/main/java/com/lrj/platform/asynctask/AsyncTaskController.java
-- async-task-service/src/test/java/com/lrj/platform/asynctask/AsyncTaskControllerTest.java
-- docs/delivery/dag-diagnostics/DELIVERY_RESULT.md
+- docs/平台工程/项目优势不足与业务接入评估-20261014.md
+- docs/README.md
 - CODEX_PROGRESS.md
 
 ## 未完成
 
-- 本任务产品代码与验证已完成，无待实现项；源码e7410ed已正常进入远程main。
-- 依赖SBOM扫描仍失败，需另行依赖整改；不属于本次事件兼容扩展。
+- 文档内容与验证已完成；Git 交付在本记录提交后执行，恢复时须核对任务分支与远程 main 的实际包含关系，不能仅凭本文推断已推送。
+- 按用户新目标继续评估相邻 `agentscope-platform`；先读取该仓库进度与规则，再核对当前源码。
 
 ## 当前问题
 
-- 当前源码e7410ed的Cutover CI38576737391通过；供应链38576737341在依赖SBOM扫描失败，基线同一步骤也失败。
+- SQL 护栏问题已复现但未修复；真实业务影响需要结合数据库权限与可达链路确认。
+- 既有 Java 供应链 `38576737341` 在依赖 SBOM 扫描失败；本次文档不整改历史依赖、不宣称生产门禁通过。
 
 ## 下一步建议
 
-1. 本功能已交付并完成本机部署；沿用 deploy/.dev-infra-state/dag-diagnostics-20261014/compose.sh 管理当前镜像。
-2. 依赖安全整改另行处理；保留工作树及原部署状态。
+1. 核对 Git 实际状态；本次文档已验证，通过任务分支正常合入并推送远程 main，完成后不重复提交。
+2. 完成 AgentScope 的只读评估，区分已实现、已启用与仍需运行验证的能力。
+3. 保留已有工作树、忽略的私有配置和部署状态；不自动部署、清理或执行候选业务开发。
 
 ## 恢复 Prompt
 
-本功能已交付并部署本机 Docker。读取相邻 agentscope-platform 仓库 docs/delivery/docker-dag-diagnostics-20261014/DEPLOYMENT_RESULT.md 确认版本和回滚命令。当前中央5cdb6f3、Python3cb39f6；其余镜像3f31dfd内容未变。保留原部署状态目录、私有配置、旧镜像和已有工作树，不重复部署。
+请读取 `CODEX_PROGRESS.md` 与 `docs/平台工程/项目优势不足与业务接入评估-20261014.md`，先根据 Git 实际状态完成文档交付，再评估相邻 `agentscope-platform` 项目。只做评估，不实施报告中的修复或候选业务；保留现有私有配置、运行环境与工作树，不重复部署。
