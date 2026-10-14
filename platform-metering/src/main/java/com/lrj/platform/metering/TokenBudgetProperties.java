@@ -3,7 +3,9 @@ package com.lrj.platform.metering;
 import com.lrj.platform.security.TenantContext;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -34,6 +36,15 @@ public class TokenBudgetProperties {
     private boolean enabled = true;
 
     /**
+     * 是否在入口预检并拒绝已用满预算的租户（{@link TokenBudgetGuardFilter}，429）。false = 只记账不拦截，
+     * 作为回滚开关保留。
+     */
+    private boolean enforce = true;
+
+    /** 预检作用的请求范围（仅 {@code POST}）。 */
+    private Guard guard = new Guard();
+
+    /**
      * 计数后端：{@code in-memory}（默认，进程内、限单 JVM）/ {@code redis}（多副本共享计数，
      * 多 pod 部署下配额才真正生效）。切 redis 需 {@code spring.data.redis.*} 可用。
      */
@@ -52,6 +63,10 @@ public class TokenBudgetProperties {
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    public boolean isEnforce() { return enforce; }
+    public void setEnforce(boolean enforce) { this.enforce = enforce; }
+    public Guard getGuard() { return guard; }
+    public void setGuard(Guard guard) { this.guard = guard; }
     public String getStore() { return store; }
     public void setStore(String store) { this.store = store; }
     public String getTimezone() { return timezone; }
@@ -62,6 +77,18 @@ public class TokenBudgetProperties {
     public void setRedis(Redis redis) { this.redis = redis; }
     public double getAnonymousMultiplier() { return anonymousMultiplier; }
     public void setAnonymousMultiplier(double anonymousMultiplier) { this.anonymousMultiplier = anonymousMultiplier; }
+
+    public static class Guard {
+        /**
+         * 发起新生成工作的入口（Ant 风格）。默认覆盖四个挂了本库的服务里调用模型的写入口；
+         * 检索（{@code /rag/**}）不在内：它的模型消耗来自 rerank/扩展，且对话入口已先预检。
+         */
+        private List<String> paths = new ArrayList<>(List.of(
+                "/chat", "/chat/**", "/extract", "/extract/**", "/agent/**", "/vision/**",
+                "/conversation/workflow/**"));
+        public List<String> getPaths() { return paths; }
+        public void setPaths(List<String> paths) { this.paths = paths == null ? new ArrayList<>() : paths; }
+    }
 
     public static class Redis {
         /** key 前缀。实际 key 为 {@code <prefix><date>:<tenantId>}，date 内嵌使跨日 key 自然区隔 + 自动过期。 */

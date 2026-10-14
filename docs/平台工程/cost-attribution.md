@@ -5,7 +5,7 @@
 按租户（`TenantContext`）做**日累加**。它有两条互补的计量维度：
 
 - **Token 预算**（`app.token-budget.*`，**默认开**）—— 把 input+output token 一视同仁地按租户日累加，
-  作为限额/配额的计量基础。
+  作为限额/配额的计量基础；用满后生成类入口 429（`TokenBudgetGuardFilter`）。
 - **USD 成本归因**（`app.cost.*`，**默认关**）—— 用 model 单价把 token 翻成美元，补 token 预算「不分模型贵贱」
   的短板，让 `model-cascade`（成本路由）、`semantic-cache`（0-token 短路）、Anthropic prompt caching
   这几条「降本」叙事第一次有了 `$` 口径的收口。
@@ -58,6 +58,15 @@ multi-agent / reflexive / eval 等触发 LLM 调用的入口（`/rag/ingest` 走
 但如果每次都让 multi-agent 烧 5k token，一天下来仍会爆账单 —— token 预算就是那条按「天」收口的账。
 
 **计量口径**：MVP 不区分 model/provider 定价，所有 token（input + output 一视同仁）累加。
+
+**拦截（入口预检）**：`TokenBudgetGuardFilter`（servlet filter，排在 `InternalTokenAuthFilter` 之后）对
+**发起新生成工作的 `POST`**（默认 `/chat`、`/chat/**`、`/extract/**`、`/agent/**`、`/vision/**`、
+`/conversation/workflow/**`）预检 `wouldExceed(tenant)`，用满即 **429** + `Retry-After`（秒，到次日 0 点）+
+`{"error":"token_budget_exhausted","retryAfterSeconds":N}`。GET/DELETE（任务状态、取消、画像读取）与
+检索 `/rag/**` 不拦。listener 只能记账——langchain4j 吞掉 listener 抛出的异常，所以拦截必须放在入口。
+语义是「用满后的下一次请求被拒」：扣减仍按真实 usage 回填，单次请求可以把当日用量推过预算。
+计数后端不可用（Redis 宕）时**放行**并计数 `platform_token_budget_guard_total{outcome="check_failed"}`，
+被拒计 `outcome="rejected"`。`TOKEN_BUDGET_ENFORCE=false` 回滚为只记账。
 按「钱」区分贵贱的口径由下一节 USD 成本归因承担。
 
 ```yaml
@@ -235,6 +244,8 @@ redis-cli KEYS 'cost:usd:*'                        # → cost:usd:2026-07-09:acm
 | 配置项（property / ENV） | 默认 | 说明 |
 | --- | --- | --- |
 | `app.token-budget.enabled` | `true` | 关则不装配 listener，零回调开销 |
+| `app.token-budget.enforce`（`TOKEN_BUDGET_ENFORCE`） | `true` | 用满后生成类 `POST` 入口 429；`false` 只记账不拦截 |
+| `app.token-budget.guard.paths` | 见上文 | 预检作用的 Ant 路径（仅 `POST`） |
 | `app.token-budget.store`（`TOKEN_BUDGET_STORE`） | `redis` | `redis` 多 pod 共享计数 / `in-memory` 单 JVM |
 | `app.token-budget.timezone` | `Asia/Shanghai` | 日历日重置时区（成本复用此基准） |
 | `app.token-budget.daily-tokens.default` | `100000` | 每租户每天 token 额度 |

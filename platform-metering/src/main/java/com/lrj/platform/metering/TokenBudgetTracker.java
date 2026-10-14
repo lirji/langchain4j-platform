@@ -12,7 +12,7 @@ import java.util.Map;
  *       <strong>多 pod 共享同一份配额</strong>，是这套限额在水平扩容下真正生效的前提。</li>
  * </ul>
  *
- * <p>消费方（{@link TokenBudgetGuardFilter} 预检 / {@link com.lrj.platform.metering.TokenBudgetChatModelListener}
+ * <p>消费方（{@link TokenBudgetGuardFilter} 入口预检 / {@link com.lrj.platform.metering.TokenBudgetChatModelListener}
  * 回填 / {@link com.lrj.platform.metering.TokenBudgetEndpoint} 快照）只依赖本接口，换后端零改动 ——
  * 这正是当初 {@code InMemory} 版注释里承诺的"业务接口保持不变"。
  */

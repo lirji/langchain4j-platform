@@ -166,6 +166,8 @@ app:
       self-rating: ${CHAT_CASCADE_SELF_RATING:false}
   token-budget:
     enabled: true
+    # 用满当日预算后，生成类 POST 入口直接 429（TokenBudgetGuardFilter）；false = 只记账不拦截（回滚开关）。
+    enforce: ${TOKEN_BUDGET_ENFORCE:true}
     store: ${TOKEN_BUDGET_STORE:redis}
     timezone: Asia/Shanghai
   cost:
