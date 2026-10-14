@@ -28,8 +28,9 @@ for path in ROOT.glob("*/src/main/java/**/*.java"):
             errors.append(f"Mapper must use named typed parameters and reviewed XML: {relative}")
 
 xmls = list(ROOT.glob("*/src/main/resources/com/**/*Mapper.xml"))
-if len(xmls) != 23:
-    errors.append(f"expected 23 owned Mapper XMLs; update inventory when adding one, found {len(xmls)}")
+# 同步治理与DAG检查点各新增一个持久化Mapper，清单总数随实际新增同步。
+if len(xmls) != 25:
+    errors.append(f"expected 25 owned Mapper XMLs; update inventory when adding one, found {len(xmls)}")
 for path in xmls:
     text = path.read_text()
     relative = path.relative_to(ROOT).as_posix()
