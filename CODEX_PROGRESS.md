@@ -18,7 +18,7 @@
 
 ## 未完成
 
-- 实现与验证完成，待提交并正常合入推送origin/main。
+- 本轮实现、验证与源码Git交付已完成；`d2d4043`已正常快进合入并推送origin/main。
 
 ## 当前问题
 
@@ -27,11 +27,11 @@
 
 ## 下一步建议
 
-1. 按task-git-delivery提交本任务，合并推送main并补记交付结果；保留历史工作树与忽略数据。
+1. 本轮已交付。按实际来源配置与升级要求接入；保留历史工作树与忽略数据，部署另行授权。
 
 ## 恢复 Prompt
 
-读取docs/delivery/knowledge-etl-default-enabled/DELIVERY_RESULT.md及Git状态，从未完成交付继续。代码已验证，不重复实现；不部署、不清理历史工作树或用户数据。
+本轮已交付，读取docs/delivery/knowledge-etl-default-enabled/DELIVERY_RESULT.md核对结果。不要重复实现或部署，不清理历史工作树或用户数据。
 
 ---
 以下为历史任务进度，默认开关事实以上述本轮记录与当前指南为准：
