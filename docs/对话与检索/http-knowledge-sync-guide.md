@@ -32,7 +32,7 @@ HTTP产品说明/FAQ增量源 → 拉取和质量校验 → 持久化待处理�
 
 ## 配置与开启
 
-先用独立迁移账号执行knowledge-ingestion的增量迁移`V7__knowledge_http_sync.sql`。应用账号仅需`SELECT/INSERT/UPDATE`。检查点使用既有入库MySQL，必须同时配置`app.rag.ingestion.store=jdbc`、`app.rag.source.store=s3`、`app.rag.registry.store=redis`。
+先用独立迁移账号执行knowledge-ingestion的增量迁移`V7__knowledge_http_sync.sql`及`V8__knowledge_sync_operations.sql`。应用账号仅需`SELECT/INSERT/UPDATE`。检查点使用既有入库MySQL，必须同时配置`app.rag.ingestion.store=jdbc`、`app.rag.source.store=s3`、`app.rag.registry.store=redis`。
 
 复制`deploy/knowledge-http-sync.example.yml`到受控运行配置，设置来源端点、租户、执行用户、部门和外部Bearer token，再用Spring的`spring.config.additional-location`加载。Compose可把该文件只读挂入`knowledge-ingest-api`，将路径追加到现有额外配置位置，并显式传入相应环境变量；本次未改变运行中的Compose或部署服务。
 
@@ -51,7 +51,7 @@ HTTP产品说明/FAQ增量源 → 拉取和质量校验 → 持久化待处理�
 
 1. 读取来源记录的成功版本，过滤旧版本和重复内容。同版本不同内容报`SOURCE_REVISION_REUSED`。
 2. 有内容变化时，使用来源ID、外部ID与来源版本派生固定幂等键提交入库。
-3. 任务尚未`READY`时保持原游标，后续轮询复用快照和原任务。worker自动恢复仍由原有reconciler负责；`MANUAL_REVIEW`等状态通过既有`POST /rag/ingestions/{jobId}/retry`处理。
+3. 任务尚未`READY`时保持原游标，后续轮询复用快照和原任务。worker自动恢复仍由原有reconciler负责；`MANUAL_REVIEW`等状态可由获授权运营者通过来源的`POST /rag/ingestions/sources/{id}/retry`恢复原任务；执行用户本人仍可使用既有任务retry入口。
 4. 每条成功映射与页内位置在同一短事务提交。整页完成才提交`nextCursor`并清除待处理正文；超时/崩溃/响应丢失不会跳过尚未完成的数据。
 5. 显式删除：检查编辑权，按当前文档版本原子写入Registry墓碑，立即对后续RAG检索不可见，再撤销文档权限关系。撤权失败时保持原游标，重试幂等撤权。
 6. 墓碑永久拒绝该文档ID后续版本提交，防止迟到worker复活。来源记录重新出现时分配新的文档ID，从版本1重新入库；旧删除重放不能删除重建文档。
@@ -60,24 +60,48 @@ HTTP产品说明/FAQ增量源 → 拉取和质量校验 → 持久化待处理�
 
 ## 管理接口
 
-沿用现有`/rag/ingestions/**`网关路由和角色限制。每次必须具备`ingest` scope，且认证租户和用户与来源配置一致；其他用户/租户访问返回404。
+沿用现有`/rag/ingestions/**`网关路由和角色限制。每次必须具备`ingest` scope，且认证租户与来源一致。执行用户本人或`operator-user-ids`显式列出的同租户用户可以管理；其他用户/租户访问返回404。运营授权不会改变后台执行身份，撤销授权需同步更新所有ingest-api实例配置。
 
 | 方法 | 路径 | 作用 |
 |---|---|---|
 | GET | `/rag/ingestions/sources` | 当前身份来源列表和脱敏状态 |
 | GET | `/rag/ingestions/sources/{id}` | 状态、错误码、待处理数、等待的入库任务ID、下次轮询时间 |
-| POST | `/rag/ingestions/sources/{id}/poll` | 手动推进一轮，仍遵守租约和退避；202不等于同步成功 |
+| POST | `/rag/ingestions/sources/{id}/poll` | 手动推进一轮，提前下次轮询时间，仍遵守暂停和租约；202不等于同步成功 |
 | GET | `/rag/ingestions/sources/{id}/document?externalId=faq-refund` | 外部记录到文档ID、来源版本、知识版本和删除状态的追溯 |
 
 成功入库/删除沿用平台`AUDIT`日志，带来源ID、来源版本和文档ID，不记录正文或令牌；恢复重放可能重复审计事件。
 
-状态：`NOT_STARTED`、`SYNCING`、`IDLE`、`BLOCKED`。不返回凭据、URL、游标或原文。
+状态：`NOT_STARTED`、`SYNCING`、`IDLE`、`BLOCKED`、`PAUSED`。不返回凭据、URL、游标或原文。
 
 `SOURCE_HTTP_ERROR`/`SOURCE_UNAVAILABLE_OR_INVALID`检查来源可用性与JSON；`INVALID_PAGE`/`INVALID_ITEM`修复来源格式；`SOURCE_CONFIG_CHANGED`核对来源身份；`INGESTION_REQUIRES_ATTENTION`按任务ID处理现有入库任务；`INGESTION_FORBIDDEN`核对知识编辑权。
 
+## 数据接入工作台与运行记录
+
+前端入口：RAG工作台 `/m/rag` → **数据接入** → 查看数据源。列表仅显示当前身份有权管理的来源。依次选择来源、查看运行记录、选择某次运行，可定位失败的外部记录、来源版本、文档和入库任务。没有配置/授权来源时显示空态；关闭功能、旧后端或来源不可访问返回404，页面明确说明而非显示成功。
+
+新增接口（全部沿用上面的来源授权）：
+
+| 方法 | 路径 | 语义 |
+|---|---|---|
+| POST | `/rag/ingestions/sources/{id}/pause` | JSON `{"expectedRevision":0}`，暂停并使旧协调器的检查点提交失效 |
+| POST | `/rag/ingestions/sources/{id}/resume` | 同一请求格式，从原检查点恢复，不清空失败页 |
+| POST | `/rag/ingestions/sources/{id}/retry` | 只恢复当前来源等待的失败入库任务，不接受任意jobId |
+| GET | `/rag/ingestions/sources/{id}/runs?limit=20&before=123` | `items`与`nextCursor`，limit为1～50，before可省略；按单调序号倒序分页 |
+| GET | `/rag/ingestions/sources/{id}/runs/{runId}` | 当前来源内运行详情，跨来源/租户与不存在均404 |
+
+来源状态新增`paused`、`controlRevision`、`lastSuccessAt`（UTC毫秒）、`activeRunId`、`executionUserId`。控制请求携带最近读取的`controlRevision`，并发修改返回409，不自动覆盖其他运营者的决定。手动轮询会提前下一次领取时间；已经持有租约时继续由原执行器处理。重试遇到执行占用、暂停或没有等待任务返回409。
+
+暂停只阻止后续协调与旧执行器推进检查点。已领取的步骤和已提交worker任务仍可能完成，不代表撤销知识写入。恢复后复用原页快照、固定幂等键和运行ID。恢复/触发的响应不是完成凭证，应刷新来源与运行记录。
+
+一个运行对应一页增量数据。`RUNNING`在等待入库时进入`WAITING`，故障进入`BLOCKED`，运营暂停进入`PAUSED`；恢复后继续同一运行，整页完成进入不可变终态`SUCCEEDED`。成功映射、页内位置及运行结果在同一数据库事务提交；成功游标、最后成功时间、运行终态与正文快照清理也同事务提交。
+
+运行保存首次触发人（自动任务为`scheduler`）、执行身份、开始/更新/完成时间、配置和前后游标SHA256摘要、有效页条数、剩余数、当前错误和最多25条逐条结果。抓取/整页校验失败时`fetchedCount=null`，只记录运行级错误，不伪造失败条数。`created/updated/deleted/skipped`只统计逐条成功结果，`failed`统计当前失败结果；重试替换同一记录的最新结果，不重复累计。它不是每次尝试的完整事件日志，历史失败会在成功后被最新结果替换；V7遗留页恢复时补齐此前已确认的记录；无法还原操作分类的记录标为`LEGACY_CONFIRMED`，单独统计而不推断为新增/更新。控制行为另写`knowledge.sync.control`审计，保留真实运营身份和后台执行用户。
+
+运行接口不返回来源URL、凭据、原始游标、标题或正文；外部记录ID、用户ID与文档ID仍属于受控运营数据。成功空页也会形成运行记录；在持续30秒一页的理论上界下每来源约2880条/日（非实测吞吐）。当前无自动历史清理，不编造统一保留期限；启用前按来源数量、数据敏感性和数据库容量确定保留/归档政策。所有历史查询有索引及分页上限，长期保留与备份占用需纳入运营监控。
+
 ## 发布与回退边界
 
-V7是新增表，旧应用可在功能关闭时继续运行。先执行迁移、升级全部knowledge角色，再启用来源，避免旧worker忽略墓碑。若已产生墓碑，不得回退到不识别`deleted`的旧版本并继续写入；应先关闭来源并保留支持墓碑的应用版本。关闭同步只停止新采集，不撤回已经提交的知识变更或在途入库任务。
+V7是新增表；V8仅新增来源控制列和运行表，旧应用可在功能关闭时继续运行。上线工作台前先关闭**全部**旧同步协调器，再由迁移账号完成V8、升级所有combined/ingest-api实例，最后恢复同步。旧协调器不认识暂停与运行记录，不能与新协调器混跑；灰度期保持HTTP同步关闭。暂停控制要求所有实例已经升级。回退到V7应用前须关闭所有来源并保持同步关闭，保留V8数据，不能让旧应用推进带运行状态的检查点。先执行迁移、升级全部knowledge角色，再启用来源，避免旧worker忽略墓碑。若已产生墓碑，不得回退到不识别`deleted`的旧版本并继续写入；应先关闭来源并保留支持墓碑的应用版本。关闭同步只停止新采集，不撤回已经提交的知识变更或在途入库任务。
 
 来源快照含待处理正文，MySQL权限及备份应与知识原文同级治理；成功后清空本页快照，失败页保留用于恢复。不自动删除任何已有生产数据，不执行全局清库或Redis清空。
 

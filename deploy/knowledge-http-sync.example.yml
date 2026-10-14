@@ -1,5 +1,5 @@
 # 作为额外Spring配置文件加载；只挂载到knowledge-ingest-api或combined角色。
-# 完成V7迁移并升级所有knowledge角色后，再通过环境变量启用。
+# 完成V7/V8迁移并升级所有knowledge角色后，再通过环境变量启用。
 app:
   rag:
     http-sync:
@@ -12,3 +12,5 @@ app:
           endpoint: ${KNOWLEDGE_HTTP_SYNC_ENDPOINT}
           bearer-token: ${KNOWLEDGE_HTTP_SYNC_TOKEN:}
           allow-insecure-http: false
+          # 可选：同租户且具备ingest权限的运营用户；不会改变上面的后台执行身份。
+          operator-user-ids: []

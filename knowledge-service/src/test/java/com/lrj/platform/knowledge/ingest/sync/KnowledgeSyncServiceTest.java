@@ -169,6 +169,35 @@ class KnowledgeSyncServiceTest {
         assertThat(jobs.find(source.tenantId(), firstJob).orElseThrow().documentId())
                 .isNotEqualTo(jobs.find(other.tenantId(), otherJob).orElseThrow().documentId());
     }
+    @Test void delegatedRetryUsesExecutionIdentityAndPreservesRunWhileWorkerFinishesDuringPause() {
+        TenantContext.set(new TenantContext.Tenant(source.tenantId(), "operator", Set.of("ingest")));
+        when(http.fetch(source, "")).thenReturn(page(1, "first", "c1"));
+        service.trigger(source, false);
+        String id = service.status(source).activeRunId(), jobId = service.status(source).pendingJobId();
+        var job = jobs.find(source.tenantId(), jobId).orElseThrow();
+        jobs.save(IngestionJobStateMachine.manualReview(job, clock.instant()), job.revision());
+        clock.advance(); service.poll(source);
+        service.trigger(source, true);
+        verify(submissions).retry(source.tenantId(), source.userId(), Set.of("ingest"), jobId);
+        assertThat(TenantContext.current().userId()).isEqualTo("operator");
+        service.control(source, 0, true); ready(jobId); clock.advance(); service.poll(source);
+        assertThat(store.get(source).cursorValue).isEmpty();
+        assertThat(service.run(source, id).status()).isEqualTo("PAUSED");
+        service.control(source, 1, false); service.poll(source);
+        assertThat(service.run(source, id).getCreated()).isEqualTo(1);
+        assertThat(service.run(source, id).triggeredBy()).isEqualTo("operator");
+        assertThat(service.run(source, id).status()).isEqualTo("SUCCEEDED");
+    }
+    @Test void staleAndUnchangedRecordsAreCountedAsSkippedWithoutRepeatingEmbedding() throws Exception {
+        ingest(2, "same", "", "c1");
+        when(http.fetch(source, "c1")).thenReturn(page(1, "old", "c2")); clock.advance(); service.poll(source);
+        assertThat(service.runs(source, null, 1).items().getFirst().getSkipped()).isEqualTo(1);
+        assertThat(service.document(source, "faq1").sourceRevision()).isEqualTo(2);
+        when(http.fetch(source, "c2")).thenReturn(page(3, "same", "c3")); clock.advance(); service.poll(source);
+        assertThat(service.runs(source, null, 1).items().getFirst().getSkipped()).isEqualTo(1);
+        assertThat(service.document(source, "faq1").sourceRevision()).isEqualTo(3);
+        verify(submissions, times(2)).submit(any());
+    }
     private Page page(long revision, String content, String cursor) { return new Page(List.of(new Item("faq1", revision, "FAQ", content, false)), cursor); }
     private void ingest(long revision, String content, String before, String after) {
         when(http.fetch(source, before)).thenReturn(page(revision, content, after));

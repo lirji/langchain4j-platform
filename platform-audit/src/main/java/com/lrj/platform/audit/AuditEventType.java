@@ -15,6 +15,8 @@ public enum AuditEventType {
     GUARDRAIL_INJECTION_DETECTED("guardrail.injection_detected"),
     GUARDRAIL_PII_REDACTED("guardrail.pii_redacted"),
 
+    KNOWLEDGE_SYNC_CONTROL("knowledge.sync.control"),
+
     DOCUMENT_UPLOADED("doc.uploaded"),
     DOCUMENT_DELETED("doc.deleted"),
 

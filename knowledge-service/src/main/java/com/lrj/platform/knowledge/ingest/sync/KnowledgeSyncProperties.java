@@ -22,8 +22,16 @@ public record KnowledgeSyncProperties(@DefaultValue("false") boolean enabled, Li
 
     /** 绑定的服务身份由部署管理员授予；令牌只用于外部源，禁止持久化或输出。 */
     public record Source(String id, String tenantId, String userId, String department,
-                         URI endpoint, String bearerToken, @DefaultValue("false") boolean allowInsecureHttp) {
+                         URI endpoint, String bearerToken, @DefaultValue("false") boolean allowInsecureHttp, List<String> operatorUserIds) {
+        @org.springframework.boot.context.properties.bind.ConstructorBinding
+        public Source { operatorUserIds = operatorUserIds == null ? List.of() : List.copyOf(operatorUserIds); }
+        public Source(String id, String tenantId, String userId, String department, URI endpoint, String bearerToken, boolean allowInsecureHttp) {
+            this(id, tenantId, userId, department, endpoint, bearerToken, allowInsecureHttp, List.of());
+        }
+        /** 显式运营授权限定在来源租户内；不能借授权名单更改后台执行身份。 */
         public void validate() {
+            if (operatorUserIds.size() > 50 || operatorUserIds.stream().anyMatch(v -> !validIdentity(v) || "anonymous".equals(v)))
+                throw new IllegalArgumentException("invalid source operators");
             if (id == null || !id.matches("[a-zA-Z0-9_-]{1,64}") || !validIdentity(tenantId)
                     || !validIdentity(userId) || "__public__".equals(tenantId) || tenantId.contains("/") || tenantId.contains("\\")
                     || tenantId.equals(".") || tenantId.equals("..") || "anonymous".equals(tenantId) || "anonymous".equals(userId)
