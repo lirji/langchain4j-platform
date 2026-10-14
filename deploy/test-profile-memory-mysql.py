@@ -51,9 +51,9 @@ GRANT ALL PRIVILEGES ON `{schema}`.* TO '{migrator}'@'%';
             return result.returncode
         comments = subprocess.run(command, input=f"""
 SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='{schema}'
-AND TABLE_NAME IN ('USER_PROFILE_OWNER','USER_PROFILE_MEMORY') AND COLUMN_COMMENT='';
+AND TABLE_NAME IN ('USER_PROFILE_OWNER','USER_PROFILE_MEMORY','USER_PROFILE_AUDIT') AND COLUMN_COMMENT='';
 SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='{schema}'
-AND TABLE_NAME IN ('USER_PROFILE_OWNER','USER_PROFILE_MEMORY') AND TABLE_COMMENT='';
+AND TABLE_NAME IN ('USER_PROFILE_OWNER','USER_PROFILE_MEMORY','USER_PROFILE_AUDIT') AND TABLE_COMMENT='';
 """, text=True, check=True, capture_output=True)
         if comments.stdout.split() != ["0", "0"]:
             raise RuntimeError("MySQL table/column comments are incomplete")

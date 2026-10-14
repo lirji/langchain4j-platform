@@ -57,8 +57,20 @@ public class UserProfileService {
         return sb.toString().trim();
     }
 
-    /** 观察一轮对话：抽取用户长期事实入库（默认异步）。失败静默。 */
+    /** 在对话开始前捕获代次，覆盖生成回复期间发生的清空；旧开发实现保留原语义。 */
+    public long beginObservation(String tenant, String user) {
+        return store instanceof GovernedProfileStore governed ? governed.generation(tenant, user) : Long.MIN_VALUE;
+    }
+
+    /** 观察一轮对话；独立调用同样在提交异步任务之前捕获代次。 */
     public void observe(String tenant, String user, String chatId, String userMessage, String assistantReply) {
+        observe(tenant, user, chatId, userMessage, assistantReply, beginObservation(tenant, user));
+    }
+
+    /** 抽取不持有数据库锁；写候选时再次验证代次，失效结果直接丢弃。 */
+    public void observe(String tenant, String user, String chatId, String userMessage, String assistantReply,
+                        long generation) {
+        if (generation == -1) return;
         Runnable task = () -> {
             try {
                 ExtractedMemories extracted = extractor.extract(userMessage, assistantReply);
@@ -66,19 +78,30 @@ public class UserProfileService {
                     return;
                 }
                 long now = clock.getAsLong();
-                for (MemoryFact fact : extracted.facts()) {
+                // 模型输出也是不可信输入，每轮有界，不能占满持久化和审计容量。
+                for (MemoryFact fact : extracted.facts().stream().limit(20).toList()) {
                     if (fact == null || fact.text() == null || fact.text().isBlank()) {
                         continue;
                     }
                     String id = Integer.toHexString(ProfileMemoryText.normalize(fact.text()).hashCode());
-                    store.add(tenant, user, new MemoryItem(id, fact.text().trim(), fact.type(), now, chatId));
+                    MemoryItem item = new MemoryItem(id, fact.text().trim(), fact.type(), now, chatId);
+                    if (store instanceof GovernedProfileStore governed) {
+                        governed.offer(tenant, user, item, generation);
+                    } else {
+                        store.add(tenant, user, item);
+                    }
                 }
             } catch (RuntimeException e) {
-                log.warn("profile observe failed (swallowed): {}", e.toString());
+                log.warn("profile observe failed: {}", e.getClass().getSimpleName());
             }
         };
         if (async) {
-            executor.execute(task);
+            try {
+                executor.execute(task);
+            } catch (java.util.concurrent.RejectedExecutionException rejected) {
+                // 后台队列满时不拖垮已完成的对话；不执行无界重试。
+                log.warn("profile observation queue is full");
+            }
         } else {
             task.run();
         }

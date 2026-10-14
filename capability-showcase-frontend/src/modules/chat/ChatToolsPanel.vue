@@ -14,6 +14,7 @@ import { validateParams, type FormValues } from '../../utils/validation'
 import type { Capability } from '../../types/catalog'
 import InfoNote from '../_shared/InfoNote.vue'
 import JsonView from '../../components/capability/JsonView.vue'
+import MemoryGovernancePanel from './MemoryGovernancePanel.vue'
 
 const props = defineProps<{
   chatId: string
@@ -325,6 +326,7 @@ watch(
           </div>
           <InfoNote v-if="memError" tone="danger" role="alert" data-mem-error>{{ memError }}</InfoNote>
           <pre v-if="memProfile" class="chat__memory-pre">{{ memProfile }}</pre>
+          <MemoryGovernancePanel :key="`${chatId}:${sessionEpoch}:${memProfile}`" />
         </div>
       </section>
 

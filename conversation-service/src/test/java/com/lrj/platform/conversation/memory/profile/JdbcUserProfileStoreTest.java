@@ -189,6 +189,149 @@ class JdbcUserProfileStoreTest {
         assertThat(store.list(tenant, "bob")).hasSize(1);
     }
 
+    @Test
+    void candidatesRequireApprovalAndKeepProvenanceAcrossRestart() {
+        var store = new JdbcUserProfileStore(source, 50);
+        long generation = store.generation(tenant, "alice");
+        assertThat(store.offer(tenant, "alice", item("candidate", "偏好书面回复", 123), generation)).isTrue();
+        assertThat(store.list(tenant, "alice")).isEmpty();
+        var row = store.snapshot(tenant, "alice").items().getFirst();
+        assertThat(row.state()).isEqualTo("PENDING");
+        assertThat(row.sourceChatId()).isEqualTo("chat-1");
+        store.decide(tenant, "alice", row.recordId(), new GovernedProfileStore.Decision(
+                row.version(), GovernedProfileStore.Action.APPROVE, null, null, null));
+        assertThat(new JdbcUserProfileStore(pool(), 50).list(tenant, "alice"))
+                .extracting(MemoryItem::text).containsExactly("偏好书面回复");
+        assertThat(store.audit(tenant, "bob", Long.MAX_VALUE, 50)).isEmpty();
+        assertThat(store.audit(tenant, "alice", Long.MAX_VALUE, 50))
+                .extracting(GovernedProfileStore.Audit::action).contains("PROPOSE", "APPROVE");
+    }
+
+    @Test
+    void clearAndOptOutFenceEarlierObservations() {
+        var store = new JdbcUserProfileStore(source, 50);
+        long old = store.generation(tenant, "alice");
+        store.clear(tenant, "alice");
+        assertThat(store.offer(tenant, "alice", item("late", "旧会话事实", 1), old)).isFalse();
+        var state = store.snapshot(tenant, "alice");
+        store.settings(tenant, "alice", state.generation(), false);
+        assertThat(store.generation(tenant, "alice")).isEqualTo(-1);
+        assertThat(store.offer(tenant, "alice", item("late", "新会话事实", 1), -1)).isFalse();
+        assertThat(store.list(tenant, "alice")).isEmpty();
+        assertThatThrownBy(() -> store.settings(tenant, "alice", state.generation(), true))
+                .isInstanceOf(MemoryGovernanceException.class);
+    }
+
+    @Test
+    void governanceUsesVersionsOwnerScopeExpiryAndPinnedCapacity() {
+        var store = new JdbcUserProfileStore(source, 1);
+        store.add(tenant, "alice", item("first", "人工确认内容", 1));
+        var row = store.snapshot(tenant, "alice").items().getFirst();
+        assertThatThrownBy(() -> store.decide(tenant, "bob", row.recordId(),
+                new GovernedProfileStore.Decision(0L, GovernedProfileStore.Action.FORGET, null, null, null)))
+                .isInstanceOf(MemoryGovernanceException.class);
+        store.decide(tenant, "alice", row.recordId(), new GovernedProfileStore.Decision(
+                row.version(), GovernedProfileStore.Action.PIN, null, null, null));
+        store.add(tenant, "alice", item("second", "另外事实", 2));
+        assertThat(store.list(tenant, "alice")).extracting(MemoryItem::id).containsExactly("first");
+        assertThatThrownBy(() -> store.decide(tenant, "alice", row.recordId(),
+                new GovernedProfileStore.Decision(row.version(), GovernedProfileStore.Action.FORGET, null, null, null)))
+                .isInstanceOf(MemoryGovernanceException.class);
+        store.decide(tenant, "alice", row.recordId(), new GovernedProfileStore.Decision(
+                row.version() + 1, GovernedProfileStore.Action.UPDATE, "用户修正后的事实", "preference", 1L));
+        assertThat(store.list(tenant, "alice")).isEmpty();
+        store.decide(tenant, "alice", row.recordId(), new GovernedProfileStore.Decision(
+                row.version() + 2, GovernedProfileStore.Action.FORGET, null, null, null));
+        assertThat(store.snapshot(tenant, "alice").items()).isEmpty();
+        assertThat(new JdbcTemplate(source).queryForObject(
+                "SELECT COUNT(*) FROM USER_PROFILE_MEMORY WHERE RECORD_ID=?", Integer.class, row.recordId())).isZero();
+    }
+
+    @Test
+    void queuedModelObservationCannotRefillAfterClearOrDisable() {
+        var store = new JdbcUserProfileStore(source, 50);
+        var queue = new java.util.ArrayList<Runnable>();
+        var extractor = mock(ProfileExtractor.class);
+        org.mockito.Mockito.when(extractor.extract("消息", "回复"))
+                .thenReturn(new ExtractedMemories(List.of(new MemoryFact("仅候选事实", "preference"))));
+        var service = new UserProfileService(store, extractor, queue::add, 12, true, () -> 100);
+        service.observe(tenant, "alice", "chat", "消息", "回复");
+        store.clear(tenant, "alice");
+        queue.removeFirst().run();
+        assertThat(store.snapshot(tenant, "alice").items()).isEmpty();
+        service.observe(tenant, "alice", "chat", "消息", "回复");
+        queue.removeFirst().run();
+        assertThat(store.snapshot(tenant, "alice").items()).hasSize(1);
+        assertThat(service.recall(tenant, "alice")).isEmpty();
+        var snapshot = store.snapshot(tenant, "alice");
+        store.settings(tenant, "alice", snapshot.generation(), false);
+        service.observe(tenant, "alice", "chat", "消息", "回复");
+        assertThat(queue).isEmpty();
+    }
+
+    @Test
+    void generationCapturedBeforeAssistantReplyBlocksLateObservation() {
+        var store = new JdbcUserProfileStore(source, 50);
+        var extractor = mock(ProfileExtractor.class);
+        var service = new UserProfileService(store, extractor, Runnable::run, 12, false, () -> 100);
+        long started = service.beginObservation(tenant, "alice");
+        store.clear(tenant, "alice");
+        org.mockito.Mockito.when(extractor.extract("消息", "回复"))
+                .thenReturn(new ExtractedMemories(List.of(new MemoryFact("旧回复的事实", "other"))));
+        service.observe(tenant, "alice", "chat", "消息", "回复", started);
+        assertThat(store.snapshot(tenant, "alice").items()).isEmpty();
+    }
+
+    @Test
+    void governanceHttpEnforcesOwnerAndVersionAndReturnsStableErrors() throws Exception {
+        var store = new JdbcUserProfileStore(source, 50);
+        store.offer(tenant, "alice", item("x", "待确认偏好", 1), store.generation(tenant, "alice"));
+        var row = store.snapshot(tenant, "alice").items().getFirst();
+        var factory = new StaticListableBeanFactory();
+        factory.addBean("profileStore", store);
+        var mvc = MockMvcBuilders.standaloneSetup(new MemoryGovernanceController(
+                factory.getBeanProvider(UserProfileStore.class))).build();
+        TenantContext.set(new TenantContext.Tenant(tenant, "alice", Set.of("chat")));
+        mvc.perform(get("/memory/governance").param("userId", "bob"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].state").value("PENDING"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                        "/memory/governance/" + row.recordId() + "/decision")
+                        .contentType("application/json").content("{\"expectedVersion\":0,\"action\":\"APPROVE\"}"))
+                .andExpect(status().isNoContent());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                        "/memory/governance/" + row.recordId() + "/decision")
+                        .contentType("application/json").content("{\"expectedVersion\":0,\"action\":\"FORGET\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("conflict"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                        "/memory/governance/" + row.recordId() + "/decision")
+                        .contentType("application/json").content("{\"action\":\"FORGET\"}"))
+                .andExpect(status().isBadRequest());
+        TenantContext.set(new TenantContext.Tenant(tenant, "bob", Set.of("chat")));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                        "/memory/governance/" + row.recordId() + "/decision")
+                        .contentType("application/json").content("{\"expectedVersion\":1,\"action\":\"FORGET\"}"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void concurrentDecisionsHaveOneWinnerAndOneAudit() throws Exception {
+        var first = new JdbcUserProfileStore(source, 50);
+        var second = new JdbcUserProfileStore(pool(), 50);
+        first.offer(tenant, "alice", item("x", "并发审核候选", 1), first.generation(tenant, "alice"));
+        var row = first.snapshot(tenant, "alice").items().getFirst();
+        var wins = new java.util.concurrent.atomic.AtomicInteger();
+        runTogether(2, i -> {
+            try {
+                (i == 0 ? first : second).decide(tenant, "alice", row.recordId(),
+                        new GovernedProfileStore.Decision(0L, GovernedProfileStore.Action.APPROVE, null, null, null));
+                wins.incrementAndGet();
+            } catch (MemoryGovernanceException conflict) { assertThat(conflict.code()).isEqualTo("conflict"); }
+        });
+        assertThat(wins.get()).isEqualTo(1);
+        assertThat(first.audit(tenant, "alice", Long.MAX_VALUE, 100).stream()
+                .filter(e -> e.action().equals("APPROVE")).count()).isEqualTo(1);
+    }
+
     private HikariDataSource pool() {
         HikariConfig config = new HikariConfig();
         config.setJdbcUrl(url);
