@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lrj.platform.workflow.mapper.WorkflowReplyStoreMapper">
+    <select id="readInit1" resultType="com.lrj.platform.workflow.mapper.WorkflowReplyStoreRow">
+        SELECT INSTANCE_ID, REPLY, DEGRADED, UPDATED_AT FROM WF_REPLY WHERE 1=0
+    </select>
+    <insert id="writeSave1">
+        INSERT INTO WF_REPLY (INSTANCE_ID, REPLY, DEGRADED, UPDATED_AT) VALUES (#{instanceId}, #{reply}, #{degraded}, #{updatedAt})
+        ON DUPLICATE KEY UPDATE REPLY = VALUES(REPLY), DEGRADED = VALUES(DEGRADED), UPDATED_AT = VALUES(UPDATED_AT)
+    </insert>
+    <select id="readFind1" resultType="com.lrj.platform.workflow.mapper.WorkflowReplyStoreRow">
+        SELECT REPLY FROM WF_REPLY WHERE INSTANCE_ID = #{instanceId}
+    </select>
+    <delete id="writeDelete1">
+        DELETE FROM WF_REPLY WHERE INSTANCE_ID = #{instanceId}
+    </delete>
+</mapper>

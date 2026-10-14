@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lrj.platform.asynctask.mapper.AsyncTaskEventJournalMapper">
+    <select id="readInit1" resultType="com.lrj.platform.asynctask.mapper.AsyncTaskEventJournalRow">
+        SELECT TASK_ID, SEQUENCE, EVENT_KEY, EVENT_NAME, DATA_JSON, CREATED_AT, WORKER_ID
+        FROM ASYNC_TASK_EVENT WHERE 1=0
+    </select>
+    <select id="readAppend1" resultType="com.lrj.platform.asynctask.mapper.AsyncTaskEventJournalRow">
+        SELECT TASK_ID FROM ASYNC_TASK WHERE TASK_ID=#{taskId} FOR UPDATE
+    </select>
+    <select id="readAppend2" resultType="java.lang.Long">
+        SELECT COALESCE(MAX(SEQUENCE), 0) FROM ASYNC_TASK_EVENT WHERE TASK_ID=#{taskId}
+    </select>
+    <insert id="writeAppend1">
+        INSERT INTO ASYNC_TASK_EVENT
+        (TASK_ID, SEQUENCE, EVENT_KEY, EVENT_NAME, DATA_JSON, CREATED_AT, WORKER_ID)
+        VALUES (#{taskId}, #{sequence}, #{eventKey}, #{eventName}, #{dataJson}, #{createdAt}, #{workerId})
+    </insert>
+    <select id="readEventsAfter1" resultType="com.lrj.platform.asynctask.mapper.AsyncTaskEventJournalRow">
+        SELECT * FROM ASYNC_TASK_EVENT
+        WHERE TASK_ID=#{taskId} AND SEQUENCE&gt;#{sequence}
+        ORDER BY SEQUENCE
+    </select>
+    <select id="readLatest1" resultType="com.lrj.platform.asynctask.mapper.AsyncTaskEventJournalRow">
+        SELECT * FROM ASYNC_TASK_EVENT
+        WHERE TASK_ID=#{taskId}
+        ORDER BY SEQUENCE DESC
+        LIMIT 1
+    </select>
+    <delete id="writeCleanupBefore1">
+        DELETE FROM ASYNC_TASK_EVENT WHERE CREATED_AT &lt; #{createdAt}
+    </delete>
+    <select id="readFindByEventKey1" resultType="com.lrj.platform.asynctask.mapper.AsyncTaskEventJournalRow">
+        SELECT * FROM ASYNC_TASK_EVENT
+        WHERE TASK_ID=#{taskId} AND EVENT_KEY=#{eventKey}
+    </select>
+</mapper>

@@ -1,5 +1,10 @@
 package com.lrj.platform.asynctask;
 
+import com.lrj.platform.asynctask.mapper.AsyncTaskStoreMapper;
+import com.lrj.platform.asynctask.mapper.AsyncTaskStoreRow;
+import com.lrj.platform.persistence.PlusMapperFactory;
+import com.lrj.platform.persistence.Rows;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -13,15 +18,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.sql.DataSource;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -32,7 +34,7 @@ import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
 /**
- * {@link AsyncTaskStore} 的 JDBC 持久化实现（{@code app.async-task.store=jdbc}），用裸 {@link JdbcTemplate}
+ * {@link AsyncTaskStore} 的 JDBC 持久化实现（{@code app.async-task.store=jdbc}），使用 {@code MyBatis-Plus Mapper}
  * 直连 MySQL 管理 {@code ASYNC_TASK} 表；schema 由独立版本化 migration 管理，
  * 本 store 启动时只验证 contract。覆写增改查、租约与清理，其中「非终态→终态」的状态提交在同一事务内原子写入一条
  * 生命周期事件 outbox（A1，仅 webhook transport=kafka 时注入 {@link AsyncTaskLifecycleOutbox}），供
@@ -45,7 +47,7 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
     private static final Logger log = LoggerFactory.getLogger(JdbcAsyncTaskStore.class);
     private static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() {};
 
-    private final JdbcTemplate jdbc;
+    private final AsyncTaskStoreMapper db;
     private final ObjectMapper mapper;
     private final Duration ttl;
     private final TransactionTemplate txTemplate;
@@ -73,7 +75,7 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
                               AsyncTaskWebhookProperties webhookProperties,
                               ObjectProvider<AsyncTaskEventJournal> eventJournal) {
         super(ttl);
-        this.jdbc = new JdbcTemplate(asyncTaskDataSource);
+        this.db = PlusMapperFactory.create(asyncTaskDataSource, AsyncTaskStoreMapper.class);
         this.mapper = mapper;
         this.ttl = ttl;
         this.txTemplate = new TransactionTemplate(txManager);
@@ -85,21 +87,14 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
     }
 
     private void init() {
-        jdbc.queryForList("""
-                SELECT TASK_ID, TENANT_ID, USER_ID, KIND, STATUS, INPUT_JSON, RESULT_JSON,
-                       ERROR_TEXT, WEBHOOK_URL, CREATED_AT, UPDATED_AT, FINISHED_AT,
-                       LEASE_OWNER_ID, LEASE_EXPIRES_AT, LEASE_EPOCH
-                FROM ASYNC_TASK WHERE 1=0""");
+        db.readInit1();
         log.info("ASYNC_TASK schema verified");
     }
 
     @Override
     public void put(AsyncTask task) {
         txTemplate.executeWithoutResult(status -> {
-            jdbc.update("""
-                    INSERT INTO ASYNC_TASK
-                    (TASK_ID, TENANT_ID, USER_ID, KIND, STATUS, INPUT_JSON, RESULT_JSON, ERROR_TEXT, WEBHOOK_URL, CREATED_AT, UPDATED_AT, FINISHED_AT, LEASE_OWNER_ID, LEASE_EXPIRES_AT, LEASE_EPOCH)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            db.writePut1(
                     task.taskId(),
                     task.tenantId(),
                     task.userId(),
@@ -121,8 +116,7 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
 
     @Override
     public Optional<AsyncTask> get(String taskId) {
-        List<AsyncTask> rows = jdbc.query("SELECT * FROM ASYNC_TASK WHERE TASK_ID=?",
-                this::mapTask, taskId);
+        List<AsyncTask> rows = Rows.map(db.readGet1(taskId), this::mapTask);
         return rows.stream().findFirst();
     }
 
@@ -136,10 +130,7 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
             }
             AsyncTask before = current.get();
             AsyncTask updated = updater.apply(before);
-            jdbc.update("""
-                    UPDATE ASYNC_TASK
-                    SET STATUS=?, RESULT_JSON=?, ERROR_TEXT=?, UPDATED_AT=?, FINISHED_AT=?, LEASE_OWNER_ID=?, LEASE_EXPIRES_AT=?
-                    WHERE TASK_ID=?""",
+            db.writeUpdate1(
                     updated.status().name(),
                     json(updated.result()),
                     updated.error(),
@@ -277,28 +268,17 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
 
     @Override
     public List<AsyncTask> listByTenant(String tenantId) {
-        return jdbc.query("""
-                SELECT * FROM ASYNC_TASK
-                WHERE TENANT_ID=?
-                ORDER BY CREATED_AT DESC""",
-                this::mapTask, tenantId);
+        return Rows.map(db.readListByTenant1(tenantId), this::mapTask);
     }
 
     @Override
     public List<AsyncTask> listByOwner(String tenantId, String userId) {
-        return jdbc.query("""
-                SELECT * FROM ASYNC_TASK
-                WHERE TENANT_ID=? AND USER_ID=?
-                ORDER BY CREATED_AT DESC""",
-                this::mapTask, tenantId, userId);
+        return Rows.map(db.readListByOwner1(tenantId, userId), this::mapTask);
     }
 
     @Override
     public long countByStatus(AsyncTaskStatus status) {
-        Long count = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM ASYNC_TASK WHERE STATUS=?",
-                Long.class,
-                status.name());
+        Long count = Rows.one(db.readCountByStatus1(status.name()));
         return count == null ? 0 : count;
     }
 
@@ -307,26 +287,11 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
         if (tenantId == null || kinds == null || kinds.isEmpty()) {
             return List.of();
         }
-        String kindPlaceholders = String.join(",", java.util.Collections.nCopies(kinds.size(), "?"));
-        List<AsyncTaskStatus> openStatuses = java.util.Arrays.stream(AsyncTaskStatus.values())
-                .filter(status -> !status.isTerminal())
-                .toList();
-        String statusPlaceholders = String.join(",", java.util.Collections.nCopies(openStatuses.size(), "?"));
-        List<Object> args = new java.util.ArrayList<>();
-        args.add(tenantId);
-        args.addAll(kinds);
-        openStatuses.forEach(status -> args.add(status.name()));
-        List<DrainInventoryRow> rows = jdbc.query("""
-                SELECT KIND, STATUS, LEASE_OWNER_ID, COUNT(*) AS OPEN_TASKS FROM ASYNC_TASK
-                WHERE TENANT_ID=? AND KIND IN (%s) AND STATUS IN (%s)
-                GROUP BY KIND, STATUS, LEASE_OWNER_ID"""
-                        .formatted(kindPlaceholders, statusPlaceholders),
-                (rs, rowNum) -> new DrainInventoryRow(
-                        rs.getString("KIND"),
-                        AsyncTaskStatus.valueOf(rs.getString("STATUS")),
-                        rs.getString("LEASE_OWNER_ID"),
-                        rs.getLong("OPEN_TASKS")),
-                args.toArray());
+        List<String> openStatuses = java.util.Arrays.stream(AsyncTaskStatus.values())
+                .filter(status -> !status.isTerminal()).map(Enum::name).toList();
+        List<DrainInventoryRow> rows = Rows.map(db.drainInventory(tenantId, kinds, openStatuses),
+                (rs, rowNum) -> new DrainInventoryRow(rs.kind, AsyncTaskStatus.valueOf(rs.status),
+                        rs.leaseOwnerId, Rows.longValue(rs.openTasks)));
         return rows.stream().sorted(DRAIN_INVENTORY_ORDER).toList();
     }
 
@@ -339,24 +304,11 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
         if (kinds.isEmpty()) {
             return List.of();
         }
-        String placeholders = String.join(",", java.util.Collections.nCopies(kinds.size(), "?"));
-        List<Object> args = new java.util.ArrayList<>(kinds);
-        args.add(AsyncTaskStatus.PENDING.name());
-        args.add(pendingCutoff.toEpochMilli());
-        args.add(AsyncTaskStatus.RUNNING.name());
-        args.add(runningCutoff.toEpochMilli());
-        args.add(runningCutoff.toEpochMilli());
-        args.add(Math.max(1, limit));
-        List<String> ids = jdbc.queryForList("""
-                SELECT TASK_ID FROM ASYNC_TASK
-                WHERE KIND IN (%s)
-                  AND KIND NOT LIKE 'agent.readonly.%%'
-                  AND ((STATUS=? AND CREATED_AT < ?)
-                    OR (STATUS=? AND
-                      ((LEASE_EXPIRES_AT IS NOT NULL AND LEASE_EXPIRES_AT < ?)
-                       OR (LEASE_EXPIRES_AT IS NULL AND UPDATED_AT < ?))))
-                ORDER BY CREATED_AT
-                LIMIT ?""".formatted(placeholders), String.class, args.toArray());
+        List<String> ids = db.orphanIds(
+                kinds,
+                pendingCutoff.toEpochMilli(),
+                runningCutoff.toEpochMilli(),
+                Math.max(1, limit));
         return ids.stream()
                 .map(id -> failOrphan(id, pendingCutoff, runningCutoff, error))
                 .flatMap(Optional::stream)
@@ -368,42 +320,37 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
             initialDelayString = "${app.async-task.cleanup-initial-delay-ms:60000}")
     public void cleanup() {
         long cutoff = Instant.now().minus(ttl).toEpochMilli();
-        int removed = jdbc.update("DELETE FROM ASYNC_TASK WHERE FINISHED_AT IS NOT NULL AND FINISHED_AT < ?", cutoff);
+        int removed = db.writeCleanup1(cutoff);
         if (removed > 0) {
             log.info("async task jdbc cleanup removed {} expired tasks ttl={}", removed, ttl);
         }
     }
 
-    private AsyncTask mapTask(ResultSet rs, int rowNum) throws SQLException {
+    private AsyncTask mapTask(AsyncTaskStoreRow rs, int rowNum) {
         return new AsyncTask(
-                rs.getString("TASK_ID"),
-                rs.getString("TENANT_ID"),
-                rs.getString("USER_ID"),
-                rs.getString("KIND"),
-                AsyncTaskStatus.valueOf(rs.getString("STATUS")),
-                map(rs.getString("INPUT_JSON")),
-                object(rs.getString("RESULT_JSON")),
-                rs.getString("ERROR_TEXT"),
-                rs.getString("WEBHOOK_URL"),
-                instant(rs.getLong("CREATED_AT")),
-                instant(rs.getLong("UPDATED_AT")),
-                instantNullable(rs, "FINISHED_AT"),
-                nullableString(rs, "LEASE_OWNER_ID"),
-                instantNullable(rs, "LEASE_EXPIRES_AT"),
-                rs.getLong("LEASE_EPOCH"));
+                rs.taskId,
+                rs.tenantId,
+                rs.userId,
+                rs.kind,
+                AsyncTaskStatus.valueOf(rs.status),
+                map(rs.inputJson),
+                object(rs.resultJson),
+                rs.errorText,
+                rs.webhookUrl,
+                instant(Rows.longValue(rs.createdAt)),
+                instant(Rows.longValue(rs.updatedAt)),
+                instantNullable(rs.finishedAt),
+                rs.leaseOwnerId,
+                instantNullable(rs.leaseExpiresAt),
+                Rows.longValue(rs.leaseEpoch));
     }
 
     private Optional<AsyncTask> getForUpdate(String taskId) {
-        return jdbc.query("SELECT * FROM ASYNC_TASK WHERE TASK_ID=? FOR UPDATE",
-                this::mapTask, taskId).stream().findFirst();
+        return Rows.map(db.readGetForUpdate1(taskId), this::mapTask).stream().findFirst();
     }
 
     private void persistMutable(AsyncTask updated) {
-        jdbc.update("""
-                UPDATE ASYNC_TASK
-                SET STATUS=?, RESULT_JSON=?, ERROR_TEXT=?, UPDATED_AT=?, FINISHED_AT=?,
-                    LEASE_OWNER_ID=?, LEASE_EXPIRES_AT=?, LEASE_EPOCH=?
-                WHERE TASK_ID=?""",
+        db.writePersistMutable1(
                 updated.status().name(),
                 json(updated.result()),
                 updated.error(),
@@ -502,13 +449,7 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
         return Instant.ofEpochMilli(millis);
     }
 
-    private static Instant instantNullable(ResultSet rs, String column) throws SQLException {
-        long value = rs.getLong(column);
-        return rs.wasNull() ? null : Instant.ofEpochMilli(value);
-    }
-
-    private static String nullableString(ResultSet rs, String column) throws SQLException {
-        String value = rs.getString(column);
-        return rs.wasNull() ? null : value;
+    private static Instant instantNullable(Long value) {
+        return value == null ? null : Instant.ofEpochMilli(value);
     }
 }

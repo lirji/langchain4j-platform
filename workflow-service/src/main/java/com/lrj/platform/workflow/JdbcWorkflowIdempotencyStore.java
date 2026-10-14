@@ -1,10 +1,13 @@
 package com.lrj.platform.workflow;
 
+import com.lrj.platform.workflow.mapper.WorkflowIdempotencyStoreMapper;
+import com.lrj.platform.persistence.PlusMapperFactory;
+import com.lrj.platform.persistence.Rows;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
@@ -14,7 +17,7 @@ import java.util.List;
  * {@link WorkflowIdempotencyStore} 的 JDBC 实现。
  *
  * <p>复合主键是并发正确性的最终裁决，不依赖进程锁或先查后建。MySQL 会让竞争 INSERT 等待首个事务
- * 提交；首个事务回滚时竞争者可获得 claim，提交时竞争者读到已经绑定的实例。JdbcTemplate 与
+ * 提交；首个事务回滚时竞争者可获得 claim，提交时竞争者读到已经绑定的实例。MyBatis-Plus Mapper 与
  * Flowable 使用同一个 {@code workflowDataSource}，因此由调用方的 {@code workflowTransactionManager}
  * 事务统一提交/回滚。
  */
@@ -24,18 +27,15 @@ public class JdbcWorkflowIdempotencyStore implements WorkflowIdempotencyStore {
 
     private static final Logger log = LoggerFactory.getLogger(JdbcWorkflowIdempotencyStore.class);
 
-    private final JdbcTemplate jdbc;
+    private final WorkflowIdempotencyStoreMapper db;
 
     public JdbcWorkflowIdempotencyStore(DataSource workflowDataSource) {
-        this.jdbc = new JdbcTemplate(workflowDataSource);
+        this.db = PlusMapperFactory.create(workflowDataSource, WorkflowIdempotencyStoreMapper.class);
         init();
     }
 
     private void init() {
-        jdbc.queryForList("""
-                SELECT TENANT_ID, OPERATION_NAME, IDEMPOTENCY_KEY_HASH, REQUEST_HASH,
-                       BUSINESS_KEY, INSTANCE_ID, CREATED_AT, UPDATED_AT
-                FROM WF_IDEMPOTENCY WHERE 1=0""");
+        db.readInit1();
         log.info("WF_IDEMPOTENCY schema verified");
     }
 
@@ -47,20 +47,10 @@ public class JdbcWorkflowIdempotencyStore implements WorkflowIdempotencyStore {
                        String businessKey) {
         long now = System.currentTimeMillis();
         try {
-            jdbc.update("""
-                            INSERT INTO WF_IDEMPOTENCY
-                              (TENANT_ID, OPERATION_NAME, IDEMPOTENCY_KEY_HASH, REQUEST_HASH,
-                               BUSINESS_KEY, INSTANCE_ID, CREATED_AT, UPDATED_AT)
-                            VALUES (?, ?, ?, ?, ?, NULL, ?, ?)""",
-                    tenantId, operation, keyHash, requestHash, businessKey, now, now);
+            db.writeClaim1(tenantId, operation, keyHash, requestHash, businessKey, now, now);
             return Claim.acquiredClaim();
         } catch (DuplicateKeyException duplicate) {
-            List<Row> rows = jdbc.query("""
-                            SELECT REQUEST_HASH, INSTANCE_ID
-                              FROM WF_IDEMPOTENCY
-                             WHERE TENANT_ID = ? AND OPERATION_NAME = ? AND IDEMPOTENCY_KEY_HASH = ?""",
-                    (rs, rowNum) -> new Row(rs.getString("REQUEST_HASH"), rs.getString("INSTANCE_ID")),
-                    tenantId, operation, keyHash);
+            List<Row> rows = Rows.map(db.readClaim1(tenantId, operation, keyHash), (rs, rowNum) -> new Row(rs.requestHash, rs.instanceId));
             if (rows.isEmpty()) {
                 throw new IdempotencyConflictException("idempotency claim disappeared during conflict resolution");
             }
@@ -83,12 +73,7 @@ public class JdbcWorkflowIdempotencyStore implements WorkflowIdempotencyStore {
                                String keyHash,
                                String requestHash,
                                String instanceId) {
-        int updated = jdbc.update("""
-                        UPDATE WF_IDEMPOTENCY
-                           SET INSTANCE_ID = ?, UPDATED_AT = ?
-                         WHERE TENANT_ID = ? AND OPERATION_NAME = ? AND IDEMPOTENCY_KEY_HASH = ?
-                           AND REQUEST_HASH = ? AND INSTANCE_ID IS NULL""",
-                instanceId, System.currentTimeMillis(), tenantId, operation, keyHash, requestHash);
+        int updated = db.writeAttachInstance1(instanceId, System.currentTimeMillis(), tenantId, operation, keyHash, requestHash);
         if (updated != 1) {
             throw new IdempotencyConflictException("idempotency claim could not be bound atomically");
         }
@@ -96,10 +81,7 @@ public class JdbcWorkflowIdempotencyStore implements WorkflowIdempotencyStore {
 
     @Override
     public java.util.Optional<String> findCommitted(String tenant, String operation, String keyHash, String requestHash) {
-        List<Row> rows = jdbc.query("""
-                SELECT REQUEST_HASH, INSTANCE_ID FROM WF_IDEMPOTENCY
-                WHERE TENANT_ID=? AND OPERATION_NAME=? AND IDEMPOTENCY_KEY_HASH=?""",
-                (rs, row) -> new Row(rs.getString("REQUEST_HASH"), rs.getString("INSTANCE_ID")), tenant, operation, keyHash);
+        List<Row> rows = Rows.map(db.readFindCommitted1(tenant, operation, keyHash), (rs, row) -> new Row(rs.requestHash, rs.instanceId));
         if (rows.isEmpty()) return java.util.Optional.empty();
         Row row = rows.getFirst();
         if (!requestHash.equals(row.requestHash()) || row.instanceId() == null || row.instanceId().isBlank())
@@ -109,7 +91,7 @@ public class JdbcWorkflowIdempotencyStore implements WorkflowIdempotencyStore {
 
     @Override
     public void deleteByInstance(String instanceId) {
-        jdbc.update("DELETE FROM WF_IDEMPOTENCY WHERE INSTANCE_ID = ?", instanceId);
+        db.writeDeleteByInstance1(instanceId);
     }
 
     private record Row(String requestHash, String instanceId) {}

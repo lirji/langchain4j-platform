@@ -1,9 +1,12 @@
 package com.lrj.platform.workflow;
 
+import com.lrj.platform.workflow.mapper.WorkflowReplyStoreMapper;
+import com.lrj.platform.persistence.PlusMapperFactory;
+import com.lrj.platform.persistence.Rows;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
@@ -14,7 +17,7 @@ import java.util.List;
  * 访问由独立 migration stage 预建的 {@code WF_REPLY} 表。
  *
  * <p><b>事务参与</b>：构造时拿的是 {@code workflowDataSource}，而 {@code save/delete} 用的
- * {@link JdbcTemplate} 在有活动事务时会经 {@code DataSourceUtils} 复用 Spring 绑定到该数据源的事务连接——
+ * {@code MyBatis-Plus Mapper} 在有活动事务时会经 {@code DataSourceUtils} 复用 Spring 绑定到该数据源的事务连接——
  * 因 Flowable 由 {@code workflowTransactionManager}（同一数据源的 {@code DataSourceTransactionManager}）
  * 驱动，ServiceTask 同步执行期间写 reply 即与流程推进同事务、原子提交（见接口 javadoc）。
  * 构造时只做 schema contract 校验，不执行 DDL。
@@ -25,38 +28,33 @@ public class JdbcWorkflowReplyStore implements WorkflowReplyStore {
 
     private static final Logger log = LoggerFactory.getLogger(JdbcWorkflowReplyStore.class);
 
-    private final JdbcTemplate jdbc;
+    private final WorkflowReplyStoreMapper db;
 
     public JdbcWorkflowReplyStore(DataSource workflowDataSource) {
-        this.jdbc = new JdbcTemplate(workflowDataSource);
+        this.db = PlusMapperFactory.create(workflowDataSource, WorkflowReplyStoreMapper.class);
         init();
     }
 
     /** 校验独立 migration 已提供当前 schema contract。 */
     private void init() {
-        jdbc.queryForList("SELECT INSTANCE_ID, REPLY, DEGRADED, UPDATED_AT FROM WF_REPLY WHERE 1=0");
+        db.readInit1();
         log.info("WF_REPLY schema verified");
     }
 
     @Override
     public void save(String instanceId, String reply, boolean degraded) {
         // MySQL upsert：同实例重跑/降级覆盖（与 enableDuplicateFiltering 的幂等取向一致）
-        jdbc.update("""
-                INSERT INTO WF_REPLY (INSTANCE_ID, REPLY, DEGRADED, UPDATED_AT) VALUES (?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE REPLY = VALUES(REPLY), DEGRADED = VALUES(DEGRADED), UPDATED_AT = VALUES(UPDATED_AT)""",
-                instanceId, reply, degraded ? 1 : 0, System.currentTimeMillis());
+        db.writeSave1(instanceId, reply, degraded ? 1 : 0, System.currentTimeMillis());
     }
 
     @Override
     public String find(String instanceId) {
-        List<String> rows = jdbc.query(
-                "SELECT REPLY FROM WF_REPLY WHERE INSTANCE_ID = ?",
-                (rs, n) -> rs.getString(1), instanceId);
+        List<String> rows = Rows.map(db.readFind1(instanceId), (rs, n) -> rs.reply);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
     @Override
     public void delete(String instanceId) {
-        jdbc.update("DELETE FROM WF_REPLY WHERE INSTANCE_ID = ?", instanceId);
+        db.writeDelete1(instanceId);
     }
 }

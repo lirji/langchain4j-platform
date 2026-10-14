@@ -15,6 +15,7 @@
     <description>Workflow 限界上下文：Flowable 审批流 + outbox</description>
 
     <dependencies>
+        <dependency><groupId>com.lrj.platform</groupId><artifactId>platform-persistence</artifactId></dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>

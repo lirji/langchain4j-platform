@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lrj.platform.asynctask.mapper.ReadOnlyTaskDispatchMapper">
+    <select id="readContract1" resultType="com.lrj.platform.asynctask.mapper.ReadOnlyTaskDispatchRow">
+        SELECT TASK_ID, DEPARTMENT, TRACE_ID, ATTEMPTS FROM ASYNC_TASK_DISPATCH WHERE 1=0
+    </select>
+    <select id="readCreate1" resultType="java.lang.Integer">
+        SELECT LOCK_ID FROM ASYNC_TASK_DISPATCH_LOCK WHERE LOCK_ID=1 FOR UPDATE
+    </select>
+    <select id="readCreate2" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM ASYNC_TASK t JOIN ASYNC_TASK_DISPATCH d ON t.TASK_ID=d.TASK_ID WHERE t.STATUS IN ('PENDING','RUNNING')
+    </select>
+    <select id="readCreate3" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM ASYNC_TASK t JOIN ASYNC_TASK_DISPATCH d ON t.TASK_ID=d.TASK_ID WHERE t.STATUS IN ('PENDING','RUNNING') AND t.TENANT_ID=#{tenantId}
+    </select>
+    <insert id="writeCreate1">
+        INSERT INTO ASYNC_TASK_DISPATCH (TASK_ID, DEPARTMENT, TRACE_ID, CREATED_AT) VALUES (#{taskId}, #{department}, #{traceId}, #{createdAt})
+    </insert>
+    <select id="readClaim1" resultType="java.lang.String">
+        SELECT LAST_TENANT FROM ASYNC_TASK_DISPATCH_LOCK WHERE LOCK_ID=1 FOR UPDATE
+    </select>
+    <select id="readClaim2" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM ASYNC_TASK t JOIN ASYNC_TASK_DISPATCH d ON t.TASK_ID=d.TASK_ID
+        WHERE t.STATUS IN ('PENDING','RUNNING') AND t.LEASE_EXPIRES_AT&gt;#{leaseExpiresAt}
+    </select>
+    <select id="readClaim3" resultType="java.lang.String">
+        SELECT t.TASK_ID FROM ASYNC_TASK t JOIN ASYNC_TASK_DISPATCH d ON t.TASK_ID=d.TASK_ID
+        WHERE t.STATUS IN ('PENDING','RUNNING')
+          AND (t.LEASE_EXPIRES_AT IS NULL OR t.LEASE_EXPIRES_AT&lt;=#{leaseExpiresAt})
+          AND (SELECT COUNT(*) FROM ASYNC_TASK b JOIN ASYNC_TASK_DISPATCH bd ON b.TASK_ID=bd.TASK_ID
+            WHERE b.TENANT_ID=t.TENANT_ID AND b.STATUS IN ('PENDING','RUNNING')
+              AND b.LEASE_EXPIRES_AT&gt;#{leaseExpiresAt2}) &lt; #{limit}
+        ORDER BY CASE WHEN t.TENANT_ID&gt;#{tenantId} THEN 0 ELSE 1 END, t.TENANT_ID, t.CREATED_AT, t.TASK_ID
+        LIMIT 1
+    </select>
+    <select id="readClaim4" resultType="java.lang.Integer">
+        SELECT ATTEMPTS FROM ASYNC_TASK_DISPATCH WHERE TASK_ID=#{taskId}
+    </select>
+    <update id="writeClaim1">
+        UPDATE ASYNC_TASK_DISPATCH SET ATTEMPTS=ATTEMPTS+1 WHERE TASK_ID=#{taskId}
+    </update>
+    <update id="writeClaim2">
+        UPDATE ASYNC_TASK_DISPATCH_LOCK SET LAST_CLAIM_AT=#{lastClaimAt}, LAST_TENANT=#{lastTenant} WHERE LOCK_ID=1
+    </update>
+    <select id="readClaim5" resultType="com.lrj.platform.asynctask.mapper.ReadOnlyTaskDispatchRow">
+        SELECT DEPARTMENT, TRACE_ID FROM ASYNC_TASK_DISPATCH WHERE TASK_ID=#{taskId}
+    </select>
+</mapper>

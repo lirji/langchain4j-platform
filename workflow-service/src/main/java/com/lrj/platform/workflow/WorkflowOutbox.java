@@ -1,17 +1,17 @@
 package com.lrj.platform.workflow;
 
+import com.lrj.platform.workflow.mapper.WorkflowOutboxMapper;
+import com.lrj.platform.persistence.PlusMapperFactory;
+import com.lrj.platform.persistence.Rows;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * 终态回推 outbox 的持久化存储（#8）。建在 Flowable 同一个 {@code workflowDataSource} 上的
@@ -34,30 +34,21 @@ public class WorkflowOutbox {
     public static final String STATUS_DELIVERED = "DELIVERED";
     public static final String STATUS_DEAD = "DEAD";
 
-    private final JdbcTemplate jdbc;
+    private final WorkflowOutboxMapper db;
 
     public WorkflowOutbox(DataSource workflowDataSource) {
-        this.jdbc = new JdbcTemplate(workflowDataSource);
+        this.db = PlusMapperFactory.create(workflowDataSource, WorkflowOutboxMapper.class);
         init();
     }
 
     private void init() {
-        jdbc.queryForList("""
-                SELECT INSTANCE_ID, TENANT_ID, TARGET_URL, STATUS, ATTEMPTS, NEXT_ATTEMPT_AT,
-                       LAST_ERROR, CLAIMED_BY, CLAIMED_UNTIL, CREATED_AT, UPDATED_AT
-                FROM WF_OUTBOX WHERE 1=0""");
+        db.readInit1();
         log.info("WF_OUTBOX schema verified");
     }
 
     /** 入队（或重置）一条待投递：status=PENDING、attempts=0、立即可投。 */
     public void enqueue(String instanceId, String tenantId, String targetUrl, long now) {
-        jdbc.update("""
-                INSERT INTO WF_OUTBOX (INSTANCE_ID, TENANT_ID, TARGET_URL, STATUS, ATTEMPTS, NEXT_ATTEMPT_AT, LAST_ERROR, CREATED_AT, UPDATED_AT)
-                VALUES (?, ?, ?, 'PENDING', 0, ?, NULL, ?, ?)
-                ON DUPLICATE KEY UPDATE TARGET_URL=VALUES(TARGET_URL), STATUS='PENDING', ATTEMPTS=0,
-                  NEXT_ATTEMPT_AT=VALUES(NEXT_ATTEMPT_AT), LAST_ERROR=NULL,
-                  CLAIMED_BY=NULL, CLAIMED_UNTIL=NULL, UPDATED_AT=VALUES(UPDATED_AT)""",
-                instanceId, tenantId, targetUrl, now, now, now);
+        db.writeEnqueue1(instanceId, tenantId, targetUrl, now, now, now);
     }
 
     /** 取到期的待投递（STATUS=PENDING 且 NEXT_ATTEMPT_AT<=now），按到期时间升序，最多 limit 条。 */
@@ -68,52 +59,16 @@ public class WorkflowOutbox {
     List<Row> claimDue(long now, int limit, String ownerId, long claimTtlMs) {
         int boundedLimit = Math.max(1, limit);
         long claimedUntil = now + Math.max(1_000L, claimTtlMs);
-        List<String> candidateIds = jdbc.queryForList("""
-                SELECT INSTANCE_ID FROM WF_OUTBOX
-                WHERE (STATUS='PENDING' AND NEXT_ATTEMPT_AT <= ?)
-                   OR (STATUS='IN_PROGRESS' AND CLAIMED_UNTIL <= ?)
-                ORDER BY NEXT_ATTEMPT_AT ASC LIMIT ?""",
-                String.class, now, now, boundedLimit);
+        List<String> candidateIds = db.readClaimDue1(now, now, boundedLimit);
         if (candidateIds.isEmpty()) {
             return List.of();
         }
-        String placeholders = placeholders(candidateIds.size());
-        List<Object> updateArgs = new ArrayList<>(List.of(ownerId, claimedUntil, now));
-        updateArgs.addAll(candidateIds);
-        updateArgs.add(now);
-        updateArgs.add(now);
-        jdbc.update("""
-                UPDATE WF_OUTBOX
-                SET STATUS='IN_PROGRESS', CLAIMED_BY=?, CLAIMED_UNTIL=?, UPDATED_AT=?
-                WHERE INSTANCE_ID IN (%s)
-                  AND ((STATUS='PENDING' AND NEXT_ATTEMPT_AT <= ?)
-                    OR (STATUS='IN_PROGRESS' AND CLAIMED_UNTIL <= ?))""".formatted(placeholders),
-                updateArgs.toArray());
-        List<Object> selectArgs = new ArrayList<>();
-        selectArgs.add(ownerId);
-        selectArgs.addAll(candidateIds);
-        selectArgs.add(boundedLimit);
-        return jdbc.query("""
-                SELECT INSTANCE_ID, TENANT_ID, TARGET_URL, ATTEMPTS, CLAIMED_BY
-                FROM WF_OUTBOX
-                WHERE STATUS='IN_PROGRESS' AND CLAIMED_BY=? AND INSTANCE_ID IN (%s)
-                ORDER BY NEXT_ATTEMPT_AT ASC LIMIT ?""".formatted(placeholders),
-                (rs, n) -> new Row(
-                        rs.getString(1),
-                        rs.getString(2),
-                        rs.getString(3),
-                        rs.getInt(4),
-                        rs.getString(5)),
-                selectArgs.toArray());
+        db.claim(candidateIds, ownerId, claimedUntil, now);
+        return Rows.map(db.claimed(candidateIds, ownerId, boundedLimit), (rs, n) -> new Row(rs.instanceId, rs.tenantId, rs.targetUrl, Rows.intValue(rs.attempts), rs.claimedBy));
     }
 
     public boolean markDelivered(String instanceId, String claimOwner, long now) {
-        return jdbc.update("""
-                UPDATE WF_OUTBOX
-                SET STATUS='DELIVERED', CLAIMED_BY=NULL, CLAIMED_UNTIL=NULL, UPDATED_AT=?
-                WHERE INSTANCE_ID=? AND STATUS='IN_PROGRESS'
-                  AND CLAIMED_BY=? AND CLAIMED_UNTIL > ?""",
-                now, instanceId, claimOwner, now) == 1;
+        return db.writeMarkDelivered1(now, instanceId, claimOwner, now) == 1;
     }
 
     public boolean markRetry(
@@ -123,13 +78,7 @@ public class WorkflowOutbox {
             long nextAttemptAt,
             String lastError,
             long now) {
-        return jdbc.update("""
-                UPDATE WF_OUTBOX
-                SET STATUS='PENDING', ATTEMPTS=?, NEXT_ATTEMPT_AT=?, LAST_ERROR=?,
-                    CLAIMED_BY=NULL, CLAIMED_UNTIL=NULL, UPDATED_AT=?
-                WHERE INSTANCE_ID=? AND STATUS='IN_PROGRESS'
-                  AND CLAIMED_BY=? AND CLAIMED_UNTIL > ?""",
-                attempts, nextAttemptAt, trunc(lastError), now, instanceId, claimOwner, now) == 1;
+        return db.writeMarkRetry1(attempts, nextAttemptAt, trunc(lastError), now, instanceId, claimOwner, now) == 1;
     }
 
     public boolean markDead(
@@ -138,18 +87,12 @@ public class WorkflowOutbox {
             int attempts,
             String lastError,
             long now) {
-        return jdbc.update("""
-                UPDATE WF_OUTBOX
-                SET STATUS='DEAD', ATTEMPTS=?, LAST_ERROR=?,
-                    CLAIMED_BY=NULL, CLAIMED_UNTIL=NULL, UPDATED_AT=?
-                WHERE INSTANCE_ID=? AND STATUS='IN_PROGRESS'
-                  AND CLAIMED_BY=? AND CLAIMED_UNTIL > ?""",
-                attempts, trunc(lastError), now, instanceId, claimOwner, now) == 1;
+        return db.writeMarkDead1(attempts, trunc(lastError), now, instanceId, claimOwner, now) == 1;
     }
 
     /** 删除某实例的 outbox 行（PII 清除 #10 调用）。 */
     public void delete(String instanceId) {
-        jdbc.update("DELETE FROM WF_OUTBOX WHERE INSTANCE_ID=?", instanceId);
+        db.writeDelete1(instanceId);
     }
 
     /**
@@ -169,10 +112,6 @@ public class WorkflowOutbox {
     private static String trunc(String s) {
         if (s == null) return null;
         return s.length() <= 512 ? s : s.substring(0, 512);
-    }
-
-    private static String placeholders(int count) {
-        return Collections.nCopies(count, "?").stream().collect(Collectors.joining(","));
     }
 
     /** 待投递行（投递所需的最小字段）。 */
