@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lrj.platform.asynctask.mapper.DagCheckpointMapper">
+  <select id="lockTask" resultType="com.lrj.platform.asynctask.mapper.AsyncTaskStoreRow">
+    SELECT TENANT_ID, USER_ID, KIND, STATUS, LEASE_OWNER_ID, LEASE_EPOCH, LEASE_EXPIRES_AT
+    FROM ASYNC_TASK WHERE TASK_ID=#{id} AND DELETED=0 FOR UPDATE
+  </select>
+  <select id="read" resultType="com.lrj.platform.asynctask.mapper.DagCheckpointRow">
+    SELECT REVISION, STATE_JSON FROM ASYNC_TASK_DAG_CHECKPOINT WHERE TASK_ID=#{id} AND DELETED=0
+  </select>
+  <insert id="insert">
+    INSERT INTO ASYNC_TASK_DAG_CHECKPOINT (TASK_ID, REVISION, STATE_JSON, UPDATED_AT) VALUES (#{id},1,#{json},#{now})
+  </insert>
+  <update id="update">
+    UPDATE ASYNC_TASK_DAG_CHECKPOINT SET REVISION=REVISION+1, STATE_JSON=#{json}, UPDATED_AT=#{now}
+    WHERE TASK_ID=#{id} AND REVISION=#{revision} AND DELETED=0
+  </update>
+</mapper>

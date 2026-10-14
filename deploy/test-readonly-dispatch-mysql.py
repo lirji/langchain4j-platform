@@ -27,11 +27,12 @@ def main() -> int:
     environment = os.environ.copy()
     environment.update(DISPATCH_TEST_DB_URL=f"jdbc:mysql://127.0.0.1:{args.port}/{schema}?useSSL=false&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true",
                        DISPATCH_TEST_DB_USER="root", DISPATCH_TEST_DB_PASSWORD=credential)
-    log = repository / ".git" / "codex-cross-runtime-reliability-baseline" / "dispatch-mysql.log"
+    log = repository / "async-task-service" / "target" / "dispatch-mysql.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
     try:
         with log.open("w") as output:
             result = subprocess.run(["mvn", "-o", "-B", "-pl", "async-task-service", "-am",
-                                     "-Dtest=ReadOnlyTaskDispatchTest", "-Dsurefire.failIfNoSpecifiedTests=false", "test"],
+                                     "-Dtest=ReadOnlyTaskDispatchTest,DagCheckpointTest", "-Dsurefire.failIfNoSpecifiedTests=false", "test"],
                                     cwd=repository, env=environment, stdout=output, stderr=subprocess.STDOUT)
         print(f"Isolated MySQL read-only dispatch verification: {'PASS' if result.returncode == 0 else 'FAIL'}; log={log}")
         return result.returncode

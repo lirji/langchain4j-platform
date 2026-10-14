@@ -69,5 +69,7 @@ public interface AsyncTaskStoreMapper {
         @Param("running") long running,
         @Param("limit") int limit);
     /** 与任务清理同事务处理原外键级联的调度行。 */
+    /** 检查点沿用父任务保留期限，逻辑删除不代表物理擦除。 */
+    int cleanupCheckpoints(@Param("cutoff") long cutoff);
     int cleanupDispatch(@Param("cutoff") long cutoff);
 }

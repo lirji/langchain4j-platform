@@ -81,6 +81,9 @@ final class AsyncTaskWorkerAuthFilter extends OncePerRequestFilter {
         } else if ("POST".equals(request.getMethod()) && path.endsWith("/events")) {
             action = "event";
             suffix = "/events";
+        } else if ("POST".equals(request.getMethod()) && path.endsWith("/checkpoint")) {
+            action = "checkpoint";
+            suffix = "/checkpoint";
         } else {
             return null;
         }

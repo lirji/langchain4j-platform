@@ -19,6 +19,8 @@ CONSUMED = [
     'boundaries/budget-reservation-reply.schema.json',
     'boundaries/budget-settlement-request.schema.json',
     'boundaries/refund-receipt-request.schema.json',
+    'boundaries/dag-checkpoint.schema.json',
+    'boundaries/dag-checkpoint-request.schema.json',
     'boundaries/readonly-task-claim-request.schema.json',
     'boundaries/readonly-task-claim-reply.schema.json',
     'boundaries/async-task-worker-token-claims.schema.json',

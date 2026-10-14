@@ -30,7 +30,8 @@ import java.util.UUID;
 @ConditionalOnProperty(name = "app.async-task.dispatch.enabled", havingValue = "true")
 public final class ReadOnlyTaskDispatch {
     static final Set<String> KINDS = Set.of("agent.readonly.run.v1", "agent.readonly.dag.v1",
-            "agent.readonly.dag-plan.v1", "agent.readonly.analyst.v1", "agent.readonly.process.v1");
+            "agent.readonly.dag-plan.v1", "agent.readonly.analyst.v1", "agent.readonly.process.v1", "agent.readonly.dag.v2", "agent.readonly.dag-plan.v2",
+            "agent.readonly.analyst.v2", "agent.readonly.process.v2");
     private static final int MAX_TOTAL_QUEUED = 10_000;
     private static final int MAX_TENANT_QUEUED = 100;
     private static final int MAX_RECOVERY_ATTEMPTS = 3;
@@ -81,7 +82,10 @@ public final class ReadOnlyTaskDispatch {
     }
 
     /** 每次最多领取一条; 并发限制和租户轮转在数据库互斥行保护下对所有副本生效. */
-    public ReadOnlyTaskClaimReply claim(String workerId) {
+    public ReadOnlyTaskClaimReply claim(String workerId) { return claim(workerId, 0); }
+
+    /** 仅显式支持检查点版本1的worker才能接管v2，保留v1混合运行。 */
+    public ReadOnlyTaskClaimReply claim(String workerId, int checkpointVersion) {
         return tx.execute(status -> {
             String cursor = Rows.one(db.readClaim1());
             long now = Instant.now().toEpochMilli();
@@ -89,7 +93,7 @@ public final class ReadOnlyTaskDispatch {
             if (active != null && active >= globalLimit) return null;
             // 一次清理至多16个耗尽候选, 避免坏任务造成无界事务或挡住其他租户.
             for (int scanned = 0; scanned < 16; scanned++) {
-                List<String> candidates = db.readClaim3(now, now, tenantLimit, cursor == null ? "" : cursor);
+                List<String> candidates = db.readClaim3(now, now, tenantLimit, cursor == null ? "" : cursor, checkpointVersion);
                 if (candidates.isEmpty()) return null;
                 String id = candidates.getFirst();
                 var leased = store.lease(id, workerId, Instant.ofEpochMilli(now).plusSeconds(leaseSeconds), null);

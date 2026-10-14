@@ -474,6 +474,8 @@ public class AsyncTaskController {
             "dag-levels",
             "dag-level-start",
             "dag-worker-start",
+            "dag-worker-queued",
+            "dag-worker-reused",
             "dag-worker-result",
             "dag-level-complete",
             "dag-synthesis-start",

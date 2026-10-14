@@ -26,6 +26,7 @@
     <select id="readClaim3" resultType="java.lang.String">
         SELECT t.TASK_ID FROM ASYNC_TASK t JOIN ASYNC_TASK_DISPATCH d ON t.TASK_ID=d.TASK_ID
         WHERE t.DELETED=0 AND d.DELETED=0 AND (t.STATUS IN ('PENDING','RUNNING')
+          AND (t.KIND NOT LIKE 'agent.readonly.%.v2' OR #{checkpointVersion}=1)
           AND (t.LEASE_EXPIRES_AT IS NULL OR t.LEASE_EXPIRES_AT&lt;=#{leaseExpiresAt})
           AND (SELECT COUNT(*) FROM ASYNC_TASK b JOIN ASYNC_TASK_DISPATCH bd ON b.TASK_ID=bd.TASK_ID
             WHERE b.DELETED=0 AND bd.DELETED=0 AND b.TENANT_ID=t.TENANT_ID AND b.STATUS IN ('PENDING','RUNNING')

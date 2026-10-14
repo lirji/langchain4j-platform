@@ -31,7 +31,9 @@ public final class ReadOnlyTaskDispatchController {
                 || !"_dispatch".equals(principal.tenantId()) || !"_dispatch".equals(principal.actorUserId())
                 || !principal.workerId().equals(request.workerId()))
             return ResponseEntity.status(403).build();
-        var result = dispatch.claim(request.workerId());
+        int version = request.checkpointVersion() == null ? 0 : request.checkpointVersion();
+        if (version != 0 && version != 1) return ResponseEntity.badRequest().build();
+        var result = dispatch.claim(request.workerId(), version);
         return result == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(result);
     }
 }

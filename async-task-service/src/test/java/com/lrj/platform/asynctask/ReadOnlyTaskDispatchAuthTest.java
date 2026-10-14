@@ -54,6 +54,6 @@ class ReadOnlyTaskDispatchAuthTest {
         String proof = worker.mint(control, "agentscope-platform.one", "dispatch", "readonly-dispatch");
         assertThat(invoke(proof, "agentscope-platform.two", false)).isEqualTo(403);
         assertThat(invoke(proof, "agentscope-platform.one", false)).isEqualTo(204);
-        verify(dispatch).claim("agentscope-platform.one");
+        verify(dispatch).claim("agentscope-platform.one", 0);
     }
 }

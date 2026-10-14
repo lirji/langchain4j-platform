@@ -28,7 +28,8 @@ public interface ReadOnlyTaskDispatchMapper {
         @Param("leaseExpiresAt") Long leaseExpiresAt,
         @Param("leaseExpiresAt2") Long leaseExpiresAt2,
         @Param("limit") Integer limit,
-        @Param("tenantId") String tenantId);
+        @Param("tenantId") String tenantId,
+        @Param("checkpointVersion") Integer checkpointVersion);
     /** 保留原readClaim4操作的条件与影响行数契约。 */
     List<Integer> readClaim4(@Param("taskId") String taskId);
     /** 保留原writeClaim1操作的条件与影响行数契约。 */

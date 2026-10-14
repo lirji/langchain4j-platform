@@ -324,6 +324,7 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
             int removed = db.writeCleanup1(cutoff);
             // 逻辑删除不会触发旧外键的ON DELETE CASCADE，因此在同一事务标记调度上下文。
             db.cleanupDispatch(cutoff);
+            db.cleanupCheckpoints(cutoff);
             return removed;
         });
         int removed = result == null ? 0 : result;

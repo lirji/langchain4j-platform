@@ -200,6 +200,20 @@ class AgentScopeContractConformanceTest {
                 com.lrj.platform.protocol.metering.BudgetReservationReply.class);
     }
 
+    @Test
+    void checkpoint_contract_is_language_neutral_and_versioned() {
+        var state = Map.<String,Object>of("schemaVersion", 1, "binding", "a".repeat(64), "deadline", 9999999999999L,
+            "modelCalls", 1, "reservedTokens", 100, "operations", Map.of());
+        assertProduces("boundaries/dag-checkpoint.schema.json", null,
+            new com.lrj.platform.protocol.asynctask.DagCheckpoint(1, state));
+        assertProduces("boundaries/dag-checkpoint-request.schema.json", null,
+            new com.lrj.platform.protocol.asynctask.DagCheckpointRequest(1, 0L, state));
+        assertProduces("boundaries/dag-checkpoint-request.schema.json", null,
+            new com.lrj.platform.protocol.asynctask.DagCheckpointRequest(1, null, null));
+        assertProduces("boundaries/readonly-task-claim-request.schema.json", null,
+            new com.lrj.platform.protocol.asynctask.ReadOnlyTaskClaimRequest("agentscope-platform.one", 1));
+    }
+
     /** 生产方向：Java 序列化出来的 JSON 必须通过 schema 校验。 */
     private static void assertProduces(String contract, String definition, Object payload) {
         Set<ValidationMessage> violations =

@@ -1,4 +1,5 @@
 package com.lrj.platform.protocol.asynctask;
-
-/** 独立只读worker单条领取请求, 身份必须与专用JWT一致。 */
-public record ReadOnlyTaskClaimRequest(String workerId) { }
+/** checkpointVersion 缺省为0，旧 worker 不可领取节点恢复任务。 */
+public record ReadOnlyTaskClaimRequest(String workerId, Integer checkpointVersion) {
+    public ReadOnlyTaskClaimRequest(String workerId) { this(workerId, 0); }
+}
