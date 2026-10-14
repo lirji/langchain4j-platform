@@ -21,7 +21,7 @@ Java八个持久化模块及platform-persistence、父/模块POM、8个增量迁
 
 ## 未完成
 
-代码完成；正在完成逻辑删除与验证文档的最后分批提交，然后正常合并/推送main并切换main。实际交付见DELIVERY_RESULT.md。
+功能与验证已提交并正常推送远程main（03944b1），逻辑删除提交2db7a04。仅补充交付记录及远程CI状态；最终切回main。实际交付见DELIVERY_RESULT.md。
 
 ## 当前问题
 
@@ -32,7 +32,7 @@ Java八个持久化模块及platform-persistence、父/模块POM、8个增量迁
 
 ## 下一步建议
 
-核对Git交付结果；若尚未推送，按现有授权正常推送main，不强推，不部署。无待实现功能。
+无待实现功能；main已发布，部署按新增迁移与兼容边界执行，不隐含生产部署授权。
 
 ## 恢复 Prompt
 
