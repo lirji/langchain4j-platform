@@ -24,10 +24,7 @@ public class InMemoryUserProfileStore implements UserProfileStore {
     }
 
     static String norm(String s) {
-        if (s == null) {
-            return "";
-        }
-        return s.toLowerCase().replaceAll("[\\s\\p{Punct}，。、；：！？（）【】「」]", "");
+        return ProfileMemoryText.normalize(s);
     }
 
     @Override

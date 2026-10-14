@@ -4,7 +4,7 @@
 
 | 资源 | Docker 地址 | 项目隔离 |
 | --- | --- | --- |
-| MySQL 8.4 | infra-mysql84:3306 | lc4j_auth / async_task / flowable / knowledge_graph / knowledge_ingestion / order_service / channel / nl2sql_demo，各库名称均加 lc4j_，应用/迁移分账号 |
+| MySQL 8.4 | infra-mysql84:3306 | lc4j_auth / async_task / flowable / knowledge_graph / knowledge_ingestion / order_service / conversation / channel / nl2sql_demo，各库名称均加 lc4j_，应用/迁移分账号 |
 | PostgreSQL 16 | infra-postgres16:5432 | lc4j_litellm，独立 owner；本项目明确选择共享实例而非额外部署 PG |
 | Redis 7 | infra-redis7:6379 | lc4j ACL 用户，仅 lc4j:* 键；独立前缀，保留原 DB index |
 | Kafka 3.8 | infra-kafka38:9092 | lc4j. 主题、独立消费组，显式建主题 |

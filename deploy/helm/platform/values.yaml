@@ -260,6 +260,9 @@ config:
   EDGE_CASDOOR_MODE: "dual"
 
   # --- conversation（可选 RAG 增强） ---
+  CONVERSATION_MEMORY_PROFILE_STORE: "jdbc"
+  CONVERSATION_PROFILE_DB_URL: "jdbc:mysql://mysql:3306/conversation?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+  CONVERSATION_PROFILE_DB_USER: "conversation_app"
   CONVERSATION_RAG_ENABLED: "false"
   CONVERSATION_RAG_TOP_K: "5"
   # 独立 conversation runtime 尚未通过创建门禁；仅预留默认关闭的无状态 shadow client。
@@ -362,6 +365,7 @@ migrations:
     ASYNC_TASK_MIGRATION_DB_PASSWORD: "change-me"
     WORKFLOW_MIGRATION_DB_PASSWORD: "change-me"
     ORDER_MIGRATION_DB_PASSWORD: "change-me"
+    CONVERSATION_PROFILE_MIGRATION_DB_PASSWORD: "change-me"
     RAG_INGESTION_MIGRATION_DB_PASSWORD: "change-me"
     RAG_GRAPH_MIGRATION_DB_PASSWORD: "change-me"
     CHANNEL_MIGRATION_DB_PASSWORD: "change-me"
@@ -387,6 +391,11 @@ migrations:
       url: "jdbc:mysql://mysql:3306/order_service?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&nullCatalogMeansCurrent=true"
       user: order_migrator
       passwordKey: ORDER_MIGRATION_DB_PASSWORD
+    conversation:
+      enabled: true
+      url: "jdbc:mysql://mysql:3306/conversation?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+      user: conversation_migrator
+      passwordKey: CONVERSATION_PROFILE_MIGRATION_DB_PASSWORD
     knowledge-ingestion:
       enabled: false
       url: "jdbc:mysql://mysql:3306/knowledge_ingestion?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&nullCatalogMeansCurrent=true"
@@ -441,6 +450,7 @@ secrets:
     RAG_GRAPH_DB_PASSWORD: "change-me"
     RAG_INGESTION_DB_PASSWORD: "change-me"
     ORDER_DB_PASSWORD: "change-me"
+    CONVERSATION_PROFILE_DB_PASSWORD: "change-me"
     # auth-service 账号库口令（AUTH_STORE=jdbc 时）。
     AUTH_DB_PASSWORD: "change-me"
     CHANNEL_DEDUP_DB_PASSWORD: "change-me"
@@ -647,6 +657,8 @@ services:
     port: 8081
     replicaCount: 1
     env:
+      - name: CONVERSATION_PROFILE_DB_PASSWORD
+        secret: CONVERSATION_PROFILE_DB_PASSWORD
       - name: APP_TOKEN_BUDGET_RESERVATIONS_API_ENABLED
         value: "false"
       - name: APP_TOKEN_BUDGET_RESERVATIONS_SERVICE_SECRET

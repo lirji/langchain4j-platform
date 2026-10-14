@@ -163,6 +163,14 @@ services:
       MIGRATION_DB_USER: order_migrator
       MIGRATION_DB_PASSWORD: order-migration-dev
 
+  migrate-conversation:
+    <<: *schema-migration
+    environment:
+      MIGRATION_SCHEMA: conversation
+      MIGRATION_DB_URL: jdbc:mysql://mysql:3306/conversation?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      MIGRATION_DB_USER: conversation_migrator
+      MIGRATION_DB_PASSWORD: ${CONVERSATION_PROFILE_MIGRATION_DB_PASSWORD:-change-me}
+
   migrate-channel:
     <<: *schema-migration
     environment:
@@ -282,6 +290,10 @@ services:
       CONVERSATION_ROUTER_ORDER_ENABLED: ${CONVERSATION_ROUTER_ORDER_ENABLED:-true}
       ORDER_BASE_URL: http://order-service:8093
       CHAT_CASCADE_ENABLED: ${CHAT_CASCADE_ENABLED:-true}                        # /chat/cascade 级联降级（cheap/strong 留空退化默认模型）
+      CONVERSATION_MEMORY_PROFILE_STORE: ${CONVERSATION_MEMORY_PROFILE_STORE:-jdbc}
+      CONVERSATION_PROFILE_DB_URL: jdbc:mysql://mysql:3306/conversation?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      CONVERSATION_PROFILE_DB_USER: conversation_app
+      CONVERSATION_PROFILE_DB_PASSWORD: ${CONVERSATION_PROFILE_DB_PASSWORD:-change-me}
       CONVERSATION_MEMORY_PROFILE_ENABLED: ${CONVERSATION_MEMORY_PROFILE_ENABLED:-true}  # /chat/memory + GET/DELETE /memory/profile 长期画像
       # chat.vision：依赖 vision-service 启用且配了可路由的视觉模型（见下方 vision-service）；否则 /chat/vision 上游不可用
       CONVERSATION_VISION_ENABLED: ${CONVERSATION_VISION_ENABLED:-true}
@@ -297,9 +309,14 @@ services:
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:
-      - litellm
-      - knowledge-service
-      - order-service
+      litellm:
+        condition: service_started
+      knowledge-service:
+        condition: service_started
+      order-service:
+        condition: service_started
+      migrate-conversation:
+        condition: service_completed_successfully
     ports:
       - "8081:8081"
 

@@ -16,7 +16,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import java.util.concurrent.Executor;
 
 /**
- * 长期记忆/用户画像装配（对齐单体 {@code MemoryProfileConfig}）。默认关；开启后构建内存画像存储、
+ * 长期记忆/用户画像装配。开启后默认由 {@link ProfileJdbcConfig} 提供持久化画像存储、
  * temp=0 抽取器、观察线程池，以及 recall/observe 编排与带记忆对话服务。
  */
 @Configuration
@@ -26,8 +26,7 @@ public class MemoryProfileConfig {
     private static final Logger log = LoggerFactory.getLogger(MemoryProfileConfig.class);
 
     @Bean
-    @ConditionalOnProperty(name = "app.conversation.memory.profile.store", havingValue = "in-memory",
-            matchIfMissing = true)
+    @ConditionalOnProperty(name = "app.conversation.memory.profile.store", havingValue = "in-memory")
     UserProfileStore userProfileStore(@Value("${app.conversation.memory.profile.max-items:50}") int maxItems) {
         log.info("User profile store: in-memory (maxItems={})", maxItems);
         return new InMemoryUserProfileStore(maxItems);

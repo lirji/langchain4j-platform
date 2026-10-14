@@ -44,3 +44,10 @@ GRANT ALL PRIVILEGES ON knowledge_ingestion.* TO 'knowledge_ingestion_migrator'@
 GRANT ALL PRIVILEGES ON order_service.* TO 'order_migrator'@'%';
 GRANT ALL PRIVILEGES ON channel.* TO 'channel_migrator'@'%';
 GRANT ALL PRIVILEGES ON nl2sql_demo.* TO 'analytics_demo_migrator'@'%';
+
+-- Local placeholder only; provision real secrets separately for shared or production environments.
+CREATE DATABASE IF NOT EXISTS conversation CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS 'conversation_app'@'%' IDENTIFIED BY 'change-me';
+CREATE USER IF NOT EXISTS 'conversation_migrator'@'%' IDENTIFIED BY 'change-me';
+GRANT SELECT, INSERT, UPDATE, DELETE ON conversation.* TO 'conversation_app'@'%';
+GRANT ALL PRIVILEGES ON conversation.* TO 'conversation_migrator'@'%';

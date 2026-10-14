@@ -85,7 +85,13 @@ app:
       # 端点 /chat/memory、GET/DELETE /memory/profile。默认开（每轮多一次 temp=0 抽取；置 false 关闭）。
       profile:
         enabled: ${CONVERSATION_MEMORY_PROFILE_ENABLED:true}
-        store: ${CONVERSATION_MEMORY_PROFILE_STORE:in-memory}  # in-memory（redis 变体待补）
+        store: ${CONVERSATION_MEMORY_PROFILE_STORE:jdbc}  # jdbc 持久化；in-memory 仅显式开发测试
+        datasource:
+          url: ${CONVERSATION_PROFILE_DB_URL:jdbc:mysql://localhost:3306/conversation?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+          username: ${CONVERSATION_PROFILE_DB_USER:conversation_app}
+          password: ${CONVERSATION_PROFILE_DB_PASSWORD:}
+          maximum-pool-size: ${CONVERSATION_PROFILE_DB_POOL_SIZE:4}
+          connection-timeout-ms: ${CONVERSATION_PROFILE_DB_CONNECTION_TIMEOUT_MS:3000}
         max-items: ${CONVERSATION_MEMORY_PROFILE_MAX_ITEMS:50}
         recall-limit: ${CONVERSATION_MEMORY_PROFILE_RECALL_LIMIT:12}
         async: ${CONVERSATION_MEMORY_PROFILE_ASYNC:true}

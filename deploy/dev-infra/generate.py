@@ -5,9 +5,10 @@ ROOT=pathlib.Path(__file__).resolve().parents[2]
 model=json.loads(subprocess.check_output(['docker','compose','-f',str(ROOT/'deploy/docker-compose.yml'),
     '-f',str(ROOT/'deploy/docker-compose.knowledge-split.yml'),'config','--no-interpolate','--format','json']))
 DB={'auth':'auth','async_task':'async','flowable':'workflow','knowledge_graph':'graph','knowledge_ingestion':'ingest',
-    'order_service':'order','channel':'channel','nl2sql_demo':'analytics'}
+    'order_service':'order','conversation':'conversation','channel':'channel','nl2sql_demo':'analytics'}
 USERS={'auth_app':('auth','APP'),'async_task_app':('async','APP'),'workflow_app':('workflow','APP'),
     'knowledge_graph_app':('graph','APP'),'knowledge_ingestion_app':('ingest','APP'),'order_app':('order','APP'),
+    'conversation_app':('conversation','APP'),'conversation_migrator':('conversation','MIGRATOR'),
     'channel_app':('channel','APP'),'nl2sql_ro':('analytics','APP'),
     'auth_migrator':('auth','MIGRATOR'),'async_task_migrator':('async','MIGRATOR'),'workflow_migrator':('workflow','MIGRATOR'),
     'knowledge_graph_migrator':('graph','MIGRATOR'),'knowledge_ingestion_migrator':('ingest','MIGRATOR'),

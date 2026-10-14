@@ -3,8 +3,7 @@ package com.lrj.platform.conversation.memory.profile;
 import java.util.List;
 
 /**
- * 用户长期记忆存储，按 {@code (tenant, user)} 隔离。默认内存实现；redis 变体留待需要时补
- * （沿用平台「接口 + @ConditionalOnProperty 变体」约定）。
+ * 用户长期记忆存储，按 {@code (tenant, user)} 隔离。默认 JDBC 持久化，内存实现仅供显式开发测试。
  */
 public interface UserProfileStore {
 
