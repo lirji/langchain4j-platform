@@ -476,6 +476,10 @@ public class AsyncTaskController {
             "dag-worker-start",
             "dag-worker-queued",
             "dag-worker-reused",
+            // 诊断仅扩展事件种类，仍复用 worker 身份、活动租约及幂等校验。
+            "dag-diagnostic-model",
+            "dag-diagnostic-operation",
+            "dag-diagnostic-summary",
             "dag-worker-result",
             "dag-level-complete",
             "dag-synthesis-start",

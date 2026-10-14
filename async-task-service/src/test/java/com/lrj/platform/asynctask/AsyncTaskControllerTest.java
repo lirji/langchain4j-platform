@@ -10,6 +10,8 @@ import com.lrj.platform.security.TenantContext;
 import com.lrj.platform.security.AsyncTaskWorkerToken;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Duration;
@@ -381,8 +383,10 @@ class AsyncTaskControllerTest {
         verify(outbox).listDead("acme", 200);
     }
 
-    @Test
-    void progressAppendRequiresAgentKindTenantAndLiveWorkerLease() {
+    @ParameterizedTest
+    @ValueSource(strings = {"dag-worker-start", "dag-diagnostic-model",
+            "dag-diagnostic-operation", "dag-diagnostic-summary"})
+    void progressAppendRequiresAgentKindTenantAndLiveWorkerLease(String eventName) {
         TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("agent")));
         AsyncTaskStore store = new AsyncTaskStore(Duration.ofHours(1));
         InMemoryAsyncTaskEventJournal journal = new InMemoryAsyncTaskEventJournal();
@@ -401,7 +405,7 @@ class AsyncTaskControllerTest {
                 .getBody();
         AsyncTaskEventAppendRequest event = new AsyncTaskEventAppendRequest(
                 "worker-1:step-1",
-                "dag-worker-start",
+                eventName,
                 Map.of("taskId", "t1"),
                 "worker-1",
                 leased.leaseEpoch());
@@ -409,14 +413,20 @@ class AsyncTaskControllerTest {
         var first = controller.appendEvent(task.taskId(), event, worker("worker-1"));
         var duplicate = controller.appendEvent(task.taskId(), event, worker("worker-1"));
         var wrongWorker = controller.appendEvent(task.taskId(), new AsyncTaskEventAppendRequest(
-                "worker-2:step-1", "dag-worker-start", Map.of(), "worker-2", leased.leaseEpoch()),
+                "worker-2:step-1", eventName, Map.of(), "worker-2", leased.leaseEpoch()),
                 worker("worker-2"));
 
+        assertThat(controller.appendEvent(task.taskId(), new AsyncTaskEventAppendRequest(
+                "stale-epoch", eventName, Map.of(), "worker-1", leased.leaseEpoch() + 1),
+                worker("worker-1")).getStatusCode().value()).isEqualTo(409);
+        assertThat(controller.appendEvent(task.taskId(), new AsyncTaskEventAppendRequest(
+                "unknown-event", "dag-diagnostic-arbitrary", Map.of(), "worker-1", leased.leaseEpoch()),
+                worker("worker-1")).getStatusCode().value()).isEqualTo(400);
         assertThat(first.getStatusCode().value()).isEqualTo(200);
         assertThat(duplicate.getBody()).isEqualTo(first.getBody());
         assertThat(wrongWorker.getStatusCode().value()).isEqualTo(409);
         assertThat(journal.eventsAfter(task.taskId(), 0)).extracting(AsyncTaskStreamEvent::event)
-                .containsExactly("PENDING", "RUNNING", "dag-worker-start");
+                .containsExactly("PENDING", "RUNNING", eventName);
         verify(applicationEvents, times(1)).publishEvent(argThat((Object item) ->
                 item instanceof AsyncTaskEvent asyncEvent
                         && asyncEvent.streamEvent() != null
