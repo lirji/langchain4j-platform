@@ -44,3 +44,5 @@
 - Javaf89cee0：observability新增五项地址与真实management端口一致性约束；production-cutover/runtime-hardening通过。
 - 固定提交镜像发布后，整栈`compose up --wait`退出0；14个Java管理探针UP、AgentScope完整readiness UP、前端200、认证质量列表200、匿名经网关401。详见RUNTIME_EVIDENCE.json。
 - 无需重跑未改动的全部Maven/前端测试；本次追加仅Python探针和Compose，原检索代码/镜像保持cfa1d5b。
+
+- Compose源码f89cee0的远程AgentScope Cutover CI38511783140和Tax AI CI38511783134均SUCCESS；Java供应链CI [38511783086](https://github.com/lirji/langchain4j-platform/actions/runs/38511783086) 已结束，仍在`Scan aggregate dependency SBOM`失败。未取消该运行，未将历史漏洞债务标记为修复。

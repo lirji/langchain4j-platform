@@ -23,7 +23,7 @@
 
 ## 当前问题
 
-- Java源码cfa1d5b远程功能CI通过但SBOM失败；Python修复源码CI及镜像扫描通过，两者不可混同。
+- Java源码cfa1d5b远程功能CI通过但SBOM失败；追加Compose源码f89cee0的Cutover/Tax CI通过，供应链38511783086仍在SBOM失败；Python修复源码CI及镜像扫描通过，两者不可混同。
 - 保留async-task恢复表RECOVERY_DISPATCH_LOCK_20261014和私有备份，未更改旧任务数据/已执行迁移。最终迁移全部成功。
 - 本地凭据、固定镜像包装脚本与恢复证据在deploy/.dev-infra-state/rag-quality-release/及忽略配置文件中；旧镜像保留。
 - 既有worktree/用户未跟踪文件未清理；冒烟容器停止，测试库/S3原文/结果保留供核查。
