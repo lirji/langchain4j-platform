@@ -26,5 +26,15 @@ public record DocumentInfo(
         int segmentCount,
         int version,
         Instant uploadedAt,
-        String category) {
+        String category,
+        boolean deleted) {
+    /** 兼容既有调用和旧JSON：未携带deleted的文档仍按正常文档处理。 */
+    public DocumentInfo(String docId, String tenantId, String displayName, String contentType,
+                        long sizeBytes, int segmentCount, int version, Instant uploadedAt, String category) {
+        this(docId, tenantId, displayName, contentType, sizeBytes, segmentCount, version, uploadedAt, category, false);
+    }
+    /** 保留版本墓碑，迟到的入库提交不能让已删除文档重新可见。 */
+    public DocumentInfo tombstone() {
+        return new DocumentInfo(docId, tenantId, displayName, contentType, sizeBytes, segmentCount, version, uploadedAt, category, true);
+    }
 }

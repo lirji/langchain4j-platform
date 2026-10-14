@@ -45,7 +45,13 @@ public class RedisDocumentRegistry implements DocumentRegistry {
 
     @Override
     public void put(DocumentInfo info) {
-        redis.opsForHash().put(key(info.tenantId()), info.docId(), toJson(info));
+        var script = new org.springframework.data.redis.core.script.DefaultRedisScript<Long>("""
+                local raw = redis.call('HGET', KEYS[1], ARGV[1])
+                if raw and cjson.decode(raw).deleted == true then return 0 end
+                redis.call('HSET', KEYS[1], ARGV[1], ARGV[2]); return 1
+                """, Long.class);
+        if (!Long.valueOf(1).equals(redis.execute(script, List.of(key(info.tenantId())), info.docId(), toJson(info))))
+            throw new IllegalStateException("document retired");
     }
 
     /** Redis Lua 在同一原子操作中读取版本并提交；重复版本保留首次提交的元数据。 */
@@ -54,7 +60,11 @@ public class RedisDocumentRegistry implements DocumentRegistry {
         var script = new org.springframework.data.redis.core.script.DefaultRedisScript<Long>("""
                 local raw = redis.call('HGET', KEYS[1], ARGV[1])
                 local version = 0
-                if raw then version = tonumber(cjson.decode(raw).version) end
+                if raw then
+                    local current = cjson.decode(raw)
+                    if current.deleted == true then return 0 end
+                    version = tonumber(current.version)
+                end
                 local incoming = tonumber(ARGV[2])
                 if version == incoming then return 1 end
                 if version + 1 ~= incoming then return 0 end
@@ -65,10 +75,24 @@ public class RedisDocumentRegistry implements DocumentRegistry {
                 info.docId(), Integer.toString(info.version()), toJson(info)));
     }
 
+    /** Lua同一原子操作保存版本墓碑；重放删除成功，但不能删除已经推进的新版本。 */
+    @Override
+    public boolean retireVersion(String tenantId, String docId, long expectedVersion) {
+        var script = new org.springframework.data.redis.core.script.DefaultRedisScript<Long>("""
+                local raw = redis.call('HGET', KEYS[1], ARGV[1])
+                if not raw then return 0 end
+                local current = cjson.decode(raw)
+                if tonumber(current.version) ~= tonumber(ARGV[2]) then return 0 end
+                current.deleted = true
+                redis.call('HSET', KEYS[1], ARGV[1], cjson.encode(current)); return 1
+                """, Long.class);
+        return Long.valueOf(1).equals(redis.execute(script, List.of(key(tenantId)), docId, Long.toString(expectedVersion)));
+    }
+
     @Override
     public Optional<DocumentInfo> get(String tenantId, String docId) {
         Object json = redis.opsForHash().get(key(tenantId), docId);
-        return json == null ? Optional.empty() : Optional.of(fromJson(json.toString()));
+        return json == null ? Optional.empty() : Optional.of(fromJson(json.toString())).filter(info -> !info.deleted());
     }
 
     @Override
@@ -76,7 +100,8 @@ public class RedisDocumentRegistry implements DocumentRegistry {
         List<Object> values = redis.opsForHash().values(key(tenantId));
         List<DocumentInfo> out = new ArrayList<>(values.size());
         for (Object v : values) {
-            out.add(fromJson(v.toString()));
+            DocumentInfo info = fromJson(v.toString());
+            if (!info.deleted()) out.add(info);
         }
         return out;
     }
@@ -87,7 +112,9 @@ public class RedisDocumentRegistry implements DocumentRegistry {
         if (existing.isPresent()) {
             // 删除文档和其检查点必须原子完成，旧GC不能在重建文档之后写回旧进度。
             redis.execute(new org.springframework.data.redis.core.script.DefaultRedisScript<Long>(
-                    "redis.call('HDEL', KEYS[1], ARGV[1]); redis.call('HDEL', KEYS[2], ARGV[1]); return 1", Long.class),
+                    "local raw = redis.call('HGET', KEYS[1], ARGV[1]); "
+                    + "if raw and cjson.decode(raw).deleted == true then return 0 end; "
+                    + "redis.call('HDEL', KEYS[1], ARGV[1]); redis.call('HDEL', KEYS[2], ARGV[1]); return 1", Long.class),
                     List.of(key(tenantId), gcKey(tenantId)), docId);
         }
         return existing;

@@ -29,6 +29,11 @@ public interface DocumentRegistry {
         throw new UnsupportedOperationException("registry does not support atomic version commit");
     }
 
+    /** 按版本原子退役并保留墓碑；重复退役幂等，旧worker不得复活此文档ID。 */
+    default boolean retireVersion(String tenantId, String docId, long expectedVersion) {
+        throw new UnsupportedOperationException("registry does not support atomic retirement");
+    }
+
     Optional<DocumentInfo> get(String tenantId, String docId);
 
     List<DocumentInfo> list(String tenantId);

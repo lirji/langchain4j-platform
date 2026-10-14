@@ -21,6 +21,27 @@ class DocumentVersionCommitTest {
         assertThat(registry.get("other", "doc")).isEmpty();
     }
 
+    @Test void retiredDocumentCannotBeRecreatedByLegacyPutOrVersionCommit() {
+        var registry = new InMemoryDocumentRegistry();
+        registry.put(info(1, "first"));
+        assertThat(registry.retireVersion("acme", "doc", 2)).isFalse();
+        assertThat(registry.retireVersion("other", "doc", 1)).isFalse();
+        assertThat(registry.retireVersion("acme", "doc", 1)).isTrue();
+        assertThat(registry.retireVersion("acme", "doc", 1)).isTrue();
+        assertThat(registry.get("acme", "doc")).isEmpty();
+        assertThat(registry.list("acme")).isEmpty();
+        assertThat(registry.remove("acme", "doc")).isEmpty();
+        assertThat(registry.commitVersion(info(1, "late"))).isFalse();
+        assertThat(registry.commitVersion(info(2, "late"))).isFalse();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> registry.put(info(1, "legacy")))
+                .isInstanceOf(IllegalStateException.class);
+    }
+    @Test void oldJsonWithoutDeletedFieldRemainsReadable() throws Exception {
+        var json = new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
+        var legacy = json.valueToTree(info(1, "first"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode) legacy).remove("deleted");
+        assertThat(json.treeToValue(legacy, DocumentInfo.class).deleted()).isFalse();
+    }
     private DocumentInfo info(int version, String name) {
         return new DocumentInfo("doc", "acme", name, "text/plain", 5, 1, version,
                 Instant.parse("2026-09-08T00:00:00Z"), null);

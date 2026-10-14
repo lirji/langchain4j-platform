@@ -26,7 +26,10 @@ public class InMemoryDocumentRegistry implements DocumentRegistry {
     @Override
     public void put(DocumentInfo info) {
         map.computeIfAbsent(info.tenantId(), k -> new ConcurrentHashMap<>())
-                .put(info.docId(), info);
+                .compute(info.docId(), (key, current) -> {
+                    if (current != null && current.deleted()) throw new IllegalStateException("document retired");
+                    return info;
+                });
     }
 
     /** 在同一文档的 compute 内校验并提交，防止旧 worker 覆盖较新版本。 */
@@ -34,6 +37,7 @@ public class InMemoryDocumentRegistry implements DocumentRegistry {
     public boolean commitVersion(DocumentInfo info) {
         var accepted = new java.util.concurrent.atomic.AtomicBoolean();
         map.computeIfAbsent(info.tenantId(), key -> new ConcurrentHashMap<>()).compute(info.docId(), (key, current) -> {
+            if (current != null && current.deleted()) return current;
             int version = current == null ? 0 : current.version();
             if (version == info.version()) { accepted.set(true); return current; }
             if (version + 1 == info.version()) { accepted.set(true); return info; }
@@ -42,18 +46,29 @@ public class InMemoryDocumentRegistry implements DocumentRegistry {
         return accepted.get();
     }
 
+    /** 同一文档的compute同时校验版本并保存墓碑，拒绝与新版本提交交错。 */
+    @Override
+    public boolean retireVersion(String tenantId, String docId, long expectedVersion) {
+        var accepted = new java.util.concurrent.atomic.AtomicBoolean();
+        map.computeIfAbsent(tenantId, key -> new ConcurrentHashMap<>()).computeIfPresent(docId, (key, current) -> {
+            if (current.version() != expectedVersion) return current;
+            accepted.set(true); return current.tombstone();
+        });
+        return accepted.get();
+    }
+
     @Override
     public Optional<DocumentInfo> get(String tenantId, String docId) {
         ConcurrentMap<String, DocumentInfo> tenantMap = map.get(tenantId);
         if (tenantMap == null) return Optional.empty();
-        return Optional.ofNullable(tenantMap.get(docId));
+        return Optional.ofNullable(tenantMap.get(docId)).filter(info -> !info.deleted());
     }
 
     @Override
     public List<DocumentInfo> list(String tenantId) {
         ConcurrentMap<String, DocumentInfo> tenantMap = map.get(tenantId);
         if (tenantMap == null) return List.of();
-        return List.copyOf(tenantMap.values());
+        return tenantMap.values().stream().filter(info -> !info.deleted()).toList();
     }
 
     @Override
@@ -62,6 +77,7 @@ public class InMemoryDocumentRegistry implements DocumentRegistry {
         if (tenantMap == null) return Optional.empty();
         var removed = new java.util.concurrent.atomic.AtomicReference<DocumentInfo>();
         tenantMap.computeIfPresent(docId, (id, value) -> {
+            if (value.deleted()) return value;
             cleaned.computeIfAbsent(tenantId, ignored -> new ConcurrentHashMap<>()).remove(docId);
             removed.set(value); return null;
         });

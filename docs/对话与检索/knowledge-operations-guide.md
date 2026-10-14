@@ -39,3 +39,7 @@
 隔离数据库验证：`python3 deploy/test-knowledge-operations-mysql.py`，默认复用 dev_infra MySQL8.4，临时库及随机账户在finally中清理。包含持久化重建、租户/用户隔离、幂等、版本、并发审核、发布占位原子性、失败恢复、响应丢失恢复、API契约，检查所有新表字段注释和DML账户禁止DDL。
 
 完整应用链路测试 `KnowledgeOperationsPipelineTest` 使用真实 JDBC任务、应用服务、worker、解析、HashEmbedding与检索，外部原文/向量/registry为离线内存适配器。它不替代生产S3/Qdrant/Redis或真实模型验收。当前结果见 [本轮测试报告](../delivery/memory-knowledge-operations/TEST_RESULT.md)。
+
+## 外部知识源自动同步
+
+产品说明或客服FAQ可通过[HTTP知识源ETL](http-knowledge-sync-guide.md)增量入库，复用现有任务与worker，支持来源更新、显式删除传播和断点恢复。功能默认关闭。

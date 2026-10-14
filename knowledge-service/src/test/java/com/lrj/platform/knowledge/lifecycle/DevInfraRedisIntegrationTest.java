@@ -39,6 +39,19 @@ class DevInfraRedisIntegrationTest {
             assertThat(registry.commitVersion(second)).isTrue();
             assertThat(registry.commitVersion(first)).isFalse();
             assertThat(registry.get(tenant, "doc")).contains(second);
+            assertThat(registry.retireVersion(tenant, "doc", 1)).isFalse();
+            assertThat(registry.retireVersion(tenant, "doc", 2)).isTrue();
+            assertThat(registry.retireVersion(tenant, "doc", 2)).isTrue();
+            assertThat(registry.get(tenant, "doc")).isEmpty();
+            assertThat(registry.list(tenant)).isEmpty();
+            assertThat(registry.commitVersion(second)).isFalse();
+            assertThat(registry.commitVersion(new DocumentInfo("doc", tenant, "late", "text/plain", 1, 1, 3, Instant.now(), null))).isFalse();
+            assertThatThrownBy(() -> registry.put(first)).isInstanceOf(IllegalStateException.class);
+            assertThat(registry.remove(tenant, "doc")).isEmpty();
+            var restarted = new RedisDocumentRegistry(redis, new ObjectMapper().registerModule(new JavaTimeModule()));
+            ReflectionTestUtils.setField(restarted, "projectPrefix", "lc4j:");
+            assertThat(restarted.commitVersion(first)).isFalse();
+            assertThat(restarted.retireVersion(tenant, "doc", 2)).isTrue();
             assertThat(redis.hasKey(key)).isTrue();
             assertThatThrownBy(() -> redis.opsForValue().get("outside-project:probe"))
                     .isInstanceOf(org.springframework.dao.DataAccessException.class);

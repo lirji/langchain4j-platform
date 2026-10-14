@@ -1,0 +1,14 @@
+# 作为额外Spring配置文件加载；只挂载到knowledge-ingest-api或combined角色。
+# 完成V7迁移并升级所有knowledge角色后，再通过环境变量启用。
+app:
+  rag:
+    http-sync:
+      enabled: ${KNOWLEDGE_HTTP_SYNC_ENABLED:false}
+      sources:
+        - id: product-faq
+          tenant-id: ${KNOWLEDGE_HTTP_SYNC_TENANT}
+          user-id: ${KNOWLEDGE_HTTP_SYNC_USER}
+          department: ${KNOWLEDGE_HTTP_SYNC_DEPARTMENT}
+          endpoint: ${KNOWLEDGE_HTTP_SYNC_ENDPOINT}
+          bearer-token: ${KNOWLEDGE_HTTP_SYNC_TOKEN:}
+          allow-insecure-http: false

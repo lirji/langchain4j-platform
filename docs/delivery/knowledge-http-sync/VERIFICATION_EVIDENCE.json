@@ -1,0 +1,69 @@
+{
+  "base_revision": "013fbe4c8d57b4d62b9b0a3bfe252047f9410b01",
+  "source_sha256": {
+    "database-migrations/src/main/resources/db/migration/knowledge-ingestion/V7__knowledge_http_sync.sql": "e51dce9e38c83dddfe7fbdf6cacff21717318dbd28df2f366afcbf5155067474",
+    "deploy/knowledge-http-sync.example.yml": "ea121c8bd568f3969a6dbcb84bc2c3906718943f92316a8e1b3ef870659fba02",
+    "deploy/test-knowledge-http-sync-mysql.py": "e8eb5b72b8bfd523fab42e79186f4d36e199cbc5aec507166c8dbea62cc9731f",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/sync/HttpKnowledgeSource.java": "d18ba0df5ff81e5c8438022c18d4eec362980bf9f75e3a0a86c3d6708b9dc35f",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/sync/KnowledgeSyncConfig.java": "398f8e0feec3eafc902ff7b3b6722040fd26793a29c022ab40f2b120381b109e",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/sync/KnowledgeSyncController.java": "80bb28322a8160dfdd6b9d43d9dfb505faefe279130e9806c127d6de3ca09b80",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/sync/KnowledgeSyncProperties.java": "3476ae4aef4121665725da74529b71f83ea96258c91b8f2f04051208518b5eae",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/sync/KnowledgeSyncScheduler.java": "1af7cb8036476217f4ca9bd4c12ab288b541279c4cc67a4366951f04b9b2d66f",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/sync/KnowledgeSyncService.java": "341020db913034f13842190dc38a068fd40071447f6839d92b8fe82a178a2452",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/sync/KnowledgeSyncStore.java": "4e1f75290b54869d56df2af83213e2372bfdd98611239894a63ef277f43c53e8",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/sync/SyncData.java": "fa688e3fe1800146b933eeb16cfc9d79ad5c536d9a2b5786badb75e692c5b000",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/sync/SyncFailure.java": "c6b052b28d40d49c02840a1fddbd6261d4b384474b645a41def04c3ffbe0b0e3",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/sync/mapper/SyncMapper.java": "a91b4af8da6faeb26dd4e18f4d3ee4ec87aa567483d5207fd3de555d87a0db5a",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/sync/mapper/SyncRow.java": "e004c104832dc79c3103e6699d1e31df60586c4046fc5c65c8b4952daafd0377",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/lifecycle/DocumentInfo.java": "b5feb2d153f07d317609cf98ef7e5ac87638e5c7d21a28cf63ceb8d3d7b66ac6",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/lifecycle/DocumentRegistry.java": "adce2e0b05180b483c47a6cf358a26866c92a3c10d8ed3ae6e8fd4d5f60db6f3",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/lifecycle/InMemoryDocumentRegistry.java": "30ab8b742c6b7b36fc87391288cdd386f18dcca59ab62dacb0a0337302fe35b9",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/lifecycle/RedisDocumentRegistry.java": "18258eafc3d92b53839686aa13698672c2034f36136c355e231a500ef4741c3e",
+    "knowledge-service/src/main/resources/com/lrj/platform/knowledge/ingest/sync/mapper/SyncMapper.xml": "885c00c4ac64226e659a448535e70814b5771d2c96d988286b8692d9405d92f5",
+    "knowledge-service/src/test/java/com/lrj/platform/knowledge/KnowledgeHttpSyncPipelineTest.java": "40c55b7729a16b7151516e224b453ca524cd160248ec316b678ed33837d8a876",
+    "knowledge-service/src/test/java/com/lrj/platform/knowledge/ingest/sync/HttpKnowledgeSourceTest.java": "976dc3168eef13eddbaab7d493990d95c1b8a2fccc0755874e8eab09f8dca243",
+    "knowledge-service/src/test/java/com/lrj/platform/knowledge/ingest/sync/KnowledgeSyncConfigTest.java": "fac65fcca0a912e682ebe856b3bc1df1f039d44406e7746357db83c28f7f2ec5",
+    "knowledge-service/src/test/java/com/lrj/platform/knowledge/ingest/sync/KnowledgeSyncControllerTest.java": "910cf6d120e1d8434670f62ba6244a464e352191ee4e0489b60df05b136a3705",
+    "knowledge-service/src/test/java/com/lrj/platform/knowledge/ingest/sync/KnowledgeSyncServiceTest.java": "095590c964d850a029be7c800bccae161e056146b3b3ed889e3f844807b33030",
+    "knowledge-service/src/test/java/com/lrj/platform/knowledge/ingest/sync/KnowledgeSyncStoreTest.java": "a510e75309d05c72135d852f1ede3be3b45516454525aee91a48121eda873b19",
+    "knowledge-service/src/test/java/com/lrj/platform/knowledge/ingest/sync/SyncTestSupport.java": "75e8b0b9a36cc85249bfafd0880897cc9a2192ec11c92b070ceebac1615bf67e",
+    "knowledge-service/src/test/java/com/lrj/platform/knowledge/lifecycle/DevInfraRedisIntegrationTest.java": "8f6885090b445d163b04bdf76dd6a539248611bbfc4792d68446d6d64105ef26",
+    "knowledge-service/src/test/java/com/lrj/platform/knowledge/lifecycle/DocumentVersionCommitTest.java": "0321533f3eaf19024ebd4c39154bdc569b887d080ded6a4821974ac7e875eecd",
+    "platform-protocol/src/main/java/com/lrj/platform/protocol/knowledge/KnowledgeSourceFeed.java": "4e1ff20f4e0ada4b3f2694d95fbaf75583566294376f193c8f0f32b4376f8cfa"
+  },
+  "verification": {
+    "module": {
+      "path": "/tmp/knowledge-http-sync-final-tests.log",
+      "sha256": "1ab4c1a7663aaaa9519a937288e21ad00c5b482b4e8c60d3f47047a4e522cb77",
+      "build_success": true,
+      "totals": {
+        "tests": 558,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 9
+      }
+    },
+    "mysql": {
+      "path": "knowledge-service/target/knowledge-http-sync-mysql.log",
+      "sha256": "b67acf6c7c1806132f79c67d78ddcf4756e7984d55ea4d41369808dce421444a",
+      "build_success": true,
+      "totals": {
+        "tests": 18,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    "redis": {
+      "path": "/tmp/knowledge-http-sync-redis.log",
+      "sha256": "aab2b4a77ab9ef3e4e1b9bdfd498ca3122f46cb02349e1cd0b8530771ae9d0bb",
+      "build_success": true,
+      "totals": {
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    }
+  }
+}

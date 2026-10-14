@@ -2,6 +2,49 @@
 
 ## 任务目标
 
+完成用户图片所示知识接入ETL：HTTP产品说明/FAQ增量采集、质量校验、新增更新、删除传播、来源追溯和可靠恢复，并正常合并推送main。
+
+## 已完成
+
+- S1：HTTP连接器、受控来源配置、MySQL检查点与记录映射、定时协调、状态/手动轮询/追溯API，复用既有入库worker。
+- S2：文档Registry原子墓碑、撤权恢复、防迟到worker复活、删除后新生命周期ID；原文和历史投影保留，不冒充物理擦除。
+- 最终模块及上游回归558项/0失败/0错误/9条件跳过；真实MySQL18项、Redis与配置4项通过。
+- 接入文档、默认关闭配置模板、隔离MySQL验证脚本和证据齐备。见docs/delivery/knowledge-http-sync/TEST_RESULT.md。
+
+## 已修改文件
+
+- knowledge-service的ingest/sync、DocumentRegistry实现与DocumentInfo、相应单元/HTTP/集成测试。
+- platform-protocol的KnowledgeSourceFeed；knowledge-ingestion的V7迁移。
+- deploy/knowledge-http-sync.example.yml与test-knowledge-http-sync-mysql.py。
+- docs/对话与检索/http-knowledge-sync-guide.md、knowledge-operations-guide.md和docs/delivery/knowledge-http-sync/。
+- CODEX_PROGRESS.md。
+
+## 未完成
+
+- 正在按持续授权完成Git提交、正常合并和推送main；未执行部署。
+
+## 当前问题
+
+- 无代码或验证阻塞。实际HTTP源地址/鉴权/样例未提供，功能默认关闭；需按文档配置后才能连接实际业务系统。
+- 全部knowledge角色需先升级再开启；生成墓碑后不可回退到不识别墓碑的旧worker。
+- 既有工作树、忽略配置、业务数据与服务保持原状。
+
+## 下一步建议
+
+1. 核对Git与验证指纹，完成本任务交付并记录DELIVERY_RESULT。
+2. 后续按真实接口契约配置来源，部署须另行授权。
+
+## 恢复 Prompt
+
+读取本文件与docs/delivery/knowledge-http-sync/，在feat/knowledge-http-sync上完成Git收尾。保留已验证实现、已有工作树/业务数据，不重复部署或清理。
+
+---
+以下为历史记录：
+
+# Codex Progress
+
+## 任务目标
+
 重做 RAG 工作台的「知识运营闭环」与「检索质量评测」界面，使其符合项目现有主题、控件和布局，并更新本地前端。
 
 ## 已完成

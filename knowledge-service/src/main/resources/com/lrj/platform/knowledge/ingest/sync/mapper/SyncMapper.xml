@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lrj.platform.knowledge.ingest.sync.mapper.SyncMapper">
+  <insert id="insert">INSERT INTO KNOWLEDGE_HTTP_SYNC (TENANT_KEY,SOURCE_KEY,CONFIG_HASH) VALUES (#{tenant},#{source},#{config})</insert>
+  <select id="get" resultType="com.lrj.platform.knowledge.ingest.sync.mapper.SyncRow">
+    SELECT TENANT_KEY,SOURCE_KEY,CONFIG_HASH,CURSOR_VALUE,PENDING_JSON,ERROR_CODE,JOB_ID,REVISION,LEASE_OWNER,LEASE_UNTIL,NEXT_POLL_AT
+    FROM KNOWLEDGE_HTTP_SYNC WHERE TENANT_KEY=#{tenant} AND SOURCE_KEY=#{source} AND DELETED=0
+  </select>
+  <update id="claim">
+    UPDATE KNOWLEDGE_HTTP_SYNC SET LEASE_OWNER=#{owner},LEASE_UNTIL=#{until},REVISION=REVISION+1
+    WHERE TENANT_KEY=#{tenant} AND SOURCE_KEY=#{source} AND CONFIG_HASH=#{config} AND DELETED=0
+      AND LEASE_UNTIL &lt;= #{now} AND NEXT_POLL_AT &lt;= #{now}
+  </update>
+  <update id="save">
+    UPDATE KNOWLEDGE_HTTP_SYNC SET CURSOR_VALUE=#{row.cursorValue},PENDING_JSON=#{row.pendingJson},ERROR_CODE=#{row.errorCode},
+      JOB_ID=#{row.jobId},LEASE_OWNER=#{row.leaseOwner},LEASE_UNTIL=#{row.leaseUntil},NEXT_POLL_AT=#{row.nextPollAt},REVISION=REVISION+1
+    WHERE TENANT_KEY=#{row.tenantKey} AND SOURCE_KEY=#{row.sourceKey} AND REVISION=#{expected}
+      AND LEASE_OWNER=#{owner} AND LEASE_UNTIL &gt; #{now} AND DELETED=0
+  </update>
+  <select id="document" resultType="com.lrj.platform.knowledge.ingest.sync.mapper.SyncRow">
+    SELECT SOURCE_REVISION,CONTENT_HASH,DOCUMENT_VERSION,DOCUMENT_ID,EXTERNAL_ID,SOURCE_DELETED FROM KNOWLEDGE_HTTP_SYNC_DOCUMENT
+    WHERE TENANT_KEY=#{tenant} AND SOURCE_KEY=#{source} AND EXTERNAL_KEY=#{external} AND DELETED=0
+  </select>
+  <insert id="insertDocument">
+    INSERT INTO KNOWLEDGE_HTTP_SYNC_DOCUMENT (TENANT_KEY,SOURCE_KEY,EXTERNAL_KEY,SOURCE_REVISION,CONTENT_HASH,DOCUMENT_VERSION,DOCUMENT_ID,EXTERNAL_ID,SOURCE_DELETED)
+    VALUES (#{tenant},#{source},#{external},#{version},#{hash},#{documentVersion},#{documentId},#{externalId},#{sourceDeleted})
+  </insert>
+  <update id="updateDocument">
+    UPDATE KNOWLEDGE_HTTP_SYNC_DOCUMENT SET SOURCE_REVISION=#{version},CONTENT_HASH=#{hash},DOCUMENT_VERSION=#{documentVersion},DOCUMENT_ID=#{documentId},EXTERNAL_ID=#{externalId},SOURCE_DELETED=#{sourceDeleted}
+    WHERE TENANT_KEY=#{tenant} AND SOURCE_KEY=#{source} AND EXTERNAL_KEY=#{external} AND SOURCE_REVISION &lt; #{version} AND DELETED=0
+  </update>
+</mapper>
