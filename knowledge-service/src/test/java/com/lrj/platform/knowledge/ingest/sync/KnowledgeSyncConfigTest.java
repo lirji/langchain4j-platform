@@ -23,10 +23,12 @@ class KnowledgeSyncConfigTest {
                 .withPropertyValues("app.rag.http-sync.enabled=true", "app.rag.ingestion.store=jdbc", "app.rag.source.store=s3",
                         "app.rag.registry.store=redis", "app.rag.http-sync.sources[0].id=faq",
                         "app.rag.http-sync.sources[0].tenant-id=tenant", "app.rag.http-sync.sources[0].user-id=sync",
-                        "app.rag.http-sync.sources[0].endpoint=https://example.invalid/feed")
+                        "app.rag.http-sync.sources[0].endpoint=https://example.invalid/feed",
+                        "app.rag.http-sync.sources[0].operator-user-ids[0]=operator")
                 .run(context -> {
                     assertThat(context).hasNotFailed(); assertThat(context).hasSingleBean(KnowledgeSyncService.class);
                     assertThat(context.getBean(KnowledgeSyncProperties.class).sources()).hasSize(1);
+                    assertThat(context.getBean(KnowledgeSyncProperties.class).sources().getFirst().operatorUserIds()).containsExactly("operator");
                 });
     }
     @Test void enabledWithoutPersistentDatabaseFailsStartup() {

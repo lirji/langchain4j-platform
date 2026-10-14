@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import static com.lrj.platform.knowledge.ingest.sync.SyncData.*;
+import static com.lrj.platform.protocol.knowledge.KnowledgeSyncOperations.*;
 import static com.lrj.platform.protocol.knowledge.KnowledgeSourceFeed.*;
 
 /** 按来源串行消费有界增量页；检查点以入库READY为准，源故障不会清空或删除现有知识。 */
@@ -26,11 +27,18 @@ public final class KnowledgeSyncService {
     }
     /** 每次最多拉取一页；其他实例持有租约时跳过，避免多实例重复拉取和提交。 */
     public void poll(KnowledgeSyncProperties.Source source) {
-        SyncRow row = store.claim(source);
-        if (row == null) return;
+        poll(source, "scheduler", null);
+    }
+    private void poll(KnowledgeSyncProperties.Source source, String triggeredBy, String retryJobId) {
+        SyncRow row = store.claim(source, triggeredBy, retryJobId);
+        if (row == null) { if (retryJobId != null) throw new SyncFailure("SOURCE_BUSY"); return; }
         var previous = TenantContext.captureRaw();
         TenantContext.set(new TenantContext.Tenant(source.tenantId(), source.userId(), Set.of("ingest"), source.department()));
         try {
+            if (retryJobId != null) {
+                if (row.jobId == null) throw new SyncFailure("NO_RETRYABLE_JOB");
+                submissions.retry(source.tenantId(), source.userId(), Set.of("ingest"), row.jobId);
+            }
             Pending pending = store.pending(row);
             if (pending == null) {
                 Page page = client.fetch(source, row.cursorValue);
@@ -40,6 +48,9 @@ public final class KnowledgeSyncService {
             while (pending.index() < pending.items().size()) {
                 Planned item = pending.items().get(pending.index());
                 SyncRow prior = store.document(row, item.item().id());
+                if (Action.SKIPPED.matches(item.action()) && prior != null && item.item().revision() <= prior.sourceRevision) {
+                    store.completed(row, item, pending.advance()); pending = pending.advance(); continue;
+                }
                 if (item.item().deleted()) {
                     store.stage(row, pending);
                     retire(source, item);
@@ -97,6 +108,7 @@ public final class KnowledgeSyncService {
             if (prior != null && item.revision() <= prior.sourceRevision) {
                 if (item.revision() == prior.sourceRevision && !hash.equals(prior.contentHash))
                     throw new SyncFailure("SOURCE_REVISION_REUSED");
+                planned.add(new Planned(item, prior.documentId, prior.documentVersion, prior.contentHash, Action.SKIPPED.code()));
                 continue;
             }
             // 来源记录删除后重新出现时使用新生命周期ID，旧worker或旧删除重放不能影响重建文档。
@@ -109,7 +121,8 @@ public final class KnowledgeSyncService {
             long version = item.deleted() ? (prior == null ? 0 : prior.documentVersion)
                     : create ? 1 : prior.documentVersion + (hash.equals(prior.contentHash) ? 0 : 1);
             if (version > Integer.MAX_VALUE) throw new SyncFailure("DOCUMENT_VERSION_EXHAUSTED");
-            planned.add(new Planned(item, documentId, version, hash));
+            planned.add(new Planned(item, documentId, version, hash,
+                    item.deleted() ? Action.DELETED.code() : create ? Action.CREATED.code() : hash.equals(prior.contentHash) ? Action.SKIPPED.code() : Action.UPDATED.code()));
         }
         return new Pending(List.copyOf(planned), page.nextCursor(), 0);
     }
@@ -135,6 +148,31 @@ public final class KnowledgeSyncService {
     private String jobKey(KnowledgeSyncProperties.Source source, Planned item) {
         return "http-sync-" + store.fingerprint(List.of(source.tenantId(), source.id(), item.item().id(), item.item().revision()));
     }
+    /** 控制只改变领取和检查点提交，不撤销已经发给worker的副作用。 */
+    public Status control(KnowledgeSyncProperties.Source source, long expectedRevision, boolean paused) {
+        store.control(source, expectedRevision, paused);
+        operation(source, paused ? "pause" : "resume");
+        return status(source);
+    }
+    /** 显式触发保留运营操作者，后台仍以来源绑定身份执行。 */
+    public Status trigger(KnowledgeSyncProperties.Source source, boolean retry) {
+        String actor = TenantContext.current().userId();
+        var current = store.get(source);
+        if (retry && (current == null || current.jobId == null)) throw new SyncFailure("NO_RETRYABLE_JOB");
+        operation(source, retry ? "retry" : "poll");
+        store.wake(source);
+        poll(source, actor, retry ? current.jobId : null);
+        return status(source);
+    }
+    /** 使用原请求上下文审计控制人，避免后台身份覆盖真实运营者。 */
+    private void operation(KnowledgeSyncProperties.Source source, String action) {
+        audit.record(com.lrj.platform.audit.AuditEventType.KNOWLEDGE_SYNC_CONTROL,
+                java.util.Map.of("sourceId", source.id(), "action", action, "executionUserId", source.userId()));
+    }
+    /** 历史列表只读，继续使用来源授权边界。 */
+    public Runs runs(KnowledgeSyncProperties.Source source, String before, int limit) { return store.runs(source, before, limit); }
+    /** 按来源隔离读取详细结果。 */
+    public Run run(KnowledgeSyncProperties.Source source, String id) { return store.run(source, id); }
     /** 用来源记录标识追溯已成功的知识文档，不返回原文或外部凭据。 */
     public DocumentState document(KnowledgeSyncProperties.Source source, String externalId) {
         if (externalId == null || externalId.isBlank() || externalId.length() > 256)
@@ -147,10 +185,10 @@ public final class KnowledgeSyncService {
     /** 状态不返回上游地址、游标、正文或凭据。 */
     public Status status(KnowledgeSyncProperties.Source source) {
         SyncRow row = store.get(source);
-        if (row == null) return new Status(source.id(), "NOT_STARTED", null, 0, null, 0);
+        if (row == null) return new Status(source.id(), "NOT_STARTED", null, 0, null, 0, false, 0, null, null, source.userId());
         Pending pending = store.pending(row);
         String error = store.configHash(source).equals(row.configHash) ? row.errorCode : "SOURCE_CONFIG_CHANGED";
-        return new Status(source.id(), error != null ? "BLOCKED" : pending != null ? "SYNCING" : "IDLE",
-                error, pending == null ? 0 : pending.items().size() - pending.index(), row.jobId, row.nextPollAt);
+        return new Status(source.id(), row.paused ? "PAUSED" : error != null ? "BLOCKED" : row.activeRunId != null ? "SYNCING" : "IDLE",
+                error, pending == null ? 0 : pending.items().size() - pending.index(), row.jobId, row.nextPollAt, row.paused, row.controlRevision, row.lastSuccessAt, row.activeRunId, source.userId());
     }
 }

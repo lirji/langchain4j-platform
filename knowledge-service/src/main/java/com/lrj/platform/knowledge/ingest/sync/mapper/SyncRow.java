@@ -13,6 +13,10 @@ public final class SyncRow {
     public String leaseOwner;
     public long leaseUntil;
     public long nextPollAt;
+    public boolean paused;
+    public long controlRevision;
+    public Long lastSuccessAt;
+    public String activeRunId;
     public long sourceRevision;
     public String contentHash;
     public long documentVersion;

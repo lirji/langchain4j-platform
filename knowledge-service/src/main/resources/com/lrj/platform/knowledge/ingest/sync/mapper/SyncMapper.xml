@@ -3,20 +3,38 @@
 <mapper namespace="com.lrj.platform.knowledge.ingest.sync.mapper.SyncMapper">
   <insert id="insert">INSERT INTO KNOWLEDGE_HTTP_SYNC (TENANT_KEY,SOURCE_KEY,CONFIG_HASH) VALUES (#{tenant},#{source},#{config})</insert>
   <select id="get" resultType="com.lrj.platform.knowledge.ingest.sync.mapper.SyncRow">
-    SELECT TENANT_KEY,SOURCE_KEY,CONFIG_HASH,CURSOR_VALUE,PENDING_JSON,ERROR_CODE,JOB_ID,REVISION,LEASE_OWNER,LEASE_UNTIL,NEXT_POLL_AT
+    SELECT TENANT_KEY,SOURCE_KEY,CONFIG_HASH,CURSOR_VALUE,PENDING_JSON,ERROR_CODE,JOB_ID,REVISION,LEASE_OWNER,LEASE_UNTIL,NEXT_POLL_AT,PAUSED,CONTROL_REVISION,LAST_SUCCESS_AT,ACTIVE_RUN_ID
     FROM KNOWLEDGE_HTTP_SYNC WHERE TENANT_KEY=#{tenant} AND SOURCE_KEY=#{source} AND DELETED=0
   </select>
   <update id="claim">
     UPDATE KNOWLEDGE_HTTP_SYNC SET LEASE_OWNER=#{owner},LEASE_UNTIL=#{until},REVISION=REVISION+1
     WHERE TENANT_KEY=#{tenant} AND SOURCE_KEY=#{source} AND CONFIG_HASH=#{config} AND DELETED=0
-      AND LEASE_UNTIL &lt;= #{now} AND NEXT_POLL_AT &lt;= #{now}
+      AND PAUSED=0 AND LEASE_UNTIL &lt;= #{now} AND NEXT_POLL_AT &lt;= #{now}
   </update>
   <update id="save">
     UPDATE KNOWLEDGE_HTTP_SYNC SET CURSOR_VALUE=#{row.cursorValue},PENDING_JSON=#{row.pendingJson},ERROR_CODE=#{row.errorCode},
-      JOB_ID=#{row.jobId},LEASE_OWNER=#{row.leaseOwner},LEASE_UNTIL=#{row.leaseUntil},NEXT_POLL_AT=#{row.nextPollAt},REVISION=REVISION+1
+      JOB_ID=#{row.jobId},LEASE_OWNER=#{row.leaseOwner},LEASE_UNTIL=#{row.leaseUntil},NEXT_POLL_AT=#{row.nextPollAt},LAST_SUCCESS_AT=#{row.lastSuccessAt},ACTIVE_RUN_ID=#{row.activeRunId},REVISION=REVISION+1
     WHERE TENANT_KEY=#{row.tenantKey} AND SOURCE_KEY=#{row.sourceKey} AND REVISION=#{expected}
       AND LEASE_OWNER=#{owner} AND LEASE_UNTIL &gt; #{now} AND DELETED=0
   </update>
+  <update id="clearPage">UPDATE KNOWLEDGE_HTTP_SYNC SET PENDING_JSON=NULL WHERE TENANT_KEY=#{row.tenantKey} AND SOURCE_KEY=#{row.sourceKey} AND REVISION=#{row.revision} AND ACTIVE_RUN_ID IS NULL AND DELETED=0</update>
+  <select id="lock" resultType="com.lrj.platform.knowledge.ingest.sync.mapper.SyncRow">
+    SELECT TENANT_KEY,SOURCE_KEY,CONFIG_HASH,CURSOR_VALUE,PENDING_JSON,ERROR_CODE,JOB_ID,REVISION,LEASE_OWNER,LEASE_UNTIL,NEXT_POLL_AT,PAUSED,CONTROL_REVISION,LAST_SUCCESS_AT,ACTIVE_RUN_ID
+    FROM KNOWLEDGE_HTTP_SYNC WHERE TENANT_KEY=#{tenant} AND SOURCE_KEY=#{source} AND DELETED=0 FOR UPDATE
+  </select>
+  <update id="control">
+    UPDATE KNOWLEDGE_HTTP_SYNC SET PAUSED=#{paused},CONTROL_REVISION=CONTROL_REVISION+1,REVISION=REVISION+1,LEASE_OWNER=NULL,LEASE_UNTIL=0,NEXT_POLL_AT=0
+    WHERE TENANT_KEY=#{tenant} AND SOURCE_KEY=#{source} AND CONTROL_REVISION=#{expected} AND DELETED=0
+  </update>
+  <update id="wake">UPDATE KNOWLEDGE_HTTP_SYNC SET NEXT_POLL_AT=0 WHERE TENANT_KEY=#{tenant} AND SOURCE_KEY=#{source} AND PAUSED=0 AND DELETED=0</update>
+  <insert id="insertRun">INSERT INTO KNOWLEDGE_HTTP_SYNC_RUN (ID,TENANT_KEY,SOURCE_KEY,BODY_JSON) VALUES (#{row.activeRunId},#{row.tenantKey},#{row.sourceKey},#{body})</insert>
+  <select id="run" resultType="com.lrj.platform.knowledge.ingest.sync.mapper.SyncRunRow">
+    SELECT SEQ,ID,BODY_JSON FROM KNOWLEDGE_HTTP_SYNC_RUN WHERE TENANT_KEY=#{tenant} AND SOURCE_KEY=#{source} AND ID=#{id} AND DELETED=0
+  </select>
+  <update id="updateRun">UPDATE KNOWLEDGE_HTTP_SYNC_RUN SET BODY_JSON=#{body} WHERE TENANT_KEY=#{row.tenantKey} AND SOURCE_KEY=#{row.sourceKey} AND ID=#{row.activeRunId} AND DELETED=0</update>
+  <select id="runs" resultType="com.lrj.platform.knowledge.ingest.sync.mapper.SyncRunRow">
+    SELECT SEQ,ID,BODY_JSON FROM KNOWLEDGE_HTTP_SYNC_RUN WHERE TENANT_KEY=#{tenant} AND SOURCE_KEY=#{source} AND DELETED=0 AND SEQ &lt; #{before} ORDER BY SEQ DESC LIMIT #{limit}
+  </select>
   <select id="document" resultType="com.lrj.platform.knowledge.ingest.sync.mapper.SyncRow">
     SELECT SOURCE_REVISION,CONTENT_HASH,DOCUMENT_VERSION,DOCUMENT_ID,EXTERNAL_ID,SOURCE_DELETED FROM KNOWLEDGE_HTTP_SYNC_DOCUMENT
     WHERE TENANT_KEY=#{tenant} AND SOURCE_KEY=#{source} AND EXTERNAL_KEY=#{external} AND DELETED=0

@@ -44,16 +44,16 @@ GRANT ALL PRIVILEGES ON `{schema}`.* TO '{migrator}'@'%';
         with log.open("w") as output:
             result = subprocess.run(
                 ["mvn", "-o", "-B", "-pl", "knowledge-service", "-am",
-                 "-Dtest=KnowledgeSyncStoreTest,KnowledgeSyncServiceTest,KnowledgeHttpSyncPipelineTest", "-Dsurefire.failIfNoSpecifiedTests=false", "test"],
+                 "-Dtest=KnowledgeSyncStoreTest,KnowledgeSyncOperationsTest,KnowledgeSyncServiceTest,KnowledgeHttpSyncPipelineTest", "-Dsurefire.failIfNoSpecifiedTests=false", "test"],
                 cwd=repository, env=environment, stdout=output, stderr=subprocess.STDOUT)
         if result.returncode:
             print(f"Knowledge HTTP sync MySQL verification: FAIL; log={log}")
             return result.returncode
         comments = subprocess.run(command, input=f"""
 SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='{schema}'
-AND TABLE_NAME IN ('KNOWLEDGE_HTTP_SYNC','KNOWLEDGE_HTTP_SYNC_DOCUMENT') AND COLUMN_COMMENT='';
+AND TABLE_NAME IN ('KNOWLEDGE_HTTP_SYNC','KNOWLEDGE_HTTP_SYNC_DOCUMENT','KNOWLEDGE_HTTP_SYNC_RUN') AND COLUMN_COMMENT='';
 SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='{schema}'
-AND TABLE_NAME IN ('KNOWLEDGE_HTTP_SYNC','KNOWLEDGE_HTTP_SYNC_DOCUMENT') AND TABLE_COMMENT='';
+AND TABLE_NAME IN ('KNOWLEDGE_HTTP_SYNC','KNOWLEDGE_HTTP_SYNC_DOCUMENT','KNOWLEDGE_HTTP_SYNC_RUN') AND TABLE_COMMENT='';
 """, text=True, check=True, capture_output=True)
         if comments.stdout.split() != ["0", "0"]:
             raise RuntimeError("MySQL table/column comments are incomplete")
