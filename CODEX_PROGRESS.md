@@ -20,16 +20,18 @@
 
 ## 未完成
 
-- 本任务Git提交、合入推送和远程CI核查待完成。
+- 本任务产品代码与验证已完成，无待实现项；源码e7410ed已正常进入远程main。
+- 依赖SBOM扫描仍失败，需另行依赖整改；不属于本次事件兼容扩展。
 
 ## 当前问题
 
-- 基线a23cc6c供应链38575411792的依赖SBOM扫描失败；本次不扩大到依赖整改。
+- 当前源码e7410ed的Cutover CI38576737391通过；供应链38576737341在依赖SBOM扫描失败，基线同一步骤也失败。
 
 ## 下一步建议
 
-1. 仅交付本任务改动，与Python诊断一起记录远程结果；不部署或清理工作树。
+1. 本功能已交付；后续若要实际使用，单独按部署授权升级中央服务与Python。
+2. 依赖安全整改另行处理；保留工作树及原部署状态。
 
 ## 恢复 Prompt
 
-读取docs/delivery/dag-diagnostics/DELIVERY_RESULT.md继续交付。本任务工作树为~/.local/share/git-worktrees/langchain4j-platform/dag-diagnostics，分支feat/dag-diagnostics。不要影响原目录Docker部署。
+本功能已交付；读取docs/delivery/dag-diagnostics/DELIVERY_RESULT.md确认状态，不重复实现或部署。本任务工作树为~/.local/share/git-worktrees/langchain4j-platform/dag-diagnostics，分支feat/dag-diagnostics。不要影响原目录Docker部署。
