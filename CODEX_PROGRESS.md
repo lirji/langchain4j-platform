@@ -21,7 +21,7 @@
 
 ## 未完成
 
-- 正在按持续授权完成Git提交、正常合并和推送main；未执行部署。
+- 功能与验证已完成，源码提交c78c449已推送任务分支并正常快进合入远程main；当前仅同步最终交付记录。未执行部署。
 
 ## 当前问题
 
@@ -31,12 +31,12 @@
 
 ## 下一步建议
 
-1. 核对Git与验证指纹，完成本任务交付并记录DELIVERY_RESULT。
+1. 本次实现已交付；源码、验证与权限边界见docs/delivery/knowledge-http-sync/DELIVERY_RESULT.md。
 2. 后续按真实接口契约配置来源，部署须另行授权。
 
 ## 恢复 Prompt
 
-读取本文件与docs/delivery/knowledge-http-sync/，在feat/knowledge-http-sync上完成Git收尾。保留已验证实现、已有工作树/业务数据，不重复部署或清理。
+本轮代码已合入推送main，读取docs/delivery/knowledge-http-sync/DELIVERY_RESULT.md核对交付事实；后续按实际HTTP接口配置来源。不要重复实现、部署或清理已有业务数据/工作树。
 
 ---
 以下为历史记录：
