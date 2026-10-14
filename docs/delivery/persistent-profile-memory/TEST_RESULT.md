@@ -52,3 +52,7 @@
 - 当前失败记录数量未单独提取，不把前次的 85 条当成本次重新统计的数字。没有修改依赖版本、扫描配置或忽略规则。
 - 本次功能验证通过与供应链门禁失败分别记录。依据用户 AGENTS 的“必要验证失败时记录阻塞”，main 合并暂停，任务分支已推送；本轮未申请或取得合并例外。
 - 本地日志保留在 `conversation-service/target/profile-verification/` 和 `conversation-service/target/profile-memory-mysql.log`。远程工作流及其 artifact 绑定上述 revision。
+
+## 后续交付状态（2026-10-14）
+
+上节 BLOCKED 是当时状态。用户在获知扫描失败后明确要求提交并推送 main；当前已通过 344245f 合并推送，集成全 reactor 1441/0 fail/0 error/17 skip 和五项配置门禁通过。扫描失败事实未被撤销，详见 ../pending-reliability-delivery/DELIVERY_RESULT.md。

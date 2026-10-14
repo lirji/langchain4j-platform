@@ -1,5 +1,7 @@
 # Execution State（checkpoint / resume）
 
+> 2026-10-14 交付更新：下文为 2026-09-25 的历史实施记录，“未提交/不 push”等描述适用于当时。当前已按用户明确指令分组提交并推送 main；最新验证和状态以 `docs/delivery/pending-reliability-delivery/DELIVERY_RESULT.md` 为准。
+
 - Goal：按 `REMEDIATION_BACKLOG.md` 执行 FIX_NOW 切片，每片一验证。
 - Workflow：`project-refactoring`（EXECUTE），Plan v1（未发生重规划），State v2（全部切片完成）。
 - Autonomy：本地仓库写 + 本地测试；**不 push / 不部署**。

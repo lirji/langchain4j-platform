@@ -2,44 +2,42 @@
 
 ## 任务目标
 
-将 conversation-service 用户长期画像从内存改为 MySQL 持久化（M1-PERSIST）。
-当前范围不含完整记忆治理、知识运营闭环或 Java 版本与依赖债务。
+提交原目录既有整改并合入长期画像 MySQL 持久化，推送远程 main，原项目目录切换到 main。
 
 ## 已完成
 
-- JDBC 存储、独立 schema/Flyway 迁移、条件数据源、默认 JDBC 配置。
-- Compose/Helm/dev_infra 接入与应用/迁移账号隔离。
-- 全 reactor 1421 tests / 0 fail / 0 error / 13 skip；真实 MySQL 10 项和权限/注释验证通过。
-- 打包、迁移/运行加固/切换/供应链静态门禁、Code Hygiene 通过（格式化工具未配置）。
-- 规范记录：docs/delivery/persistent-profile-memory/{PLAN,TEST_RESULT,PROGRESS_STATE}.md。
+- 原有 23 个变更文件和 3 个整改文档按功能提交；画像分支无冲突合入。
+- 集成代码 344245f 已正常推送远程 main；本轮交付文档随后同步。
+- 合并后全 reactor 1441 tests / 0 failures / 0 errors / 17 skipped。
+- 真实 Redis 4 项补跑通过；五项部署配置门禁通过；Redis 已恢复原停止状态。
+- 详细提交、授权、验证和保留目录见 docs/delivery/pending-reliability-delivery/DELIVERY_RESULT.md。
 
 ## 已修改文件
 
-- conversation-service 的 profile 存储、配置、依赖、测试。
-- database-migrations 的 conversation schema；deploy 的 Compose/Helm/dev_infra 接入。
-- memory-guide 与本切片进度/证据文档。仅独立任务工作树有修改。
+- edge-gateway、platform-metering、conversation-service 的整改与测试。
+- 门户 nginx、部署门禁、历史整改记录。
+- 已合入的画像持久化存储、数据库迁移、运行配置与文档。
 
 ## 未完成
 
-- 功能提交 d8ce9d0 已推送 feat/persistent-profile-memory；交付状态文档随后补充。
-- main 合并阻塞：本次供应链 CI 38491391893 在 SBOM 扫描失败；本轮未授予新的扫描失败合并例外。
+- 无待实现的本次交付功能；最新 main 远程 CI 结果需以实际运行记录为准。
+- Java 依赖漏洞整改、完整记忆治理和知识运营属于后续独立任务。
 
 ## 当前问题
 
-- 旧内存数据不会自动导出；清空后的旧抽取回填保护属于后续治理。
-- 本次兼容性 CI 38491384085 SUCCESS；供应链 CI 的测试/打包成功但扫描失败，镜像扫描未执行。
-- 原项目目录的用户未提交内容未改动。生产仍未部署。
+- 已知供应链 SBOM 扫描失败仍保留；用户在获知该事实后明确要求本次合并推送，不代表扫描通过。
+- 旧内存数据无自动迁移；清空后的旧抽取防回填保护尚属后续治理。
+- 未部署生产，未清理本地环境、忽略文件或独立工作树。
 
 ## 下一步建议
 
-1. 在 ~/.local/share/git-worktrees/langchain4j-platform/persistent-profile-memory 继续。
-2. 分支 feat/persistent-profile-memory；功能已提交/推送，详见 PROGRESS_STATE 的实际结果。
-3. 供应链门禁通过或获得本轮明确例外后再合并 main。
+1. 以原目录 main 为后续工作入口，核对远程 CI 状态。
+2. 按已排定优先级继续长期记忆治理和知识运营；不自动扩展版本债务整改。
 
 ## 恢复 Prompt
 
-读取本文件和 docs/delivery/persistent-profile-memory/PROGRESS_STATE.md，恢复 M1-PERSIST 的剩余交付。
-不要重新实现；保护原项目 dirty 内容，不扩大到 Java 版本升级、完整记忆治理或知识运营。
+读取本文件及 docs/delivery/pending-reliability-delivery/DELIVERY_RESULT.md。
+本轮代码已推送 main；勿重复提交历史整改或重新实现画像持久化。保留扫描失败及未部署事实。
 
 ---
 

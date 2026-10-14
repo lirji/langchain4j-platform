@@ -1,5 +1,7 @@
 # Remediation Report（2026-09-25）
 
+> 2026-10-14 交付更新：下文为 2026-09-25 的历史实施记录，“未提交/不 push”等描述适用于当时。当前已按用户明确指令分组提交并推送 main；最新验证和状态以 `docs/delivery/pending-reliability-delivery/DELIVERY_RESULT.md` 为准。
+
 **Final Status：COMPLETE_WITH_LIMITATIONS**：backlog 中全部 FIX_NOW 项已实现并验证。
 这里的「限制」指：未提交（用户未要求）；O2 跨语言配额仍需两仓协同；真实 Redis 集成测试需环境开关，CI 默认跳过。
 

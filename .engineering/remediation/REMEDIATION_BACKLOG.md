@@ -1,5 +1,7 @@
 # Remediation Backlog（唯一权威整改清单）
 
+> 2026-10-14 交付更新：下文为 2026-09-25 的历史实施记录，“未提交/不 push”等描述适用于当时。当前已按用户明确指令分组提交并推送 main；最新验证和状态以 `docs/delivery/pending-reliability-delivery/DELIVERY_RESULT.md` 为准。
+
 - 路由：`intent-mapper.py` →「技术债治理」= `PROJECT_REFACTORING` → `project-refactoring`（执行模式）。
   「remediation」关键词会路由到只允许改 Runtime 文件的 `remediation` 技能，见 `EXECUTION_STATE.md` 的 GAP-1。
 - 基线：`e8f11cb`（main）。工作树开工前已有用户未提交改动 `capability-showcase-frontend/nginx.conf`，本轮不触碰。
