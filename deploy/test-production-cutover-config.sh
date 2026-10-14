@@ -207,6 +207,23 @@ test "$(config_value ASYNC_TASK_WORKER_JWT_ISSUER)" = "platform-services"
 test "$(config_value ASYNC_TASK_WORKER_JWT_AUDIENCE)" = "async-task-worker"
 test "$(config_value ASYNC_TASK_WORKER_JWT_KEY_ID)" = "async-task-worker-v1"
 test "$(config_value ASYNC_TASK_WORKER_JWT_TTL_SECONDS)" = "60"
+
+# 生产内部 JWT 必须 RS256：HS256 下任一服务泄漏共享 secret 即可伪造任意租户，且 compose/yml 的
+# HS256 兜底值是仓库里公开的 dev secret。RS256 验签固定算法（InternalToken 拒绝 HS256 令牌）。
+if [ "$(config_value PLATFORM_SECURITY_JWT_ALGORITHM)" != "RS256" ]; then
+  echo "production internal JWT must use RS256 (platform-config PLATFORM_SECURITY_JWT_ALGORITHM)" >&2
+  exit 1
+fi
+# 签发私钥只允许 edge-gateway 挂载；下游只拿公钥。
+jwt_signing_mounts="$(awk '
+  /^kind: / { kind = $2; name = "" }
+  kind == "Deployment" && name == "" && /^  name: / { name = $2 }
+  kind == "Deployment" && /name: edge-gateway-jwt$/ { print name }
+' "$rendered" | sort -u | tr '\n' ' ')"
+if [ "$jwt_signing_mounts" != "edge-gateway " ]; then
+  echo "RS256 signing key secret edge-gateway-jwt must be mounted only by edge-gateway (got: ${jwt_signing_mounts:-none})" >&2
+  exit 1
+fi
 test "$(config_value ASYNC_TASK_WORKER_JWT_CLOCK_SKEW_SECONDS)" = "5"
 test "$(config_value INTERNAL_JWT_KEY_ID)" = "$(config_value PLATFORM_SECURITY_JWT_KEY_ID)"
 test "$(config_value INTERNAL_JWT_TOKEN_USE)" = "internal_access"
