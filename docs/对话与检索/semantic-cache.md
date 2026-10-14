@@ -65,7 +65,7 @@ tenantId 直接进 key，天然隔离。租户身份由内部 JWT 还原进 `Ten
 
 | store | 类 | 特性 |
 | --- | --- | --- |
-| `redis`（**默认**） | `RedisSemanticCacheStore` | 每租户一个 Hash（field = `sha256(原始问题)`，value = 条目 JSON）。多副本共享、重启不丢；相似度检索用 `HVALS` 拉回本租户全部条目后在应用侧算余弦（无 RediSearch 依赖） |
+| `redis`（**默认**） | `RedisSemanticCacheStore` | 每租户一个 Hash（field = `sha256(原始问题)`，value = 条目 JSON）。多副本共享、重启不丢；相似度检索用 `HVALS` 拉回本租户全部条目后在应用侧算余弦（无 RediSearch 依赖）；插入顺序记在同租户 ZSET `…:order`，写入时按 `max-entries-per-tenant` 原子淘汰最旧 |
 | `in-memory` | `InMemorySemanticCacheStore` | 进程内 `Map`，重启即丢。单实例 / 本地开发 / 单测够用，零外部依赖 |
 
 > **默认值即 redis**：`application.yml` 里 `store: ${CONVERSATION_SEMANTIC_CACHE_STORE:redis}`。
@@ -98,11 +98,14 @@ tenantId 直接进 key，天然隔离。租户身份由内部 JWT 还原进 `Ten
 
 ### 3.4 容量与 TTL 淘汰
 
-- **内存（容量上限）**：每租户桶容量上限 `max-entries-per-tenant`（**每租户**，非全局，默认 `1000`）。
-  底层 `LinkedHashMap` + `removeEldestEntry`：超容量时丢**最旧插入**的一条。**内存实现无 TTL**，只靠容量淘汰。
+- **容量上限（两档一致）**：每租户桶容量上限 `max-entries-per-tenant`（**每租户**，非全局，默认 `1000`），
+  超容量时丢**最旧插入**的一条；同问覆盖不改变位置。内存档用 `LinkedHashMap` + `removeEldestEntry`；
+  Redis 档用一段 Lua 原子完成「写入 Hash → ZSET 登记首次写入时间 → `ZPOPMIN` 淘汰最旧并 `HDEL`」。
+  升级前写入、没有顺序记录的旧条目在首次写入时按「最旧」补登记，因此会最先被淘汰——无需迁移脚本。
+  上限同时约束了每次查询 `HVALS` 的扫描量。**内存实现无 TTL**，只靠容量淘汰。
 - **Redis（整桶 TTL）**：可选 `redis.ttl` 给**整个租户桶**设过期（默认 `0s` = 不过期）。答案会随知识库 /
   时间漂移，给桶一个自然新鲜度上限；`0s` 时只靠「知识库更新触发失效」（见 §6）与写覆盖来保鲜。
-  注意 Redis 档不按 `max-entries-per-tenant` 裁桶，容量控制交给 TTL 与显式失效。
+  TTL 同时作用于 Hash 与顺序 ZSET。
 
 ### 3.5 韧性
 
@@ -119,7 +122,7 @@ app:
     semantic-cache:
       enabled: true             # 总开关，默认开
       threshold: 0.95           # 余弦命中阈值 [-1,1]，越高越保守（越不易误命中）
-      max-entries-per-tenant: 1000   # 每租户桶上限（仅 in-memory 生效），超出丢最旧
+      max-entries-per-tenant: 1000   # 每租户桶上限（in-memory 与 redis 均生效），超出丢最旧
       store: redis              # redis（默认）| in-memory
       embedding:
         provider: hash          # hash（默认，确定性 64 维）| openai（经 LiteLLM）
@@ -132,7 +135,7 @@ app:
 | --- | --- | --- |
 | `CONVERSATION_SEMANTIC_CACHE_ENABLED` | `true` | 总开关（默认开）。置 `false` 时缓存链全程短路，`/chat` 行为与历史完全一致 |
 | `CONVERSATION_SEMANTIC_CACHE_THRESHOLD` | `0.95` | 余弦命中阈值。语义缓存最怕「意思其实不同却误命中返回错答案」，故默认偏保守，宁可 miss |
-| `CONVERSATION_SEMANTIC_CACHE_MAX_ENTRIES` | `1000` | 每租户桶条数上限（**仅 in-memory 生效**），超出丢最旧插入的一条 |
+| `CONVERSATION_SEMANTIC_CACHE_MAX_ENTRIES` | `1000` | 每租户桶条数上限（in-memory 与 redis 均生效），超出丢最旧插入的一条 |
 | `CONVERSATION_SEMANTIC_CACHE_STORE` | `redis` | `redis`（默认，多副本共享 / 重启不丢，开启需 Redis 在线）\| `in-memory`（进程内，单机 / dev） |
 | `CONVERSATION_SEMANTIC_CACHE_EMBEDDING_PROVIDER` | `hash` | `hash`（默认，确定性 64 维，本地零依赖）\| `openai`（经 LiteLLM 接真 embedding 模型） |
 | `CONVERSATION_SEMANTIC_CACHE_EMBEDDING_MODEL` | `embedding-default` | `provider=openai` 时的逻辑模型名（LiteLLM `model_list` 里的名字） |
@@ -212,8 +215,8 @@ knowledge 与 conversation 都已就绪且 conversation 已开缓存才有意义
   权衡后再开。缓存键是原始问题字符串（Redis 档 field = `sha256(问题)`），同租户内跨 chatId/用户共享。
 - **hash 默认 ≈ 近精确去重**：真语义归并需 `provider=openai`（见 §3.3），换 provider 记得清桶。
 - **PII / 合规删除**：`DELETE /chat/cache` 可挂到既有的租户数据清除路径，按租户或按问题清。
-- **Redis 档无条数上限**：`max-entries-per-tenant` 只对 in-memory 生效；Redis 档靠 `redis.ttl` +
-  知识库联动失效 + 写覆盖控制体积，长期运行建议给 `CONVERSATION_SEMANTIC_CACHE_REDIS_TTL` 设一个上限。
+- **检索仍是桶内线性扫描**：条数已有上限（默认 1000），但每次查询仍 `HVALS` 整桶在应用侧算余弦；
+  若要把上限调到上万，应先换向量索引（RediSearch / 向量库），而不是单纯调大该值。
 - **无专用命中率指标**：当前命中/未命中仅经 `SemanticCache` 的 `debug` 日志可见，未接 Micrometer counter。
 
 ## 9. 开关速查
@@ -222,7 +225,7 @@ knowledge 与 conversation 都已就绪且 conversation 已开缓存才有意义
 | --- | --- | --- |
 | `CONVERSATION_SEMANTIC_CACHE_ENABLED` | `true` | 总开关（conversation `/chat`） |
 | `CONVERSATION_SEMANTIC_CACHE_THRESHOLD` | `0.95` | 余弦命中阈值 |
-| `CONVERSATION_SEMANTIC_CACHE_MAX_ENTRIES` | `1000` | 每租户桶上限（仅 in-memory） |
+| `CONVERSATION_SEMANTIC_CACHE_MAX_ENTRIES` | `1000` | 每租户桶上限（in-memory 与 redis） |
 | `CONVERSATION_SEMANTIC_CACHE_STORE` | `redis` | 存储后端：`redis` / `in-memory` |
 | `CONVERSATION_SEMANTIC_CACHE_EMBEDDING_PROVIDER` | `hash` | 向量化：`hash` / `openai` |
 | `CONVERSATION_SEMANTIC_CACHE_EMBEDDING_MODEL` | `embedding-default` | `openai` 档逻辑模型名 |
