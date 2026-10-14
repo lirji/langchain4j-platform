@@ -43,7 +43,7 @@ class KnowledgeQueryControllerTest {
     @Test
     void query_mapsVisibilityFromSharedFlag() {
         KnowledgeQueryService service = mock(KnowledgeQueryService.class);
-        var tenantHit = new KnowledgeQueryService.Hit("t#0", 0.9, "t", "t.md", "manual", "0", "私有", "vector", false);
+        var tenantHit = new KnowledgeQueryService.Hit("t#0", 0.9, "t", "t.md", "manual", "0", "2", "私有", "vector", false);
         var publicHit = new KnowledgeQueryService.Hit("p#0", 0.8, "p", "p.md", "manual", "0", "共享", "vector", true);
         when(service.query("q", null, null, null))
                 .thenReturn(new KnowledgeQueryService.QueryResult("q", "acme", List.of(tenantHit, publicHit)));
@@ -53,6 +53,7 @@ class KnowledgeQueryControllerTest {
 
         assertThat(body).isNotNull();
         assertThat(body.hits()).extracting(KnowledgeHit::visibility).containsExactly("tenant", "public");
+        assertThat(body.hits().getFirst().version()).isEqualTo("2");
     }
 
     @Test

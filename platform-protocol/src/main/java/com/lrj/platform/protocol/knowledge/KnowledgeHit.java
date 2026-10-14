@@ -13,5 +13,11 @@ public record KnowledgeHit(String id,
                            String index,
                            String text,
                            String source,
-                           String visibility) {
+                           String visibility,
+                           String version) {
+    /** 旧调用方可继续构造命中；未知版本不能作为发布复查通过的证据。 */
+    public KnowledgeHit(String id, Double score, String docId, String displayName, String category,
+                        String index, String text, String source, String visibility) {
+        this(id, score, docId, displayName, category, index, text, source, visibility, null);
+    }
 }

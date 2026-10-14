@@ -30,7 +30,10 @@ public final class KnowledgeRetrievalProbe implements KnowledgeProbe {
                         new KnowledgeQueryRequest(check.question(), 5, 0.0, candidate.draft().category()), headers), KnowledgeQueryReply.class);
                 if (reply == null || !actor.tenantId().equals(reply.tenantId()))
                     throw new OperationsException("unavailable", "retrieval returned an invalid tenant result");
+                // 旧query节点缺少版本时必须失败关闭，不能把其他版本的相同文本作为本次发布证据。
                 passed = reply.hits().stream().anyMatch(hit -> candidate.documentId().equals(hit.docId())
+                        && candidate.release() != null
+                        && Long.toString(candidate.release().documentVersion()).equals(hit.version())
                         && "tenant".equals(hit.visibility()) && hit.text() != null && hit.text().contains(check.requiredText()));
             } else {
                 if (!actor.equals(TenantContext.captureRaw())) throw new OperationsException("forbidden", "probe identity context mismatch");

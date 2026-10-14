@@ -2,6 +2,41 @@
 
 ## 任务目标
 
+先修复知识发布复查版本校验与GC推进，再完成RAG检索质量评测闭环（用户确认仅检索质量和延迟）。计划：docs/delivery/rag-quality-loop/PLAN.md。
+
+## 已完成
+
+- 完成源码调查；远程复查缺版本、GC固定首批已确认。
+- S1已修复并通过knowledge-service及上游模块回归；兼容version字段缺失时复查不通过。
+
+## 已修改文件
+
+- platform-protocol KnowledgeHit；knowledge query controller、retrieval probe和相关测试。
+- docs/delivery/rag-quality-loop/PLAN.md；本进度文件。
+
+## 未完成
+
+S1待最终Git集成交付，S2 GC，S3评测后端，S4前端，S5回归和Git交付。
+
+## 当前问题
+
+历史供应链扫描失败；本次未改依赖、未部署。不触碰既有worktree与忽略文件。
+
+## 下一步建议
+
+从当前分支fix/knowledge-probe-version继续S1测试，然后按计划连续推进。每项独立任务分支，后续基于已验证前序提交；不重复等待确认。
+
+## 恢复 Prompt
+
+读取本文件与docs/delivery/rag-quality-loop/PLAN.md，核对Git和测试实际状态，从未完成项继续执行，不重做已通过实现。
+
+---
+以下为历史记录：
+
+# Codex Progress
+
+## 任务目标
+
 langchain4j-platform 全部自有关系业务持久化切换 MyBatis-Plus，删除统一使用 DELETED：0正常、1已删除。Python agentscope-platform 不属于此次 Java 迁移。
 
 ## 已完成
