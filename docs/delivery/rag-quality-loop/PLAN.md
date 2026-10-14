@@ -14,4 +14,4 @@
 
 ## 当前阶段结果
 
-S1–S5源码与测试已完成并合入main。用户追加本地Docker发布授权后，新版Java/前端已运行，真实组件检索评测闭环通过。整栈PARTIAL：AgentScope独立仓库的readiness地址兼容修复待用户范围确认。详见DEPLOYMENT_RESULT。
+S1–S5源码与测试已完成并合入main。用户追加本地Docker发布授权后，新版Java/前端已运行，真实组件检索评测闭环通过。用户确认跨仓范围后，AgentScope管理地址兼容修复完成，整栈本地运行验收PASS。详见DEPLOYMENT_RESULT。

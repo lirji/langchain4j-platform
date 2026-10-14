@@ -37,3 +37,10 @@
 
 - Coding Agent Kit、Frontend、Tax AI、AgentScope Cutover均SUCCESS。
 - Java供应链 [38509783445](https://github.com/lirji/langchain4j-platform/actions/runs/38509783445) 在 `Scan aggregate dependency SBOM` 失败，后续attest/image-scan/release-images未执行。既有依赖债务保留，不宣称全CI通过、镜像安全扫描通过或生产发布就绪。
+
+## AgentScope 管理端口修复与最终验收
+
+- Python22ba8db：管理端口用例先红后绿；6项探针、全量530项/覆盖率89.38%、Ruff/format/Mypy、契约、Shadow和Compose验证PASS。远程CI38511738475 SUCCESS，含镜像扫描。
+- Javaf89cee0：observability新增五项地址与真实management端口一致性约束；production-cutover/runtime-hardening通过。
+- 固定提交镜像发布后，整栈`compose up --wait`退出0；14个Java管理探针UP、AgentScope完整readiness UP、前端200、认证质量列表200、匿名经网关401。详见RUNTIME_EVIDENCE.json。
+- 无需重跑未改动的全部Maven/前端测试；本次追加仅Python探针和Compose，原检索代码/镜像保持cfa1d5b。

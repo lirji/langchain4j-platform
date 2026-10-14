@@ -2,42 +2,39 @@
 
 ## 任务目标
 
-完成发布复查版本校验、GC公平推进和RAG检索质量闭环，然后按用户追加授权在本地Docker发布启动。只评估检索质量与延迟，不含生成回答和模型费用。
+完成发布复查版本校验、GC公平推进和RAG检索质量闭环，并按用户授权在本地Docker发布启动。用户确认只覆盖检索质量/延迟，并确认修复发布独立AgentScope仓库。
 
 ## 已完成
 
-- S1发布复查版本校验12cf1a2、S2版本GC与Redis检查点160f6bb、S3/S4评测后端及运营前端cfa1d5b；任务分支和main均已推送。
-- Maven1483项/零失败，前端580项、类型/构建通过；真实MySQL、Redis与配置门禁通过。
-- 固定cfa1d5b镜像构建并启动本地Java/前端；9项迁移退出0。12个Java服务readiness=UP，前端8093可访问，网关18080匿名评测请求401。
-- Docker真实MySQL/S3/Redis/Qdrant/ES检索评测冒烟：无基线→建立基线→PASS/200→移除本次测试文档→REGRESSION/422。自动脚本deploy/dev-infra/smoke.py新增--quality/--image/--compose。
-- 恢复环境async-task排序规则导致V3失败：保存局部锁表和history副本，保留恢复表，调整库默认排序规则后Flyway只移除1条失败记录、未改成功历史，重试至V4成功。
-- 远程功能CI四项通过；Java SBOM扫描仍失败（38509783445），后续attestation/image-scan/release-images跳过。
+- S1发布复查版本12cf1a2；S2公平GC与Redis检查点160f6bb；S3/S4评测后端及运营前端cfa1d5b；Docker真实组件验证脚本bf33151。均已正常合入推送main。
+- Maven1483项、前端580项、类型/构建、真实MySQL/Redis、配置门禁通过。
+- Python探针支持独立Java管理地址22ba8db，JavaCompose适配f89cee0；两仓正常合入推送main。Python全量530项、覆盖率89.38%、类型/格式/契约/Shadow通过；源码远程CI38511738475含镜像扫描SUCCESS。
+- 固定Java应用镜像cfa1d5b与Python22ba8db已发布本地Docker。整栈up --wait退出0，14个Javareadiness和AgentScope均UP；17个常驻容器运行，9个迁移exit0；前端8093返回200，网关18080匿名评测401，认证质量列表200。
+- 真实MySQL/S3/Redis/Qdrant/ES检索评测：无基线→建立基线→PASS/200→仅移除测试文档→REGRESSION/422。
+- 当前本地运行验收PASS；详细证据docs/delivery/rag-quality-loop/{TEST_RESULT,DEPLOYMENT_RESULT,RUNTIME_EVIDENCE.json}。
 
 ## 已修改文件
 
-- 三个源码提交的相关Java、数据库迁移、测试、前端和文档；详细见docs/delivery/rag-quality-loop/。
-- 本地Docker固定镜像包装脚本和恢复证据位于忽略目录deploy/.dev-infra-state/rag-quality-release/；凭据仅保存在本地忽略文件。
+三项功能提交、Docker冒烟脚本、AgentScope配置/探针/测试和两仓部署文档。Python源码22ba8db，Java应用源码cfa1d5b，JavaCompose源码f89cee0；后续文档提交以Git HEAD为准。
 
 ## 未完成
 
-- 用户已确认跨仓修复：Python22ba8db已提交，6项聚焦/全量530项PASS，JavaCompose管理地址和防漂移门禁完成；正在构建并切换AgentScope。最终健康验证前仍为PARTIAL。
-- 运行验证脚本和交付记录随feat/rag-retrieval-quality完成正常提交推送；最终文档提交以Git HEAD为准。
-- 浏览器工具超时，视觉验收UNVERIFIED。
+本次功能和本地部署目标已完成，无待实现事项。浏览器工具超时，视觉验收UNVERIFIED；Java历史供应链扫描失败未整改，不宣称生产发布就绪。
 
 ## 当前问题
 
-- AgentScope唯一整栈健康阻塞；不能通过禁用健康检查或放松权限伪造通过。
-- 供应链历史依赖债务未整改，不宣称生产发布就绪。
-- 保留恢复表lc4j_async_task.RECOVERY_DISPATCH_LOCK_20261014及私有备份；没有删除既有数据。
-- 三个既有worktree、忽略配置/缓存/本地证据保留；冒烟容器已停止，独立库/S3测试原文保留。
+- Java源码cfa1d5b远程功能CI通过但SBOM失败；Python修复源码CI及镜像扫描通过，两者不可混同。
+- 保留async-task恢复表RECOVERY_DISPATCH_LOCK_20261014和私有备份，未更改旧任务数据/已执行迁移。最终迁移全部成功。
+- 本地凭据、固定镜像包装脚本与恢复证据在deploy/.dev-infra-state/rag-quality-release/及忽略配置文件中；旧镜像保留。
+- 既有worktree/用户未跟踪文件未清理；冒烟容器停止，测试库/S3原文/结果保留供核查。
 
 ## 下一步建议
 
-完成AgentScope镜像构建和实际切换，验证readiness全部必需依赖UP、整栈Compose --wait通过并更新两仓交付记录。部署包装脚本deploy/.dev-infra-state/rag-quality-release/compose.sh。
+直接使用http://localhost:8093；网关http://localhost:18080。运维可用deploy/.dev-infra-state/rag-quality-release/compose.sh查看固定版本栈；独立标准AgentScope local标签已更新为已验证镜像。后续真实标注集运营、视觉验收和Java依赖整改分别处理，不重做本次实现或扩大到生产部署。
 
 ## 恢复 Prompt
 
-读取本文件及docs/delivery/rag-quality-loop/，从AgentScope独立仓库授权与Docker健康收尾继续，不重做已通过实现。保留用户改动、现有数据、工作树和供应链失败事实。
+本轮已完成。读取本文件和docs/delivery/rag-quality-loop/核对实际状态；保留现有服务、数据、工作树和供应链失败事实，不重复部署或重新实现已通过功能。
 
 ---
 以下为历史记录：

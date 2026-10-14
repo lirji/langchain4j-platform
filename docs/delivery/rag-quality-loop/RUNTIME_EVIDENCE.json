@@ -1,0 +1,301 @@
+{
+  "verifiedAtUtc": "2026-10-14T04:32:33.882764+00:00",
+  "target": "local Docker langchain4j-platform with shared dev-infra",
+  "javaSource": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+  "composeSource": "f89cee01dbe1815dc699c08c8ed99791a5dfd547",
+  "pythonSource": "22ba8dbc483c10d39b2205b78952c52590b48623",
+  "composeUpWaitExitCode": 0,
+  "javaReadiness": [
+    {
+      "service": "edge-gateway",
+      "http": 200,
+      "status": "UP"
+    },
+    {
+      "service": "conversation-service",
+      "http": 200,
+      "status": "UP"
+    },
+    {
+      "service": "workflow-service",
+      "http": 200,
+      "status": "UP"
+    },
+    {
+      "service": "analytics-service",
+      "http": 200,
+      "status": "UP"
+    },
+    {
+      "service": "knowledge-service",
+      "http": 200,
+      "status": "UP"
+    },
+    {
+      "service": "async-task-service",
+      "http": 200,
+      "status": "UP"
+    },
+    {
+      "service": "channel-service",
+      "http": 200,
+      "status": "UP"
+    },
+    {
+      "service": "interop-service",
+      "http": 200,
+      "status": "UP"
+    },
+    {
+      "service": "vision-service",
+      "http": 200,
+      "status": "UP"
+    },
+    {
+      "service": "voice-service",
+      "http": 200,
+      "status": "UP"
+    },
+    {
+      "service": "auth-service",
+      "http": 200,
+      "status": "UP"
+    },
+    {
+      "service": "order-service",
+      "http": 200,
+      "status": "UP"
+    },
+    {
+      "service": "tax-service",
+      "http": 200,
+      "status": "UP"
+    },
+    {
+      "service": "config-server",
+      "http": 200,
+      "status": "UP"
+    }
+  ],
+  "agentReadiness": {
+    "status": "UP",
+    "checks": {
+      "agentScope": "UP",
+      "modelConfiguration": "UP",
+      "candidateRoute": "DISABLED",
+      "mcpProvider": "DISABLED",
+      "browserSandbox": "DISABLED",
+      "codeSandbox": "DISABLED",
+      "confirmationReplayStore": "DISABLED",
+      "modelGateway": "UP",
+      "asyncTask": "UP",
+      "knowledgeService": "UP",
+      "analyticsService": "UP",
+      "workflowService": "UP",
+      "orderService": "UP",
+      "agentSessionStore": "UP"
+    }
+  },
+  "frontendHttp": 200,
+  "anonymousQualityApiHttp": 401,
+  "authenticatedQualityApiHttp": 200,
+  "containers": {
+    "agentscope-orchestrator": {
+      "imageId": "sha256:330bef578f4b405374bb5ce862ff44f82da07c8635296a3b5192b1e35d0c6bd2",
+      "revision": "22ba8dbc483c10d39b2205b78952c52590b48623",
+      "state": "running",
+      "health": "healthy",
+      "exitCode": null
+    },
+    "edge-gateway": {
+      "imageId": "sha256:0bb3d532c1b1ae6e822ea430c9f68a9f62efc8d4c39bdb8ce1258c784cccd7bf",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "running",
+      "health": null,
+      "exitCode": null
+    },
+    "interop-service": {
+      "imageId": "sha256:7f70c1d64537f182df1d39ca529ae53cec7fe26c52ded826c0fd74eaf8dd9c39",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "running",
+      "health": null,
+      "exitCode": null
+    },
+    "workflow-service": {
+      "imageId": "sha256:1d4dac8e1c93e5120ca2e6a7aace2f09a5126e6a921789050fa63e6c06695065",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "running",
+      "health": null,
+      "exitCode": null
+    },
+    "voice-service": {
+      "imageId": "sha256:c638aeae23477d60c60ecc0f679b356dae4644cdff7e8a89e32809f1345c35c8",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "running",
+      "health": null,
+      "exitCode": null
+    },
+    "conversation-service": {
+      "imageId": "sha256:3e15f96deddb14db5d6779d5fd0b69ffc1fcb0238fb2eedf00f2eceafbe946c1",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "running",
+      "health": null,
+      "exitCode": null
+    },
+    "tax-service": {
+      "imageId": "sha256:feebdcc8a27a6401f995bef5f6e12568966f1e5c7b93d750cac6c9120b9c576e",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "running",
+      "health": null,
+      "exitCode": null
+    },
+    "channel-service": {
+      "imageId": "sha256:22e141ab5e7d8bab6b3b6575ddba3f61a0a23cbb3e335b66a2bbf23142ef2c0f",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "running",
+      "health": null,
+      "exitCode": null
+    },
+    "knowledge-service": {
+      "imageId": "sha256:b3d194ebce961643fef5f0aa89a030328d20fe40c1de1b75d636909ea5d7c278",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "running",
+      "health": null,
+      "exitCode": null
+    },
+    "vision-service": {
+      "imageId": "sha256:dd300d1451013238cb56e8661085416f33259ed11cfe148666c474ee3fce72a7",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "running",
+      "health": null,
+      "exitCode": null
+    },
+    "auth-service": {
+      "imageId": "sha256:c3c6e956f13fe18e5a2546d2909c7f86c4ea15fcd69ba568c21a221d626749f2",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "running",
+      "health": null,
+      "exitCode": null
+    },
+    "analytics-service": {
+      "imageId": "sha256:cf811f55d8e485530aefa494e18ebe83875bbaeafdd9cd593bb25e792a30880d",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "running",
+      "health": null,
+      "exitCode": null
+    },
+    "order-service": {
+      "imageId": "sha256:af3d3dd7233325a59cf2a60c40d0a6f2bc8bf81bfd1687af4bdb9577054d6d4b",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "running",
+      "health": null,
+      "exitCode": null
+    },
+    "async-task-service": {
+      "imageId": "sha256:a5ebd9c0fc199cc2858a83acc8650488729ce3d256b0f88b522a13634cd47670",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "running",
+      "health": null,
+      "exitCode": null
+    },
+    "litellm": {
+      "imageId": "sha256:229665e372493ab0948f36ca813a5a20f352e258424383d6a7043bf088eb12fb",
+      "revision": "fe7aee26944261fc74e25eabf15d99a0b627cf74",
+      "state": "running",
+      "health": null,
+      "exitCode": null
+    },
+    "config-server": {
+      "imageId": "sha256:5959d7329fb761749a7c375d9322701808c5c5398b0167bdb5c0eaef6c7ca6fa",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "running",
+      "health": null,
+      "exitCode": null
+    },
+    "migrate-workflow": {
+      "imageId": "sha256:41ebbfb983db61de73449a42d89fc84ff44078212b25bc876284f7474968eb88",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "exited",
+      "health": null,
+      "exitCode": 0
+    },
+    "capability-showcase-frontend": {
+      "imageId": "sha256:da4088365eed73b9f64470c5770a7b5c0f68769ee7422eefb2a45c345c9fcf15",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "running",
+      "health": null,
+      "exitCode": null
+    },
+    "migrate-order": {
+      "imageId": "sha256:41ebbfb983db61de73449a42d89fc84ff44078212b25bc876284f7474968eb88",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "exited",
+      "health": null,
+      "exitCode": 0
+    },
+    "migrate-async-task": {
+      "imageId": "sha256:41ebbfb983db61de73449a42d89fc84ff44078212b25bc876284f7474968eb88",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "exited",
+      "health": null,
+      "exitCode": 0
+    },
+    "migrate-knowledge-graph": {
+      "imageId": "sha256:41ebbfb983db61de73449a42d89fc84ff44078212b25bc876284f7474968eb88",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "exited",
+      "health": null,
+      "exitCode": 0
+    },
+    "migrate-analytics-demo": {
+      "imageId": "sha256:41ebbfb983db61de73449a42d89fc84ff44078212b25bc876284f7474968eb88",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "exited",
+      "health": null,
+      "exitCode": 0
+    },
+    "migrate-knowledge-ingestion": {
+      "imageId": "sha256:41ebbfb983db61de73449a42d89fc84ff44078212b25bc876284f7474968eb88",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "exited",
+      "health": null,
+      "exitCode": 0
+    },
+    "migrate-auth": {
+      "imageId": "sha256:41ebbfb983db61de73449a42d89fc84ff44078212b25bc876284f7474968eb88",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "exited",
+      "health": null,
+      "exitCode": 0
+    },
+    "migrate-channel": {
+      "imageId": "sha256:41ebbfb983db61de73449a42d89fc84ff44078212b25bc876284f7474968eb88",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "exited",
+      "health": null,
+      "exitCode": 0
+    },
+    "migrate-conversation": {
+      "imageId": "sha256:41ebbfb983db61de73449a42d89fc84ff44078212b25bc876284f7474968eb88",
+      "revision": "cfa1d5b8a21b519ac6cf2407186bbd0e4aaaf019",
+      "state": "exited",
+      "health": null,
+      "exitCode": 0
+    }
+  },
+  "retrievalSmoke": {
+    "tenant": "infra-smoke-32bf704108d3",
+    "initial": "BASELINE_REQUIRED",
+    "baseline": "PASS",
+    "afterTestDocumentRemoval": "REGRESSION",
+    "recallAfterRemoval": 0.0,
+    "embedding": "hash",
+    "realComponents": [
+      "MySQL",
+      "S3",
+      "Redis",
+      "Qdrant",
+      "Elasticsearch"
+    ]
+  }
+}
