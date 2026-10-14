@@ -14,3 +14,12 @@
 - 真实共享Redis随机前缀测试PASS：SCAN/HSCAN覆盖25文档/3租户、Lua条件推进、重新装配后进度存留、移除后重建拒绝旧writer。测试键已清理。
 - `GC_REDIS_TEST=true mvn -o -B -pl knowledge-service -am test` PASS（密码仅进子进程环境）。
 - 为验证暂启dev-infra Redis/MySQL，任务结束恢复其原停止状态。
+
+## S3/S4 检索评测闭环
+
+- `mvn -o -B test` PASS：1483 tests / 0 failures / 0 errors / 18 conditional skips。
+- `python3 deploy/test-knowledge-operations-mysql.py` PASS：含检索质量并发/幂等/过期终止与旧writer保护；三张新表及字段注释、应用DDL权限限制通过。随机测试库/账号已清理。
+- 真实应用管线使用HashEmbedding、生产query与registry版本过滤，发布v2→建立基线→移除文档→门禁REGRESSION，通过。此证据不冒充外部模型/向量组件验证。
+- 前端580tests通过；vue-tsc和Vite构建通过（保留既有chunk体积/动态导入提示）。
+- MyBatis边界23XML、observability、production-cutover、supply-chain配置、database-migration、runtime-hardening门禁PASS。不存在的历史脚本名称未作为PASS计入。
+- 无真实模型评委调用；浏览器与Docker运行验证待进行。

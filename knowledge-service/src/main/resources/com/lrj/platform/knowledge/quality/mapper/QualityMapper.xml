@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lrj.platform.knowledge.quality.mapper.QualityMapper">
+  <select id="dataset" resultType="com.lrj.platform.knowledge.quality.mapper.QualityRow">SELECT BODY_JSON FROM KNOWLEDGE_QUALITY_DATASET WHERE TENANT_KEY=#{tenant} AND ID=#{id} AND DELETED=0</select>
+  <select id="datasetRequest" resultType="com.lrj.platform.knowledge.quality.mapper.QualityRow">SELECT BODY_JSON,REQUEST_HASH FROM KNOWLEDGE_QUALITY_DATASET WHERE TENANT_KEY=#{tenant} AND REQUEST_KEY=#{key} AND DELETED=0</select>
+  <select id="datasets" resultType="com.lrj.platform.knowledge.quality.mapper.QualityRow">
+    SELECT BODY_JSON FROM KNOWLEDGE_QUALITY_DATASET WHERE TENANT_KEY=#{tenant} AND DELETED=0
+    <if test="before != null">AND ID &lt; #{before}</if> ORDER BY ID DESC LIMIT #{limit}
+  </select>
+  <insert id="insertDataset">INSERT INTO KNOWLEDGE_QUALITY_DATASET (ID,TENANT_KEY,REQUEST_KEY,REQUEST_HASH,REVISION,BODY_JSON) VALUES (#{id},#{tenant},#{key},#{hash},0,#{body})</insert>
+  <update id="updateDataset">UPDATE KNOWLEDGE_QUALITY_DATASET SET BODY_JSON=#{body},REVISION=REVISION+1 WHERE TENANT_KEY=#{tenant} AND ID=#{id} AND REVISION=#{expected} AND ACTIVE_RUN_ID IS NULL AND DELETED=0</update>
+  <update id="claim">UPDATE KNOWLEDGE_QUALITY_DATASET SET ACTIVE_RUN_ID=#{run} WHERE TENANT_KEY=#{tenant} AND ID=#{id} AND REVISION=#{expected} AND ACTIVE_RUN_ID IS NULL AND DELETED=0</update>
+  <update id="release">UPDATE KNOWLEDGE_QUALITY_DATASET SET ACTIVE_RUN_ID=NULL WHERE TENANT_KEY=#{tenant} AND ID=#{id} AND ACTIVE_RUN_ID=#{run} AND DELETED=0</update>
+  <select id="run" resultType="com.lrj.platform.knowledge.quality.mapper.QualityRow">SELECT BODY_JSON FROM KNOWLEDGE_QUALITY_RUN WHERE TENANT_KEY=#{tenant} AND ID=#{id} AND DELETED=0</select>
+  <select id="runRequest" resultType="com.lrj.platform.knowledge.quality.mapper.QualityRow">SELECT BODY_JSON,REQUEST_HASH FROM KNOWLEDGE_QUALITY_RUN WHERE TENANT_KEY=#{tenant} AND DATASET_ID=#{dataset} AND REQUEST_KEY=#{key} AND DELETED=0</select>
+  <select id="runs" resultType="com.lrj.platform.knowledge.quality.mapper.QualityRow">
+    SELECT BODY_JSON FROM KNOWLEDGE_QUALITY_RUN WHERE TENANT_KEY=#{tenant} AND DATASET_ID=#{dataset} AND DELETED=0
+    <if test="before != null">AND ID &lt; #{before}</if> ORDER BY ID DESC LIMIT #{limit}
+  </select>
+  <insert id="insertRun">INSERT INTO KNOWLEDGE_QUALITY_RUN (ID,TENANT_KEY,DATASET_ID,REQUEST_KEY,REQUEST_HASH,STATUS,DEADLINE_AT,BODY_JSON) VALUES (#{id},#{tenant},#{dataset},#{key},#{hash},'RUNNING',#{deadline},#{body})</insert>
+  <update id="finish">UPDATE KNOWLEDGE_QUALITY_RUN SET STATUS=#{status},BODY_JSON=#{body} WHERE TENANT_KEY=#{tenant} AND ID=#{id} AND STATUS='RUNNING' AND DELETED=0</update>
+  <insert id="audit">INSERT INTO KNOWLEDGE_QUALITY_AUDIT (TENANT_KEY,DATASET_ID,ACTOR,ACTION_CODE,SUBJECT_ID,OCCURRED_AT) VALUES (#{tenant},#{dataset},#{actor},#{action},#{subject},#{at})</insert>
+</mapper>

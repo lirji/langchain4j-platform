@@ -68,6 +68,21 @@ class KnowledgeOperationsPipelineTest {
         assertThat(operations.feedbackSummary(actor, current.id())).containsEntry("HELPFUL", 1L);
         var first = operations.get(actor, original.id());
         assertThatThrownBy(() -> publication.probe(actor, original.id(), first.version(), null, probe)).isInstanceOf(OperationsException.class);
+        // 使用真正的query、HashEmbedding和版本过滤器形成检索闭环，不用固定HTTP结果代替检索。
+        var quality = new com.lrj.platform.knowledge.quality.QualityService(
+                new com.lrj.platform.knowledge.quality.QualityStore(ds, mapper), store, probe, clock);
+        var definition = new com.lrj.platform.protocol.knowledge.RetrievalQuality.Definition("policy quality",
+                List.of(new com.lrj.platform.protocol.knowledge.RetrievalQuality.Case("policy", "refund phoenix",
+                        List.of(new com.lrj.platform.protocol.knowledge.RetrievalQuality.Target("tenant", original.documentId())), feedback.id())),
+                new com.lrj.platform.protocol.knowledge.RetrievalQuality.Settings(5, 0, "policy", 0, 10000));
+        var dataset = quality.create(actor, new com.lrj.platform.protocol.knowledge.RetrievalQuality.Create("quality", definition));
+        var baseline = quality.execute(actor, dataset.id(), new com.lrj.platform.protocol.knowledge.RetrievalQuality.Execute(0L, "baseline", "v2"), null);
+        assertThat(baseline.metrics().recall()).isEqualTo(1);
+        assertThat(baseline.results().getFirst().retrieved().getFirst().version()).isEqualTo("2");
+        dataset = quality.baseline(actor, dataset.id(), new com.lrj.platform.protocol.knowledge.RetrievalQuality.Baseline(0L, baseline.id()));
+        registry.remove(actor.tenantId(), original.documentId());
+        var regression = quality.execute(actor, dataset.id(), new com.lrj.platform.protocol.knowledge.RetrievalQuality.Execute(dataset.revision(), "regression", "document removed"), null);
+        assertThat(regression.gate().verdict()).isEqualTo(com.lrj.platform.protocol.knowledge.RetrievalQuality.Verdict.REGRESSION);
         TenantContext.set(new TenantContext.Tenant("foreign", "editor", Set.of("chat")));
         assertThat(query.query("refund phoenix", 5, 0.0, "policy").hits()).isEmpty();
     }

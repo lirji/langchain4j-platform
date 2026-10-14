@@ -36,9 +36,17 @@ public class KnowledgeOperationsConfig {
             JdbcKnowledgeOperationsStore store, IngestionSubmissionService submissions, IngestionJobStore jobs, DocumentRegistry registry) {
         return new KnowledgePublicationService(operations, store, submissions, jobs, registry, Clock.systemUTC());
     }
+    /** 评测与运营使用同一受治理数据源；query/worker角色不持有写库能力。 */
+    @Bean
+    com.lrj.platform.knowledge.quality.QualityService qualityService(@Qualifier("ingestionJobDataSource") DataSource source,
+            ObjectMapper mapper, JdbcKnowledgeOperationsStore operations, KnowledgeRetrievalProbe probe) {
+        return new com.lrj.platform.knowledge.quality.QualityService(
+                new com.lrj.platform.knowledge.quality.QualityStore(source, mapper), operations, probe, Clock.systemUTC());
+    }
+
     /** HTTP探针只转发本次认证请求的原令牌；不保存凭证，也不在下游签发新JWT。 */
     @Bean
-    KnowledgeProbe knowledgeProbe(KnowledgeRuntimeProperties runtime, ObjectProvider<KnowledgeQueryService> local,
+    KnowledgeRetrievalProbe knowledgeProbe(KnowledgeRuntimeProperties runtime, ObjectProvider<KnowledgeQueryService> local,
             RestTemplateBuilder builder, InternalSecurityProperties security,
             @Value("${app.rag.operations.query-base-url:}") String queryUrl) {
         if (!queryUrl.isBlank()) {

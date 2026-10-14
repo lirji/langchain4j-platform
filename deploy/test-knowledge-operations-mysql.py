@@ -44,16 +44,16 @@ GRANT ALL PRIVILEGES ON `{schema}`.* TO '{migrator}'@'%';
         with log.open("w") as output:
             result = subprocess.run(
                 ["mvn", "-o", "-B", "-pl", "knowledge-service", "-am",
-                 "-Dtest=KnowledgeOperationsStoreTest,KnowledgeOperationsServiceTest,KnowledgeOperationsHttpTest", "-Dsurefire.failIfNoSpecifiedTests=false", "test"],
+                 "-Dtest=KnowledgeOperationsStoreTest,KnowledgeOperationsServiceTest,KnowledgeOperationsHttpTest,RetrievalQualityTest", "-Dsurefire.failIfNoSpecifiedTests=false", "test"],
                 cwd=repository, env=environment, stdout=output, stderr=subprocess.STDOUT)
         if result.returncode:
             print(f"Knowledge operations MySQL verification: FAIL; log={log}")
             return result.returncode
         comments = subprocess.run(command, input=f"""
 SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='{schema}'
-AND TABLE_NAME IN ('KNOWLEDGE_OPERATION_FEEDBACK','KNOWLEDGE_OPERATION_CANDIDATE','KNOWLEDGE_OPERATION_AUDIT','KNOWLEDGE_OPERATION_RELEASE') AND COLUMN_COMMENT='';
+AND TABLE_NAME IN ('KNOWLEDGE_OPERATION_FEEDBACK','KNOWLEDGE_OPERATION_CANDIDATE','KNOWLEDGE_OPERATION_AUDIT','KNOWLEDGE_OPERATION_RELEASE','KNOWLEDGE_QUALITY_DATASET','KNOWLEDGE_QUALITY_RUN','KNOWLEDGE_QUALITY_AUDIT') AND COLUMN_COMMENT='';
 SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='{schema}'
-AND TABLE_NAME IN ('KNOWLEDGE_OPERATION_FEEDBACK','KNOWLEDGE_OPERATION_CANDIDATE','KNOWLEDGE_OPERATION_AUDIT','KNOWLEDGE_OPERATION_RELEASE') AND TABLE_COMMENT='';
+AND TABLE_NAME IN ('KNOWLEDGE_OPERATION_FEEDBACK','KNOWLEDGE_OPERATION_CANDIDATE','KNOWLEDGE_OPERATION_AUDIT','KNOWLEDGE_OPERATION_RELEASE','KNOWLEDGE_QUALITY_DATASET','KNOWLEDGE_QUALITY_RUN','KNOWLEDGE_QUALITY_AUDIT') AND TABLE_COMMENT='';
 """, text=True, check=True, capture_output=True)
         if comments.stdout.split() != ["0", "0"]:
             raise RuntimeError("MySQL table/column comments are incomplete")

@@ -23,6 +23,7 @@
 
 **对话与检索**
 - [RAG 接入指南](对话与检索/rag-guide.md)：文档/图片上传、向量库 provider、collection-per-tenant 隔离、Docker/Helm 默认百炼 `text-embedding-v4` + `qwen3-rerank`、混合检索、GraphRAG、Obsidian 导入、语义缓存。
+- [RAG 检索质量评测闭环](对话与检索/retrieval-quality-loop.md)：反馈标注、固定评测集、基线、退化门禁与失败恢复。
 - [知识库文档更新与存储](对话与检索/知识库文档更新与存储.md)：同名重传的全量替换规则、更新参数与版本字段、向量/Redis/内存/ES/GraphRAG/SpiceDB 多存储落点、原始文件缺口和跨存储一致性边界。
 - [ES 全文混排指南](对话与检索/es-hybrid-rerank.md)：Elasticsearch 真 BM25 全文分支并入四路混合检索、多源 RRF 融合、smartcn 中文分析器、`knowledge_segments_text` 索引与量纲处理。
 - [ES / Kibana 查询速查](对话与检索/es-kibana-查询速查.md)：Kibana Dev Tools 常用 DSL、按租户/分类过滤、排障命令。

@@ -16,15 +16,15 @@
 
 ## 未完成
 
-S1/S2已完成并通过相关回归和真实Redis验证；待S3评测后端、S4前端、S5回归和Git交付。
+S1/S2完成提交12cf1a2/160f6bb；S3/S4实现完成并通过全Maven1483、前端580、真实MySQL验证。待最终review、Git交付、Docker构建更新启动与运行验收。
 
 ## 当前问题
 
-历史供应链扫描失败；本次未改依赖、未部署。不触碰既有worktree与忽略文件。
+历史供应链扫描失败；本次未改依赖。用户追加授权：完成后在本地Docker发布新代码并启动。既有栈来自恢复快照且未运行；当前Compose缺LC4J_CONVERSATION两个密码，需要安全补齐该新增库/账户，不重跑backup/migrate。Redis/MySQL已为测试启动，后续用于目标栈而保留。
 
 ## 下一步建议
 
-从feat/rag-retrieval-quality继续评测闭环；前两项已在独立分支提交。每项独立任务分支，后续基于已验证前序提交；不重复等待确认。
+从feat/rag-retrieval-quality继续最终交付与本地Docker更新。验证日志在/tmp/quality-*、/tmp/rag-quality-reactor.log，规范证据在docs/delivery/rag-quality-loop/。每项独立任务分支，后续基于已验证前序提交；不重复等待确认。
 
 ## 恢复 Prompt
 
