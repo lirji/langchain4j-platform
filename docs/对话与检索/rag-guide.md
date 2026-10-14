@@ -565,3 +565,7 @@ curl -s -X POST 'http://localhost:8080/rag/obsidian/import' \
 - 每篇 `.md` → 一个文档（正文经现有上传管线分块/embedding/入库）；`.obsidian/` 配置目录自动跳过。
 - `category` 优先级：笔记 frontmatter 的 `category` > 请求参数 `category` > 顶层文件夹名。
 - `[[目标笔记]]`（含 `[[目标|别名]]`、`[[目标#小节]]`）→ GraphRAG 三元组 `本笔记|链接到|目标笔记`，**直接写图存储、不掺进向量索引**；需 `RAG_GRAPH_ENABLED=true`（默认已开）才生成（若显式设 `false` 则只导入正文）。导入后可用 `/rag/graph/query` 按笔记关系查邻居。
+
+## 知识运营闭环
+
+已有RAG工作台新增反馈、候选修订、检查、审核、发布、检索复查和新版本回滚入口。启用JDBC运营存储及配置拆分检索地址后使用，操作与故障恢复见 [知识运营指南](knowledge-operations-guide.md)。内容契约检查不等于语义正确性评测，入库READY才显示已发布。

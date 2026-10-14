@@ -2,41 +2,36 @@
 
 ## 任务目标
 
-按已批准规划完成可治理长期记忆和知识运营闭环；不做Java版本升级或依赖债务。
-分支：feat/governed-memory-knowledge-operations；基线 ba0b8c9。设计 docs/design/memory-knowledge-operations；状态 docs/delivery/memory-knowledge-operations/PROGRESS_STATE.md。
+按批准规划实现可治理长期记忆与知识运营闭环；不升级Java/依赖，不部署生产。
 
 ## 已完成
 
-- M1–M3：持久化状态/版本/代次、候选确认、遗忘/停用防旧任务回填、审计与HTTP接口；窄测试通过。
-- M4：对话侧栏管理入口；14项相关组件/回归测试、类型检查通过，视觉截图尚未验证。
-- M5：真实MySQL隔离库17项测试、并发审核、表字段注释及APP DDL限制通过；全量回归进行中。
+- 记忆治理、候选确认、过期/固定、遗忘、停用、审计与旧抽取防回填：fb9a917。
+- 知识反馈→草稿→内容契约检查→审核→真实入库→检索复查→新版本回滚：b305433。
+- RAG运营界面与异步/冲突/身份隔离：bbeb5d2。
+- 全Maven1462 tests/0fail/0error/17skip；前端576tests、类型/构建；MySQL记忆17项、知识11项；五项配置门禁；Code Hygiene无阻塞。
 
 ## 已修改文件
 
-- conversation memory profile、conversation V2迁移及测试。
-- 前端 memoryGovernance API、MemoryGovernancePanel 和 ChatToolsPanel。
-- MySQL验证脚本、memory-guide、本轮设计及交付状态。
+conversation治理与V2迁移、knowledge operations与V4迁移、前端chat/rag、网关路由/拆分配置、对应测试脚本和指南。详细证据见docs/delivery/memory-knowledge-operations/。
 
 ## 未完成
 
-- M5全量/视觉验收与Git提交。
-- K1–K6知识运营：反馈、候选、评测、审核、发布、效果复查/回滚及控制台。
-- 最终回归、Code Hygiene、文档和正常Git交付；远程扫描失败不伪装通过。
+- Git合并推送最终结果核验及记录。
+- 浏览器工具不可用，桌面/窄屏视觉验收未验证；不能用组件测试冒充截图验收。
+- 远程基线依赖SBOM失败保留；本轮不处理依赖债务，不宣称生产可发布。
 
 ## 当前问题
 
-- Python原目录有历史未提交内容，本轮尚未修改。
-- 共享 dev-infra-mysql84-1 本轮临时启动用于隔离测试；完成后恢复停止状态。
-- 新迁移只在隔离测试库执行，不改业务数据；未部署。
+Python原目录历史dirty未动。临时测试库/用户已清理、MySQL容器恢复停止、Vite预览已停止。既有工作树和本地环境/验证日志保留。
 
 ## 下一步建议
 
-1. 复核M5当前测试进程和证据，提交记忆批次。
-2. 依据统一设计先补K1–K4详细契约，再实现并测试知识运营；不要只做记忆就停止。
+按已有Git授权完成正常交付并记录实际远程状态；随后在可用浏览器环境补验视觉。生产发布和依赖整改均不在本轮范围。
 
 ## 恢复 Prompt
 
-读取本文件及docs/delivery/memory-knowledge-operations/PROGRESS_STATE.md，继续未完成切片，不重做M1-PERSIST。保留Python dirty及所有工作树。用户已授权连续执行，不逐片等待确认。
+读取本文件及docs/delivery/memory-knowledge-operations/PROGRESS_STATE.md，核对当前Git事实继续剩余交付，不重做已通过实现。保留Python用户改动和历史工作树，不强推、不部署。
 
 ---
 
