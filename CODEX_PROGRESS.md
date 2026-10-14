@@ -2,6 +2,48 @@
 
 ## 任务目标
 
+重做 RAG 工作台的「知识运营闭环」与「检索质量评测」界面，使其符合项目现有主题、控件和布局，并更新本地前端。
+
+## 已完成
+
+- 使用现有 WorkbenchSection、InfoNote、form-control、btn 与主题 token，统一卡片、表单、操作层级、列表、指标和状态提示。
+- 知识运营桌面双栏，窄屏单列；评测提供流程引导、分组编辑、样本卡片与六项指标展示。
+- 保留既有 API、权限、租户切换、取消确认和失败恢复逻辑。
+- RAG 27 项测试、vue-tsc、前端 Docker/Vite 构建通过；Chrome 实际桌面、编辑表单、390×844 窄屏检查通过。
+- 本地前端预览已更新，其余服务未重启。
+
+## 已修改文件
+
+- capability-showcase-frontend/src/modules/rag/KnowledgeOperationsPanel.vue
+- capability-showcase-frontend/src/modules/rag/RetrievalQualityPanel.vue
+- capability-showcase-frontend/src/modules/rag/rag-governance.css
+- docs/delivery/rag-operations-design/DELIVERY_RESULT.md
+- CODEX_PROGRESS.md
+
+## 未完成
+
+完成任务分支提交、固定源码版本前端镜像、正常合并推送 main 与交付状态记录。
+
+## 当前问题
+
+本次无阻塞。全局移动端顶栏存在既有拥挤，本次范围仅上述两块；未扩大修改导航壳层。历史 Java 供应链问题仍按前一任务记录保留。
+
+## 下一步建议
+
+1. 提交 fix/rag-operations-design 并固定本地前端镜像到源码提交。
+2. 正常合并推送 main，记录最终交付结果。
+
+## 恢复 Prompt
+
+读取本文件与 docs/delivery/rag-operations-design/DELIVERY_RESULT.md，完成未完成的交付步骤，不重复实现或重启后端。保留已有工作树、数据与忽略配置。
+
+---
+以下为历史记录：
+
+# Codex Progress
+
+## 任务目标
+
 完成发布复查版本校验、GC公平推进和RAG检索质量闭环，并按用户授权在本地Docker发布启动。用户确认只覆盖检索质量/延迟，并确认修复发布独立AgentScope仓库。
 
 ## 已完成

@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
+import WorkbenchSection from '../_shared/WorkbenchSection.vue'
+import InfoNote from '../_shared/InfoNote.vue'
+import './rag-governance.css'
 import { useSessionStore } from '../../stores/session'
 import { useAuthStore } from '../../stores/auth'
 import { ApiError, humanizeError, isAbortError } from '../../api/errors'
@@ -104,83 +107,95 @@ const statusNames: Record<api.CandidateStatus, string> = { DRAFT: '草稿', EVAL
 const reasonNames: Record<api.FeedbackReason, string> = { NO_ANSWER: '未找到答案', INCORRECT: '内容不正确', HELPFUL: '有帮助' }
 </script>
 <template>
-  <section class="knowledge-operations" aria-label="知识运营闭环">
-    <header><h2>知识运营闭环</h2><p>记录检索反馈，把修订草稿送审发布，再复查检索效果。</p></header>
-    <form aria-label="检索反馈" @submit.prevent="feedback">
-      <h3>提交反馈</h3>
-      <label>检索问题<input v-model="question" required maxlength="2000" /></label>
-      <button v-if="props.query" type="button" :disabled="busy" @click="question = props.query || ''">使用当前检索问题</button>
-      <div class="ops-fields">
-        <label>反馈类型<select v-model="reason"><option v-for="(name, value) in reasonNames" :key="value" :value="value">{{ name }}</option></select></label>
-        <label>关联文档 ID（可选）<input v-model="documentId" maxlength="256" /></label>
-      </div>
-      <label>补充说明<textarea v-model="comment" maxlength="4000" rows="2" /></label>
-      <button :disabled="busy">提交反馈</button>
-    </form>
-    <div class="ops-actions"><button :disabled="busy" @click="loadFeedback()">查看反馈收件箱</button><button :disabled="busy" @click="loadCandidates()">查看修订候选</button></div>
-    <p class="ops-hint">管理操作需要 ingest 权限；内容检查仅验证必需片段，审核者仍需确认事实准确性。</p>
-    <p v-if="busy" role="status">正在处理…</p><p v-if="error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p>
-    <div v-if="opened">
-      <button :disabled="busy" @click="newDraft()">新建知识草稿</button>
-      <ul v-if="feedbacks.length" class="ops-list"><li v-for="row in feedbacks" :key="row.id"><p>{{ row.input.question }} · {{ reasonNames[row.input.reason] }}</p><p>{{ row.input.comment }}</p><button :disabled="busy" @click="newDraft(row)">基于此反馈修订</button></li></ul>
-      <button v-if="feedbacks.length === 20" :disabled="busy" @click="loadFeedback(true)">下一页反馈</button>
-      <ul v-if="candidates.length" class="ops-list"><li v-for="row in candidates" :key="row.id"><button :disabled="busy" @click="select(row)">{{ row.draft.title }} · {{ statusNames[row.status] }}</button></li></ul>
-      <button v-if="candidates.length === 20" :disabled="busy" @click="loadCandidates(true)">下一页候选</button>
-      <p v-if="!feedbacks.length && !candidates.length">暂无记录，可提交反馈或新建草稿。</p>
+  <WorkbenchSection class="rag-governance knowledge-operations" aria-label="知识运营闭环"
+    title="知识运营闭环" subtitle="从检索反馈到知识修订，让每次发布都有据可查。">
+    <template #actions><span class="governance-tag">反馈 · 修订 · 复查</span></template>
+    <div class="ops-entry-grid">
+      <form class="ops-feedback" aria-label="检索反馈" @submit.prevent="feedback">
+        <div class="governance-section-head">
+          <h3>记录检索反馈</h3>
+          <button v-if="props.query" type="button" class="btn btn--ghost btn--sm" :disabled="busy" @click="question = props.query || ''">使用当前检索问题</button>
+        </div>
+        <label>检索问题<input class="form-control" v-model="question" required maxlength="2000" placeholder="输入需要改进的检索问题" /></label>
+        <div class="ops-fields">
+          <label>反馈类型<select class="form-control" v-model="reason"><option v-for="(name, value) in reasonNames" :key="value" :value="value">{{ name }}</option></select></label>
+          <label>关联文档 ID（可选）<input class="form-control" v-model="documentId" maxlength="256" placeholder="填写本次检索关联的文档" /></label>
+        </div>
+        <label>补充说明<textarea class="form-control" v-model="comment" maxlength="4000" rows="3" placeholder="说明缺失的信息、错误内容或期望结果" /></label>
+        <div class="governance-form-footer">
+          <span class="governance-muted">反馈将进入收件箱，供后续修订参考。</span>
+          <button class="btn btn--primary" :disabled="busy">提交反馈</button>
+        </div>
+      </form>
+      <aside class="ops-manage" aria-label="知识运营入口">
+        <div class="ops-manage-item">
+          <span class="governance-eyebrow">01 / 收集问题</span>
+          <h3>反馈收件箱</h3>
+          <p>查看待处理的反馈，从具体问题发起知识修订。</p>
+          <button class="btn btn--ghost" :disabled="busy" @click="loadFeedback()">查看反馈收件箱</button>
+        </div>
+        <div class="ops-manage-item">
+          <span class="governance-eyebrow">02 / 修订与发布</span>
+          <h3>知识修订</h3>
+          <p>检查草稿、审核发布，并复查新版本的检索效果。</p>
+          <button class="btn btn--ghost" :disabled="busy" @click="loadCandidates()">查看修订候选</button>
+        </div>
+        <p class="ops-hint">管理操作需要 ingest 权限。内容检查通过后，仍需人工审核事实准确性。</p>
+      </aside>
     </div>
-    <article v-if="selected" class="ops-detail">
+    <div class="governance-feedback" aria-live="polite">
+      <InfoNote v-if="busy" tone="neutral" role="status">正在处理…</InfoNote>
+      <InfoNote v-if="error" tone="danger" role="alert">{{ error }}</InfoNote>
+      <InfoNote v-if="notice" tone="success" role="status">{{ notice }}</InfoNote>
+    </div>
+    <div v-if="opened" class="governance-block">
+      <button class="btn btn--primary" :disabled="busy" @click="newDraft()">新建知识草稿</button>
+      <ul v-if="feedbacks.length" class="ops-list"><li v-for="row in feedbacks" :key="row.id"><p>{{ row.input.question }} · {{ reasonNames[row.input.reason] }}</p><p>{{ row.input.comment }}</p><button class="btn btn--ghost" :disabled="busy" @click="newDraft(row)">基于此反馈修订</button></li></ul>
+      <button class="btn btn--ghost" v-if="feedbacks.length === 20" :disabled="busy" @click="loadFeedback(true)">下一页反馈</button>
+      <ul v-if="candidates.length" class="ops-list"><li v-for="row in candidates" :key="row.id"><button class="btn btn--ghost" :disabled="busy" @click="select(row)">{{ row.draft.title }} · {{ statusNames[row.status] }}</button></li></ul>
+      <button class="btn btn--ghost" v-if="candidates.length === 20" :disabled="busy" @click="loadCandidates(true)">下一页候选</button>
+      <p v-if="!feedbacks.length && !candidates.length" class="governance-empty">暂无记录，可提交反馈或新建草稿。</p>
+    </div>
+    <article v-if="selected" class="ops-detail governance-block">
       <h3>{{ selected.draft.title }} · {{ statusNames[selected.status] }}</h3>
       <p class="ops-hint">修订 {{ selected.version }} · 文档 {{ selected.documentId }}</p>
       <p v-if="selected.rollbackOf">旧内容来源：{{ selected.rollbackOf }}；重新发布将生成新的文档版本。</p>
       <p v-if="selected.release">文档版本 {{ selected.release.documentVersion || '待分配' }} · 审核人 {{ selected.release.reviewer }} · 入库任务 {{ selected.release.jobId || '尚未确认' }}</p>
       <p class="ops-content">{{ selected.draft.content }}</p>
-      <div class="ops-actions">
-        <button :disabled="busy" @click="refresh">刷新详情</button>
-        <button v-if="editable" :disabled="busy" @click="edit">编辑草稿</button>
-        <button v-if="editable" :disabled="busy || editing" @click="act('evaluate')">检查内容契约</button>
-        <button v-if="selected.status === 'EVALUATED'" :disabled="busy || editing" @click="act('approve')">确认审核通过</button>
-        <button v-if="selected.status === 'APPROVED'" :disabled="busy || editing" @click="act('publish')">发布到知识库</button>
-        <button v-if="['PUBLISHING', 'PUBLISH_FAILED'].includes(selected.status)" :disabled="busy" @click="act('publish')">恢复发布</button>
-        <button v-if="selected.release?.publisher" :disabled="busy" @click="act('sync')">同步入库状态</button>
-        <button v-if="selected.status === 'PUBLISHED'" :disabled="busy" @click="act('probe')">复查检索效果</button>
-        <button v-if="selected.status === 'PUBLISHED'" :disabled="busy" @click="rollback">用此版本创建回滚草稿</button>
-        <button :disabled="busy" @click="effect">查看反馈与审计</button>
+      <div class="ops-actions governance-actions">
+        <button class="btn btn--ghost" :disabled="busy" @click="refresh">刷新详情</button>
+        <button class="btn btn--ghost" v-if="editable" :disabled="busy" @click="edit">编辑草稿</button>
+        <button class="btn btn--ghost" v-if="editable" :disabled="busy || editing" @click="act('evaluate')">检查内容契约</button>
+        <button class="btn btn--primary" v-if="selected.status === 'EVALUATED'" :disabled="busy || editing" @click="act('approve')">确认审核通过</button>
+        <button class="btn btn--primary" v-if="selected.status === 'APPROVED'" :disabled="busy || editing" @click="act('publish')">发布到知识库</button>
+        <button class="btn btn--ghost" v-if="['PUBLISHING', 'PUBLISH_FAILED'].includes(selected.status)" :disabled="busy" @click="act('publish')">恢复发布</button>
+        <button class="btn btn--ghost" v-if="selected.release?.publisher" :disabled="busy" @click="act('sync')">同步入库状态</button>
+        <button class="btn btn--ghost" v-if="selected.status === 'PUBLISHED'" :disabled="busy" @click="act('probe')">复查检索效果</button>
+        <button class="btn btn--ghost" v-if="selected.status === 'PUBLISHED'" :disabled="busy" @click="rollback">用此版本创建回滚草稿</button>
+        <button class="btn btn--ghost" :disabled="busy" @click="effect">查看反馈与审计</button>
       </div>
       <div v-for="evidence in [selected.evaluation, selected.probe].filter(Boolean)" :key="evidence!.kind" class="ops-evidence">
         <strong>{{ evidence!.kind === 'CONTENT_CONTRACT' ? '内容契约检查' : '检索复查' }}：{{ evidence!.passed }}/{{ evidence!.total }} 通过</strong>
         <ul><li v-for="(check, index) in evidence!.results" :key="index">{{ check.passed ? '通过' : '未通过' }} · {{ check.question }} · {{ check.reason }}</li></ul>
       </div>
       <p v-if="summary">关联文档主动反馈：未找到答案 {{ summary.NO_ANSWER || 0 }} · 内容不正确 {{ summary.INCORRECT || 0 }} · 有帮助 {{ summary.HELPFUL || 0 }}（不等于完整线上质量指标）</p>
-      <ol v-if="history.length"><li v-for="event in history" :key="event.id">{{ event.action }} · {{ event.actor }} · 修订 {{ event.version }} · {{ new Date(event.occurredAt).toLocaleString() }}</li></ol>
+      <ol v-if="history.length" class="ops-history"><li v-for="event in history" :key="event.id">{{ event.action }} · {{ event.actor }} · 修订 {{ event.version }} · {{ new Date(event.occurredAt).toLocaleString() }}</li></ol>
     </article>
-    <form v-if="editing" aria-label="知识草稿" @submit.prevent="save">
+    <form v-if="editing" class="governance-block" aria-label="知识草稿" @submit.prevent="save">
       <h3>{{ selected ? '编辑草稿' : '新建草稿' }}</h3><p v-if="feedbackId" class="ops-hint">来源反馈：{{ feedbackId }}</p>
-      <label>标题<input v-model="title" required maxlength="200" /></label>
-      <label>类目（可选）<input v-model="category" maxlength="128" /></label>
-      <label>正文<textarea v-model="content" required maxlength="50000" rows="8" /></label>
+      <label>标题<input class="form-control" v-model="title" required maxlength="200" /></label>
+      <label>类目（可选）<input class="form-control" v-model="category" maxlength="128" /></label>
+      <label>正文<textarea class="form-control" v-model="content" required maxlength="50000" rows="8" /></label>
       <fieldset><legend>内容与检索检查用例（最多 20 项）</legend>
         <div v-for="(check, index) in checks" :key="index" class="ops-check">
-          <label>检查问题<input v-model="check.question" required maxlength="500" /></label>
-          <label>必须包含的片段<input v-model="check.requiredText" required maxlength="500" /></label>
-          <button type="button" :disabled="busy || checks.length === 1" @click="checks.splice(index, 1)">移除此项</button>
+          <label>检查问题<input class="form-control" v-model="check.question" required maxlength="500" /></label>
+          <label>必须包含的片段<input class="form-control" v-model="check.requiredText" required maxlength="500" /></label>
+          <button class="btn btn--ghost" type="button" :disabled="busy || checks.length === 1" @click="checks.splice(index, 1)">移除此项</button>
         </div>
-        <button type="button" :disabled="busy || checks.length >= 20" @click="checks.push({ question: '', requiredText: '' })">添加检查项</button>
+        <button class="btn btn--ghost" type="button" :disabled="busy || checks.length >= 20" @click="checks.push({ question: '', requiredText: '' })">添加检查项</button>
       </fieldset>
       <p class="ops-hint">保存修改后，旧的检查和审核失效。发布中的内容不能直接修改。</p>
-      <div class="ops-actions"><button :disabled="busy">保存草稿</button><button type="button" :disabled="busy" @click="editing = false">取消编辑</button></div>
+      <div class="ops-actions governance-actions"><button class="btn btn--primary" :disabled="busy">保存草稿</button><button class="btn btn--ghost" type="button" :disabled="busy" @click="editing = false">取消编辑</button></div>
     </form>
-  </section>
+  </WorkbenchSection>
 </template>
-<style scoped>
-.knowledge-operations { border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-5); background: var(--surface); display: grid; gap: var(--space-4); min-width: 0; }
-h2,h3,p { margin: 0; } header,form,.ops-detail { display: grid; gap: var(--space-3); }
-form,.ops-detail,.ops-evidence { padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); }
-label { display: grid; gap: var(--space-1); } input,textarea,select { width: 100%; min-width: 0; }
-button { padding: var(--space-2) var(--space-3); } .ops-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.ops-fields,.ops-check { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--space-3); }
-.ops-check { margin-bottom: var(--space-3); } .ops-hint { color: var(--text-muted); font-size: var(--fs-sm); overflow-wrap: anywhere; }
-.ops-content { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 24rem; overflow: auto; }
-.ops-list { display: grid; gap: var(--space-2); padding-left: var(--space-4); overflow-wrap: anywhere; }
-[role=alert] { color: var(--danger); } fieldset { min-width: 0; border: 1px solid var(--border); }
-@media (max-width:640px) { .ops-fields,.ops-check { grid-template-columns: minmax(0,1fr); } .knowledge-operations { padding: var(--space-3); } }
-</style>

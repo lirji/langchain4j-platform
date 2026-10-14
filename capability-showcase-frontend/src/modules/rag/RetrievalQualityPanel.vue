@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, onUnmounted } from 'vue'
+import WorkbenchSection from '../_shared/WorkbenchSection.vue'
+import InfoNote from '../_shared/InfoNote.vue'
+import './rag-governance.css'
 import { useSessionStore } from '../../stores/session'
 import { useAuthStore } from '../../stores/auth'
 import { ApiError, humanizeError, isAbortError } from '../../api/errors'
@@ -80,78 +83,89 @@ function reason(code: string) {
 }
 </script>
 <template>
-  <section class="quality-panel" aria-label="检索质量评测">
-    <h2>检索质量评测</h2>
-    <p>把真实反馈整理成评测集，比较知识或检索调整前后的效果。这里只评测检索，不评测回答质量和模型费用。</p>
-    <div class="actions"><button :disabled="busy || editing" @click="load()">查看评测集</button><button :disabled="busy || editing" @click="edit(null)">新建评测集</button></div>
-    <p v-if="busy" role="status">正在处理，请稍候。运行请求中断后可查看历史确认结果。</p>
-    <p v-if="error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p>
-    <ul v-if="loaded"><li v-for="row in datasets" :key="row.id"><button :disabled="busy || editing" @click="select(row)">{{ row.definition.name }}</button> · {{ row.definition.cases.length }} 题 · {{ row.baselineRunId ? '已设基线' : '尚无基线' }}</li></ul>
-    <p v-if="loaded && !datasets.length">暂无评测集，可从反馈开始建立。</p>
-    <button v-if="datasets.length === 20" :disabled="busy || editing" @click="load(true)">下一页评测集</button>
-    <form v-if="editing" aria-label="评测集编辑" @submit.prevent="save">
+  <WorkbenchSection class="rag-governance quality-panel" aria-label="检索质量评测"
+    title="检索质量评测" subtitle="把真实反馈整理成评测集，持续比较知识与检索调整前后的效果。">
+    <template #actions>
+      <button class="btn btn--ghost" :disabled="busy || editing" @click="load()">查看评测集</button>
+      <button class="btn btn--primary" :disabled="busy || editing" @click="edit(null)">新建评测集</button>
+    </template>
+    <ol v-if="!loaded && !editing && !selected" class="quality-workflow" aria-label="评测流程">
+      <li><span class="quality-step" aria-hidden="true">01</span><div><h3>整理评测问题</h3><p>从反馈选题，标注应该命中的文档。</p></div></li>
+      <li><span class="quality-step" aria-hidden="true">02</span><div><h3>建立检索基线</h3><p>运行评测，确认结果后设为基线。</p></div></li>
+      <li><span class="quality-step" aria-hidden="true">03</span><div><h3>验证改进效果</h3><p>比较召回、排名与延迟，定位退化。</p></div></li>
+    </ol>
+    <p class="governance-scope">评测范围：文档检索质量与延迟。回答质量和模型费用不在本次评测内。</p>
+    <div class="governance-feedback" aria-live="polite">
+      <InfoNote v-if="busy" tone="neutral" role="status">正在处理，请稍候。运行请求中断后可查看历史确认结果。</InfoNote>
+      <InfoNote v-if="error" tone="danger" role="alert">{{ error }}</InfoNote>
+      <InfoNote v-if="notice" tone="success" role="status">{{ notice }}</InfoNote>
+    </div>
+    <ul v-if="loaded" class="quality-datasets">
+      <li v-for="row in datasets" :key="row.id" :class="{ 'is-selected': selected?.id === row.id }">
+        <button class="btn btn--ghost quality-dataset-name" :aria-pressed="selected?.id === row.id" :disabled="busy || editing" @click="select(row)">{{ row.definition.name }}</button>
+        <div class="quality-dataset-meta"><span>{{ row.definition.cases.length }} 题</span><span class="governance-tag" :data-tone="row.baselineRunId ? 'success' : 'neutral'">{{ row.baselineRunId ? '已设基线' : '尚无基线' }}</span></div>
+      </li>
+    </ul>
+    <p v-if="loaded && !datasets.length" class="governance-empty">暂无评测集，可从反馈开始建立。</p>
+    <button class="btn btn--ghost" v-if="datasets.length === 20" :disabled="busy || editing" @click="load(true)">下一页评测集</button>
+    <form v-if="editing" class="quality-editor governance-block" aria-label="评测集编辑" @submit.prevent="save">
       <fieldset :disabled="busy">
         <legend>{{ selected ? '编辑评测集（保存后清除当前基线）' : '新建评测集' }}</legend>
-        <label>名称<input v-model="draft.name" required maxlength="128" /></label>
-        <div class="fields">
-          <label>检索条数 K<input v-model.number="draft.settings.topK" type="number" min="1" max="20" required /></label>
-          <label>最低相似度<input v-model.number="draft.settings.minScore" type="number" min="0" max="1" step="0.01" required /></label>
-          <label>分类（可选）<input v-model="draft.settings.category" maxlength="128" /></label>
-          <label>允许质量下降（0～1）<input v-model.number="draft.settings.allowedDrop" type="number" min="0" max="1" step="0.01" required /></label>
-          <label>允许 P95 增加（毫秒）<input v-model.number="draft.settings.allowedP95IncreaseMs" type="number" min="0" max="120000" required /></label>
+        <label class="quality-name">名称<input class="form-control" v-model="draft.name" required maxlength="128" placeholder="为这组检索问题起一个容易识别的名称" /></label>
+        <h3 class="quality-group-title">检索设置与退化门槛</h3>
+        <div class="fields quality-settings">
+          <label>检索条数 K<input class="form-control" v-model.number="draft.settings.topK" type="number" min="1" max="20" required /></label>
+          <label>最低相似度<input class="form-control" v-model.number="draft.settings.minScore" type="number" min="0" max="1" step="0.01" required /></label>
+          <label>分类（可选）<input class="form-control" v-model="draft.settings.category" maxlength="128" /></label>
+          <label>允许质量下降（0～1）<input class="form-control" v-model.number="draft.settings.allowedDrop" type="number" min="0" max="1" step="0.01" required /></label>
+          <label>允许 P95 增加（毫秒）<input class="form-control" v-model.number="draft.settings.allowedP95IncreaseMs" type="number" min="0" max="120000" required /></label>
         </div>
-        <button type="button" @click="request(ctx => listFeedback(true, '~', ctx), rows => { feedbacks = rows })">加载近期反馈</button>
-        <button v-if="feedbacks.length === 20" type="button" @click="request(ctx => listFeedback(true, feedbacks.at(-1)!.id, ctx), rows => { feedbacks = rows })">下一页反馈来源</button>
+        <button class="btn btn--ghost btn--sm" type="button" @click="request(ctx => listFeedback(true, '~', ctx), rows => { feedbacks = rows })">加载近期反馈</button>
+        <button class="btn btn--ghost" v-if="feedbacks.length === 20" type="button" @click="request(ctx => listFeedback(true, feedbacks.at(-1)!.id, ctx), rows => { feedbacks = rows })">下一页反馈来源</button>
         <article v-for="(sample, i) in draft.cases" :key="sample.id" class="sample">
-          <h3>用例 {{ i + 1 }}</h3>
-          <label>反馈来源<select :value="sample.feedbackId || ''" @change="source(sample, ($event.target as HTMLSelectElement).value)"><option value="">手动标注</option><option v-if="sample.feedbackId && !feedbacks.some(f => f.id === sample.feedbackId)" :value="sample.feedbackId">已关联反馈</option><option v-for="row in feedbacks" :key="row.id" :value="row.id">{{ row.input.question }}</option></select></label>
-          <label>问题<textarea v-model="sample.question" :readonly="!!sample.feedbackId" required maxlength="2000" rows="2" /></label>
-          <p>请人工确认相关文档 ID；反馈中提到的文档不一定是正确结果。</p>
-          <div v-for="(target, j) in sample.relevant" :key="j" class="fields">
-            <label>知识范围<select v-model="target.visibility"><option value="tenant">本租户</option><option value="public">共享库</option></select></label>
-            <label>相关文档 ID<input v-model="target.docId" required maxlength="256" /></label>
-            <button v-if="sample.relevant.length > 1" type="button" @click="sample.relevant.splice(j, 1)">移除文档</button>
+          <div class="governance-section-head"><h3>用例 {{ i + 1 }}</h3><span class="governance-tag">{{ sample.feedbackId ? '来源于反馈' : '手动标注' }}</span></div>
+          <label>反馈来源<select class="form-control" :value="sample.feedbackId || ''" @change="source(sample, ($event.target as HTMLSelectElement).value)"><option value="">手动标注</option><option v-if="sample.feedbackId && !feedbacks.some(f => f.id === sample.feedbackId)" :value="sample.feedbackId">已关联反馈</option><option v-for="row in feedbacks" :key="row.id" :value="row.id">{{ row.input.question }}</option></select></label>
+          <label>问题<textarea class="form-control" v-model="sample.question" :readonly="!!sample.feedbackId" required maxlength="2000" rows="2" /></label>
+          <p class="governance-muted">请人工确认相关文档 ID；反馈中提到的文档不一定是正确结果。</p>
+          <div v-for="(target, j) in sample.relevant" :key="j" class="fields quality-target">
+            <label>知识范围<select class="form-control" v-model="target.visibility"><option value="tenant">本租户</option><option value="public">共享库</option></select></label>
+            <label>相关文档 ID<input class="form-control" v-model="target.docId" required maxlength="256" /></label>
+            <button class="btn btn--ghost" v-if="sample.relevant.length > 1" type="button" @click="sample.relevant.splice(j, 1)">移除文档</button>
           </div>
-          <div class="actions"><button type="button" :disabled="sample.relevant.length >= 20" @click="sample.relevant.push({ visibility: 'tenant', docId: '' })">添加相关文档</button><button type="button" :disabled="draft.cases.length === 1" @click="draft.cases.splice(i, 1)">移除此用例</button></div>
+          <div class="actions governance-actions"><button class="btn btn--ghost" type="button" :disabled="sample.relevant.length >= 20" @click="sample.relevant.push({ visibility: 'tenant', docId: '' })">添加相关文档</button><button class="btn btn--ghost" type="button" :disabled="draft.cases.length === 1" @click="draft.cases.splice(i, 1)">移除此用例</button></div>
         </article>
-        <div class="actions"><button type="button" :disabled="draft.cases.length >= 20" @click="draft.cases.push(emptyCase())">添加用例（最多20题）</button><button type="submit">保存评测集</button><button type="button" @click="confirmDiscard = true">取消编辑</button></div>
-        <div v-if="confirmDiscard" role="alert"><p>放弃本次未保存的编辑？</p><button type="button" @click="editing = false; confirmDiscard = false">放弃编辑</button><button type="button" @click="confirmDiscard = false">继续编辑</button></div>
+        <div class="actions governance-actions"><button class="btn btn--ghost" type="button" :disabled="draft.cases.length >= 20" @click="draft.cases.push(emptyCase())">添加用例（最多20题）</button><button class="btn btn--primary" type="submit">保存评测集</button><button class="btn btn--ghost" type="button" @click="confirmDiscard = true">取消编辑</button></div>
+        <div v-if="confirmDiscard" class="quality-discard" role="alert"><p>放弃本次未保存的编辑？</p><button class="btn btn--ghost" type="button" @click="editing = false; confirmDiscard = false">放弃编辑</button><button class="btn btn--ghost" type="button" @click="confirmDiscard = false">继续编辑</button></div>
       </fieldset>
     </form>
-    <article v-if="selected">
+    <article v-if="selected" class="quality-detail governance-block">
       <h3>{{ selected.definition.name }} · {{ selected.definition.cases.length }} 题</h3>
-      <p>修订 {{ selected.revision }} · {{ selected.baselineRunId ? `基线 ${selected.baselineRunId}` : '尚无基线，首次运行不会判为通过。' }}</p>
-      <div class="actions"><button :disabled="busy" @click="refresh">刷新评测集</button><button :disabled="busy || editing" @click="edit(selected)">编辑定义</button><button :disabled="busy || editing" @click="history()">查看运行历史</button></div>
-      <form v-if="!editing" aria-label="执行检索评测" @submit.prevent="execute">
-        <label>本次运行说明<input v-model="label" required maxlength="128" placeholder="例如：调整分块后的验证" :disabled="busy" /></label><button :disabled="busy">执行检索评测</button>
+      <p class="governance-muted">修订 {{ selected.revision }} · {{ selected.baselineRunId ? `基线 ${selected.baselineRunId}` : '尚无基线，首次运行不会判为通过。' }}</p>
+      <div class="actions governance-actions"><button class="btn btn--ghost" :disabled="busy" @click="refresh">刷新评测集</button><button class="btn btn--ghost" :disabled="busy || editing" @click="edit(selected)">编辑定义</button><button class="btn btn--ghost" :disabled="busy || editing" @click="history()">查看运行历史</button></div>
+      <form v-if="!editing" class="quality-execute" aria-label="执行检索评测" @submit.prevent="execute">
+        <label>本次运行说明<input class="form-control" v-model="label" required maxlength="128" placeholder="例如：调整分块后的验证" :disabled="busy" /></label><button class="btn btn--primary" :disabled="busy">执行检索评测</button>
       </form>
-      <ul><li v-for="run in runs" :key="run.id"><button :disabled="busy || editing" @click="result = run">{{ run.label }} · {{ status(run) }}</button> · {{ new Date(run.startedAt).toLocaleString() }}</li></ul>
-      <button v-if="runs.length === 20" :disabled="busy || editing" @click="history(true)">下一页运行</button>
+      <ul class="quality-history"><li v-for="run in runs" :key="run.id"><button class="btn btn--ghost" :disabled="busy || editing" @click="result = run">{{ run.label }} · {{ status(run) }}</button> · {{ new Date(run.startedAt).toLocaleString() }}</li></ul>
+      <button class="btn btn--ghost" v-if="runs.length === 20" :disabled="busy || editing" @click="history(true)">下一页运行</button>
     </article>
-    <article v-if="result && !editing" class="result">
+    <article v-if="result && !editing" class="result governance-block" :data-verdict="result.gate?.verdict || result.status">
       <h3>{{ result.label }}：{{ status(result) }}</h3>
-      <p>固定评测集修订 {{ result.datasetRevision }} · K={{ result.snapshot.settings.topK }} · 基线 {{ result.baselineRunId || '无' }}</p>
-      <div class="actions"><button :disabled="busy" @click="refreshRun()">刷新运行结果</button><button v-if="result.status === 'SUCCEEDED'" :disabled="busy" @click="baseline">将此运行设为基线</button><button v-if="result.status === 'RUNNING'" :disabled="busy" @click="refreshRun(true)">终止过期运行</button></div>
+      <p class="governance-muted">固定评测集修订 {{ result.datasetRevision }} · K={{ result.snapshot.settings.topK }} · 基线 {{ result.baselineRunId || '无' }}</p>
+      <div class="actions governance-actions"><button class="btn btn--ghost" :disabled="busy" @click="refreshRun()">刷新运行结果</button><button class="btn btn--primary" v-if="result.status === 'SUCCEEDED'" :disabled="busy" @click="baseline">将此运行设为基线</button><button class="btn btn--ghost" v-if="result.status === 'RUNNING'" :disabled="busy" @click="refreshRun(true)">终止过期运行</button></div>
       <p v-if="result.status === 'RUNNING'">运行尚未结束。服务端两分钟期限到达后可终止过期记录；终止不会撤销已发生的检索调用。</p>
-      <p v-if="result.status === 'FAILED'" role="alert">本次执行未完成，不能作为通过证据或基线。请检查检索服务后发起新的运行。</p>
-      <div v-if="result.metrics" class="metrics"><span>召回率 {{ percent(result.metrics.recall) }}</span><span>精确率 {{ percent(result.metrics.precision) }}</span><span>MRR {{ result.metrics.mrr.toFixed(3) }}</span><span>命中率 {{ percent(result.metrics.hitRate) }}</span><span>P50 {{ result.metrics.p50Ms }} ms</span><span>P95 {{ result.metrics.p95Ms }} ms</span></div>
+      <p v-if="result.status === 'FAILED'" class="quality-failure" role="alert">本次执行未完成，不能作为通过证据或基线。请检查检索服务后发起新的运行。</p>
+      <dl v-if="result.metrics" class="quality-metrics">
+        <div><dt>召回率</dt><dd>{{ percent(result.metrics.recall) }}</dd></div>
+        <div><dt>精确率</dt><dd>{{ percent(result.metrics.precision) }}</dd></div>
+        <div><dt>MRR</dt><dd>{{ result.metrics.mrr.toFixed(3) }}</dd></div>
+        <div><dt>命中率</dt><dd>{{ percent(result.metrics.hitRate) }}</dd></div>
+        <div><dt>P50 延迟</dt><dd>{{ result.metrics.p50Ms }} <small>ms</small></dd></div>
+        <div><dt>P95 延迟</dt><dd>{{ result.metrics.p95Ms }} <small>ms</small></dd></div>
+      </dl>
       <p v-if="result.gate && result.gate.recallDelta !== null">相对基线：召回 {{ delta(result.gate.recallDelta) }}；精确率 {{ delta(result.gate.precisionDelta) }}；MRR {{ result.gate.mrrDelta?.toFixed(3) }}；命中率 {{ delta(result.gate.hitRateDelta) }}；P95 {{ result.gate.p95DeltaMs }} ms。</p>
       <ul v-if="result.gate"><li v-for="item in result.gate.reasons" :key="item">{{ reason(item) }}</li></ul>
       <div class="table-scroll"><table><caption>逐题结果（相关文档按范围和ID匹配，重复片段不重复计数）</caption><thead><tr><th>问题</th><th>相关文档</th><th>命中文档 / 版本</th><th>召回率</th><th>耗时</th></tr></thead><tbody><tr v-for="item in result.results" :key="item.caseId"><td>{{ result.snapshot.cases.find(c => c.id === item.caseId)?.question }}</td><td><div v-for="target in result.snapshot.cases.find(c => c.id === item.caseId)?.relevant" :key="`${target.visibility}:${target.docId}`">{{ target.visibility === 'public' ? '共享' : '租户' }} / {{ target.docId }}</div></td><td><div v-for="hit in item.retrieved" :key="`${hit.document.visibility}:${hit.document.docId}`">{{ hit.document.visibility === 'public' ? '共享' : '租户' }} / {{ hit.document.docId }} / v{{ hit.version || '未知' }}</div><span v-if="!item.retrieved.length">未命中文档</span></td><td>{{ percent(item.recall) }}</td><td>{{ item.latencyMs }} ms</td></tr></tbody></table></div>
-      <p>精确率以实际返回的不同文档数为分母；小样本延迟仅用于本次比较。运行说明是人工备注，不代表模型或索引版本已固定。</p>
+      <p class="governance-muted">精确率以实际返回的不同文档数为分母；小样本延迟仅用于本次比较。运行说明是人工备注，不代表模型或索引版本已固定。</p>
     </article>
-  </section>
+  </WorkbenchSection>
 </template>
-<style scoped>
-.quality-panel { margin-top: 1.5rem; padding: 1rem; border: 1px solid var(--border, #dbe1e8); border-radius: 12px; }
-.quality-panel p { line-height: 1.6; overflow-wrap: anywhere; }
-.actions, .fields, .metrics { display: flex; flex-wrap: wrap; gap: .65rem; align-items: end; margin: .75rem 0; }
-label { display: flex; flex-direction: column; gap: .3rem; flex: 1; min-width: 150px; margin: .6rem 0; }
-input, textarea, select { width: 100%; box-sizing: border-box; padding: .55rem; border: 1px solid var(--border, #cad2dc); border-radius: 6px; color: inherit; background: var(--surface, #fff); }
-button { cursor: pointer; padding: .5rem .75rem; } button:disabled { cursor: default; opacity: .55; }
-fieldset { min-width: 0; border: 1px solid var(--border, #dbe1e8); padding: .8rem; }
-.sample, .result { margin-top: 1rem; border-top: 1px solid var(--border, #dbe1e8); padding-top: .75rem; }
-.metrics span { padding: .5rem; background: var(--surface-muted, #f3f6fa); border-radius: 6px; }
-[role=alert] { color: #a32929; } .table-scroll { overflow-x: auto; } table { border-collapse: collapse; width: 100%; } th, td { text-align: left; padding: .65rem; border-bottom: 1px solid var(--border, #dbe1e8); vertical-align: top; overflow-wrap: anywhere; min-width: 90px; } caption { text-align: left; padding: .5rem 0; }
-@media (max-width: 600px) { .quality-panel { padding: .75rem; } .fields { display: block; } }
-</style>
