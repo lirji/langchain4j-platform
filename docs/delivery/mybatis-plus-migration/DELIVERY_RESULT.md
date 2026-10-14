@@ -18,4 +18,10 @@
 
 ## CI 与限制
 
-本地完整测试、MySQL、打包和配置门禁 PASS，Code Hygiene 限制见 TEST_RESULT。推送 main 只触发现有 CI；镜像发布仅在版本 tag 时触发，未触发生产部署。远程 CI 结果待本次推送后核对，本地通过不替代远程结果。
+本地完整测试、MySQL、打包和配置门禁 PASS，Code Hygiene 限制见 TEST_RESULT。推送 main 只触发现有 CI；镜像发布仅在版本 tag 时触发，未触发生产部署。产品与验证提交 `03944b1` 的远程结果已核对：
+
+- [AgentScope Cutover CI](https://github.com/lirji/langchain4j-platform/actions/runs/38499724664)：PASS，包含完整 Reactor、新增持久化边界与 Flowable 专项。
+- [Edge Gateway CI](https://github.com/lirji/langchain4j-platform/actions/runs/38499724556)、[Tax AI CI](https://github.com/lirji/langchain4j-platform/actions/runs/38499724519)、[Coding Agent Kit CI](https://github.com/lirji/langchain4j-platform/actions/runs/38499724597)：PASS。
+- [Java supply chain](https://github.com/lirji/langchain4j-platform/actions/runs/38499724630)：FAIL 于 `Scan aggregate dependency SBOM`；其完整测试和打包步骤已通过。基线 `4fd8fd4` 的[同一流程](https://github.com/lirji/langchain4j-platform/actions/runs/38496053061)也失败于同一步，未把全仓漏洞扫描当作通过。当前与基线完整扫描 JSON 未逐项比对，不能声称所有发现完全相同；新增 MyBatis 坐标 OSV 查询结果仅覆盖该窄范围。
+
+未绕过门禁、忽略漏洞或执行发布。最后仅同步交付记录，等待上述运行全部结束后再正常推送，避免取消正在运行的检查。文档提交可能再次触发供应链流程，不用产品提交的结果冒充新运行结果。
