@@ -53,7 +53,7 @@
 
 ## 未完成
 
-- 源码、测试和验证记录已完成；正在执行分批提交及正常合并推送main。
+- 开发、测试与源码交付均已完成。c0d3091（后端）和fed773e（前端）已正常合并推送origin/main；本次仅同步最终交付记录。
 
 ## 当前问题
 
@@ -62,12 +62,12 @@
 
 ## 下一步建议
 
-1. 验证已通过，证据见docs/delivery/knowledge-etl-workbench/TEST_RESULT.md和VERIFICATION_EVIDENCE.json。
-2. 完成测试证据、按task-git-delivery提交并正常合并推送main，不部署。
+1. 本轮已交付；入口为RAG工作台的数据接入分区，证据见docs/delivery/knowledge-etl-workbench/TEST_RESULT.md。
+2. 实际接源前配置来源和运营用户、按指南完成V8迁移及协调器升级；部署另行授权。
 
 ## 恢复 Prompt
 
-读取本文件和docs/delivery/knowledge-etl-workbench/PLAN.md，继续feat/knowledge-etl-workbench的最终验证与Git交付，不重做HTTP连接器，不部署或清理已有工作树。
+本轮工作台与运行记录已合入推送main，读取docs/delivery/knowledge-etl-workbench/DELIVERY_RESULT.md核对事实。不要重复实现或部署，不清理其他任务工作树。
 
 ---
 以下为历史记录：
