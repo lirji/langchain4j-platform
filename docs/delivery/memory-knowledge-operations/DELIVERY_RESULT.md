@@ -18,7 +18,16 @@
 
 源码交付不表示镜像发行或生产准入。远程main基线ba0b8c9的供应链SBOM扫描已失败（run38492801755），既有依赖债务按用户要求排除本轮，失败未被抹除，也未豁免可信发行/生产门禁。当前浏览器截图未验证，M4/K5不声称完成视觉验收。
 
-当前本地实现已按功能提交；合并及远程结果在实际执行后追加，不预先宣称成功。
+正常快进合并并推送已完成：远程main从ba0b8c9推进到97205f21e8fb9d48055b63670ae70825151fdb72，git ls-remote核验一致。任务分支也已推送；没有force、没有PR自动合并或分支保护绕过（main当前无保护）。本记录的后续文档提交继续正常同步，不改变已验证源码。
+
+本轮源码CI已触发，记录时仍在运行，不能宣称全绿：
+- AgentScope Cutover CI：[38495973479](https://github.com/lirji/langchain4j-platform/actions/runs/38495973479)
+- 前端：[38495973459](https://github.com/lirji/langchain4j-platform/actions/runs/38495973459)
+- Edge：[38495973524](https://github.com/lirji/langchain4j-platform/actions/runs/38495973524)
+- Tax：[38495973481](https://github.com/lirji/langchain4j-platform/actions/runs/38495973481)
+- 供应链：[38495973476](https://github.com/lirji/langchain4j-platform/actions/runs/38495973476)；后续纯文档main推送可能按工作流规则取消/替换此运行，以最新main运行作为发行证据。
+
+本次完成源码交付。视觉验收仍UNVERIFIED，远程发行证据待定；不把源码提交当作完整外部环境验收。
 
 ## 工作目录
 

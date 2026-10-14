@@ -14,6 +14,6 @@
 | K3 | 审核和真实入库发布闭环 | K2 | operations+existing ingestion | 失败重试、并发发布、READY才发布 | VALIDATED |
 | K4 | 效果反馈、回归与回滚路径 | K3 | operations+existing retrieval | 反馈关联发布、旧内容新版本恢复 | VALIDATED |
 | K5 | 现有RAG控制台运营入口 | K4 | rag Vue组件/API | 反馈→修订→评测→审核→发布→复查 | IMPLEMENTED / VISUAL_UNVERIFIED |
-| K6 | 端到端/数据库/回滚/交付 | K5 | docs/tests/runtime | 真实DB、前后端检查、配置门禁、git交付 | LOCAL_VALIDATED / DELIVERY_PENDING |
+| K6 | 端到端/数据库/回滚/交付 | K5 | docs/tests/runtime | 真实DB、前后端检查、配置门禁、git交付 | LOCAL_VALIDATED / SOURCE_DELIVERED |
 
 不新建中间件。Runtime 仅在新迁移/路由接入时修改既有 Compose/Helm 门禁。接口细节缺口由设计轨道先补文档，再实施，不能由UI编造响应。
