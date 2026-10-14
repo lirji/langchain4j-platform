@@ -110,6 +110,18 @@ if ! rg -q 'agentscope-orchestrator:8085' "$scrape_config"; then
   exit 1
 fi
 
+# AgentScope依赖探针也必须使用同一管理端口，避免服务UP但编排器持续unhealthy。
+agent_environment="$(sed -n '/^  agentscope-orchestrator:$/,/^  [a-z]/p' deploy/docker-compose.yml)"
+for dependency in async-task knowledge analytics workflow order; do
+  management_port="$(rg -o '^    port: \$\{MANAGEMENT_PORT:([0-9]+)\}' -r '$1' "$dependency-service/src/main/resources/application.yml")"
+  variable="$(tr '[:lower:]-' '[:upper:]_' <<<"$dependency")_MANAGEMENT_BASE_URL"
+  expected="      $variable: \${$variable:-http://$dependency-service:$management_port}"
+  if ! rg -Fqx "$expected" <<<"$agent_environment"; then
+    echo "AgentScope $dependency readiness must use management port $management_port" >&2
+    exit 1
+  fi
+done
+
 # 告警规则必须可判定：每条都要有 severity 与可执行的处置说明
 alert_count="$(rg -c '^      - alert: ' "$alert_rules")"
 for field in 'severity:' 'summary:' 'description:'; do

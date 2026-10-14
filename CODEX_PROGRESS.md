@@ -20,7 +20,7 @@
 
 ## 未完成
 
-- AgentScope旧Python镜像readiness向Java业务端口请求actuator，返回404导致unhealthy。已向用户异步询问是否允许修改独立agentscope-platform仓库并发布；回答前不修改该仓库。当前整体Docker结果PARTIAL，Java/RAG发布及冒烟PASS。
+- 用户已确认跨仓修复：Python22ba8db已提交，6项聚焦/全量530项PASS，JavaCompose管理地址和防漂移门禁完成；正在构建并切换AgentScope。最终健康验证前仍为PARTIAL。
 - 运行验证脚本和交付记录随feat/rag-retrieval-quality完成正常提交推送；最终文档提交以Git HEAD为准。
 - 浏览器工具超时，视觉验收UNVERIFIED。
 
@@ -33,7 +33,7 @@
 
 ## 下一步建议
 
-若用户批准跨仓修复：为Python新增可配置management base URL（默认回退旧business URL以兼容），五项Java依赖分别9086/9084/9083/9082/9093；补聚焦测试，正常分支提交推送并重建AgentScope，当前JavaCompose同步配置。若拒绝，只记录独立依赖阻塞，不宣称全栈健康。部署包装脚本deploy/.dev-infra-state/rag-quality-release/compose.sh。
+完成AgentScope镜像构建和实际切换，验证readiness全部必需依赖UP、整栈Compose --wait通过并更新两仓交付记录。部署包装脚本deploy/.dev-infra-state/rag-quality-release/compose.sh。
 
 ## 恢复 Prompt
 
