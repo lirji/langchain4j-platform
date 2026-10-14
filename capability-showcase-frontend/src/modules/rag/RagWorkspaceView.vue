@@ -31,6 +31,7 @@ import EmptyState from '../../components/common/EmptyState.vue'
 import ModuleHeader from '../../components/layout/ModuleHeader.vue'
 import WorkbenchSection from '../_shared/WorkbenchSection.vue'
 import InfoNote from '../_shared/InfoNote.vue'
+import KnowledgeOperationsPanel from './KnowledgeOperationsPanel.vue'
 
 const props = defineProps<{ moduleId: string; capId?: string }>()
 const catalog = useCatalogStore()
@@ -819,6 +820,8 @@ const ingestScopeHint = computed(() => {
         </WorkbenchSection>
       </div>
     </div>
+
+    <KnowledgeOperationsPanel :query="query" />
 
     <WorkbenchSection
       v-if="session.hasCredential"
