@@ -1,0 +1,223 @@
+package com.lrj.platform.conversation.memory.profile;
+
+import com.lrj.platform.migrations.SchemaMigrationRunner;
+import com.lrj.platform.migrations.SchemaName;
+import com.lrj.platform.security.TenantContext;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+/** 同一套存储契约默认跑 H2；专用环境变量可切到隔离 MySQL，验证真实锁与事务语义。 */
+class JdbcUserProfileStoreTest {
+    private final List<HikariDataSource> pools = new ArrayList<>();
+    private String url;
+    private String username;
+    private String password;
+    private String tenant;
+    private HikariDataSource source;
+
+    @BeforeEach
+    void prepare() {
+        url = System.getenv().getOrDefault("PROFILE_TEST_DB_URL",
+                "jdbc:h2:mem:profile_" + UUID.randomUUID() + ";MODE=MySQL;DB_CLOSE_DELAY=-1");
+        username = System.getenv().getOrDefault("PROFILE_TEST_DB_USER", "sa");
+        password = System.getenv().getOrDefault("PROFILE_TEST_DB_PASSWORD", "");
+        tenant = UUID.randomUUID().toString();
+        source = pool();
+        var migrationSource = new DriverManagerDataSource(url,
+                System.getenv().getOrDefault("PROFILE_TEST_MIGRATION_DB_USER", username),
+                System.getenv().getOrDefault("PROFILE_TEST_MIGRATION_DB_PASSWORD", password));
+        assertThat(SchemaMigrationRunner.migrate(migrationSource, SchemaName.CONVERSATION).success()).isTrue();
+        assertThat(SchemaMigrationRunner.migrate(migrationSource, SchemaName.CONVERSATION).migrationsExecuted()).isZero();
+    }
+
+    @AfterEach
+    void closePools() {
+        TenantContext.clear();
+        pools.forEach(HikariDataSource::close);
+    }
+
+    @Test
+    void survivesClosingAndRecreatingAllConnections() {
+        JdbcUserProfileStore first = new JdbcUserProfileStore(source, 50);
+        MemoryItem expected = item("id", "偏好邮件联系", 123);
+        first.add(tenant, "alice", expected);
+        source.close();
+        JdbcUserProfileStore restarted = new JdbcUserProfileStore(pool(), 50);
+        assertThat(restarted.list(tenant, "alice")).containsExactly(expected);
+    }
+
+    @Test
+    void preservesNormalizationSubstringDedupAndInsertionOrder() {
+        JdbcUserProfileStore store = new JdbcUserProfileStore(source, 2);
+        store.add(tenant, "alice", item("1", "Prefers Email", 999));
+        store.add(tenant, "alice", item("2", "prefers, email.", 998));
+        store.add(tenant, "alice", item("3", "always prefers email", 997));
+        assertThat(store.list(tenant, "alice")).hasSize(1);
+        store.add(tenant, "alice", item("4", "喜欢咖啡", 2));
+        store.add(tenant, "alice", item("5", "住在杭州", 1));
+        assertThat(store.list(tenant, "alice")).extracting(MemoryItem::id).containsExactly("4", "5");
+    }
+
+    @Test
+    void isolatesTenantUserCaseAndSeparatorCharacters() {
+        JdbcUserProfileStore store = new JdbcUserProfileStore(source, 50);
+        store.add(tenant, "Alice", item("1", "偏好邮件", 0));
+        store.add(tenant + "::a", "b", item("2", "喜欢咖啡", 0));
+        assertThat(store.list(tenant, "alice")).isEmpty();
+        assertThat(store.list(tenant.toUpperCase(java.util.Locale.ROOT), "Alice")).isEmpty();
+        assertThat(store.list(tenant, "a::b")).isEmpty();
+        assertThat(store.clear(tenant, "alice")).isZero();
+        assertThat(store.list(tenant, "Alice")).hasSize(1);
+    }
+
+    @Test
+    void clearIsDurableAndReturnsOnlyThisOwnersCount() {
+        JdbcUserProfileStore store = new JdbcUserProfileStore(source, 50);
+        store.add(tenant, "alice", item("1", "偏好邮件", 0));
+        store.add(tenant, "bob", item("2", "喜欢咖啡", 0));
+        assertThat(store.clear(tenant, "alice")).isEqualTo(1);
+        assertThat(new JdbcUserProfileStore(pool(), 50).list(tenant, "alice")).isEmpty();
+        assertThat(store.clear(tenant, "alice")).isZero();
+        assertThat(store.list(tenant, "bob")).hasSize(1);
+    }
+
+    @Test
+    void concurrentInstancesDeduplicateAndEnforceCapacity() throws Exception {
+        JdbcUserProfileStore first = new JdbcUserProfileStore(source, 5);
+        JdbcUserProfileStore second = new JdbcUserProfileStore(pool(), 5);
+        runTogether(20, index -> (index % 2 == 0 ? first : second)
+                .add(tenant, "alice", item("same", "偏好邮件", index)));
+        assertThat(first.list(tenant, "alice")).hasSize(1);
+        first.clear(tenant, "alice");
+        runTogether(20, index -> (index % 2 == 0 ? first : second)
+                .add(tenant, "alice", item("id-" + index, "事实" + String.format("%03d", index), index)));
+        assertThat(first.list(tenant, "alice")).hasSize(5);
+        assertThat(second.list(tenant, "alice")).isEqualTo(first.list(tenant, "alice"));
+    }
+
+    @Test
+    void databaseFailureRollsBackWithoutEvictingExistingMemory() {
+        JdbcUserProfileStore store = new JdbcUserProfileStore(source, 1);
+        store.add(tenant, "alice", item("good", "保留的记忆", 0));
+        // 非空列约束在事务内部失败，不能先淘汰旧记录再留下空画像。
+        assertThatThrownBy(() -> store.add(tenant, "alice", item(null, "新记忆", 1)))
+                .isInstanceOf(RuntimeException.class);
+        assertThat(store.list(tenant, "alice")).extracting(MemoryItem::id).containsExactly("good");
+    }
+
+    @Test
+    void ignoresBlankItemsAndRejectsInvalidLimits() {
+        JdbcUserProfileStore store = new JdbcUserProfileStore(source, 50);
+        store.add(tenant, "alice", null);
+        store.add(tenant, "alice", item("1", "  ", 0));
+        assertThat(store.list(tenant, "alice")).isEmpty();
+        assertThatThrownBy(() -> new JdbcUserProfileStore(source, 0)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new JdbcUserProfileStore(source, 1001)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void constructorOnlyVerifiesSchemaAndNeverCreatesTables() {
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl("jdbc:h2:mem:missing_" + UUID.randomUUID());
+        try (HikariDataSource empty = new HikariDataSource(config)) {
+            assertThatThrownBy(() -> new JdbcUserProfileStore(empty, 50)).isInstanceOf(RuntimeException.class);
+            assertThat(new JdbcTemplate(empty).queryForObject(
+                    "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='USER_PROFILE_MEMORY'", Integer.class))
+                    .isZero();
+        }
+    }
+
+    @Test
+    void legacyAndJdbcHaveEquivalentObservableStorageBehavior() {
+        UserProfileStore legacy = new InMemoryUserProfileStore(3);
+        UserProfileStore durable = new JdbcUserProfileStore(source, 3);
+        for (String text : List.of("偏好邮件", "偏好邮件联系", "喜欢咖啡", "住在杭州", "使用中文")) {
+            MemoryItem value = item(Integer.toHexString(text.hashCode()), text, 123);
+            legacy.add(tenant, "alice", value);
+            durable.add(tenant, "alice", value);
+            assertThat(durable.list(tenant, "alice")).isEqualTo(legacy.list(tenant, "alice"));
+        }
+        assertThat(durable.clear(tenant, "alice")).isEqualTo(legacy.clear(tenant, "alice"));
+    }
+
+    @Test
+    void httpProfileContractUsesCallerIdentityAfterStoreReplacement() throws Exception {
+        JdbcUserProfileStore store = new JdbcUserProfileStore(source, 50);
+        store.add(tenant, "alice", item("1", "偏好邮件", 123));
+        store.add(tenant, "bob", item("2", "喜欢咖啡", 123));
+        var factory = new StaticListableBeanFactory();
+        factory.addBean("profile", new UserProfileService(store,
+                mock(ProfileExtractor.class), Runnable::run, 12, false, () -> 123));
+        var controller = new MemoryProfileController(factory.getBeanProvider(UserProfileChatService.class),
+                factory.getBeanProvider(UserProfileService.class));
+        var mvc = MockMvcBuilders.standaloneSetup(controller).build();
+        TenantContext.set(new TenantContext.Tenant(tenant, "alice", Set.of("chat")));
+        mvc.perform(get("/memory/profile")
+                        .param("userId", "bob").param("tenantId", "other"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.items[0].text").value("偏好邮件"))
+                .andExpect(jsonPath("$.tenantId").value(tenant));
+        mvc.perform(delete("/memory/profile"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.removed").value(1));
+        assertThat(store.list(tenant, "alice")).isEmpty();
+        assertThat(store.list(tenant, "bob")).hasSize(1);
+    }
+
+    private HikariDataSource pool() {
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl(url);
+        config.setUsername(username);
+        config.setPassword(password);
+        config.setMaximumPoolSize(4);
+        HikariDataSource result = new HikariDataSource(config);
+        pools.add(result);
+        return result;
+    }
+
+    private static MemoryItem item(String id, String text, long time) {
+        return new MemoryItem(id, text, "preference", time, "chat-1");
+    }
+
+    private static void runTogether(int count, java.util.function.IntConsumer operation) throws Exception {
+        CountDownLatch start = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(8)) {
+            List<Future<?>> results = new ArrayList<>();
+            for (int i = 0; i < count; i++) {
+                int index = i;
+                results.add(executor.submit(() -> {
+                    start.await();
+                    operation.accept(index);
+                    return null;
+                }));
+            }
+            start.countDown();
+            for (Future<?> result : results) result.get(30, TimeUnit.SECONDS);
+        }
+    }
+}

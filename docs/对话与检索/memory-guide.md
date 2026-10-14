@@ -131,7 +131,7 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=s2' \
 | --- | --- |
 | `MemoryItem` / `MemoryFact` / `ExtractedMemories` | 持久化记忆项 + 抽取的结构化输出（`MemoryFact` 带 `type`：preference/attribute/issue/other） |
 | `ProfileExtractor` | `@AiService`（temp=0 判官模型，`GatewayChatModelFactory.buildDeterministic()`）：一轮对话 → durable 用户事实。prompt 强约束"只抽持久、跳过一次性、多数轮返回空"，含正/反例 |
-| `UserProfileStore` + `InMemoryUserProfileStore` | 按 `(tenant,user)` 隔离存储；去重（归一相等 / 互为子串）+ 容量上限淘汰最旧 + per-key 锁串行化「读→去重→写」 |
+| `UserProfileStore` + `JdbcUserProfileStore` | MySQL 持久化，按 `(tenant,user)` 隔离；所有者行锁覆盖去重、容量淘汰和清空；内存变体仅显式开发测试 |
 | `UserProfileService` | `recall`（渲染最近 N 条 `- text` 项目符号块）+ `observe`（**默认异步**抽取入库，失败被吞） |
 | `UserProfileChatService` | 包装 `Assistant.chat`：召回注入 + 异步观察（跟 RAG `context` 注入同范式，不改主 `Assistant`） |
 | `MemoryProfileConfig` | `@ConditionalOnProperty(app.conversation.memory.profile.enabled)` 装配全部 + `profileExecutor` 线程池 |
@@ -148,7 +148,7 @@ app:
     memory:
       profile:
         enabled: true         # 默认开；置 false 则关闭、对话链零变化
-        store: in-memory      # in-memory（默认，重启即丢）；redis 变体接口已留、待补
+        store: jdbc           # 默认 MySQL 持久化；in-memory 仅显式开发测试
         max-items: 50         # 每用户记忆上限，超出淘汰最旧
         recall-limit: 12      # chat 前注入召回最近多少条
         async: true           # 观察（抽取 + 入库）异步，不阻塞 chat 响应
@@ -156,13 +156,42 @@ app:
 
 对应环境变量：`CONVERSATION_MEMORY_PROFILE_ENABLED` / `_STORE` / `_MAX_ITEMS` / `_RECALL_LIMIT` / `_ASYNC`。
 
+### 3.3.1 持久化运行要求
+
+- `CONVERSATION_PROFILE_DB_URL`：画像专属 MySQL JDBC URL；本地默认 `localhost:3306/conversation`。
+- `CONVERSATION_PROFILE_DB_USER`：应用账号，默认 `conversation_app`，只授予 SELECT/INSERT/UPDATE/DELETE。
+- `CONVERSATION_PROFILE_DB_PASSWORD`：经环境或 Secret 注入，应用配置不提供明文默认口令。
+- `CONVERSATION_PROFILE_DB_POOL_SIZE`：默认 4，允许 1–32。
+- `CONVERSATION_PROFILE_DB_CONNECTION_TIMEOUT_MS`：默认 3000，允许 250–30000。
+
+先通过独立 `database-migrations` 执行 `MIGRATION_SCHEMA=conversation`，再启动服务。
+Compose 的 `migrate-conversation` 是应用前置；Helm 增加同名 schema hook，应用和迁移分别取 Secret。
+已有本地 MySQL 卷不会自动重跑 init SQL；应使用管理员按新增库/账号 SQL 有界补齐，不删除卷。
+`change-me` 仅为本地 Compose/Helm 占位；生产必须预置数据库、最小权限账号和 Secret。
+
+使用共享 dev_infra 时执行 `python3 deploy/dev-infra/manage.py provision`，为 `lc4j_conversation` 配置
+独立 APP/MIGRATOR 账号；已有 `.dev-infra.env` 只增加缺失 key，不轮换旧凭据。使用既有 compose.sh
+启动前置迁移与应用即可。旧内存版本备份允许没有 conversation 库；历史备份恢复仅处理 manifest
+实际包含的库，新库由 Flyway 初始化。**不需要重新执行旧栈 backup/migrate。**
+
+画像默认启用。需要不依赖数据库的开发场景时显式关闭画像，或显式选择 `in-memory`。
+缺表/连接故障不会自动切回内存；启动时验证 schema，读/清空错误会向调用者传播。
+抽取仍沿用既有异步 best-effort 策略，写入失败会记录告警，不等于画像已保存。
+
+旧 JVM 内存中的画像不能凭数据库迁移自动恢复；需要保留时必须在旧进程停止前另行授权导出。
+回退可关闭画像功能，保留新增表。切到旧二进制或内存模式无法读取数据库中已有画像。
+本切片仅保证存储操作串行化；清空后才完成的旧抽取仍可能重新追加，generation fencing 属于后续治理。
+
+验证：`mvn -pl conversation-service -am test`；真实数据库执行
+`python3 deploy/test-profile-memory-mysql.py`，只使用 dev_infra 独立临时库和临时账号，结束后清理。
+
 ### 3.4 端点 / 响应体
 
 | 方法 | 路径 | 说明 | 响应体 |
 | --- | --- | --- | --- |
 | POST | `/chat/memory` | 带长期记忆的对话：召回注入 + 异步更新画像 | `{"reply","chatId","tenantId","userId"}` |
 | GET | `/memory/profile` | 列出当前用户的长期记忆 | `{"count","items":[MemoryItem…],"tenantId"}` |
-| DELETE | `/memory/profile` | 清空（PII 合规删除），返回清除条数 | `{"removed","tenantId"}` |
+| DELETE | `/memory/profile` | 清空在线画像内容，返回清除条数；保留最小所有者锁行，备份删除按保留策略 | `{"removed","tenantId"}` |
 
 > 未开启时三个端点均返回 `{"error":"User profile memory not enabled. Set app.conversation.memory.profile.enabled=true.","tenantId":…}`。
 > `MemoryItem` 字段：`id`（归一文本 hashCode 十六进制，稳定去重键）、`text`、`type`、`createdAtEpochMs`、`sourceChatId`（来源会话，便于溯源）。
@@ -241,13 +270,13 @@ curl -s -X DELETE 'http://localhost:8080/memory/profile' -H 'X-Api-Key: dev-key-
 | `CONVERSATION_MEMORY_TOKEN_MODEL` | `gpt-4o-mini` | `tokens` 档 tokenizer 依据 |
 | `CONVERSATION_MEMORY_REDIS_TTL` | `P7D` | `redis` 档会话 TTL（ISO-8601；`0s`/负值 = 永不过期） |
 
-长期用户画像（默认**关闭**）：
+长期用户画像（默认**开启**，默认 JDBC 持久化）：
 
 | 环境变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `CONVERSATION_MEMORY_PROFILE_ENABLED` | `true` | 总开关；置 `false` 时 `/chat/memory`、`/memory/profile` 返回禁用提示 |
-| `CONVERSATION_MEMORY_PROFILE_STORE` | `in-memory` | 目前仅内存实现（redis 变体待补） |
-| `CONVERSATION_MEMORY_PROFILE_MAX_ITEMS` | `50` | 每用户记忆上限，超出淘汰最旧 |
+| `CONVERSATION_MEMORY_PROFILE_STORE` | `jdbc` | MySQL 持久化；`in-memory` 仅供显式开发测试，无故障自动回退 |
+| `CONVERSATION_MEMORY_PROFILE_MAX_ITEMS` | `50` | JDBC 接受 1–1000；超出按插入顺序淘汰最旧 |
 | `CONVERSATION_MEMORY_PROFILE_RECALL_LIMIT` | `12` | chat 前召回注入最近多少条 |
 | `CONVERSATION_MEMORY_PROFILE_ASYNC` | `true` | 抽取 + 入库是否异步（不阻塞 chat 响应） |
 

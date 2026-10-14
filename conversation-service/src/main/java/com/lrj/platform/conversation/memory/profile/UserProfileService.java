@@ -70,7 +70,7 @@ public class UserProfileService {
                     if (fact == null || fact.text() == null || fact.text().isBlank()) {
                         continue;
                     }
-                    String id = Integer.toHexString(InMemoryUserProfileStore.norm(fact.text()).hashCode());
+                    String id = Integer.toHexString(ProfileMemoryText.normalize(fact.text()).hashCode());
                     store.add(tenant, user, new MemoryItem(id, fact.text().trim(), fact.type(), now, chatId));
                 }
             } catch (RuntimeException e) {

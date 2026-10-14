@@ -7,7 +7,7 @@ INFRA = pathlib.Path(os.environ.get('DEV_INFRA_HOME', ROOT.parent / 'dev-infra')
 STATE = DEPLOY / '.dev-infra-state'
 ENV = DEPLOY / '.dev-infra.env'
 DATABASES = {'auth':'auth', 'async_task':'async', 'flowable':'workflow', 'knowledge_graph':'graph',
-             'knowledge_ingestion':'ingest', 'order_service':'order', 'channel':'channel', 'nl2sql_demo':'analytics'}
+             'knowledge_ingestion':'ingest', 'order_service':'order', 'conversation':'conversation', 'channel':'channel', 'nl2sql_demo':'analytics'}
 OLD = 'langchain4j-platform-'
 MYSQL = 'dev-infra-mysql84-1'
 PG = 'dev-infra-postgres16-1'
@@ -40,13 +40,18 @@ def container_env(name):
     return dict(v.split('=',1) for v in obj['Config']['Env'] if '=' in v)
 
 def credentials():
-    if not ENV.exists():
-        vals = {}
-        for db, short in DATABASES.items():
-            for role in ['APP','MIGRATOR']: vals[f'LC4J_{short.upper()}_{role}_PASSWORD'] = secrets.token_hex(24)
-        for key in ['PG','REDIS','S3']: vals[f'LC4J_{key}_PASSWORD'] = secrets.token_hex(24)
-        private(ENV, ''.join(f'{k}={v}\n' for k,v in vals.items()))
-    return dict(line.split('=',1) for line in ENV.read_text().splitlines() if line and not line.startswith('#'))
+    # 新增 schema 只补缺失 key，保留已有凭据及文件内容，不轮换在用密码。
+    existing = ENV.read_text() if ENV.exists() else ''
+    vals = dict(line.split('=', 1) for line in existing.splitlines() if line and not line.startswith('#'))
+    required = [f'LC4J_{short.upper()}_{role}_PASSWORD'
+                for short in DATABASES.values() for role in ['APP', 'MIGRATOR']]
+    required += [f'LC4J_{key}_PASSWORD' for key in ['PG', 'REDIS', 'S3']]
+    additions = {key: secrets.token_hex(24) for key in required if key not in vals}
+    if additions:
+        separator = '\n' if existing and not existing.endswith('\n') else ''
+        private(ENV, existing + separator + ''.join(f'{k}={v}\n' for k, v in additions.items()))
+        vals.update(additions)
+    return vals
 
 def mysql(sql, target=MYSQL, database=None):
     args=['docker','exec','-i',target,'sh','-c',
@@ -146,6 +151,9 @@ def backup():
         except RuntimeError: time.sleep(1)
     manifest={'created':stamp,'databases':{},'volumes':[]}
     for db in DATABASES:
+        # 旧内存版没有 conversation 库，迁移备份不得因此失败。
+        if db == 'conversation' and not mysql("SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='conversation';", OLD+'mysql-1').strip():
+            continue
         data=run(['docker','exec',OLD+'mysql-1','sh','-c',
                   'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --single-transaction --no-tablespaces --set-gtid-purged=OFF --skip-add-drop-table "$1"','sh',db])
         if len(data)<100:raise RuntimeError('Empty MySQL backup')
@@ -188,11 +196,19 @@ def pg_counts(container, database):
     tables=query("SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename;")
     return {table:int(query('SELECT count(*) FROM public."'+table.replace('"','""')+'";')[0]) for table in tables}
 
+def migration_databases(manifest):
+    """兼容新增画像库之前的备份，同时保留缺失任何历史必需库即拒绝的保护。"""
+    present = set(manifest['databases'])
+    required = set(DATABASES) - {'conversation'}
+    if not required.issubset(present) or not present.issubset(DATABASES):
+        raise RuntimeError('Backup contains missing or unknown schemas')
+    return tuple(db for db in DATABASES if db in present)
+
 def migrate():
     folder=pathlib.Path((STATE/'latest').read_text());manifest=json.loads((folder/'manifest.json').read_text())
     for name,digest in manifest['checksums'].items():
         if file_hash(folder/name)!=digest:raise RuntimeError('Backup checksum mismatch')
-    for db in DATABASES:
+    for db in migration_databases(manifest):
         target='lc4j_'+db
         present=counts(MYSQL,target)
         if present:

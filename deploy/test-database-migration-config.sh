@@ -11,6 +11,7 @@ runtime_schema_sources=(
   knowledge-service/src/main/java/com/lrj/platform/knowledge/graph
   knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/job
   order-service/src/main/java
+  conversation-service/src/main/java/com/lrj/platform/conversation/memory/profile
   platform-eventbus/src/main/java
   channel-service/src/main/java
   analytics-service/src/main/java
@@ -41,12 +42,12 @@ fi
 
 migration_root="database-migrations/src/main/resources/db/migration"
 location_count="$(find "$migration_root" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')"
-if [[ "$location_count" != "8" ]]; then
-  echo "expected 8 owned schema migration locations, found $location_count" >&2
+if [[ "$location_count" != "9" ]]; then
+  echo "expected 9 owned schema migration locations, found $location_count" >&2
   exit 1
 fi
 
-for schema in auth async-task workflow knowledge-ingestion knowledge-graph order channel analytics-demo; do
+for schema in auth async-task workflow knowledge-ingestion knowledge-graph order channel analytics-demo conversation; do
   if ! find "$migration_root/$schema" -maxdepth 1 -type f -name 'V1__*.sql' | rg -q .; then
     echo "missing initial versioned migration for $schema" >&2
     exit 1
@@ -73,7 +74,7 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.knowledge-s
   config --format json > "$split_compose_json"
 
 if ! jq -e '
-  ([.services | to_entries[] | select(.key | startswith("migrate-"))] | length) == 8
+  ([.services | to_entries[] | select(.key | startswith("migrate-"))] | length) == 9
   and ([.services | to_entries[] | select(.key | startswith("migrate-"))
     | (.value.read_only == true
        and .value.user == "10001:10001"
@@ -81,7 +82,7 @@ if ! jq -e '
        and .value.depends_on.mysql.condition == "service_healthy")]
     | all)
 ' "$compose_json" >/dev/null; then
-  echo "Compose must render 8 hardened one-shot migration services behind MySQL readiness" >&2
+  echo "Compose must render 9 hardened one-shot migration services behind MySQL readiness" >&2
   exit 1
 fi
 
@@ -93,6 +94,7 @@ compose_dependencies=(
   'knowledge-service:migrate-knowledge-graph'
   'channel-service:migrate-channel'
   'order-service:migrate-order'
+  'conversation-service:migrate-conversation'
 )
 for dependency in "${compose_dependencies[@]}"; do
   app="${dependency%%:*}"
@@ -123,6 +125,7 @@ if jq -e '
    .services["workflow-service"].environment.WORKFLOW_DB_USER,
    .services["knowledge-service"].environment.RAG_GRAPH_DB_USER,
    .services["order-service"].environment.ORDER_DB_USER,
+   .services["conversation-service"].environment.CONVERSATION_PROFILE_DB_USER,
    .services["channel-service"].environment.CHANNEL_DEDUP_DB_USER,
    .services["analytics-service"].environment.NL2SQL_DB_READONLY_USER]
   | any(. == "root")
@@ -145,11 +148,11 @@ helm template platform deploy/helm/platform \
   --set secrets.create=false \
   --set externalSecrets.enabled=true > "$helm_external_secrets"
 
-if [[ "$(rg -c '^  name: schema-migration-(auth|async-task|workflow|order)$' "$helm_default")" != "4" ]]; then
-  echo "default Helm release must render the 4 schema jobs owned by enabled workloads" >&2
+if [[ "$(rg -c '^  name: schema-migration-(auth|async-task|workflow|order|conversation)$' "$helm_default")" != "5" ]]; then
+  echo "default Helm release must render the 5 schema jobs owned by enabled workloads" >&2
   exit 1
 fi
-for schema in auth async-task workflow order knowledge-ingestion knowledge-graph channel analytics-demo; do
+for schema in auth async-task workflow order knowledge-ingestion knowledge-graph channel analytics-demo conversation; do
   if ! rg -q "^  name: schema-migration-$schema$" "$helm_all"; then
     echo "Helm did not render migration job for $schema" >&2
     exit 1
@@ -170,7 +173,7 @@ if ! rg -q '^# Source: platform/templates/migration-secret.yaml$' "$helm_default
   exit 1
 fi
 
-if [[ "$(rg -c '^                  name: platform-migration-secrets$' "$helm_all")" != "8" ]]; then
+if [[ "$(rg -c '^                  name: platform-migration-secrets$' "$helm_all")" != "9" ]]; then
   echo "every Helm migration job must reference the isolated platform-migration-secrets Secret" >&2
   exit 1
 fi
@@ -210,9 +213,18 @@ if ! rg -q 'secretKey: NL2SQL_DB_READONLY_PASSWORD' "$helm_external_secrets" \
   exit 1
 fi
 
-if [[ "$(rg -c 'secretKey: .*_MIGRATION_DB_PASSWORD' deploy/helm/platform-migration-externalsecret.example.yaml)" != "8" ]]; then
-  echo "the pre-bootstrap migration ExternalSecret example must define all 8 migration credentials" >&2
+if [[ "$(rg -c 'secretKey: .*_MIGRATION_DB_PASSWORD' deploy/helm/platform-migration-externalsecret.example.yaml)" != "9" ]]; then
+  echo "the pre-bootstrap migration ExternalSecret example must define all 9 migration credentials" >&2
   exit 1
 fi
 
+if ! jq -e '.services["conversation-service"].environment.CONVERSATION_MEMORY_PROFILE_STORE == "jdbc"' \
+    "$compose_json" >/dev/null \
+  || ! rg -q 'secretKey: CONVERSATION_PROFILE_DB_PASSWORD' "$helm_external_secrets" \
+  || ! rg -q 'name: CONVERSATION_PROFILE_DB_PASSWORD' "$helm_workloads"; then
+  echo "persistent profiles must default to JDBC and receive their runtime Secret" >&2
+  exit 1
+fi
+
+python3 deploy/dev-infra/test_profile_setup.py
 echo "database migration config gate passed"

@@ -11,6 +11,8 @@ public enum SchemaName {
     KNOWLEDGE_GRAPH("knowledge-graph"),
     ORDER("order"),
     CHANNEL("channel"),
+    /** 对话服务拥有用户长期画像，独立于其他服务的数据库。 */
+    CONVERSATION("conversation"),
     ANALYTICS_DEMO("analytics-demo");
 
     private final String id;

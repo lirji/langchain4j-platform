@@ -2,6 +2,53 @@
 
 ## 任务目标
 
+将 conversation-service 用户长期画像从内存改为 MySQL 持久化（M1-PERSIST）。
+当前范围不含完整记忆治理、知识运营闭环或 Java 版本与依赖债务。
+
+## 已完成
+
+- JDBC 存储、独立 schema/Flyway 迁移、条件数据源、默认 JDBC 配置。
+- Compose/Helm/dev_infra 接入与应用/迁移账号隔离。
+- 全 reactor 1421 tests / 0 fail / 0 error / 13 skip；真实 MySQL 10 项和权限/注释验证通过。
+- 打包、迁移/运行加固/切换/供应链静态门禁、Code Hygiene 通过（格式化工具未配置）。
+- 规范记录：docs/delivery/persistent-profile-memory/{PLAN,TEST_RESULT,PROGRESS_STATE}.md。
+
+## 已修改文件
+
+- conversation-service 的 profile 存储、配置、依赖、测试。
+- database-migrations 的 conversation schema；deploy 的 Compose/Helm/dev_infra 接入。
+- memory-guide 与本切片进度/证据文档。仅独立任务工作树有修改。
+
+## 未完成
+
+- 功能提交 d8ce9d0 已推送 feat/persistent-profile-memory；交付状态文档随后补充。
+- main 合并阻塞：本次供应链 CI 38491391893 在 SBOM 扫描失败；本轮未授予新的扫描失败合并例外。
+
+## 当前问题
+
+- 旧内存数据不会自动导出；清空后的旧抽取回填保护属于后续治理。
+- 本次兼容性 CI 38491384085 SUCCESS；供应链 CI 的测试/打包成功但扫描失败，镜像扫描未执行。
+- 原项目目录的用户未提交内容未改动。生产仍未部署。
+
+## 下一步建议
+
+1. 在 ~/.local/share/git-worktrees/langchain4j-platform/persistent-profile-memory 继续。
+2. 分支 feat/persistent-profile-memory；功能已提交/推送，详见 PROGRESS_STATE 的实际结果。
+3. 供应链门禁通过或获得本轮明确例外后再合并 main。
+
+## 恢复 Prompt
+
+读取本文件和 docs/delivery/persistent-profile-memory/PROGRESS_STATE.md，恢复 M1-PERSIST 的剩余交付。
+不要重新实现；保护原项目 dirty 内容，不扩大到 Java 版本升级、完整记忆治理或知识运营。
+
+---
+
+以下为历史任务进度：
+
+# Codex Progress
+
+## 任务目标
+
 按Claude Engineering Skill修复Java/AgentScope七类可靠性缺口, 完成验证与正常Git交付。
 规范状态: langchain4j-platform/docs/delivery/cross-runtime-reliability/DELIVERY_STATUS.md。
 两仓任务分支fix/cross-runtime-reliability; 用户持续授权正常合并/push main, 不含生产部署。
