@@ -15,6 +15,7 @@
     <description>用户登录体系：账号密码校验、会话访问 JWT 签发、刷新令牌轮转（静默续期）。</description>
 
     <dependencies>
+        <dependency><groupId>com.lrj.platform</groupId><artifactId>platform-persistence</artifactId></dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>

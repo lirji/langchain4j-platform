@@ -1,22 +1,24 @@
 package com.lrj.platform.order;
 
+import com.lrj.platform.order.mapper.OrderStoreMapper;
+import com.lrj.platform.order.mapper.OrderStoreRow;
+import com.lrj.platform.persistence.PlusMapperFactory;
+import com.lrj.platform.persistence.Rows;
+
 import com.lrj.platform.protocol.order.OrderView;
 import com.lrj.platform.security.TenantContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.RowMapper;
+import javax.sql.DataSource;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 
 /**
- * 订单只读存储。用裸 {@link JdbcTemplate} 直连持久化 MySQL；schema 由发布前的
+ * 订单只读存储。使用 {@code MyBatis-Plus Mapper} 直连持久化 MySQL；schema 由发布前的
  * {@code database-migrations} Job 管理，本类启动时只验证 contract。
  *
  * <p><strong>租户隔离</strong>：{@link #findByOrderNo(String)} 用参数化 {@code WHERE id = ? AND tenant_id = ?}，
@@ -32,19 +34,20 @@ public class JdbcOrderStore implements OrderStore {
 
     private static final Logger log = LoggerFactory.getLogger(JdbcOrderStore.class);
 
-    private final JdbcTemplate jdbc;
+    private final OrderStoreMapper db;
+
     private final boolean seedDemo;
 
-    public JdbcOrderStore(JdbcTemplate jdbcTemplate,
+    public JdbcOrderStore(DataSource dataSource,
                           @Value("${app.order.seed-demo:true}") boolean seedDemo) {
-        this.jdbc = jdbcTemplate;
+        this.db = PlusMapperFactory.create(dataSource, OrderStoreMapper.class);
         this.seedDemo = seedDemo;
         init();
     }
 
     private void init() {
-        jdbc.queryForList("SELECT id, tenant_id, customer_id, amount, status, created_at FROM orders WHERE 1=0");
-        jdbc.queryForList("SELECT id, tenant_id, name FROM customers WHERE 1=0");
+        db.readInit1();
+        db.readInit2();
         log.info("orders/customers schema verified");
         if (seedDemo) {
             seedDemoDataIfEmpty();
@@ -53,34 +56,38 @@ public class JdbcOrderStore implements OrderStore {
 
     /** 表空才插演示数据（幂等，不 DROP）；已有数据则跳过，保证持久化不被重启覆盖。 */
     private void seedDemoDataIfEmpty() {
-        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM orders", Integer.class);
+        Integer count = Rows.one(db.readSeedDemoDataIfEmpty1());
         if (count != null && count > 0) {
             return;
         }
         // tenantA 客户 + 订单（对齐 analytics-demo migration，便于两服务演示同一批数据）
-        jdbc.batchUpdate("INSERT INTO customers (id, tenant_id, name) VALUES (?, ?, ?)",
-                List.of(
-                        new Object[]{"1", "tenantA", "张三"},
-                        new Object[]{"2", "tenantA", "李四"},
-                        new Object[]{"3", "tenantA", "王五"},
-                        new Object[]{"4", "tenantA", "赵六"},
-                        new Object[]{"5", "tenantA", "钱七"},
-                        new Object[]{"1001", "tenantB", "ACME-A"},
-                        new Object[]{"1002", "tenantB", "ACME-B"}));
-        jdbc.batchUpdate("INSERT INTO orders (id, tenant_id, customer_id, amount, status, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                List.of(
-                        new Object[]{"101", "tenantA", "1", new BigDecimal("1200.00"), "已支付", "2026-05-03"},
-                        new Object[]{"102", "tenantA", "1", new BigDecimal("800.00"), "已退款", "2026-05-06"},
-                        new Object[]{"103", "tenantA", "2", new BigDecimal("2500.00"), "已发货", "2026-05-09"},
-                        new Object[]{"104", "tenantA", "3", new BigDecimal("450.00"), "已退款", "2026-05-12"},
-                        new Object[]{"105", "tenantA", "3", new BigDecimal("3200.00"), "已支付", "2026-05-20"},
-                        new Object[]{"106", "tenantA", "4", new BigDecimal("150.00"), "已取消", "2026-05-22"},
-                        new Object[]{"107", "tenantA", "4", new BigDecimal("5400.00"), "已退款", "2026-05-25"},
-                        new Object[]{"108", "tenantA", "5", new BigDecimal("990.00"), "已支付", "2026-04-28"},
-                        new Object[]{"109", "tenantA", "2", new BigDecimal("1750.00"), "已退款", "2026-04-15"},
+        for (CustomerSeed row : List.of(
+                        new CustomerSeed("1", "tenantA", "张三"),
+                        new CustomerSeed("2", "tenantA", "李四"),
+                        new CustomerSeed("3", "tenantA", "王五"),
+                        new CustomerSeed("4", "tenantA", "赵六"),
+                        new CustomerSeed("5", "tenantA", "钱七"),
+                        new CustomerSeed("1001", "tenantB", "ACME-A"),
+                        new CustomerSeed("1002", "tenantB", "ACME-B"))) db.insertCustomer(row.id(), row.tenant(), row.name());
+        for (OrderSeed row : List.of(
+                        new OrderSeed("101", "tenantA", "1", new BigDecimal("1200.00"), "已支付", "2026-05-03"),
+                        new OrderSeed("102", "tenantA", "1", new BigDecimal("800.00"), "已退款", "2026-05-06"),
+                        new OrderSeed("103", "tenantA", "2", new BigDecimal("2500.00"), "已发货", "2026-05-09"),
+                        new OrderSeed("104", "tenantA", "3", new BigDecimal("450.00"), "已退款", "2026-05-12"),
+                        new OrderSeed("105", "tenantA", "3", new BigDecimal("3200.00"), "已支付", "2026-05-20"),
+                        new OrderSeed("106", "tenantA", "4", new BigDecimal("150.00"), "已取消", "2026-05-22"),
+                        new OrderSeed("107", "tenantA", "4", new BigDecimal("5400.00"), "已退款", "2026-05-25"),
+                        new OrderSeed("108", "tenantA", "5", new BigDecimal("990.00"), "已支付", "2026-04-28"),
+                        new OrderSeed("109", "tenantA", "2", new BigDecimal("1750.00"), "已退款", "2026-04-15"),
                         // tenantB：演示隔离——tenantA 的查询不该看到这些
-                        new Object[]{"2001", "tenantB", "1001", new BigDecimal("9999.00"), "已退款", "2026-05-15"},
-                        new Object[]{"2002", "tenantB", "1002", new BigDecimal("8888.00"), "已支付", "2026-05-18"}));
+                        new OrderSeed("2001", "tenantB", "1001", new BigDecimal("9999.00"), "已退款", "2026-05-15"),
+                        new OrderSeed("2002", "tenantB", "1002", new BigDecimal("8888.00"), "已支付", "2026-05-18"))) db.insertOrder(
+                                row.id(),
+                                row.tenant(),
+                                row.customer(),
+                                row.amount(),
+                                row.status(),
+                                row.date());
         log.info("orders demo data seeded (tenantA 101-109, tenantB 2001-2002)");
     }
 
@@ -94,25 +101,21 @@ public class JdbcOrderStore implements OrderStore {
             return Optional.empty();
         }
         String tenantId = TenantContext.current().tenantId();
-        List<OrderView> rows = jdbc.query(
-                """
-                SELECT o.id, c.name AS customer, o.amount, o.status, o.created_at
-                FROM orders o
-                LEFT JOIN customers c ON o.customer_id = c.id AND c.tenant_id = ?
-                WHERE o.id = ? AND o.tenant_id = ?
-                """,
-                ORDER_MAPPER, tenantId, orderNo.trim(), tenantId);
+        List<OrderView> rows = Rows.map(db.readFindByOrderNo1(tenantId, orderNo.trim(), tenantId), ORDER_MAPPER);
         return rows.stream().findFirst();
     }
 
-    private static final RowMapper<OrderView> ORDER_MAPPER = (ResultSet rs, int rowNum) -> {
-        BigDecimal amount = rs.getBigDecimal("amount");
-        java.sql.Date created = rs.getDate("created_at");
+    private static final java.util.function.BiFunction<OrderStoreRow, Integer, OrderView> ORDER_MAPPER = (OrderStoreRow rs, Integer rowNum) -> {
+        BigDecimal amount = rs.amount;
+        java.sql.Date created = rs.createdAt;
         return new OrderView(
-                rs.getString("id"),
-                rs.getString("customer"),
+                rs.id,
+                rs.customer,
                 amount == null ? null : amount.toPlainString(),
-                rs.getString("status"),
+                rs.status,
                 created == null ? null : created.toString());
     };
+    /** 演示种子的输入类型，避免位置数组造成金额/日期错位。 */
+    private record CustomerSeed(String id, String tenant, String name) {}
+    private record OrderSeed(String id, String tenant, String customer, BigDecimal amount, String status, String date) {}
 }

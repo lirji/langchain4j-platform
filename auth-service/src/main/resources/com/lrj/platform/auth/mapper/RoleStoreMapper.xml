@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lrj.platform.auth.mapper.RoleStoreMapper">
+    <select id="readInit1" resultType="com.lrj.platform.auth.mapper.RoleStoreRow">
+        SELECT NAME, SCOPES, DESCRIPTION, VERSION, CREATED_AT FROM ROLES WHERE 1=0
+    </select>
+    <select id="readInit2" resultType="com.lrj.platform.auth.mapper.RoleStoreRow">
+        SELECT ROLE_NAME, SCOPE, CREATED_AT FROM ROLE_SCOPE WHERE 1=0
+    </select>
+    <select id="readInit3" resultType="java.lang.Integer">
+        SELECT COUNT(*) FROM ROLES
+    </select>
+    <select id="readFindByName1" resultType="com.lrj.platform.auth.mapper.RoleStoreRow">
+        SELECT NAME, DESCRIPTION FROM ROLES WHERE NAME=#{name}
+    </select>
+    <select id="readFindAll1" resultType="com.lrj.platform.auth.mapper.RoleStoreRow">
+        SELECT NAME, DESCRIPTION FROM ROLES ORDER BY NAME
+    </select>
+    <select id="readVersionOf1" resultType="java.lang.Long">
+        SELECT VERSION FROM ROLES WHERE NAME=#{name}
+    </select>
+    <delete id="writeDoUpdate1">
+        DELETE FROM ROLE_SCOPE WHERE ROLE_NAME=#{roleName}
+    </delete>
+    <delete id="writeDelete1">
+        DELETE FROM ROLE_SCOPE WHERE ROLE_NAME=#{roleName}
+    </delete>
+    <delete id="writeDelete2">
+        DELETE FROM ROLES WHERE NAME=#{name}
+    </delete>
+    <insert id="writeInsertRole1">
+        INSERT INTO ROLES (NAME, SCOPES, DESCRIPTION, CREATED_AT) VALUES (#{name}, #{scopes}, #{description}, #{createdAt})
+    </insert>
+    <insert id="writeInsertRoleScopeIfAbsent1">
+        INSERT INTO ROLE_SCOPE (ROLE_NAME, SCOPE, CREATED_AT) VALUES (#{roleName}, #{scope}, #{createdAt})
+    </insert>
+    <select id="readScopesOf1" resultType="java.lang.String">
+        SELECT SCOPE FROM ROLE_SCOPE WHERE ROLE_NAME=#{roleName} ORDER BY SCOPE
+    </select>
+    <update id="updateRole">
+        UPDATE ROLES SET SCOPES=#{scopes}, DESCRIPTION=#{description}, VERSION=VERSION+1 WHERE NAME=#{name} <if test="expectedVersion != null">AND VERSION=#{expectedVersion}</if>
+    </update>
+</mapper>

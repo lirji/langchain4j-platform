@@ -1,10 +1,13 @@
 package com.lrj.platform.auth;
 
+import com.lrj.platform.auth.mapper.RoleStoreMapper;
+import com.lrj.platform.persistence.PlusMapperFactory;
+import com.lrj.platform.persistence.Rows;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
@@ -30,17 +33,17 @@ public class JdbcRoleStore implements RoleStore {
 
     private static final Logger log = LoggerFactory.getLogger(JdbcRoleStore.class);
 
-    private final JdbcTemplate jdbc;
+    private final RoleStoreMapper db;
 
     public JdbcRoleStore(DataSource authDataSource, AuthProperties props) {
-        this.jdbc = new JdbcTemplate(authDataSource);
+        this.db = PlusMapperFactory.create(authDataSource, RoleStoreMapper.class);
         init(props);
     }
 
     private void init(AuthProperties props) {
-        jdbc.queryForList("SELECT NAME, SCOPES, DESCRIPTION, VERSION, CREATED_AT FROM ROLES WHERE 1=0");
-        jdbc.queryForList("SELECT ROLE_NAME, SCOPE, CREATED_AT FROM ROLE_SCOPE WHERE 1=0");
-        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM ROLES", Integer.class);
+        db.readInit1();
+        db.readInit2();
+        Integer count = Rows.one(db.readInit3());
         if ((count == null || count == 0) && props.getSeed().isEnabled()) {
             long now = System.currentTimeMillis();
             for (Role r : SeedRoles.defaults()) {
@@ -57,17 +60,13 @@ public class JdbcRoleStore implements RoleStore {
             return Optional.empty();
         }
         String key = name.trim().toLowerCase(Locale.ROOT);
-        List<Role> rows = jdbc.query(
-                "SELECT NAME, DESCRIPTION FROM ROLES WHERE NAME=?",
-                (rs, i) -> new Role(rs.getString("NAME"), scopesOf(rs.getString("NAME")), rs.getString("DESCRIPTION")),
-                key);
+        List<Role> rows = Rows.map(db.readFindByName1(key), (rs, i) -> new Role(rs.name, scopesOf(rs.name), rs.description));
         return rows.stream().findFirst();
     }
 
     @Override
     public List<Role> findAll() {
-        return jdbc.query("SELECT NAME, DESCRIPTION FROM ROLES ORDER BY NAME",
-                (rs, i) -> new Role(rs.getString("NAME"), scopesOf(rs.getString("NAME")), rs.getString("DESCRIPTION")));
+        return Rows.map(db.readFindAll1(), (rs, i) -> new Role(rs.name, scopesOf(rs.name), rs.description));
     }
 
     @Override
@@ -102,36 +101,30 @@ public class JdbcRoleStore implements RoleStore {
 
     @Override
     public boolean update(Role r) {
-        return doUpdate(r, "UPDATE ROLES SET SCOPES=?, DESCRIPTION=?, VERSION=VERSION+1 WHERE NAME=?");
+        return doUpdate(r, null);
     }
 
     @Override
     public long versionOf(String name) {
-        List<Long> v = jdbc.queryForList("SELECT VERSION FROM ROLES WHERE NAME=?",
-                Long.class, name.trim().toLowerCase(Locale.ROOT));
+        List<Long> v = db.readVersionOf1(name.trim().toLowerCase(Locale.ROOT));
         return v.isEmpty() ? -1L : v.get(0);
     }
 
     @Override
     public boolean updateIfVersion(Role r, long expectedVersion) {
-        return doUpdate(r, "UPDATE ROLES SET SCOPES=?, DESCRIPTION=?, VERSION=VERSION+1 WHERE NAME=? AND VERSION=?",
+        return doUpdate(r,
                 expectedVersion);
     }
 
     /**
      * 角色更新共用实现：先条件更新 ROLES（影子 CSV + 版本），命中则重建 ROLE_SCOPE 关系行
-     * （在 mutation executor 事务内与上面同批提交）。{@code extraArgs} 供乐观锁变体传 expectedVersion。
+     * （在 mutation executor 事务内与上面同批提交）。expectedVersion 非空时执行版本条件更新。
      */
-    private boolean doUpdate(Role r, String updateSql, Object... extraArgs) {
-        Object[] args = new Object[3 + extraArgs.length];
-        args[0] = String.join(",", r.scopes());
-        args[1] = r.description();
-        args[2] = r.name();
-        System.arraycopy(extraArgs, 0, args, 3, extraArgs.length);
-        if (jdbc.update(updateSql, args) == 0) {
+    private boolean doUpdate(Role r, Long expectedVersion) {
+        if (db.updateRole(String.join(",", r.scopes()), r.description(), r.name(), expectedVersion) == 0) {
             return false;
         }
-        jdbc.update("DELETE FROM ROLE_SCOPE WHERE ROLE_NAME=?", r.name());
+        db.writeDoUpdate1(r.name());
         long now = System.currentTimeMillis();
         for (String scope : r.scopes()) {
             insertRoleScopeIfAbsent(r.name(), scope, now);
@@ -143,14 +136,13 @@ public class JdbcRoleStore implements RoleStore {
     public void delete(String name) {
         if (name != null && !name.isBlank()) {
             String key = name.trim().toLowerCase(Locale.ROOT);
-            jdbc.update("DELETE FROM ROLE_SCOPE WHERE ROLE_NAME=?", key);
-            jdbc.update("DELETE FROM ROLES WHERE NAME=?", key);
+            db.writeDelete1(key);
+            db.writeDelete2(key);
         }
     }
 
     private void insertRole(Role r, long now) {
-        jdbc.update("INSERT INTO ROLES (NAME, SCOPES, DESCRIPTION, CREATED_AT) VALUES (?, ?, ?, ?)",
-                r.name(), String.join(",", r.scopes()), r.description(), now);
+        db.writeInsertRole1(r.name(), String.join(",", r.scopes()), r.description(), now);
         for (String scope : r.scopes()) {
             insertRoleScopeIfAbsent(r.name(), scope, now);
         }
@@ -158,8 +150,7 @@ public class JdbcRoleStore implements RoleStore {
 
     private boolean insertRoleScopeIfAbsent(String roleName, String scope, long now) {
         try {
-            jdbc.update("INSERT INTO ROLE_SCOPE (ROLE_NAME, SCOPE, CREATED_AT) VALUES (?, ?, ?)",
-                    roleName, scope, now);
+            db.writeInsertRoleScopeIfAbsent1(roleName, scope, now);
             return true;
         } catch (DuplicateKeyException e) {
             return false;
@@ -167,8 +158,7 @@ public class JdbcRoleStore implements RoleStore {
     }
 
     private Set<String> scopesOf(String roleName) {
-        List<String> scopes = jdbc.queryForList(
-                "SELECT SCOPE FROM ROLE_SCOPE WHERE ROLE_NAME=? ORDER BY SCOPE", String.class, roleName);
+        List<String> scopes = db.readScopesOf1(roleName);
         return new LinkedHashSet<>(scopes);
     }
 

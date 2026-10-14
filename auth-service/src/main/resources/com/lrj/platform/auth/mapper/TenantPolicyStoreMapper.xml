@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lrj.platform.auth.mapper.TenantPolicyStoreMapper">
+    <select id="readInit1" resultType="com.lrj.platform.auth.mapper.TenantPolicyStoreRow">
+        SELECT TENANT, VERSION, UPDATED_AT FROM TENANT_POLICY WHERE 1=0
+    </select>
+    <select id="readInit2" resultType="com.lrj.platform.auth.mapper.TenantPolicyStoreRow">
+        SELECT TENANT, ROLE_NAME, CREATED_AT FROM TENANT_ROLE WHERE 1=0
+    </select>
+    <select id="readRolesOf1" resultType="java.lang.String">
+        SELECT ROLE_NAME FROM TENANT_ROLE WHERE TENANT=#{tenant} ORDER BY ROLE_NAME
+    </select>
+    <select id="readVersionOf1" resultType="java.lang.Long">
+        SELECT VERSION FROM TENANT_POLICY WHERE TENANT=#{tenant}
+    </select>
+    <update id="writeReplaceRoles1">
+        UPDATE TENANT_POLICY SET VERSION=VERSION+1, UPDATED_AT=#{updatedAt} WHERE TENANT=#{tenant}
+    </update>
+    <insert id="writeReplaceRoles2">
+        INSERT INTO TENANT_POLICY (TENANT, VERSION, UPDATED_AT) VALUES (#{tenant}, 0, #{updatedAt})
+    </insert>
+    <insert id="writeReplaceRolesIfVersion1">
+        INSERT INTO TENANT_POLICY (TENANT, VERSION, UPDATED_AT) VALUES (#{tenant}, 0, #{updatedAt})
+    </insert>
+    <update id="writeReplaceRolesIfVersion2">
+        UPDATE TENANT_POLICY SET VERSION=VERSION+1, UPDATED_AT=#{updatedAt} WHERE TENANT=#{tenant} AND VERSION=#{version}
+    </update>
+    <delete id="writeClear1">
+        DELETE FROM TENANT_ROLE WHERE TENANT=#{tenant}
+    </delete>
+    <delete id="writeClear2">
+        DELETE FROM TENANT_POLICY WHERE TENANT=#{tenant}
+    </delete>
+    <select id="readListPolicyTenants1" resultType="java.lang.String">
+        SELECT TENANT FROM TENANT_POLICY ORDER BY TENANT
+    </select>
+    <select id="readTenantsUsingRole1" resultType="java.lang.String">
+        SELECT DISTINCT TENANT FROM TENANT_ROLE WHERE ROLE_NAME=#{roleName} ORDER BY TENANT
+    </select>
+    <delete id="writeRebuildRoles1">
+        DELETE FROM TENANT_ROLE WHERE TENANT=#{tenant}
+    </delete>
+    <insert id="writeRebuildRoles2">
+        INSERT INTO TENANT_ROLE (TENANT, ROLE_NAME, CREATED_AT) VALUES (#{tenant}, #{roleName}, #{createdAt})
+    </insert>
+</mapper>

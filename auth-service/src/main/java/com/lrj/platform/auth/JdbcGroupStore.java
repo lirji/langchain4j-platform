@@ -1,10 +1,13 @@
 package com.lrj.platform.auth;
 
+import com.lrj.platform.auth.mapper.GroupStoreMapper;
+import com.lrj.platform.persistence.PlusMapperFactory;
+import com.lrj.platform.persistence.Rows;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
@@ -29,16 +32,16 @@ public class JdbcGroupStore implements GroupStore {
 
     private static final Logger log = LoggerFactory.getLogger(JdbcGroupStore.class);
 
-    private final JdbcTemplate jdbc;
+    private final GroupStoreMapper db;
 
     public JdbcGroupStore(DataSource authDataSource) {
-        this.jdbc = new JdbcTemplate(authDataSource);
+        this.db = PlusMapperFactory.create(authDataSource, GroupStoreMapper.class);
         init();
     }
 
     private void init() {
-        jdbc.queryForList("SELECT NAME, DESCRIPTION, VERSION, CREATED_AT FROM AUTH_GROUP WHERE 1=0");
-        jdbc.queryForList("SELECT GROUP_NAME, ROLE_NAME, CREATED_AT FROM GROUP_ROLE WHERE 1=0");
+        db.readInit1();
+        db.readInit2();
         log.info("AUTH_GROUP/GROUP_ROLE schema verified");
     }
 
@@ -48,17 +51,13 @@ public class JdbcGroupStore implements GroupStore {
             return Optional.empty();
         }
         String key = name.trim().toLowerCase(Locale.ROOT);
-        List<Group> rows = jdbc.query(
-                "SELECT NAME, DESCRIPTION FROM AUTH_GROUP WHERE NAME=?",
-                (rs, i) -> new Group(rs.getString("NAME"), rs.getString("DESCRIPTION"), rolesOf(rs.getString("NAME"))),
-                key);
+        List<Group> rows = Rows.map(db.readFindByName1(key), (rs, i) -> new Group(rs.name, rs.description, rolesOf(rs.name)));
         return rows.stream().findFirst();
     }
 
     @Override
     public List<Group> findAll() {
-        return jdbc.query("SELECT NAME, DESCRIPTION FROM AUTH_GROUP ORDER BY NAME",
-                (rs, i) -> new Group(rs.getString("NAME"), rs.getString("DESCRIPTION"), rolesOf(rs.getString("NAME"))));
+        return Rows.map(db.readFindAll1(), (rs, i) -> new Group(rs.name, rs.description, rolesOf(rs.name)));
     }
 
     @Override
@@ -85,19 +84,17 @@ public class JdbcGroupStore implements GroupStore {
 
     @Override
     public long versionOf(String name) {
-        List<Long> v = jdbc.queryForList("SELECT VERSION FROM AUTH_GROUP WHERE NAME=?",
-                Long.class, name.trim().toLowerCase(Locale.ROOT));
+        List<Long> v = db.readVersionOf1(name.trim().toLowerCase(Locale.ROOT));
         return v.isEmpty() ? -1L : v.get(0);
     }
 
     @Override
     public boolean updateIfVersion(Group g, long expectedVersion) {
         String key = g.name();
-        if (jdbc.update("UPDATE AUTH_GROUP SET DESCRIPTION=?, VERSION=VERSION+1 WHERE NAME=? AND VERSION=?",
-                g.description(), key, expectedVersion) == 0) {
+        if (db.writeUpdateIfVersion1(g.description(), key, expectedVersion) == 0) {
             return false;
         }
-        jdbc.update("DELETE FROM GROUP_ROLE WHERE GROUP_NAME=?", key);
+        db.writeUpdateIfVersion2(key);
         long now = System.currentTimeMillis();
         for (String r : g.roles()) {
             insertGroupRoleIfAbsent(key, r, now);
@@ -108,16 +105,15 @@ public class JdbcGroupStore implements GroupStore {
     @Override
     public boolean touchVersionIfVersion(String name, long expectedVersion) {
         String key = name.trim().toLowerCase(Locale.ROOT);
-        return jdbc.update("UPDATE AUTH_GROUP SET VERSION=VERSION+1 WHERE NAME=? AND VERSION=?",
-                key, expectedVersion) > 0;
+        return db.writeTouchVersionIfVersion1(key, expectedVersion) > 0;
     }
 
     @Override
     public void delete(String name) {
         if (name != null && !name.isBlank()) {
             String key = name.trim().toLowerCase(Locale.ROOT);
-            jdbc.update("DELETE FROM GROUP_ROLE WHERE GROUP_NAME=?", key);
-            jdbc.update("DELETE FROM AUTH_GROUP WHERE NAME=?", key);
+            db.writeDelete1(key);
+            db.writeDelete2(key);
         }
     }
 
@@ -126,13 +122,11 @@ public class JdbcGroupStore implements GroupStore {
         if (roleName == null || roleName.isBlank()) {
             return List.of();
         }
-        return jdbc.queryForList("SELECT DISTINCT GROUP_NAME FROM GROUP_ROLE WHERE ROLE_NAME=? ORDER BY GROUP_NAME",
-                String.class, roleName.trim().toLowerCase(Locale.ROOT));
+        return db.readGroupsUsingRole1(roleName.trim().toLowerCase(Locale.ROOT));
     }
 
     private void insertGroup(Group g, long now) {
-        jdbc.update("INSERT INTO AUTH_GROUP (NAME, DESCRIPTION, CREATED_AT) VALUES (?, ?, ?)",
-                g.name(), g.description(), now);
+        db.writeInsertGroup1(g.name(), g.description(), now);
         for (String r : g.roles()) {
             insertGroupRoleIfAbsent(g.name(), r, now);
         }
@@ -140,16 +134,14 @@ public class JdbcGroupStore implements GroupStore {
 
     private void insertGroupRoleIfAbsent(String groupName, String roleName, long now) {
         try {
-            jdbc.update("INSERT INTO GROUP_ROLE (GROUP_NAME, ROLE_NAME, CREATED_AT) VALUES (?, ?, ?)",
-                    groupName, roleName, now);
+            db.writeInsertGroupRoleIfAbsent1(groupName, roleName, now);
         } catch (DuplicateKeyException ignored) {
             // 幂等
         }
     }
 
     private Set<String> rolesOf(String groupName) {
-        List<String> roles = jdbc.queryForList(
-                "SELECT ROLE_NAME FROM GROUP_ROLE WHERE GROUP_NAME=? ORDER BY ROLE_NAME", String.class, groupName);
+        List<String> roles = db.readRolesOf1(groupName);
         return new LinkedHashSet<>(roles);
     }
 }

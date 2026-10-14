@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lrj.platform.auth.mapper.UserAccountStoreMapper">
+    <select id="readInit1" resultType="com.lrj.platform.auth.mapper.UserAccountStoreRow">
+        SELECT USERNAME, PASSWORD_HASH, TENANT, USER_ID, SCOPES, ROLES, ENABLED, VERSION, CREATED_AT
+        FROM USERS WHERE 1=0
+    </select>
+    <select id="readInit2" resultType="com.lrj.platform.auth.mapper.UserAccountStoreRow">
+        SELECT USERNAME, ROLE_NAME, CREATED_AT FROM USER_ROLE WHERE 1=0
+    </select>
+    <select id="readInit3" resultType="java.lang.Integer">
+        SELECT COUNT(*) FROM USERS
+    </select>
+    <select id="readCount1" resultType="java.lang.Integer">
+        SELECT COUNT(*) FROM USERS
+    </select>
+    <select id="readFindByRole1" resultType="java.lang.String">
+        SELECT USERNAME FROM USER_ROLE WHERE ROLE_NAME=#{roleName} ORDER BY USERNAME
+    </select>
+    <select id="readDistinctTenants1" resultType="java.lang.String">
+        SELECT DISTINCT TENANT FROM USERS WHERE TENANT IS NOT NULL ORDER BY TENANT
+    </select>
+    <update id="writeTouchVersionIfVersion1">
+        UPDATE USERS SET VERSION=VERSION+1 WHERE USERNAME=#{username} AND VERSION=#{version}
+    </update>
+    <update id="writeUpdateProfile1">
+        UPDATE USERS SET PASSWORD_HASH=#{passwordHash}, TENANT=#{tenant}, SCOPES=#{scopes}, ENABLED=#{enabled}, VERSION=VERSION+1 WHERE USERNAME=#{username}
+    </update>
+    <select id="readVersionOf1" resultType="java.lang.Long">
+        SELECT VERSION FROM USERS WHERE USERNAME=#{username}
+    </select>
+    <update id="writeUpdateProfileIfVersion1">
+        UPDATE USERS SET PASSWORD_HASH=#{passwordHash}, TENANT=#{tenant}, SCOPES=#{scopes}, ENABLED=#{enabled}, VERSION=VERSION+1 WHERE USERNAME=#{username} AND VERSION=#{version}
+    </update>
+    <delete id="writeDoReplaceRoles1">
+        DELETE FROM USER_ROLE WHERE USERNAME=#{username}
+    </delete>
+    <delete id="writeDelete1">
+        DELETE FROM USER_ROLE WHERE USERNAME=#{username}
+    </delete>
+    <delete id="writeDelete2">
+        DELETE FROM USERS WHERE USERNAME=#{username}
+    </delete>
+    <insert id="writeInsertUser1">
+        INSERT INTO USERS (USERNAME, PASSWORD_HASH, TENANT, USER_ID, SCOPES, ROLES, ENABLED, CREATED_AT)
+        VALUES (#{username}, #{passwordHash}, #{tenant}, #{userId}, #{scopes}, #{roles}, #{enabled}, #{createdAt})
+    </insert>
+    <insert id="writeInsertUserRoleIfAbsent1">
+        INSERT INTO USER_ROLE (USERNAME, ROLE_NAME, CREATED_AT) VALUES (#{username}, #{roleName}, #{createdAt})
+    </insert>
+    <select id="readRolesOf1" resultType="java.lang.String">
+        SELECT ROLE_NAME FROM USER_ROLE WHERE USERNAME=#{username} ORDER BY ROLE_NAME
+    </select>
+    <select id="findUsers1" resultType="com.lrj.platform.auth.mapper.UserAccountStoreRow">
+        SELECT * FROM USERS WHERE USERNAME=#{username}
+    </select>
+    <select id="findUsers2" resultType="com.lrj.platform.auth.mapper.UserAccountStoreRow">
+        SELECT * FROM USERS ORDER BY USERNAME
+    </select>
+    <select id="findUsers3" resultType="com.lrj.platform.auth.mapper.UserAccountStoreRow">
+        SELECT * FROM USERS ORDER BY USERNAME LIMIT #{limit} OFFSET #{offset}
+    </select>
+    <select id="findUsers4" resultType="com.lrj.platform.auth.mapper.UserAccountStoreRow">
+        SELECT * FROM USERS WHERE TENANT=#{tenant} ORDER BY USERNAME
+    </select>
+    <update id="updateRoles">
+        UPDATE USERS SET ROLES=#{roles}, VERSION=VERSION+1 WHERE USERNAME=#{username} <if test="expectedVersion != null">AND VERSION=#{expectedVersion}</if>
+    </update>
+</mapper>

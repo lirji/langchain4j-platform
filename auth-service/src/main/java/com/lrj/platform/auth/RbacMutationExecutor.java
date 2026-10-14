@@ -10,7 +10,7 @@ import java.util.function.Supplier;
  * <ul>
  *   <li>内存实现：全局临界区（synchronized）串行化控制面写。</li>
  *   <li>JDBC 实现：{@code TransactionTemplate(authTransactionManager)} 事务；各 Jdbc*Store 的
- *       JdbcTemplate 共用同一 DataSource，自动加入该事务，实现跨表原子提交/回滚。</li>
+ *       MyBatis-Plus Mapper 共用同一 DataSource，自动加入该事务，实现跨表原子提交/回滚。</li>
  * </ul>
  */
 public interface RbacMutationExecutor {

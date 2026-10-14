@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lrj.platform.order.mapper.OrderStoreMapper">
+    <select id="readInit1" resultType="com.lrj.platform.order.mapper.OrderStoreRow">
+        SELECT id, tenant_id, customer_id, amount, status, created_at FROM orders WHERE 1=0
+    </select>
+    <select id="readInit2" resultType="com.lrj.platform.order.mapper.OrderStoreRow">
+        SELECT id, tenant_id, name FROM customers WHERE 1=0
+    </select>
+    <select id="readSeedDemoDataIfEmpty1" resultType="java.lang.Integer">
+        SELECT COUNT(*) FROM orders
+    </select>
+    <select id="readFindByOrderNo1" resultType="com.lrj.platform.order.mapper.OrderStoreRow">
+        SELECT o.id, c.name AS customer, o.amount, o.status, o.created_at
+        FROM orders o
+        LEFT JOIN customers c ON o.customer_id = c.id AND c.tenant_id = #{tenantId}
+        WHERE o.id = #{id} AND o.tenant_id = #{tenantId2}
+    </select>
+    <insert id="insertCustomer">
+        INSERT INTO customers (id, tenant_id, name) VALUES (#{id}, #{tenantId}, #{name})
+    </insert>
+    <insert id="insertOrder">
+        INSERT INTO orders (id, tenant_id, customer_id, amount, status, created_at) VALUES (#{id}, #{tenantId}, #{customerId}, #{amount}, #{status}, #{createdAt})
+    </insert>
+</mapper>

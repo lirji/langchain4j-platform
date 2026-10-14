@@ -9,7 +9,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
-import org.springframework.jdbc.core.JdbcTemplate;
+import com.lrj.platform.persistence.PlusMapperFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 
 import javax.sql.DataSource;
@@ -52,7 +52,7 @@ public class PlatformEventbusAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(ProcessedEventStore.class)
-    @ConditionalOnClass(JdbcTemplate.class)
+    @ConditionalOnClass(PlusMapperFactory.class)
     @ConditionalOnProperty(prefix = "platform.eventbus", name = "processed-event-store", havingValue = "jdbc")
     public ProcessedEventStore jdbcProcessedEventStore(DataSource dataSource) {
         return new JdbcProcessedEventStore(dataSource);

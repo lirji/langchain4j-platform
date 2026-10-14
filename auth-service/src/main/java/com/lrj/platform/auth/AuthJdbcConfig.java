@@ -36,7 +36,7 @@ public class AuthJdbcConfig {
 
     /**
      * auth 数据源专用事务管理器。{@code RbacMutationExecutor}（jdbc 变体）用它把用户/角色/关系表/
-     * refresh session 的复合写包进单个事务；各 {@code Jdbc*Store} 的 JdbcTemplate 共用同一 DataSource，
+     * refresh session 的复合写包进单个事务；各 {@code Jdbc*Store} 的 MyBatis-Plus Mapper 共用同一 DataSource，
      * 因而自动加入该事务，实现跨 store 原子提交/回滚。
      */
     @Bean

@@ -1,10 +1,12 @@
 package com.lrj.platform.auth;
 
+import com.lrj.platform.auth.mapper.TenantPolicyStoreMapper;
+import com.lrj.platform.persistence.PlusMapperFactory;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
@@ -25,16 +27,16 @@ public class JdbcTenantPolicyStore implements TenantPolicyStore {
 
     private static final Logger log = LoggerFactory.getLogger(JdbcTenantPolicyStore.class);
 
-    private final JdbcTemplate jdbc;
+    private final TenantPolicyStoreMapper db;
 
     public JdbcTenantPolicyStore(DataSource authDataSource) {
-        this.jdbc = new JdbcTemplate(authDataSource);
+        this.db = PlusMapperFactory.create(authDataSource, TenantPolicyStoreMapper.class);
         init();
     }
 
     private void init() {
-        jdbc.queryForList("SELECT TENANT, VERSION, UPDATED_AT FROM TENANT_POLICY WHERE 1=0");
-        jdbc.queryForList("SELECT TENANT, ROLE_NAME, CREATED_AT FROM TENANT_ROLE WHERE 1=0");
+        db.readInit1();
+        db.readInit2();
         log.info("TENANT_POLICY/TENANT_ROLE schema verified");
     }
 
@@ -43,14 +45,13 @@ public class JdbcTenantPolicyStore implements TenantPolicyStore {
         if (tenant == null || tenant.isBlank()) {
             return Set.of();
         }
-        List<String> roles = jdbc.queryForList(
-                "SELECT ROLE_NAME FROM TENANT_ROLE WHERE TENANT=? ORDER BY ROLE_NAME", String.class, tenant.trim());
+        List<String> roles = db.readRolesOf1(tenant.trim());
         return new LinkedHashSet<>(roles);
     }
 
     @Override
     public long versionOf(String tenant) {
-        List<Long> v = jdbc.queryForList("SELECT VERSION FROM TENANT_POLICY WHERE TENANT=?", Long.class, tenant.trim());
+        List<Long> v = db.readVersionOf1(tenant.trim());
         return v.isEmpty() ? -1L : v.get(0);
     }
 
@@ -59,8 +60,8 @@ public class JdbcTenantPolicyStore implements TenantPolicyStore {
         String key = tenant.trim();
         long now = System.currentTimeMillis();
         // 首次绑定即建策略行（版本 0）；已存在则版本 +1。
-        if (jdbc.update("UPDATE TENANT_POLICY SET VERSION=VERSION+1, UPDATED_AT=? WHERE TENANT=?", now, key) == 0) {
-            jdbc.update("INSERT INTO TENANT_POLICY (TENANT, VERSION, UPDATED_AT) VALUES (?, 0, ?)", key, now);
+        if (db.writeReplaceRoles1(now, key) == 0) {
+            db.writeReplaceRoles2(key, now);
         }
         rebuildRoles(key, roles, now);
     }
@@ -72,15 +73,14 @@ public class JdbcTenantPolicyStore implements TenantPolicyStore {
         if (expectedVersion < 0) {
             // 期望尚无策略行：仅当确无行才建（唯一键并发保护）。
             try {
-                jdbc.update("INSERT INTO TENANT_POLICY (TENANT, VERSION, UPDATED_AT) VALUES (?, 0, ?)", key, now);
+                db.writeReplaceRolesIfVersion1(key, now);
             } catch (DuplicateKeyException e) {
                 return false;
             }
             rebuildRoles(key, roles, now);
             return true;
         }
-        if (jdbc.update("UPDATE TENANT_POLICY SET VERSION=VERSION+1, UPDATED_AT=? WHERE TENANT=? AND VERSION=?",
-                now, key, expectedVersion) == 0) {
+        if (db.writeReplaceRolesIfVersion2(now, key, expectedVersion) == 0) {
             return false;
         }
         rebuildRoles(key, roles, now);
@@ -91,14 +91,14 @@ public class JdbcTenantPolicyStore implements TenantPolicyStore {
     public void clear(String tenant) {
         if (tenant != null && !tenant.isBlank()) {
             String key = tenant.trim();
-            jdbc.update("DELETE FROM TENANT_ROLE WHERE TENANT=?", key);
-            jdbc.update("DELETE FROM TENANT_POLICY WHERE TENANT=?", key);
+            db.writeClear1(key);
+            db.writeClear2(key);
         }
     }
 
     @Override
     public List<String> listPolicyTenants() {
-        return jdbc.queryForList("SELECT TENANT FROM TENANT_POLICY ORDER BY TENANT", String.class);
+        return db.readListPolicyTenants1();
     }
 
     @Override
@@ -106,16 +106,15 @@ public class JdbcTenantPolicyStore implements TenantPolicyStore {
         if (roleName == null || roleName.isBlank()) {
             return List.of();
         }
-        return jdbc.queryForList("SELECT DISTINCT TENANT FROM TENANT_ROLE WHERE ROLE_NAME=? ORDER BY TENANT",
-                String.class, roleName.trim().toLowerCase(java.util.Locale.ROOT));
+        return db.readTenantsUsingRole1(roleName.trim().toLowerCase(java.util.Locale.ROOT));
     }
 
     /** 全量重建某租户的角色绑定（先删后插，在 mutation executor 事务内与策略行同批提交）。 */
     private void rebuildRoles(String tenant, Set<String> roles, long now) {
-        jdbc.update("DELETE FROM TENANT_ROLE WHERE TENANT=?", tenant);
+        db.writeRebuildRoles1(tenant);
         for (String r : UserAccount.normalize(roles)) {
             try {
-                jdbc.update("INSERT INTO TENANT_ROLE (TENANT, ROLE_NAME, CREATED_AT) VALUES (?, ?, ?)", tenant, r, now);
+                db.writeRebuildRoles2(tenant, r, now);
             } catch (DuplicateKeyException ignored) {
                 // 幂等：同批不会重复，防御性忽略。
             }

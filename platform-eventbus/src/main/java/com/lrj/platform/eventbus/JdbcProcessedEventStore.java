@@ -1,9 +1,12 @@
 package com.lrj.platform.eventbus;
 
+import com.lrj.platform.eventbus.mapper.ProcessedEventStoreMapper;
+import com.lrj.platform.eventbus.mapper.ProcessedEventStoreRow;
+import com.lrj.platform.persistence.PlusMapperFactory;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 import javax.sql.DataSource;
 
@@ -15,30 +18,29 @@ public class JdbcProcessedEventStore implements ProcessedEventStore {
 
     private static final Logger log = LoggerFactory.getLogger(JdbcProcessedEventStore.class);
 
-    private final JdbcTemplate jdbc;
+    private final ProcessedEventStoreMapper db;
 
     public JdbcProcessedEventStore(DataSource dataSource) {
-        this.jdbc = new JdbcTemplate(dataSource);
+        this.db = PlusMapperFactory.create(dataSource, ProcessedEventStoreMapper.class);
         init();
     }
 
     private void init() {
-        jdbc.queryForList("SELECT EVENT_ID, PROCESSED_AT FROM PROCESSED_EVENT WHERE 1=0");
+        db.readInit1();
         log.info("PROCESSED_EVENT schema verified");
     }
 
     @Override
     public boolean isProcessed(String eventId) {
-        Integer n = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM PROCESSED_EVENT WHERE EVENT_ID = ?", Integer.class, eventId);
-        return n != null && n > 0;
+        return db.selectById(eventId) != null;
     }
 
     @Override
     public boolean markProcessed(String eventId) {
         try {
-            jdbc.update("INSERT INTO PROCESSED_EVENT (EVENT_ID, PROCESSED_AT) VALUES (?, ?)",
-                    eventId, System.currentTimeMillis());
+            var event = new ProcessedEventStoreRow();
+            event.eventId = eventId; event.processedAt = System.currentTimeMillis();
+            db.insert(event);
             return true;
         } catch (DuplicateKeyException ex) {
             return false;
@@ -47,6 +49,6 @@ public class JdbcProcessedEventStore implements ProcessedEventStore {
 
     @Override
     public void releaseClaim(String eventId) {
-        jdbc.update("DELETE FROM PROCESSED_EVENT WHERE EVENT_ID = ?", eventId);
+        db.deleteById(eventId);
     }
 }

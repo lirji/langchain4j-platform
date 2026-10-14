@@ -13,7 +13,7 @@ import java.util.function.Supplier;
 
 /**
  * JDBC mutation executor（{@code AUTH_STORE=jdbc}）：把复合写包进 {@code authTransactionManager} 的
- * 单个事务。各 Jdbc*Store 的 JdbcTemplate 共用同一 auth DataSource，因而其写操作自动加入本事务，
+ * 单个事务。各 Jdbc*Store 的 MyBatis-Plus Mapper 共用同一 auth DataSource，因而其写操作自动加入本事务，
  * 实现"用户 + USER_ROLE + refresh session"跨表原子提交/回滚（异常整体回滚）。
  *
  * <p><b>SERIALIZABLE + 重试</b>：控制面写用可串行化隔离，使"读当前态 →（最后管理员/引用完整性）校验 →

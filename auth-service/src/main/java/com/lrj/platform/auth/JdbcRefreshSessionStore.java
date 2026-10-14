@@ -1,14 +1,16 @@
 package com.lrj.platform.auth;
 
+import com.lrj.platform.auth.mapper.RefreshSessionStoreMapper;
+import com.lrj.platform.auth.mapper.RefreshSessionStoreRow;
+import com.lrj.platform.persistence.PlusMapperFactory;
+import com.lrj.platform.persistence.Rows;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -20,25 +22,21 @@ public class JdbcRefreshSessionStore implements RefreshSessionStore {
 
     private static final Logger log = LoggerFactory.getLogger(JdbcRefreshSessionStore.class);
 
-    private final JdbcTemplate jdbc;
+    private final RefreshSessionStoreMapper db;
 
     public JdbcRefreshSessionStore(DataSource authDataSource) {
-        this.jdbc = new JdbcTemplate(authDataSource);
+        this.db = PlusMapperFactory.create(authDataSource, RefreshSessionStoreMapper.class);
         init();
     }
 
     private void init() {
-        jdbc.queryForList("""
-                SELECT TOKEN_HASH, USERNAME, CREATED_AT, EXPIRES_AT, REVOKED
-                FROM AUTH_SESSION WHERE 1=0""");
+        db.readInit1();
         log.info("AUTH_SESSION schema verified");
     }
 
     @Override
     public void create(RefreshSession session) {
-        jdbc.update("""
-                INSERT INTO AUTH_SESSION (TOKEN_HASH, USERNAME, CREATED_AT, EXPIRES_AT, REVOKED)
-                VALUES (?, ?, ?, ?, ?)""",
+        db.writeCreate1(
                 session.tokenHash(),
                 session.username(),
                 session.createdAt().toEpochMilli(),
@@ -51,36 +49,35 @@ public class JdbcRefreshSessionStore implements RefreshSessionStore {
         if (tokenHash == null || tokenHash.isBlank()) {
             return Optional.empty();
         }
-        List<RefreshSession> rows = jdbc.query(
-                "SELECT * FROM AUTH_SESSION WHERE TOKEN_HASH=?", this::mapSession, tokenHash);
+        List<RefreshSession> rows = Rows.map(db.readFindByTokenHash1(tokenHash), this::mapSession);
         return rows.stream().findFirst();
     }
 
     @Override
     public void revoke(String tokenHash) {
-        jdbc.update("UPDATE AUTH_SESSION SET REVOKED=TRUE WHERE TOKEN_HASH=?", tokenHash);
+        db.writeRevoke1(tokenHash);
     }
 
     @Override
     public void revokeByUsername(String username) {
         if (username != null && !username.isBlank()) {
-            jdbc.update("UPDATE AUTH_SESSION SET REVOKED=TRUE WHERE USERNAME=? AND REVOKED=FALSE", username);
+            db.writeRevokeByUsername1(username);
         }
     }
 
     @Override
     public void deleteByUsername(String username) {
         if (username != null && !username.isBlank()) {
-            jdbc.update("DELETE FROM AUTH_SESSION WHERE USERNAME=?", username);
+            db.writeDeleteByUsername1(username);
         }
     }
 
-    private RefreshSession mapSession(ResultSet rs, int rowNum) throws SQLException {
+    private RefreshSession mapSession(RefreshSessionStoreRow rs, int rowNum) {
         return new RefreshSession(
-                rs.getString("TOKEN_HASH"),
-                rs.getString("USERNAME"),
-                Instant.ofEpochMilli(rs.getLong("CREATED_AT")),
-                Instant.ofEpochMilli(rs.getLong("EXPIRES_AT")),
-                rs.getBoolean("REVOKED"));
+                rs.tokenHash,
+                rs.username,
+                Instant.ofEpochMilli(Rows.longValue(rs.createdAt)),
+                Instant.ofEpochMilli(Rows.longValue(rs.expiresAt)),
+                Boolean.TRUE.equals(rs.revoked));
     }
 }

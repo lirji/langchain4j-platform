@@ -1,15 +1,17 @@
 package com.lrj.platform.auth;
 
+import com.lrj.platform.auth.mapper.UserAccountStoreMapper;
+import com.lrj.platform.auth.mapper.UserAccountStoreRow;
+import com.lrj.platform.persistence.PlusMapperFactory;
+import com.lrj.platform.persistence.Rows;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -31,19 +33,17 @@ public class JdbcUserAccountStore implements UserAccountStore {
 
     private static final Logger log = LoggerFactory.getLogger(JdbcUserAccountStore.class);
 
-    private final JdbcTemplate jdbc;
+    private final UserAccountStoreMapper db;
 
     public JdbcUserAccountStore(DataSource authDataSource, PasswordHasher hasher, AuthProperties props) {
-        this.jdbc = new JdbcTemplate(authDataSource);
+        this.db = PlusMapperFactory.create(authDataSource, UserAccountStoreMapper.class);
         init(hasher, props);
     }
 
     private void init(PasswordHasher hasher, AuthProperties props) {
-        jdbc.queryForList("""
-                SELECT USERNAME, PASSWORD_HASH, TENANT, USER_ID, SCOPES, ROLES, ENABLED, VERSION, CREATED_AT
-                FROM USERS WHERE 1=0""");
-        jdbc.queryForList("SELECT USERNAME, ROLE_NAME, CREATED_AT FROM USER_ROLE WHERE 1=0");
-        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM USERS", Integer.class);
+        db.readInit1();
+        db.readInit2();
+        Integer count = Rows.one(db.readInit3());
         if ((count == null || count == 0) && props.getSeed().isEnabled()) {
             for (UserAccount u : SeedUsers.defaults(hasher, props.getDemoPassword())) {
                 insertUser(u, System.currentTimeMillis());
@@ -58,13 +58,13 @@ public class JdbcUserAccountStore implements UserAccountStore {
         if (username == null || username.isBlank()) {
             return Optional.empty();
         }
-        return loadUsers("SELECT * FROM USERS WHERE USERNAME=?", username.trim().toLowerCase(Locale.ROOT))
+        return Rows.map(db.findUsers1(username.trim().toLowerCase(Locale.ROOT)), this::mapUser)
                 .stream().findFirst();
     }
 
     @Override
     public List<UserAccount> findAll() {
-        return loadUsers("SELECT * FROM USERS ORDER BY USERNAME");
+        return Rows.map(db.findUsers2(), this::mapUser);
     }
 
     @Override
@@ -72,13 +72,12 @@ public class JdbcUserAccountStore implements UserAccountStore {
         if (limit <= 0) {
             return List.of();
         }
-        return loadUsers("SELECT * FROM USERS ORDER BY USERNAME LIMIT ? OFFSET ?",
-                limit, Math.max(0, offset));
+        return Rows.map(db.findUsers3(limit, Math.max(0, offset)), this::mapUser);
     }
 
     @Override
     public int count() {
-        Integer n = jdbc.queryForObject("SELECT COUNT(*) FROM USERS", Integer.class);
+        Integer n = Rows.one(db.readCount1());
         return n == null ? 0 : n;
     }
 
@@ -87,9 +86,7 @@ public class JdbcUserAccountStore implements UserAccountStore {
         if (roleName == null || roleName.isBlank()) {
             return List.of();
         }
-        List<String> usernames = jdbc.queryForList(
-                "SELECT USERNAME FROM USER_ROLE WHERE ROLE_NAME=? ORDER BY USERNAME",
-                String.class, roleName.trim().toLowerCase(Locale.ROOT));
+        List<String> usernames = db.readFindByRole1(roleName.trim().toLowerCase(Locale.ROOT));
         List<UserAccount> out = new java.util.ArrayList<>();
         for (String u : usernames) {
             findByUsername(u).ifPresent(out::add);
@@ -102,19 +99,17 @@ public class JdbcUserAccountStore implements UserAccountStore {
         if (tenant == null || tenant.isBlank()) {
             return List.of();
         }
-        return loadUsers("SELECT * FROM USERS WHERE TENANT=? ORDER BY USERNAME", tenant.trim());
+        return Rows.map(db.findUsers4(tenant.trim()), this::mapUser);
     }
 
     @Override
     public List<String> distinctTenants() {
-        return jdbc.queryForList("SELECT DISTINCT TENANT FROM USERS WHERE TENANT IS NOT NULL ORDER BY TENANT",
-                String.class);
+        return db.readDistinctTenants1();
     }
 
     @Override
     public boolean touchVersionIfVersion(String username, long expectedVersion) {
-        return jdbc.update("UPDATE USERS SET VERSION=VERSION+1 WHERE USERNAME=? AND VERSION=?",
-                username.trim().toLowerCase(Locale.ROOT), expectedVersion) > 0;
+        return db.writeTouchVersionIfVersion1(username.trim().toLowerCase(Locale.ROOT), expectedVersion) > 0;
     }
 
     @Override
@@ -130,57 +125,54 @@ public class JdbcUserAccountStore implements UserAccountStore {
     @Override
     public boolean updateProfile(String username, String tenant, String passwordHash,
                                  Set<String> directScopes, boolean enabled) {
-        int updated = jdbc.update(
-                "UPDATE USERS SET PASSWORD_HASH=?, TENANT=?, SCOPES=?, ENABLED=?, VERSION=VERSION+1 WHERE USERNAME=?",
-                passwordHash, tenant, String.join(",", UserAccount.normalize(directScopes)), enabled,
+        int updated = db.writeUpdateProfile1(
+                passwordHash,
+                tenant,
+                String.join(",", UserAccount.normalize(directScopes)),
+                enabled,
                 username.trim().toLowerCase(Locale.ROOT));
         return updated > 0;
     }
 
     @Override
     public boolean replaceRoles(String username, Set<String> roles) {
-        return doReplaceRoles(username.trim().toLowerCase(Locale.ROOT), roles,
-                "UPDATE USERS SET ROLES=?, VERSION=VERSION+1 WHERE USERNAME=?");
+        return doReplaceRoles(username.trim().toLowerCase(Locale.ROOT), roles, null);
     }
 
     @Override
     public long versionOf(String username) {
-        List<Long> v = jdbc.queryForList("SELECT VERSION FROM USERS WHERE USERNAME=?",
-                Long.class, username.trim().toLowerCase(Locale.ROOT));
+        List<Long> v = db.readVersionOf1(username.trim().toLowerCase(Locale.ROOT));
         return v.isEmpty() ? -1L : v.get(0);
     }
 
     @Override
     public boolean updateProfileIfVersion(String username, String tenant, String passwordHash,
                                           Set<String> directScopes, boolean enabled, long expectedVersion) {
-        int updated = jdbc.update(
-                "UPDATE USERS SET PASSWORD_HASH=?, TENANT=?, SCOPES=?, ENABLED=?, VERSION=VERSION+1 "
-                        + "WHERE USERNAME=? AND VERSION=?",
-                passwordHash, tenant, String.join(",", UserAccount.normalize(directScopes)), enabled,
-                username.trim().toLowerCase(Locale.ROOT), expectedVersion);
+        int updated = db.writeUpdateProfileIfVersion1(
+                passwordHash,
+                tenant,
+                String.join(",", UserAccount.normalize(directScopes)),
+                enabled,
+                username.trim().toLowerCase(Locale.ROOT),
+                expectedVersion);
         return updated > 0;
     }
 
     @Override
     public boolean replaceRolesIfVersion(String username, Set<String> roles, long expectedVersion) {
-        return doReplaceRoles(username.trim().toLowerCase(Locale.ROOT), roles,
-                "UPDATE USERS SET ROLES=?, VERSION=VERSION+1 WHERE USERNAME=? AND VERSION=?", expectedVersion);
+        return doReplaceRoles(username.trim().toLowerCase(Locale.ROOT), roles, expectedVersion);
     }
 
     /**
      * 全量替换角色的共用实现：先条件更新 USERS（影子 CSV + 版本），命中则重建 USER_ROLE 关系行。
-     * {@code extraArgs} 供带 {@code AND VERSION=?} 的乐观锁变体传 expectedVersion。
+     * expectedVersion 非空时执行版本条件更新。
      */
-    private boolean doReplaceRoles(String key, Set<String> roles, String updateSql, Object... extraArgs) {
+    private boolean doReplaceRoles(String key, Set<String> roles, Long expectedVersion) {
         Set<String> norm = UserAccount.normalize(roles);
-        Object[] args = new Object[2 + extraArgs.length];
-        args[0] = String.join(",", norm);
-        args[1] = key;
-        System.arraycopy(extraArgs, 0, args, 2, extraArgs.length);
-        if (jdbc.update(updateSql, args) == 0) {
+        if (db.updateRoles(String.join(",", norm), key, expectedVersion) == 0) {
             return false;
         }
-        jdbc.update("DELETE FROM USER_ROLE WHERE USERNAME=?", key);
+        db.writeDoReplaceRoles1(key);
         long now = System.currentTimeMillis();
         for (String r : norm) {
             insertUserRoleIfAbsent(key, r, now);
@@ -206,8 +198,8 @@ public class JdbcUserAccountStore implements UserAccountStore {
     public void delete(String username) {
         if (username != null && !username.isBlank()) {
             String key = username.trim().toLowerCase(Locale.ROOT);
-            jdbc.update("DELETE FROM USER_ROLE WHERE USERNAME=?", key);
-            jdbc.update("DELETE FROM USERS WHERE USERNAME=?", key);
+            db.writeDelete1(key);
+            db.writeDelete2(key);
         }
     }
 
@@ -215,11 +207,15 @@ public class JdbcUserAccountStore implements UserAccountStore {
 
     private void insertUser(UserAccount u, long now) {
         String username = u.username().trim().toLowerCase(Locale.ROOT);
-        jdbc.update("""
-                INSERT INTO USERS (USERNAME, PASSWORD_HASH, TENANT, USER_ID, SCOPES, ROLES, ENABLED, CREATED_AT)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                username, u.passwordHash(), u.tenant(), u.userId(),
-                String.join(",", u.scopes()), String.join(",", u.roles()), u.enabled(), now);
+        db.writeInsertUser1(
+                username,
+                u.passwordHash(),
+                u.tenant(),
+                u.userId(),
+                String.join(",", u.scopes()),
+                String.join(",", u.roles()),
+                u.enabled(),
+                now);
         for (String r : u.roles()) {
             insertUserRoleIfAbsent(username, r, now);
         }
@@ -227,34 +223,28 @@ public class JdbcUserAccountStore implements UserAccountStore {
 
     private boolean insertUserRoleIfAbsent(String username, String roleName, long now) {
         try {
-            jdbc.update("INSERT INTO USER_ROLE (USERNAME, ROLE_NAME, CREATED_AT) VALUES (?, ?, ?)",
-                    username, roleName, now);
+            db.writeInsertUserRoleIfAbsent1(username, roleName, now);
             return true;
         } catch (DuplicateKeyException e) {
             return false;
         }
     }
 
-    private List<UserAccount> loadUsers(String sql, Object... args) {
-        return jdbc.query(sql, this::mapUser, args);
-    }
-
-    private UserAccount mapUser(ResultSet rs, int rowNum) throws SQLException {
-        String username = rs.getString("USERNAME");
+    private UserAccount mapUser(UserAccountStoreRow rs, int rowNum) {
+        String username = rs.username;
         return new UserAccount(
                 username,
-                rs.getString("PASSWORD_HASH"),
-                rs.getString("TENANT"),
-                rs.getString("USER_ID"),
-                parseCsv(rs.getString("SCOPES")),
+                rs.passwordHash,
+                rs.tenant,
+                rs.userId,
+                parseCsv(rs.scopes),
                 rolesOf(username),
-                rs.getBoolean("ENABLED"));
+                Boolean.TRUE.equals(rs.enabled));
     }
 
     /** 角色以关系表 USER_ROLE 为权威（非 USERS.ROLES CSV）。 */
     private Set<String> rolesOf(String username) {
-        List<String> roles = jdbc.queryForList(
-                "SELECT ROLE_NAME FROM USER_ROLE WHERE USERNAME=? ORDER BY ROLE_NAME", String.class, username);
+        List<String> roles = db.readRolesOf1(username);
         return new LinkedHashSet<>(roles);
     }
 

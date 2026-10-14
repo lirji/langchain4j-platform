@@ -46,7 +46,7 @@ class JdbcOrderStoreMySqlIT {
                 envOr("ORDER_IT_MYSQL_PASSWORD", "root"));
         SchemaMigrationRunner.migrate(ds, SchemaName.ORDER);
         jdbc = new JdbcTemplate(ds);
-        store = new JdbcOrderStore(jdbc, false); // 关演示种子，自插已知数据
+        store = new JdbcOrderStore(jdbc.getDataSource(), false); // 关演示种子，自插已知数据
         jdbc.update("DELETE FROM orders");
         jdbc.update("DELETE FROM customers");
         jdbc.update("INSERT INTO customers (id, tenant_id, name) VALUES (?, ?, ?)", "1", "tenantA", "张三");
