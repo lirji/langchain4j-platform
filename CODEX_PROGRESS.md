@@ -98,6 +98,12 @@ Docker Desktop 虚拟盘清空后，恢复共享 `dev-infra`，并把能力门�
   - 验证：新增 `InboundIdempotencyTest`(7)、`EdgeRateLimitFilterTest`(10)，`ProcessedEventStoreTest` +3（有界窗口 / 两种实现的归还语义），`EdgeOpenPathsTest` +2，两个 bridge test 各 +2（多副本共享 store 去重、处理失败后重投能重来）。`mvn -B -o -pl platform-security,platform-eventbus,edge-gateway,channel-service,auth-service -am test` 全绿（platform-security 62 / platform-eventbus 20 / auth-service 95 / channel-service 69 / edge-gateway 70）；`helm template`、`docker compose config`、`deploy/test-observability-config.sh` 均 PASS。
   - 文档：`docs/平台工程/eventbus-guide.md` 新增 2.2.1「入站回调的幂等」并补内存窗口口径，`docs/参考/operations.md` 网关限流一节补免鉴权 family 表与 XFF 说明，`docs/互操作渠道/dingtalk-guide.md` 改写去重与白名单段，`docs/参考/架构文档.md`、`docs/参考/api-reference.md` 同步。
   - 已提交（`49202ac`）并推送。
+- **整改轮 R1–R5（2026-09-25）**：按 `.engineering/remediation/REMEDIATION_BACKLOG.md` 验证既有发现后执行 5 个切片（详见同目录 `REMEDIATION_REPORT.md`）。
+  - R1（P0）edge：新增常驻 `InboundInternalHeaderStripFilter`（-140）；`ApiKeyToInternalTokenFilter` 改按 `EdgeAuthenticatedTenant` 判断已认证——此前 `EDGE_CASDOOR_ENABLED=false` 时客户端自带的内部头会被原样放行。
+  - R2（P1）`platform-metering` 新增 `TokenBudgetGuardFilter`：用满日预算后，生成类 POST 返回 429 + Retry-After；`TOKEN_BUDGET_ENFORCE=false` 回滚。
+  - R3（P2）`RedisSemanticCacheStore` 按 `max-entries-per-tenant` 原子 FIFO 淘汰（Lua + 顺序 ZSET），旧桶自动收敛。
+  - R4 cutover 门禁：生产必须 RS256，且签名私钥只挂 edge-gateway。R5 修正 Casdoor 注释漂移。
+  - 验证：全反应堆 1374/0 fail；5 个 deploy 门禁 PASS；注入回归均被拦截；真实 jar 冒烟（vision 429、edge 伪造头 401）。**未提交、未推送**。
 - 共享栈已重建并在跑：MySQL 8.4 `:43306`、PostgreSQL 16 `:45432`、Redis 7 `:46379`、Kafka 3.8 `:49092`、MinIO `:49000`、Nacos 2.4.3。未起 RabbitMQ、marketing-obs、Kibana。
 - 数据恢复：langchain4j `deploy/.dev-infra-state/20260908-110350`；workflow `pg_restore` 53 张表；risk MySQL dump 17 张表。
 - 门户 10 个项目此前已逐个起过并探活通过（12GiB 不能并存）。
