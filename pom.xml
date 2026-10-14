@@ -24,6 +24,7 @@
 
     <modules>
         <!-- 共享库（Maven 内部制品，不是服务） -->
+        <module>platform-persistence</module>
         <module>platform-security</module>
         <module>platform-observability</module>
         <module>platform-gateway-client</module>
@@ -53,6 +54,9 @@
 
     <properties>
         <java.version>21</java.version>
+        <mybatis-plus.version>3.5.17</mybatis-plus.version>
+        <mybatis-spring.version>3.0.5</mybatis-spring.version>
+        <mybatis.version>3.5.19</mybatis.version>
         <maven.compiler.release>21</maven.compiler.release>
         <langchain4j.version>1.13.1</langchain4j.version>
         <langchain4j-mcp.version>1.13.1-beta23</langchain4j-mcp.version>
@@ -64,6 +68,12 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- 与MP Boot3适配依赖保持一致，统一Flowable传递的MyBatis版本。 -->
+            <dependency><groupId>com.baomidou</groupId><artifactId>mybatis-plus-spring</artifactId><version>${mybatis-plus.version}</version></dependency>
+            <dependency><groupId>org.mybatis</groupId><artifactId>mybatis-spring</artifactId><version>${mybatis-spring.version}</version></dependency>
+            <dependency><groupId>org.mybatis</groupId><artifactId>mybatis</artifactId><version>${mybatis.version}</version></dependency>
+            <dependency><groupId>com.lrj.platform</groupId><artifactId>platform-persistence</artifactId><version>${project.version}</version></dependency>
+
             <dependency>
                 <groupId>dev.langchain4j</groupId>
                 <artifactId>langchain4j-bom</artifactId>
