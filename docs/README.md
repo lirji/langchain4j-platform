@@ -60,7 +60,8 @@
 - [Java Code Graph](平台工程/java-codegraph.md)：JDK 21 离线源码图谱、符号/文件影响查询、证据强度与已知限制。
 - [AI Coding 团队培训提纲](平台工程/ai-coding-training-outline.md)：60～90 分钟课程、演示脚本、对抗练习与分阶段推广方式。
 - [软件供应链与可信发布](平台工程/software-supply-chain.md)：完整 Reactor/18 镜像矩阵、CycloneDX、Trivy、OIDC Cosign、SLSA provenance、发布后验证与 digest 回滚。
-- [版本化数据库迁移与回滚](平台工程/database-migrations.md)：8 个关系 schema 的 Flyway/Flowable 独立迁移阶段、expand-contract、最小权限账号、Compose/Helm 前置任务和故障回滚手册。
+- [版本化数据库迁移与回滚](平台工程/database-migrations.md)：9 个关系 schema 的 Flyway/Flowable 独立迁移阶段、expand-contract、最小权限账号、Compose/Helm 前置任务和故障回滚手册。
+- [MyBatis-Plus 持久化](平台工程/mybatis-plus-persistence.md)：22 个 Mapper、Spring 事务、类型化 XML 和 33 张自有表的 0/1 逻辑删除；包含发布兼容性与回滚边界。
 - [登录、RBAC 与公共知识库指南](平台工程/rbac-and-public-kb.md)：auth-service 账号密码登录 → 会话令牌 + 刷新 cookie、边缘 `SessionBearerAuthFilter` 换发内部 JWT、角色→scope 展开、`role-admin`/`public-ingest` 平台 scope、后端 `/auth/admin/**` 管理面（If-Match 乐观锁；前端随包 RBAC 控制台已移除）、`__public__` 公共/共享知识库；另含**外接 auth-platform 的文档级 ReBAC / 部门层级隔离与 Casdoor 多租户 SSO 登录**（Casdoor SSO 整栈默认开、`only` 严格模式；文档级 ReBAC `app.rag.authz.mode` 默认 `disabled`，见文中授权章节）。
 - [公网化 OIDC 改造方案](平台工程/公网化-OIDC-改造方案.md)：外部 IdP（Casdoor）SSO 落地方案——**已落地并成为默认**：edge `CasdoorTokenExchangeFilter` 验 Casdoor JWT 换发内部 JWT（`edge.casdoor.enabled` **默认开**、`mode` **默认 `only`** 严格，`dual` 作灰度回滚窗口）+ 前端方案 C 多租户登录（Shared Application + 选组织）+ 接 SpiceDB 文档级 ReBAC；与 auth-service 自建会话登录、api-key 并存（切 `dual` 时回退）。
 - [事件总线与终态可靠投递(EOS)指南](平台工程/eventbus-guide.md)：事务性 outbox + relay + 消费侧去重 = effective exactly-once（workflow/async-task 两侧）。

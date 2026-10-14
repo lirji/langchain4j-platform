@@ -5,6 +5,9 @@ on:
     paths:
       - 'pom.xml'
       - 'platform-protocol/**'
+      - 'platform-persistence/**'
+      - 'platform-eventbus/**'
+      - 'deploy/test-mybatis-boundary.py'
       - 'platform-security/**'
       - 'platform-metering/**'
       - 'conversation-service/**'
@@ -45,6 +48,9 @@ on:
     paths:
       - 'pom.xml'
       - 'platform-protocol/**'
+      - 'platform-persistence/**'
+      - 'platform-eventbus/**'
+      - 'deploy/test-mybatis-boundary.py'
       - 'platform-security/**'
       - 'platform-metering/**'
       - 'conversation-service/**'
@@ -171,6 +177,11 @@ jobs:
 
       - name: Verify full native reactor including reliability slices
         run: mvn -B test
+
+      - name: Verify persistence boundaries and Flowable transaction participation
+        run: |
+          python3 deploy/test-mybatis-boundary.py
+          mvn -B -pl workflow-service -am -Pflowable-it test
 
       - name: Validate Compose
         run: |

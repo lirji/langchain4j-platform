@@ -1,0 +1,43 @@
+{
+  "source": "https://api.osv.dev/v1/query",
+  "date": "2026-10-14",
+  "scope": "New MyBatis coordinates only; not a full reactor security clearance",
+  "results": [
+    {
+      "package": "com.baomidou:mybatis-plus-spring",
+      "version": "3.5.17",
+      "advisories": [],
+      "status": "CHECKED"
+    },
+    {
+      "package": "com.baomidou:mybatis-plus-core",
+      "version": "3.5.17",
+      "advisories": [],
+      "status": "CHECKED"
+    },
+    {
+      "package": "com.baomidou:mybatis-plus-extension",
+      "version": "3.5.17",
+      "advisories": [],
+      "status": "CHECKED"
+    },
+    {
+      "package": "com.baomidou:mybatis-plus-annotation",
+      "version": "3.5.17",
+      "advisories": [],
+      "status": "CHECKED"
+    },
+    {
+      "package": "org.mybatis:mybatis",
+      "version": "3.5.19",
+      "advisories": [],
+      "status": "CHECKED"
+    },
+    {
+      "package": "org.mybatis:mybatis-spring",
+      "version": "3.0.5",
+      "advisories": [],
+      "status": "CHECKED"
+    }
+  ]
+}

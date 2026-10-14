@@ -67,6 +67,9 @@ jobs:
           AUTH_PLATFORM_REPO: ${{ github.workspace }}/.ci-sources/auth-platform
         run: bash deploy/install-auth-sdk.sh
 
+      - name: Verify MyBatis persistence boundary
+        run: python3 deploy/test-mybatis-boundary.py
+
       - name: Test the complete reactor
         run: mvn -B -DskipITs test
 

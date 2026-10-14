@@ -12,6 +12,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--container", default="dev-infra-mysql84-1")
     parser.add_argument("--port", type=int, default=43306)
+    parser.add_argument("--case", choices=["receipt", "concurrency", "logical-delete"], default="receipt")
     args = parser.parse_args()
     repository = Path(__file__).resolve().parents[1]
     details = json.loads(subprocess.check_output(["docker", "inspect", args.container], text=True))[0]
@@ -27,11 +28,18 @@ def main() -> int:
     environment = os.environ.copy()
     environment.update(WORKFLOW_RECEIPT_TEST_DB_URL=f"jdbc:mysql://127.0.0.1:{args.port}/{schema}?useSSL=false&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true",
                        WORKFLOW_RECEIPT_TEST_DB_USER="root", WORKFLOW_RECEIPT_TEST_DB_PASSWORD=credential)
-    log = repository / ".git" / "codex-cross-runtime-reliability-baseline" / "workflow-receipt-mysql.log"
+    log = repository / "workflow-service" / "target" / ("workflow-" + args.case + "-mysql.log")
+    log.parent.mkdir(parents=True, exist_ok=True)
+    tests = {
+        "receipt": "WorkflowIdempotencyAtomicityTest#lostStartResponseCanReadReceiptWithoutAnotherCreation",
+        "concurrency": "WorkflowIdempotencyAtomicityTest#concurrentSameRequestCreatesExactlyOneProcess",
+        "logical-delete": "WorkflowLogicalDeleteTest",
+    }
     try:
         with log.open("w") as output:
-            result = subprocess.run(["mvn", "-o", "-B", "-pl", "workflow-service", "-am", "-Pflowable-it",
-                                     "-Dtest=WorkflowIdempotencyAtomicityTest#lostStartResponseCanReadReceiptWithoutAnotherCreation", "-Dsurefire.failIfNoSpecifiedTests=false", "test"],
+            profile = [] if args.case == "logical-delete" else ["-Pflowable-it"]
+            result = subprocess.run(["mvn", "-o", "-B", "-pl", "workflow-service", "-am", *profile,
+                                     "-Dtest=" + tests[args.case], "-Dsurefire.failIfNoSpecifiedTests=false", "test"],
                                     cwd=repository, env=environment, stdout=output, stderr=subprocess.STDOUT)
         print(f"Isolated MySQL refund receipt verification: {'PASS' if result.returncode == 0 else 'FAIL'}; log={log}")
         return result.returncode

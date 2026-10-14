@@ -538,7 +538,7 @@ Elasticsearch 真 BM25 全文分支：ingest 时把明文分块同步 upsert 进
 | `RAG_GRAPH_ASYNC` | `false` | 抽取是否异步 |
 | `RAG_GRAPH_DB_URL` / `_USER` / `_PASSWORD` | MySQL `knowledge_graph` 库 / `root` / 空 | `jdbc` 档数据源 |
 
-> 关系表由 `database-migrations` 的 Flyway 版本在发布前创建/升级；JDBC store 只验证 schema 并执行业务 DML。见 `docs/平台工程/database-migrations.md`。
+> 关系表由 `database-migrations` 的 Flyway 版本在发布前创建/升级；关系库 store 通过 MyBatis-Plus Mapper 只验证 schema 并执行业务 DML（`store=jdbc` 配置键保持兼容）。见 `docs/平台工程/database-migrations.md`。
 
 ### 图片多模态 embedding（`RAG_MULTIMODAL_*`，源码默认关）
 

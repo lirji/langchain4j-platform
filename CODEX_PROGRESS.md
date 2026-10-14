@@ -2,6 +2,50 @@
 
 ## 任务目标
 
+langchain4j-platform 全部自有关系业务持久化切换 MyBatis-Plus，删除统一使用 DELETED：0正常、1已删除。Python agentscope-platform 不属于此次 Java 迁移。
+
+## 已完成
+
+- MP0–MP3：共享事务装配和22个类型化XML Mapper，检查点92eb562/fdcbf79/54793f1/97106e6。
+- MP5：8个新Flyway迁移覆盖33表，正常查询/更新过滤，删除改条件UPDATE；实体/成员关系显式重建版本不回退，工作流已删除幂等键不可复用。
+- 已验证墓碑存留、租户隔离、旧CAS拒绝、迟到回调不复活、Outbox查询、任务逻辑级联、事件序号/去重。
+- 全Maven1470项，0失败/0错误/17跳过；Flowable profile含依赖209项，0失败/4条件跳过，其中引擎专项10项全通过；全量打包通过。
+- 真实MySQL：认证3、订单4、入库4、图谱4、记忆17、知识11、调度6、Inbox10、工作流回执/并发/逻辑删除各1，均通过。记忆/知识应用账号无DELETE权限。
+- 22XML边界、5配置门禁、diff检查通过；Code Hygiene无阻断，限制为无formatter。新增MyBatis坐标OSV无匹配条目，不代表全仓漏洞扫描通过。
+- 临时数据库/账号已清理，MySQL恢复原停止状态。未部署或修改现有业务数据库，未创建worktree。
+- 报告与可追溯证据：docs/delivery/mybatis-plus-migration/。
+
+## 已修改文件
+
+Java八个持久化模块及platform-persistence、父/模块POM、8个增量迁移、行为测试、deploy验证脚本、CI与相关指南。完整源码指纹见VERIFICATION_EVIDENCE.json。
+
+## 未完成
+
+代码完成；正在完成逻辑删除与验证文档的最后分批提交，然后正常合并/推送main并切换main。实际交付见DELIVERY_RESULT.md。
+
+## 当前问题
+
+- 逻辑删除保留正文并持续占用空间，不表示物理擦除；产生墓碑后不能回退到忽略DELETED的旧代码。
+- Flowable内部表、Flyway历史、NL2SQL/Doris/Redis/ES等专用适配器不套自有业务表规则。
+- 无生产DDL/容量测试；历史供应链漏洞债务未扩大修复。
+- 保留既有三个worktree及忽略的本地配置、依赖和构建缓存，没有清理授权，不删除。
+
+## 下一步建议
+
+核对Git交付结果；若尚未推送，按现有授权正常推送main，不强推，不部署。无待实现功能。
+
+## 恢复 Prompt
+
+读取docs/delivery/mybatis-plus-migration/和Git事实，完成未完成的Git收尾，不重做已验证实现，不要求逐批确认。
+
+---
+
+以下为之前任务记录：
+
+# Codex Progress
+
+## 任务目标
+
 按批准规划实现可治理长期记忆与知识运营闭环；不升级Java/依赖，不部署生产。
 
 ## 已完成

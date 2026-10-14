@@ -1,0 +1,359 @@
+{
+  "date": "2026-10-14",
+  "baseline": "4fd8fd4",
+  "checks": [
+    {
+      "check": "full-reactor",
+      "result": "PASS",
+      "local_log": "/tmp/lc4j-soft-final-9.log",
+      "log_sha256": "fd381cffbe19d0b125958944b12929abc712e33e59b4d7c8975a918e38b35113",
+      "counts": {
+        "tests": 1470,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 17
+      }
+    },
+    {
+      "check": "flowable-profile-with-dependencies",
+      "result": "PASS",
+      "local_log": "/tmp/lc4j-soft-final-8.log",
+      "log_sha256": "2ff00ba9c2ea0da759a9b0d4bc7605781099db48cba8161917ca025bc1e466c5",
+      "counts": {
+        "tests": 209,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 4
+      }
+    },
+    {
+      "check": "package-all",
+      "result": "PASS",
+      "local_log": "/tmp/lc4j-soft-final-10.log",
+      "log_sha256": "1484a1d80c84216277e971abee0f39799316a7f6a4e3159c3424d146efd31a06",
+      "counts": {
+        "tests": 0,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "check": "package-after-comment-only-sync",
+      "result": "PASS",
+      "local_log": "/tmp/lc4j-soft-comment-package.log",
+      "log_sha256": "1eed260d9d29a1c6ac7cf9e9e0184497a411018a3e1ad4ba6f66cd0b610e8c74",
+      "counts": {
+        "tests": 0,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "check": "conversation-service/target/profile-memory-mysql.log",
+      "result": "PASS",
+      "local_log": "/Users/liruijun/personal/LLM/langchain4j-platform/conversation-service/target/profile-memory-mysql.log",
+      "log_sha256": "2d00504bdfa1584b9716453f982751bce7ce74245baf5e4fefd1ccc22ae84a10",
+      "counts": {
+        "tests": 17,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "check": "workflow-service/target/workflow-concurrency-mysql.log",
+      "result": "PASS",
+      "local_log": "/Users/liruijun/personal/LLM/langchain4j-platform/workflow-service/target/workflow-concurrency-mysql.log",
+      "log_sha256": "035c1f85292198acf933d07126e851f4375e9026c7f7c3d67410008d1f632305",
+      "counts": {
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "check": "workflow-service/target/workflow-logical-delete-mysql.log",
+      "result": "PASS",
+      "local_log": "/Users/liruijun/personal/LLM/langchain4j-platform/workflow-service/target/workflow-logical-delete-mysql.log",
+      "log_sha256": "bb32c15f8407ee47c1e9a5f928d9eddf4e3adf81ff46bc89aa3d9c5222eac892",
+      "counts": {
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "check": "workflow-service/target/workflow-receipt-mysql.log",
+      "result": "PASS",
+      "local_log": "/Users/liruijun/personal/LLM/langchain4j-platform/workflow-service/target/workflow-receipt-mysql.log",
+      "log_sha256": "0141d43db82e630e1d48098f03eee90422acfcc08e556ec44e3c490c2b0c7544",
+      "counts": {
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "check": "knowledge-service/target/JdbcIngestionJobStoreTest-mysql.log",
+      "result": "PASS",
+      "local_log": "/Users/liruijun/personal/LLM/langchain4j-platform/knowledge-service/target/JdbcIngestionJobStoreTest-mysql.log",
+      "log_sha256": "24517fb76880590494f04051f88abcc967e4ee762981cb3ca7d4dd8dd9af9a2e",
+      "counts": {
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "check": "knowledge-service/target/JdbcGraphStoreTest-mysql.log",
+      "result": "PASS",
+      "local_log": "/Users/liruijun/personal/LLM/langchain4j-platform/knowledge-service/target/JdbcGraphStoreTest-mysql.log",
+      "log_sha256": "416ac92202d231a881a3b0f767314ba53fff175fba5c11407410a7fbf8a039e3",
+      "counts": {
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "check": "knowledge-service/target/knowledge-operations-mysql.log",
+      "result": "PASS",
+      "local_log": "/Users/liruijun/personal/LLM/langchain4j-platform/knowledge-service/target/knowledge-operations-mysql.log",
+      "log_sha256": "f3c70f3d9a3e919c306ba7b3185efc30d0a0379fc678f86ee1045ab7515e71c3",
+      "counts": {
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "check": "order-service/target/JdbcOrderStoreMySqlIT-mysql.log",
+      "result": "PASS",
+      "local_log": "/Users/liruijun/personal/LLM/langchain4j-platform/order-service/target/JdbcOrderStoreMySqlIT-mysql.log",
+      "log_sha256": "bb97220f27ebf20c6db56582105eef909ce5591f8413bd000408ba5eb96e5ff2",
+      "counts": {
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "check": "auth-service/target/MybatisAuthMySqlIT-mysql.log",
+      "result": "PASS",
+      "local_log": "/Users/liruijun/personal/LLM/langchain4j-platform/auth-service/target/MybatisAuthMySqlIT-mysql.log",
+      "log_sha256": "0a66cd2c6e7f438f0f2ce66cfa5fabe4ae589b96de81684ebfbb37a22f30cd33",
+      "counts": {
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "check": "dispatch",
+      "result": "PASS",
+      "local_log": "/Users/liruijun/personal/LLM/langchain4j-platform/.git/codex-cross-runtime-reliability-baseline/dispatch-mysql.log",
+      "log_sha256": "d953b7e51d0a61835fd1fac1afa77a8f3a7ab2d32214ea902ea1224e1e5584f8",
+      "counts": {
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "check": "inbox",
+      "result": "PASS",
+      "local_log": "/Users/liruijun/personal/LLM/langchain4j-platform/.git/codex-cross-runtime-reliability-baseline/inbox-mysql.log",
+      "log_sha256": "e85ba89b4b7cf6190fade39cba1c85167468ff8cdcd00af1d2206e6226c52e53",
+      "counts": {
+        "tests": 10,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "check": "database-migration-config",
+      "result": "PASS",
+      "local_log": "/tmp/lc4j-soft-database-migration-gate.log",
+      "log_sha256": "36b6ab70cf28953f3805e86e348bf695be6d1a86007cc5c66a578b74c526ca3b"
+    },
+    {
+      "check": "production-cutover-config",
+      "result": "PASS",
+      "local_log": "/tmp/lc4j-soft-production-cutover-gate.log",
+      "log_sha256": "e64aeaa9aaa24e36ced0476e0a601f51eb66795b515cd203049a44177343f384"
+    },
+    {
+      "check": "runtime-hardening-config",
+      "result": "PASS",
+      "local_log": "/tmp/lc4j-soft-runtime-hardening-gate.log",
+      "log_sha256": "2177fcec6bdebd7d0b63ab191064e3fdb4eae281fac9598fc44bdb5dd5d9de0d"
+    },
+    {
+      "check": "observability-config",
+      "result": "PASS",
+      "local_log": "/tmp/lc4j-soft-observability-gate.log",
+      "log_sha256": "44c70e128ec451439c79dd3deb021643e33c4abf21db10b3eff3e1e62f5cfdd3"
+    },
+    {
+      "check": "supply-chain-config",
+      "result": "PASS",
+      "local_log": "/tmp/lc4j-soft-supply-chain-gate.log",
+      "log_sha256": "f47a15d619c045f1bc5b8cf982c1ca90cf95c7f0f57f4fc4a15dc317df60b1c1"
+    }
+  ],
+  "boundary": "PASS:22 XMLs,8 reviewed JDBC exceptions",
+  "packaging": "7 application jars include platform-persistence and their Mapper XML resources; eventbus mapper resides in shared library",
+  "environment_cleanup": "temporary schemas and test accounts absent; original MySQL stopped state restored",
+  "validation_fence": {
+    ".github/workflows/agentscope-cutover-ci.yml": "b29cea603f15cf4e0de642daef645f95579601b3617fb50366007228d0625d7c",
+    ".github/workflows/supply-chain.yml": "41760a9f6efcf158c5ce502592d20c7ec35e4596168c6f81df2129f6dbcebc9f",
+    "async-task-service/pom.xml": "52b8ff0a686c0f9efe838f5a4aae88bce1d3caddd2d4331a2ee731ca1c8de719",
+    "async-task-service/src/main/java/com/lrj/platform/asynctask/AsyncTaskLifecycleOutbox.java": "9ce079ca2a591c975e7273c982c2de6b8ef393bb068e1efb33cfa48730e27c45",
+    "async-task-service/src/main/java/com/lrj/platform/asynctask/AsyncTaskWebhookOutbox.java": "e0319092c23e2f6d8dd58d871208d368eee7ad08565887b6e54ce7e5e91c0300",
+    "async-task-service/src/main/java/com/lrj/platform/asynctask/JdbcAsyncTaskEventJournal.java": "cff8f40d4ec16ef4abdcc4573a2354f1e85776160f9417aa96750885e35ed629",
+    "async-task-service/src/main/java/com/lrj/platform/asynctask/JdbcAsyncTaskStore.java": "ece4538fbe1d08bb922609abdc96affa37974d908fac2046c82d4a28b1b69534",
+    "async-task-service/src/main/java/com/lrj/platform/asynctask/ReadOnlyTaskDispatch.java": "f5a87498a7373a3e7c771b61f1238c03db08080f8ae8b952e175dbdec522fd3a",
+    "async-task-service/src/main/java/com/lrj/platform/asynctask/mapper/AsyncTaskEventJournalMapper.java": "e61e987fb1b696e997db70c7950742c738d347bec9c2af6cffa69571a00ff9a3",
+    "async-task-service/src/main/java/com/lrj/platform/asynctask/mapper/AsyncTaskEventJournalRow.java": "64ee15a65ae7557016b7cb568e00555fa3a39cd087a7e85afa49783f910d29e5",
+    "async-task-service/src/main/java/com/lrj/platform/asynctask/mapper/AsyncTaskLifecycleOutboxMapper.java": "cb6beadcd74504e140b41914044e74053bf40e0affc551a97297f8c95bb5ada4",
+    "async-task-service/src/main/java/com/lrj/platform/asynctask/mapper/AsyncTaskLifecycleOutboxRow.java": "ef14a11164a85e1e01b7684795d8a314165efc86f01d683639361756971b737a",
+    "async-task-service/src/main/java/com/lrj/platform/asynctask/mapper/AsyncTaskStoreMapper.java": "2d40c8b05ee4de19b381e7d14c41e5af4fb8156eb1938f3b3a1f0ccf4253de04",
+    "async-task-service/src/main/java/com/lrj/platform/asynctask/mapper/AsyncTaskStoreRow.java": "eb2b6dfb0bcb3279ce12ec910d7bae255c67d84c0478d660db1bcd7d3594df8e",
+    "async-task-service/src/main/java/com/lrj/platform/asynctask/mapper/AsyncTaskWebhookOutboxMapper.java": "fb359237da62d3c37aeba223f4a2a97390f4ed0aefe4437580ea73996e1214f1",
+    "async-task-service/src/main/java/com/lrj/platform/asynctask/mapper/AsyncTaskWebhookOutboxRow.java": "57072a4b96a25cda2e99bfdb2373afb5d342ff4929b0bc0fb3ff3f936a9db926",
+    "async-task-service/src/main/java/com/lrj/platform/asynctask/mapper/ReadOnlyTaskDispatchMapper.java": "4d38c1562ac73e388cb05ea121c678b5efca04ee75224f3fdd4c656dd8254b33",
+    "async-task-service/src/main/java/com/lrj/platform/asynctask/mapper/ReadOnlyTaskDispatchRow.java": "549f45c23a29278a9d544796f010f2a36a2bf5d79c35667b28d6fc29e2e04189",
+    "async-task-service/src/main/resources/com/lrj/platform/asynctask/mapper/AsyncTaskEventJournalMapper.xml": "b8b9986d6e247486b9955a70305e34b1163c3c89d8da44270452492aa97af018",
+    "async-task-service/src/main/resources/com/lrj/platform/asynctask/mapper/AsyncTaskLifecycleOutboxMapper.xml": "91476a58944adabb4d421e67b6faf992a6f5ad9ea352ccdcaf56000f6dec610d",
+    "async-task-service/src/main/resources/com/lrj/platform/asynctask/mapper/AsyncTaskStoreMapper.xml": "a5035765ce8e2778393b92128ab8e43faa41931379c304130b2c2420105ace48",
+    "async-task-service/src/main/resources/com/lrj/platform/asynctask/mapper/AsyncTaskWebhookOutboxMapper.xml": "114968465dace58375ba430bba165c4d047e7bc9c81e9010461210c4e98a50d0",
+    "async-task-service/src/main/resources/com/lrj/platform/asynctask/mapper/ReadOnlyTaskDispatchMapper.xml": "9430174a763234978cc716dcef59e76c5036c768fdde8139483f675f7f858263",
+    "async-task-service/src/test/java/com/lrj/platform/asynctask/AsyncTaskEventJournalTest.java": "f7aa7e27865720b7487358bfc32ca6ea4866129673f828c5b1ed21e07c451faa",
+    "async-task-service/src/test/java/com/lrj/platform/asynctask/AsyncTaskWebhookOutboxTest.java": "9b1c352aa0deac4cfe6aa6f687fa5a25dac6582e800266ebc8a65447cf7b0816",
+    "async-task-service/src/test/java/com/lrj/platform/asynctask/ReadOnlyTaskDispatchTest.java": "d78415eccbad28a00ac03456ad3d27e4c4aa17880f15b669ed522e1da8b47d75",
+    "auth-service/pom.xml": "edded4efa1993f104aa0a3ceb9aa3b2cdeacd1c1491466300a29049cd0ffa2f0",
+    "auth-service/src/main/java/com/lrj/platform/auth/AuthJdbcConfig.java": "742dee3481b5aa68aef4d1508c360ad8c3e01694a972c5e4fcbf75fd9cdcde1c",
+    "auth-service/src/main/java/com/lrj/platform/auth/JdbcGroupStore.java": "1cc03f899b305a7d76c88aa91c74d4af54b69ef511cbf167f314ac5dd76cde55",
+    "auth-service/src/main/java/com/lrj/platform/auth/JdbcRbacMutationExecutor.java": "da627767ae8d0c375617739df85bc20bc50fb743548dd188355e9e7f0056b64e",
+    "auth-service/src/main/java/com/lrj/platform/auth/JdbcRefreshSessionStore.java": "d1c478e8b51089470890235ca719c5617023d89d1df00e11ed979c161001cd3c",
+    "auth-service/src/main/java/com/lrj/platform/auth/JdbcRoleStore.java": "44c18d2a8ca0e1ac852bd5e857098e9773188bcee9aa50a43e70ebbaabec84e1",
+    "auth-service/src/main/java/com/lrj/platform/auth/JdbcTenantPolicyStore.java": "5f68123bd51202ec2d7cc8a6bd756651c621fd95e8022870cb610b9315431145",
+    "auth-service/src/main/java/com/lrj/platform/auth/JdbcUserAccountStore.java": "499d6bf1bcf1b18d46dd551f7aa6feeae358881b6172aa3523d92a6892735d58",
+    "auth-service/src/main/java/com/lrj/platform/auth/JdbcUserGroupStore.java": "f39105f6aa866b5999e18e9eba8b9c487c3a6568c151927187d15826b602f030",
+    "auth-service/src/main/java/com/lrj/platform/auth/RbacMutationExecutor.java": "83b55542296549ec6635f16c20b0161dc8e2f43d37a3b6181985a659500cdc2a",
+    "auth-service/src/main/java/com/lrj/platform/auth/mapper/GroupStoreMapper.java": "af820dd8b57ab909847e9ff99743c7ec23cd8737169e550168b664ac3e0cef8b",
+    "auth-service/src/main/java/com/lrj/platform/auth/mapper/GroupStoreRow.java": "7a67083c89368b2600ee06e748e935e792edf2d1e43c3699fe477a7cba91232b",
+    "auth-service/src/main/java/com/lrj/platform/auth/mapper/RefreshSessionStoreMapper.java": "af2bbf0f189d1a97fac534451f722fc62e4061b7cf4c9e9f9d24cdd7d212a69b",
+    "auth-service/src/main/java/com/lrj/platform/auth/mapper/RefreshSessionStoreRow.java": "9a5c0f96d8ba02f3f1bf4d849a656c3f3a31342a2c9a3555521f4e3dee74a826",
+    "auth-service/src/main/java/com/lrj/platform/auth/mapper/RoleStoreMapper.java": "1eb0d6067187fc84eb55a92406d1e5c8fb0e3e2117dee465dd503b97576ed15f",
+    "auth-service/src/main/java/com/lrj/platform/auth/mapper/RoleStoreRow.java": "0c96674ac1b15b37cdfe118021176f393a0dfe84219c0778302ad461ae5ec08b",
+    "auth-service/src/main/java/com/lrj/platform/auth/mapper/TenantPolicyStoreMapper.java": "b2b82cf9b95b0cfba7973cf1f304e0d2e3212e1060cb5c34da200a4c6cb01d99",
+    "auth-service/src/main/java/com/lrj/platform/auth/mapper/TenantPolicyStoreRow.java": "fe5c65d61328dc2b37ddce232b037c2078123ab0f9912e9f8f479c78a98ac09f",
+    "auth-service/src/main/java/com/lrj/platform/auth/mapper/UserAccountStoreMapper.java": "161dadbe914a141dfe9bcd5d2c4201c0e9e1b9d8c7ee7d0147781943f7dc89ce",
+    "auth-service/src/main/java/com/lrj/platform/auth/mapper/UserAccountStoreRow.java": "4c9ae7e59abc4e26af645c9a246703fb6449c085dc93dc28e25badbf379f9c91",
+    "auth-service/src/main/java/com/lrj/platform/auth/mapper/UserGroupStoreMapper.java": "bedce69a3ffa7a0a75edf080d622be20fda71cab52b4669a6becf6c671cb5845",
+    "auth-service/src/main/java/com/lrj/platform/auth/mapper/UserGroupStoreRow.java": "0d8dc148c1e28f35e05033295d7436edaa2be3195a99c436c38185cf62c5a55c",
+    "auth-service/src/main/resources/com/lrj/platform/auth/mapper/GroupStoreMapper.xml": "e3dc61a92e844592898a00bfc51c2b0be0e80443c82792847d9f693f207a55dc",
+    "auth-service/src/main/resources/com/lrj/platform/auth/mapper/RefreshSessionStoreMapper.xml": "bbd194b1670f1662d77e7b57cdd0222dc692f241669b6ee39b8cf24bebb576fa",
+    "auth-service/src/main/resources/com/lrj/platform/auth/mapper/RoleStoreMapper.xml": "19896db5368f2e9d80bc6c5a43209fb50aafcc353c6015164b1c659c012fcb12",
+    "auth-service/src/main/resources/com/lrj/platform/auth/mapper/TenantPolicyStoreMapper.xml": "034288c80cdbf8b337d02af2f7254250fb9a7180795ce67cfcbcb9a0c79e60d7",
+    "auth-service/src/main/resources/com/lrj/platform/auth/mapper/UserAccountStoreMapper.xml": "c3f50005d4b0155c3167e3574a608f1ea74bd106a642437bc7955751bbb09501",
+    "auth-service/src/main/resources/com/lrj/platform/auth/mapper/UserGroupStoreMapper.xml": "605f8642c985483c05ed3b25cbc6257d4db390cdf79d8e0416c07d4bd81c9155",
+    "auth-service/src/test/java/com/lrj/platform/auth/LogicalDeleteStoresTest.java": "2052b8b18796f944d997566a0899efffc06ecc6e3a6ac4ec55074412566cf7b5",
+    "auth-service/src/test/java/com/lrj/platform/auth/MybatisAuthMySqlIT.java": "3ce21bda9de4f68abd4995b5555f77074d3ae59f3745218094b517d2b07d3dff",
+    "channel-service/pom.xml": "6c94b2c876ae935db028f6480507e490997e88d6de070998f31d6a3c475dc6f4",
+    "channel-service/src/main/java/com/lrj/platform/channel/inbox/JdbcInboundInboxStore.java": "967f7d14db1e9d28671c8ff1deeafa1d13306c5a1dd4e982c43a72b4ae2fe299",
+    "channel-service/src/main/java/com/lrj/platform/channel/inbox/mapper/InboundInboxStoreMapper.java": "e1075e883f3aa9187cabe98373a3e372f3f9ee01539c73fdeb42f76428872973",
+    "channel-service/src/main/java/com/lrj/platform/channel/inbox/mapper/InboundInboxStoreRow.java": "56f11ef6474d55c1f8a0376faa3958a09183b0bd0b27d70a70ae4a3ee44a8877",
+    "channel-service/src/main/resources/com/lrj/platform/channel/inbox/mapper/InboundInboxStoreMapper.xml": "3d4ff5fd3c78680f4f8d09f562a30a306c0caccfbc99cd3e484c51e90edcee73",
+    "channel-service/src/test/java/com/lrj/platform/channel/inbox/InboundInboxStoreTest.java": "8094e3a8d01208476f4d9c61b4f9ca7044cd606d9f0abc1ca91109b0aa7c0c96",
+    "conversation-service/pom.xml": "5d5a161aa161a110d4f600ba63227a4659c9e2c5eb262791fe7809935fe344b8",
+    "conversation-service/src/main/java/com/lrj/platform/conversation/memory/profile/JdbcUserProfileStore.java": "85ff8564ec74831cab1dd9d2c2d125dacfbb6fb0c917395179ea5791bbf98767",
+    "conversation-service/src/main/java/com/lrj/platform/conversation/memory/profile/mapper/UserProfileStoreMapper.java": "c329fd501edce1529e92f570aae55fa382c458db62a66e0fff84d7f527777a3f",
+    "conversation-service/src/main/java/com/lrj/platform/conversation/memory/profile/mapper/UserProfileStoreRow.java": "d70367cef83f33984ffb4209aab0a26322d6741feda8b298e138e41fd3564d0d",
+    "conversation-service/src/main/resources/com/lrj/platform/conversation/memory/profile/mapper/UserProfileStoreMapper.xml": "679199fe5f20facfa3ddb4b383eb2ccc55c245bb2d2843eb6a8a3964005a77b7",
+    "conversation-service/src/test/java/com/lrj/platform/conversation/memory/profile/JdbcUserProfileStoreTest.java": "2e410979ba1dce33fae0afd268520311f0735ebae984b295c283761b009d7c1c",
+    "database-migrations/src/main/resources/db/migration/async-task/V4__logical_delete.sql": "7d6165f2df458d3c2f80769b07a116303e0bfacf9303809eb62a3e0fc5d17f08",
+    "database-migrations/src/main/resources/db/migration/auth/V4__logical_delete.sql": "cd90937e1ffa1716e98b5d2d824bfa9197997df7a883827d35ac584c57d243fb",
+    "database-migrations/src/main/resources/db/migration/channel/V3__logical_delete.sql": "2cfe481e58a439662bd51166d7546629420f47e528a99cdd711c538f2d427c70",
+    "database-migrations/src/main/resources/db/migration/conversation/V3__logical_delete.sql": "39cb7a9d84deb48a8ccbacc925ffabb4d39a421c0debac2e68241ed5cd37365f",
+    "database-migrations/src/main/resources/db/migration/knowledge-graph/V3__logical_delete.sql": "97e697c5ac6494a9e78b1fa2053402ce3ecab2323480d66037c5e2a33db2ae20",
+    "database-migrations/src/main/resources/db/migration/knowledge-ingestion/V5__logical_delete.sql": "fa5c3d61b29988cfb534459f3cd10de1d223d03dce49aa5ab458aaf9670e9540",
+    "database-migrations/src/main/resources/db/migration/order/V3__logical_delete.sql": "0342dd6bbcca12c4e78ce6189ac7bca9ed6d51455bba66c220843dc3059ed128",
+    "database-migrations/src/main/resources/db/migration/workflow/V4__logical_delete.sql": "47caf6cf4e267ae2d18007f961acb2f38fa19bcfed847afe3b9d146bbe11a12b",
+    "database-migrations/src/test/java/com/lrj/platform/migrations/SchemaMigrationRunnerTest.java": "03e347eccd9184af9f21340160132eb4114b7f858439ba778ad7a555637bf399",
+    "deploy/test-knowledge-operations-mysql.py": "8d072990c526631f326ec37279e130701f477b5661b7bd74fda178341e86b7eb",
+    "deploy/test-mybatis-boundary.py": "6a708aae8bf15fdf3f479dc60ccf7ea173ad367beab1ecbc28798fc9256181e1",
+    "deploy/test-mybatis-mysql.py": "81c3d5e50fb79c0d19809f92e078a34abb6ed4ca59c20652decc7b359bd30d70",
+    "deploy/test-profile-memory-mysql.py": "61bf07d91d94a946953c9d18a3a3db4468144ea4f039dd910ab2fa34663bf994",
+    "deploy/test-workflow-receipt-mysql.py": "5fc0265d7ba6fc6be95e9e65bf9008c2575d23617e4ba8f7718d64dd3b6b9143",
+    "knowledge-service/pom.xml": "1b597c1835c65b946814c1ff22a110596d0f863f3a84b40d08ad4aa67c50f91c",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/graph/JdbcGraphStore.java": "04cf73d7f6013beabbb1cb13711522f3082798376e1a32ce712727e0b4458433",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/graph/mapper/GraphStoreMapper.java": "b6fde15306b0429813c05735bcb4d1cdb8bc3949777f4fac16f48e9b5c675888",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/graph/mapper/GraphStoreRow.java": "9b59bbeb837d6727dab3c27956cbc431512d7fb92f3739ce54911518aa5e6618",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/job/JdbcIngestionJobStore.java": "665f3bf54ecec10b1742c6e7670fb7e6a77c9b462ae44c2a4ea41f6f6fb952fb",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/job/mapper/IngestionJobStoreMapper.java": "aab913c111a155da481ae92f47a2deba7d30e28a40a5f2693f93e218994c2d0d",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/ingest/job/mapper/IngestionJobStoreRow.java": "61e0c9978b2083e588a8dab01397cfa2b7e8a7a44dc8738b70b14169f735970c",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/operations/JdbcKnowledgeOperationsStore.java": "bd24da55e91a2ec998f92880591703ff12edb0e0be67e96e341feb0af0a86406",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/operations/mapper/KnowledgeOperationsStoreMapper.java": "aa523899a773c035be7236eee54fb47410c2fba61d8920cb90c07af954d56851",
+    "knowledge-service/src/main/java/com/lrj/platform/knowledge/operations/mapper/KnowledgeOperationsStoreRow.java": "15fcad1a39e93f4ae74f0b558cb805b125c372fb33546f0612b81ddeaadcd965",
+    "knowledge-service/src/main/resources/com/lrj/platform/knowledge/graph/mapper/GraphStoreMapper.xml": "69ab829180830d050f9f57a925693a151bcb2083cc2b4cc75444787c6805fece",
+    "knowledge-service/src/main/resources/com/lrj/platform/knowledge/ingest/job/mapper/IngestionJobStoreMapper.xml": "8c73ab575b422fafd2569f2dc425bce0bd793c3e7de669bc20ffbddf61a6a397",
+    "knowledge-service/src/main/resources/com/lrj/platform/knowledge/operations/mapper/KnowledgeOperationsStoreMapper.xml": "8e7168ca54f86e12c5197d7548113299cb92ae923cdd085d8cf5ddd03f285b96",
+    "knowledge-service/src/test/java/com/lrj/platform/knowledge/graph/JdbcGraphStoreTest.java": "215ec720433667bf8096b80c158af637c7f38e23500274b5d164072a1126c84c",
+    "knowledge-service/src/test/java/com/lrj/platform/knowledge/ingest/job/JdbcIngestionJobStoreTest.java": "7d9ae3580fd9a76c8887bfc04575ba19e62016f7173e2b78ea776f009a0b2311",
+    "order-service/pom.xml": "14954bb83340d7c8c78f8dad833764e6e0206f7c562bbac5701a6af5056166e3",
+    "order-service/src/main/java/com/lrj/platform/order/JdbcOrderStore.java": "9ab8f54b5dbcd241af8feeea399766e0318f9a2a037c4cc3643124202b6f2907",
+    "order-service/src/main/java/com/lrj/platform/order/OrderServiceApplication.java": "62ee5dec6e8d2de4657a33e8e3c118ea072e959900f43783c1ddbf880b42718d",
+    "order-service/src/main/java/com/lrj/platform/order/mapper/OrderStoreMapper.java": "1eacadc5047a68a3dc50138ca6185e368a2545e73f8a7ee2f39efe872df04c6a",
+    "order-service/src/main/java/com/lrj/platform/order/mapper/OrderStoreRow.java": "20023f54367c3a469308e288e22824fc0e48624c629d659ce7cfc774e90b69b3",
+    "order-service/src/main/resources/com/lrj/platform/order/mapper/OrderStoreMapper.xml": "84807271565fe9ecaa7bd7cf0be3c44165d3717269f5b6596ef024b86c933241",
+    "order-service/src/test/java/com/lrj/platform/order/JdbcOrderStoreMySqlIT.java": "257d9faad8b8e3ab549846c521d8ecc87067948ac3ffef9c9d74f94a1c161408",
+    "platform-eventbus/pom.xml": "d4e79a8ae7ae2055001c930bfe5518cc5953bc068f183707c9360d76c9630bff",
+    "platform-eventbus/src/main/java/com/lrj/platform/eventbus/JdbcProcessedEventStore.java": "b3f778853c5fb58fbe0948c562689ee74e4915583cee183b58164f9c617e3ae7",
+    "platform-eventbus/src/main/java/com/lrj/platform/eventbus/PlatformEventbusAutoConfiguration.java": "37e5ed3e4d4edeeb7a2919a34a3e62c2b6c7dca807fda9a80bb1453697ac5fcf",
+    "platform-eventbus/src/main/java/com/lrj/platform/eventbus/mapper/ProcessedEventStoreMapper.java": "6d9399a14a8c7599c5a6930547b3e8c7fafc5505073a1f1cacebb0849c81e48c",
+    "platform-eventbus/src/main/java/com/lrj/platform/eventbus/mapper/ProcessedEventStoreRow.java": "26d7800e5b0b04b6c06336c7d843cc1efefca6abd9253fd3ea753c5b035e2669",
+    "platform-eventbus/src/main/resources/com/lrj/platform/eventbus/mapper/ProcessedEventStoreMapper.xml": "28aaa080b8b2ae231b2164fe891c25a446e5780300127ba19737562377c84cdb",
+    "platform-eventbus/src/test/java/com/lrj/platform/eventbus/ProcessedEventStoreTest.java": "c4b7bb93b8252bcbe27a8a2249fa3aba22c22004f51eb1b5d30b9c2c42340523",
+    "platform-persistence/pom.xml": "493382cb36daa47308db2e95f41bba0eb9fb1537d9cfec249964a51ffbd44d6d",
+    "platform-persistence/src/main/java/com/lrj/platform/persistence/PlusMapperFactory.java": "eef1210079c29067ab46d89152351bdd8ccd625891cbffeb7894d22cd2979bd2",
+    "platform-persistence/src/main/java/com/lrj/platform/persistence/Rows.java": "517f22168b3e1da3952e4ae8e74bb15415ad4bce7ad484de9aebe7fa3f945976",
+    "platform-persistence/src/test/java/com/lrj/platform/persistence/PlusMapperFactoryTest.java": "d220462d722f5245d4af89c06fd48a3a1b4131805e6e81b188e550cdd229443c",
+    "pom.xml": "f4b5ab0ba985ec1b3fbc3ae8d32ed2a381044516689a28c95a2261b3878f5a85",
+    "workflow-service/pom.xml": "cf402cab56fea17c066a9ffd1c408f5079bfdf744c75f53fded0879784660305",
+    "workflow-service/src/main/java/com/lrj/platform/workflow/JdbcWorkflowIdempotencyStore.java": "c44c0e29c89fa0de1b71d4c1d60cbb895241aea004b4c75a9a70f124900d5822",
+    "workflow-service/src/main/java/com/lrj/platform/workflow/JdbcWorkflowReplyStore.java": "e6bf46401ed04377ad35cd7071053570f15261e47280a359b050c2aac9ae1151",
+    "workflow-service/src/main/java/com/lrj/platform/workflow/WorkflowOutbox.java": "1e75918037f15a7c93d5f8666a4ff401b858f05517fc9d75286262f50fcf5175",
+    "workflow-service/src/main/java/com/lrj/platform/workflow/WorkflowService.java": "505c0f80f48e768941c5fadc2b519e9ee3d5594dcdb0aa8f7998e5aa7510eaaf",
+    "workflow-service/src/main/java/com/lrj/platform/workflow/WorkflowTerminalEventOutbox.java": "189bb2761a618ab57b8d7f9d2838369ae0631f553b6b61ea21d5258d06f016d1",
+    "workflow-service/src/main/java/com/lrj/platform/workflow/controller/WorkflowController.java": "984d464887d395bc2a8a56608ebad3c1c9142f1cda6bf84706077e7e1c6ee39d",
+    "workflow-service/src/main/java/com/lrj/platform/workflow/mapper/WorkflowIdempotencyStoreMapper.java": "93b205ddb61d79de4a8b368e8c6f7d8ed5307cd3bd1f1bef5554ebe05adaad67",
+    "workflow-service/src/main/java/com/lrj/platform/workflow/mapper/WorkflowIdempotencyStoreRow.java": "97a79b985c6b6271e7d2c201046229999f8ec0730cac7abe9cb725e840aa8d56",
+    "workflow-service/src/main/java/com/lrj/platform/workflow/mapper/WorkflowOutboxMapper.java": "0619f8131a92368df907f966d2a2762eaf189f82f249a334fe1ccdfff60622e9",
+    "workflow-service/src/main/java/com/lrj/platform/workflow/mapper/WorkflowOutboxRow.java": "7a142cd8bed867fd60b66957568010e8b6b74e5dcdd4f0cb92fcfa0f01a5cb60",
+    "workflow-service/src/main/java/com/lrj/platform/workflow/mapper/WorkflowReplyStoreMapper.java": "ce54ea82175a5b0235ad494cc1e14b733edf7ec648892795fb1369702a20e574",
+    "workflow-service/src/main/java/com/lrj/platform/workflow/mapper/WorkflowReplyStoreRow.java": "902b4e03203f6d3b7beaea2d2182b8c3f8ab9d24cf51fcfbc065c38f3921f16f",
+    "workflow-service/src/main/java/com/lrj/platform/workflow/mapper/WorkflowTerminalEventOutboxMapper.java": "5a79056663935f214f21cf8d9a7d250c4d8819911efc0da6aefd261f8badff14",
+    "workflow-service/src/main/java/com/lrj/platform/workflow/mapper/WorkflowTerminalEventOutboxRow.java": "39606d5230c14c75f91cb8c6fd9aab127704922c5eb35e0c7aab3820cbd95da3",
+    "workflow-service/src/main/resources/com/lrj/platform/workflow/mapper/WorkflowIdempotencyStoreMapper.xml": "b44e5efab0ad1091bdb9c5a48189e1b3a12c593ce01587ec9ad674789497de88",
+    "workflow-service/src/main/resources/com/lrj/platform/workflow/mapper/WorkflowOutboxMapper.xml": "9aae72d4047e59df7bef0eb93acf88c440dac9e99184cd541cf92febc5f40261",
+    "workflow-service/src/main/resources/com/lrj/platform/workflow/mapper/WorkflowReplyStoreMapper.xml": "56e4569ddd68812701b2edd5d8bc260a639d6003729d1abeb39d80fdff99d7e8",
+    "workflow-service/src/main/resources/com/lrj/platform/workflow/mapper/WorkflowTerminalEventOutboxMapper.xml": "256adbd39dc6d81e7006eb4fe1fd16d96f2b986bd9c45c063054dfa876a90357",
+    "workflow-service/src/test/java/com/lrj/platform/workflow/JdbcWorkflowIdempotencyStoreTest.java": "7cc93f8007376686a8da186fff6618271794731b3397d718486eeee30fe2bd5c",
+    "workflow-service/src/test/java/com/lrj/platform/workflow/WorkflowIdempotencyAtomicityTest.java": "0edae05f1f079c052f07b731337aba9b73c88d25c8a45eb19ae81144af30a6d5",
+    "workflow-service/src/test/java/com/lrj/platform/workflow/WorkflowLogicalDeleteTest.java": "56a208637e02313ea434823ba887091eb5e3c14a9c00871d66bf14680714d31a"
+  }
+}

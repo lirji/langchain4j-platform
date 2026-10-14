@@ -30,7 +30,7 @@ def main() -> int:
 CREATE DATABASE `{schema}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER '{app}'@'%' IDENTIFIED BY '{app_password}';
 CREATE USER '{migrator}'@'%' IDENTIFIED BY '{migration_password}';
-GRANT SELECT, INSERT, UPDATE, DELETE ON `{schema}`.* TO '{app}'@'%';
+GRANT SELECT, INSERT, UPDATE ON `{schema}`.* TO '{app}'@'%';
 GRANT ALL PRIVILEGES ON `{schema}`.* TO '{migrator}'@'%';
 """
     environment = os.environ.copy()
