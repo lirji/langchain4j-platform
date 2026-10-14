@@ -51,8 +51,9 @@ public class ApiKeyToInternalTokenFilter implements GlobalFilter, Ordered {
             return chain.filter(authenticated);
         }
 
-        // 已被 SessionBearerAuthFilter 用会话令牌换发内部 JWT（双模）：直接放行，不再要求 X-Api-Key。
-        if (exchange.getRequest().getHeaders().getFirst(props.getInternalHeader()) != null) {
+        // 已被更早的认证 filter（服务令牌 / Casdoor / 会话）换发内部 JWT：直接放行，不再要求 X-Api-Key。
+        // 只认 exchange 属性而不认 header —— header 可由客户端伪造，属性只由完成验签的 filter 写入。
+        if (EdgeAuthenticatedTenant.get(exchange) != null) {
             return chain.filter(exchange);
         }
 

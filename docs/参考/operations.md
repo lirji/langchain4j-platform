@@ -173,7 +173,7 @@ curl -s -X POST 'http://localhost:8080/chat?chatId=u1' \
 
 ### 4.2 Casdoor SSO Bearer（边缘身份切换，`edge.casdoor.*`，**默认开 + `only`**）
 
-边缘接**外部 Casdoor（OIDC/SSO 身份，非本仓库模块）**签发的 JWT 作**默认凭据**：`CasdoorTokenExchangeFilter`（order **-120**，早于会话 -110 / api-key -100）用 **JWKS 验签** Casdoor JWT，通过后**剥掉入站 `X-Internal-Token`/`Authorization`/`X-Api-Key`**（防伪造、Casdoor token 不进内网），从 claims 取 `owner`（租户）/`sub`（用户）/scope/`groups`→部门，重新签发内部 JWT。**总开关默认开**——`EDGE_CASDOOR_ENABLED=true`（默认）装配此 filter/decoder；置 `false` 则全不装配、回到 api-key/会话双凭据。
+边缘接**外部 Casdoor（OIDC/SSO 身份，非本仓库模块）**签发的 JWT 作**默认凭据**：`CasdoorTokenExchangeFilter`（order **-120**，早于会话 -110 / api-key -100）用 **JWKS 验签** Casdoor JWT，通过后**剥掉入站 `X-Internal-Token`/`Authorization`/`X-Api-Key`**（防伪造、Casdoor token 不进内网），从 claims 取 `owner`（租户）/`sub`（用户）/scope/`groups`→部门，重新签发内部 JWT。**总开关默认开**——`EDGE_CASDOOR_ENABLED=true`（默认）装配此 filter/decoder；置 `false` 则全不装配、回到 api-key/会话双凭据。入站 `X-Internal-Token` 的剥离**不依赖**此开关：常驻 `InboundInternalHeaderStripFilter`（order **-140**）对每个请求无条件剥离；api-key filter 只按 exchange 属性（`EdgeAuthenticatedTenant`，仅由验签成功的 filter 写入）判断「已认证」，不按内部头是否存在——关闭 Casdoor 后客户端自带内部头一律 401。
 
 - **`only`（默认，最终态）**：无 Bearer 或验签失败 → 直接 **401**，**不回退**旧凭据；且要求 `tenant-claim=owner`（启动即校验，否则 fail-fast）。
 - **`dual`（灰度回滚）**：有合法 Casdoor Bearer 就用它换发；无 Bearer 或验签失败 → **透传**给会话 / api-key filter 兜底（本地无 Casdoor 或过渡期用）。

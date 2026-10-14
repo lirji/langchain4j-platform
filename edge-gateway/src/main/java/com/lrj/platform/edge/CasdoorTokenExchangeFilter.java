@@ -65,8 +65,8 @@ public class CasdoorTokenExchangeFilter implements GlobalFilter, Ordered {
         if (Boolean.TRUE.equals(exchange.getAttribute(InternalServiceTokenExchangeFilter.VERIFIED_ATTRIBUTE))) {
             return chain.filter(exchange);
         }
-        // 剥离客户端伪造的入站内部头：Casdoor 是最早(-120)的认证 filter，内部头只应由本链各 filter 换发注入，
-        // 绝不能信任外部传入——否则可伪造有效内部 JWT 绕过 Casdoor/session/api-key 全部认证。
+        // 剥离客户端伪造的入站内部头：常驻的 InboundInternalHeaderStripFilter(-140) 已先剥离（不依赖 Casdoor 开关），
+        // 这里保留为纵深防御——内部头只应由本链各 filter 换发注入，绝不能信任外部传入。
         ServerWebExchange ex = stripInboundInternalHeader(exchange);
         String path = ex.getRequest().getPath().value();
         if (EdgeOpenPaths.isOpen(path)) {

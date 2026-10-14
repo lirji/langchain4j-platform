@@ -5,10 +5,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import java.util.List;
 
 /**
- * ③ Casdoor SSO 身份切换配置（edge.casdoor.*）。默认<strong>关</strong>（灰度期开）。
+ * ③ Casdoor SSO 身份切换配置（edge.casdoor.*）。
+ *
+ * <p><strong>生效默认以 {@code edge-gateway/application.yml} 为准：{@code enabled=true}、{@code mode=only}</strong>
+ * （{@code EDGE_CASDOOR_ENABLED} / {@code EDGE_CASDOOR_MODE}）。下面字段上的初始值只是 yml 缺席时（如单测直接
+ * new 本对象）的保守回落值，不代表部署默认——不要据此判断「Casdoor 默认关」。
  *
  * <p>enabled=true 时 {@code CasdoorTokenExchangeFilter} 用 Casdoor JWKS 验 {@code Authorization: Bearer}，
- * 验过就把 {@code owner→tenantId}、{@code sub→userId}、scope 换成内部 JWT；验不过透传给 legacy filter（灰度）。
+ * 验过就把 {@code owner→tenantId}、{@code sub→userId}、scope 换成内部 JWT；验不过按 {@link #mode} 401 或透传 legacy。
  *
  * <p>scope 由 Casdoor（权限中心）展开进 token，edge 只从 {@link #scopeClaim} 提取 + 用固定
  * {@link #scopeAllowlist} 过滤——<strong>edge 不维护 role→scope 表，角色规模增长与 edge 无关</strong>（见设计 D3）。
@@ -16,15 +20,15 @@ import java.util.List;
 @ConfigurationProperties(prefix = "edge.casdoor")
 public class CasdoorSecurityProperties {
 
-    /** 是否启用 Casdoor token 换发。默认关（引入即安全）。 */
+    /** 是否启用 Casdoor token 换发。字段回落值 false；yml 生效默认 true。 */
     private boolean enabled = false;
 
     /**
      * 认证模式（仅 enabled=true 时生效）：
      * <ul>
-     *   <li>{@code DUAL}（默认，灰度）：Casdoor 验过即换发内部 JWT；无 Bearer / 验签失败 → <strong>透传</strong>
+     *   <li>{@code DUAL}（字段回落值；灰度/回滚窗口）：Casdoor 验过即换发内部 JWT；无 Bearer / 验签失败 → <strong>透传</strong>
      *       给 legacy(session/api-key) filter，供切换窗口回滚。</li>
-     *   <li>{@code ONLY}（严格 Casdoor-only，最终验收）：非 open path <strong>必须</strong>有有效 Casdoor token；
+     *   <li>{@code ONLY}（yml 生效默认，严格 Casdoor-only）：非 open path <strong>必须</strong>有有效 Casdoor token；
      *       无 Bearer / 验签失败 → <strong>401</strong>，不再落 legacy。tenant 恒取 owner，杜绝身份混用。</li>
      * </ul>
      */

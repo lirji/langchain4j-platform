@@ -2,6 +2,7 @@ package com.lrj.platform.edge;
 
 import com.lrj.platform.security.InternalSecurityProperties;
 import com.lrj.platform.security.InternalToken;
+import com.lrj.platform.security.TenantContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.http.HttpStatus;
@@ -13,6 +14,7 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,15 +42,30 @@ class ApiKeyToInternalTokenFilterTest {
 
     @Test
     void alreadyAuthenticatedByBearerPassesThroughWithoutApiKey() {
-        // 模拟 SessionBearerAuthFilter 已注入内部 JWT：即使没有 X-Api-Key 也不应 401
+        // 模拟 SessionBearerAuthFilter 已验签并注入内部 JWT：即使没有 X-Api-Key 也不应 401
         MockServerWebExchange exchange = MockServerWebExchange.from(
                 MockServerHttpRequest.post("/chat").header(props.getInternalHeader(), "some.internal.jwt"));
+        EdgeAuthenticatedTenant.set(exchange, new TenantContext.Tenant("acme", "alice", Set.of("chat")));
 
         AtomicBoolean chainCalled = new AtomicBoolean(false);
         filter.filter(exchange, passThrough(chainCalled)).block();
 
         assertThat(chainCalled).isTrue();
         assertThat(exchange.getResponse().getStatusCode()).isNull(); // 未 401
+    }
+
+    @Test
+    void clientSuppliedInternalHeaderWithoutEdgeAuthenticationIsRejected() {
+        // 回归：Casdoor 关闭时没有 filter 替客户端「认证」过，自带的内部头不能当作已认证凭证。
+        String forged = tokens.mint(new TenantContext.Tenant("victim", "mallory", Set.of("chat")));
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.post("/chat").header(props.getInternalHeader(), forged));
+
+        AtomicBoolean chainCalled = new AtomicBoolean(false);
+        filter.filter(exchange, passThrough(chainCalled)).block();
+
+        assertThat(chainCalled).isFalse();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     @Test
