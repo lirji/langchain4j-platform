@@ -42,3 +42,13 @@
 - 现有 main `38b3d80` 的供应链运行 36983397611 仍在 `Scan aggregate dependency SBOM` 失败，镜像扫描未进入。用户本次排除版本与债务整改，保留该事实；前次交付的扫描合并例外不自动扩大为本轮例外。
 
 远程基线：[供应链运行](https://github.com/lirji/langchain4j-platform/actions/runs/36983397611)。本任务当前 revision 的远程验证以交付状态为准，不能复用基线成功/失败充当本轮执行结果。
+
+## 本次远程验证
+
+验证 revision：d8ce9d0aef2e9e728896c1609e68e2c0f69a6190。
+
+- [AgentScope Cutover CI 38491384085](https://github.com/lirji/langchain4j-platform/actions/runs/38491384085)：SUCCESS，包含固定契约校验、全 reactor 和配置/Helm 门禁。
+- [Java supply chain 38491391893](https://github.com/lirji/langchain4j-platform/actions/runs/38491391893)：FAILURE；全 reactor、打包、SBOM 生成通过，Scan aggregate dependency SBOM 退出 1。镜像扫描、制品证明和镜像发布跳过。
+- 当前失败记录数量未单独提取，不把前次的 85 条当成本次重新统计的数字。没有修改依赖版本、扫描配置或忽略规则。
+- 本次功能验证通过与供应链门禁失败分别记录。依据用户 AGENTS 的“必要验证失败时记录阻塞”，main 合并暂停，任务分支已推送；本轮未申请或取得合并例外。
+- 本地日志保留在 `conversation-service/target/profile-verification/` 和 `conversation-service/target/profile-memory-mysql.log`。远程工作流及其 artifact 绑定上述 revision。

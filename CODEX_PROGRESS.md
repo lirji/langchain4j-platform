@@ -21,19 +21,19 @@
 
 ## 未完成
 
-- 当前待完成 Git 提交与任务分支推送。
-- main 合并：现有供应链 SBOM 扫描失败；本轮未授予新的扫描失败合并例外。
+- 功能提交 d8ce9d0 已推送 feat/persistent-profile-memory；交付状态文档随后补充。
+- main 合并阻塞：本次供应链 CI 38491391893 在 SBOM 扫描失败；本轮未授予新的扫描失败合并例外。
 
 ## 当前问题
 
 - 旧内存数据不会自动导出；清空后的旧抽取回填保护属于后续治理。
-- 现有 main 扫描 run 36983397611 失败，保留门禁，不修复本次排除的版本债务。
+- 本次兼容性 CI 38491384085 SUCCESS；供应链 CI 的测试/打包成功但扫描失败，镜像扫描未执行。
 - 原项目目录的用户未提交内容未改动。生产仍未部署。
 
 ## 下一步建议
 
 1. 在 ~/.local/share/git-worktrees/langchain4j-platform/persistent-profile-memory 继续。
-2. 分支 feat/persistent-profile-memory；完成提交/推送，更新 PROGRESS_STATE 的实际结果。
+2. 分支 feat/persistent-profile-memory；功能已提交/推送，详见 PROGRESS_STATE 的实际结果。
 3. 供应链门禁通过或获得本轮明确例外后再合并 main。
 
 ## 恢复 Prompt
