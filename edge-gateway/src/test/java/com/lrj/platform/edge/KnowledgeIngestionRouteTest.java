@@ -26,7 +26,7 @@ class KnowledgeIngestionRouteTest {
         assertThat(query.getUri().toString()).isEqualTo("http://query:8084");
         assertThat(admin.getUri().toString()).isEqualTo("http://admin:8084");
         assertThat(ingestion.getPredicates().getFirst().getArgs().values())
-                .containsExactly("/rag/ingestions", "/rag/ingestions/**");
+                .containsExactly("/rag/ingestions", "/rag/ingestions/**", "/rag/operations", "/rag/operations/**");
         assertThat(admin.getPredicates()).anySatisfy(p -> {
             assertThat(p.getName()).isEqualTo("Method");
             assertThat(p.getArgs().values()).containsExactly("POST", "DELETE");

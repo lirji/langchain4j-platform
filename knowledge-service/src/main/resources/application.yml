@@ -42,6 +42,8 @@ platform:
 
 app:
   rag:
+    operations:
+      query-base-url: ${KNOWLEDGE_OPERATIONS_QUERY_URL:}
     # combined 保持兼容 façade；query/ingest-api/ingest-worker 用同一 artifact 拆独立 Deployment。
     # 独立角色会在启动期强制使用 JDBC job store；ingest 角色还会强制使用 S3 source store。
     runtime:

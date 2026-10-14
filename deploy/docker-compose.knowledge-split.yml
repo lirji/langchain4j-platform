@@ -85,6 +85,7 @@ services:
       service: knowledge-service
     environment: &knowledge-ingest-environment
       RAG_RUNTIME_ROLE: ingest-api
+      KNOWLEDGE_OPERATIONS_QUERY_URL: http://knowledge-query:8084
       RAG_INGESTION_STORE: jdbc
       RAG_INGESTION_DB_URL: jdbc:mysql://mysql:3306/knowledge_ingestion?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       RAG_INGESTION_DB_USER: knowledge_ingestion_app

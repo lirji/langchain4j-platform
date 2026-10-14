@@ -14,11 +14,11 @@ PUT /memory/governance/settings：enabled，expectedGeneration；停用或启用
 
 ## 知识运营
 
-在 /rag/operations 下增加反馈、候选、评测、审核、发布/同步和效果查看入口。所有写操作使用稳定幂等键或 expectedVersion；发布键由候选ID/修订推导，重试不得创建第二任务。编辑后旧评测/审核失效。内容正文仅在草稿详情可读；普通用户只能访问自己反馈，管理员需要 ingest。
+在 /rag/operations 下增加反馈、候选、评测、审核、发布/同步和效果查看入口。所有写操作使用稳定幂等键或 expectedVersion；发布键由候选ID/修订推导，重试不得创建第二任务。编辑后旧评测/审核失效。候选列表与详情均只允许同租户运营管理员读取正文；普通用户只能访问自己反馈，管理员需要 ingest。
 
 评测记录绑定候选内容摘要和版本；必须有真实执行结果及来源引用，不能仅手工传 passed=true 绕过审核。审核和发布分别记录操作者。发布结果先为 PUBLISHING，只有现有 ingestion job READY 才为 PUBLISHED；失败显示 FAILED/可重试。回滚为旧内容的新版本发布，复用同一审核/评测链路。
 
-详细 DTO 在 K1 实施前依据现有 ingestion 契约补齐；未定义前禁止实现知识写接口。禁止仅存状态而不连接真实入库。
+以下DTO在K1实施前依据现有ingestion契约定义。发布必须连接真实入库。
 
 
 ## 知识运营具体契约（K1前冻结）
@@ -26,7 +26,7 @@ PUT /memory/governance/settings：enabled，expectedGeneration；停用或启用
 生产仅 JDBC；装配复用 ingestionJobDataSource，路由 /rag/operations/** 优先去 KNOWLEDGE_INGEST_URI（combined/ingest-api），不依赖 query 实例拥有数据库写凭据。管理员能力复用 ingest scope；现有文档编辑仍需 KnowledgeAuthz 授权。
 
 - POST /rag/operations/feedback：{idempotencyKey,question,reason:NO_ANSWER|INCORRECT|HELPFUL,comment,documentId?}；认证用户可提交；最多 question2000/comment4000，返回本人记录。GET /feedback 返回本人分页；GET /feedback/inbox 需ingest，按租户分页。
-- POST /rag/operations/candidates：{idempotencyKey,feedbackId?,title,content,category?,checks:[{question,requiredText}]}。需ingest，来源必须同租户反馈；最多正文50000、标题200、20个用例、每个问题500/引用500。生成服务端文档ID，状态DRAFT。
+- POST /rag/operations/candidates：{idempotencyKey,feedbackId?,draft:{title,content,category?,checks:[{question,requiredText}]}}。需ingest，来源必须同租户反馈；最多正文50000、标题200、20个用例、每个问题500/引用500。生成服务端文档ID，状态DRAFT。
 - GET /candidates?before=&limit=20 和 GET /candidates/{id}：需ingest；分页1..100，before为服务端不透明ID游标，按ID倒序。
 - PUT /candidates/{id}：{expectedVersion,draft:{title,content,category,checks}}；仅发布前可编辑，编辑清空旧评测/审核，版本递增并回DRAFT。
 - POST /candidates/{id}/evaluate：{expectedVersion}；服务端执行内容契约回归，逐条检查 requiredText 是否存在于候选正文。返回绑定完整草稿SHA256的 CONTENT_CONTRACT 证据；这是内容覆盖检查，不宣称LLM事实正确或线上召回率。全部通过后 EVALUATED，否则 DRAFT。
@@ -39,3 +39,7 @@ PUT /memory/governance/settings：enabled，expectedGeneration；停用或启用
 Candidate包含id、tenantId、feedbackId、rollbackOf、documentId、draft、status、version、evaluation、release、probe、createdBy、updatedBy、createdAt、updatedAt；release包含documentVersion、publisher、reviewer、jobId，审核/发布只来自认证上下文。反馈输入可关联文档ID，但不是授权依据。所有管理读写受tenant谓词和ingest权限保护。错误code/message：400 bad_request、403 forbidden、404 not_found、409 conflict、503 unavailable。
 
 状态提交与审计同一数据库事务。审计只存动作、ID、操作者与版本，不复制正文；索引保证租户游标查询。正式数据全部持久化；审计/反馈/发布内容保留与容量纳入运维记录，不擅自承诺法律删除或自动清理期限。
+
+GET /candidates/{id}/history?limit=50：同租户ingest管理员读取最近有界操作审计，无正文。
+
+GET /candidates/{id}/feedback-summary：按候选documentId聚合真实主动反馈，返回类别→数量的映射，空集合表示无反馈，不代表质量通过。跨版本的同文档反馈累计展示，不冒充发布前后对照实验。拆分探针显式配置KNOWLEDGE_OPERATIONS_QUERY_URL，经原入站JWT请求query角色，校验返回tenant及registry发布版本；不向ingest-api发放签名私钥。

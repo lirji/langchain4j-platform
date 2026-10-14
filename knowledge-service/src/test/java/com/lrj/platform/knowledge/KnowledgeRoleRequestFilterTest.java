@@ -19,6 +19,8 @@ class KnowledgeRoleRequestFilterTest {
         assertThat(filter.allows(request("POST", "/rag/documents"))).isFalse();
         assertThat(filter.allows(request("POST", "/rag/image"))).isFalse();
         assertThat(filter.allows(request("GET", "/rag/ingestions/job-1"))).isFalse();
+        assertThat(filter.allows(request("GET", "/rag/operations/candidates"))).isFalse();
+        assertThat(filter.allows(request("POST", "/rag/operations/feedback"))).isFalse();
     }
 
     @Test
@@ -28,6 +30,8 @@ class KnowledgeRoleRequestFilterTest {
 
         assertThat(filter.allows(request("POST", "/rag/ingestions"))).isTrue();
         assertThat(filter.allows(request("GET", "/rag/ingestions/job-1"))).isTrue();
+        assertThat(filter.allows(request("GET", "/rag/operations/candidates"))).isTrue();
+        assertThat(filter.allows(request("POST", "/rag/operations/feedback"))).isTrue();
         assertThat(filter.allows(request("GET", "/rag/query"))).isFalse();
         assertThat(filter.allows(request("POST", "/rag/documents"))).isFalse();
     }

@@ -59,9 +59,10 @@ public class KnowledgeRoleRequestFilter extends OncePerRequestFilter {
         return switch (role) {
             case QUERY -> (isReadMethod(request.getMethod())
                     && path.startsWith("/rag/")
-                    && !path.startsWith("/rag/ingestions"))
+                    && !path.startsWith("/rag/ingestions") && !path.startsWith("/rag/operations"))
                     || isQueryPost(request.getMethod(), path);
-            case INGEST_API -> path.equals("/rag/ingestions") || path.startsWith("/rag/ingestions/");
+            case INGEST_API -> path.equals("/rag/ingestions") || path.startsWith("/rag/ingestions/")
+                    || path.equals("/rag/operations") || path.startsWith("/rag/operations/");
             case INGEST_WORKER -> false;
             case COMBINED -> true;
         };

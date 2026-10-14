@@ -775,6 +775,8 @@ services:
     env:
       - name: RAG_RUNTIME_ROLE
         value: ingest-api
+      - name: KNOWLEDGE_OPERATIONS_QUERY_URL
+        value: http://knowledge-query:8084
       - name: RAG_INGESTION_STORE
         value: jdbc
       - name: RAG_INGESTION_DB_URL
