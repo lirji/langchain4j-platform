@@ -2,45 +2,57 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.lrj.platform.auth.mapper.GroupStoreMapper">
     <select id="readInit1" resultType="com.lrj.platform.auth.mapper.GroupStoreRow">
-        SELECT NAME, DESCRIPTION, VERSION, CREATED_AT FROM AUTH_GROUP WHERE 1=0
+        SELECT NAME, DESCRIPTION, VERSION, CREATED_AT FROM AUTH_GROUP WHERE DELETED=0 AND (1=0)
     </select>
     <select id="readInit2" resultType="com.lrj.platform.auth.mapper.GroupStoreRow">
-        SELECT GROUP_NAME, ROLE_NAME, CREATED_AT FROM GROUP_ROLE WHERE 1=0
+        SELECT GROUP_NAME, ROLE_NAME, CREATED_AT FROM GROUP_ROLE WHERE DELETED=0 AND (1=0)
     </select>
     <select id="readFindByName1" resultType="com.lrj.platform.auth.mapper.GroupStoreRow">
-        SELECT NAME, DESCRIPTION FROM AUTH_GROUP WHERE NAME=#{name}
+        SELECT NAME, DESCRIPTION FROM AUTH_GROUP WHERE DELETED=0 AND (NAME=#{name})
     </select>
     <select id="readFindAll1" resultType="com.lrj.platform.auth.mapper.GroupStoreRow">
-        SELECT NAME, DESCRIPTION FROM AUTH_GROUP ORDER BY NAME
+        SELECT NAME, DESCRIPTION FROM AUTH_GROUP  WHERE DELETED=0 ORDER BY NAME
     </select>
     <select id="readVersionOf1" resultType="java.lang.Long">
-        SELECT VERSION FROM AUTH_GROUP WHERE NAME=#{name}
+        SELECT VERSION FROM AUTH_GROUP WHERE DELETED=0 AND (NAME=#{name})
     </select>
     <update id="writeUpdateIfVersion1">
-        UPDATE AUTH_GROUP SET DESCRIPTION=#{description}, VERSION=VERSION+1 WHERE NAME=#{name} AND VERSION=#{version}
+        UPDATE AUTH_GROUP SET DESCRIPTION=#{description}, VERSION=VERSION+1 WHERE DELETED=0 AND (NAME=#{name} AND VERSION=#{version})
     </update>
-    <delete id="writeUpdateIfVersion2">
-        DELETE FROM GROUP_ROLE WHERE GROUP_NAME=#{groupName}
-    </delete>
+    <update id="writeUpdateIfVersion2">
+        UPDATE GROUP_ROLE SET DELETED=1 WHERE DELETED=0 AND (GROUP_NAME=#{groupName})
+    </update>
     <update id="writeTouchVersionIfVersion1">
-        UPDATE AUTH_GROUP SET VERSION=VERSION+1 WHERE NAME=#{name} AND VERSION=#{version}
+        UPDATE AUTH_GROUP SET VERSION=VERSION+1 WHERE DELETED=0 AND (NAME=#{name} AND VERSION=#{version})
     </update>
-    <delete id="writeDelete1">
-        DELETE FROM GROUP_ROLE WHERE GROUP_NAME=#{groupName}
-    </delete>
-    <delete id="writeDelete2">
-        DELETE FROM AUTH_GROUP WHERE NAME=#{name}
-    </delete>
+    <update id="writeDelete1">
+        UPDATE GROUP_ROLE SET DELETED=1 WHERE DELETED=0 AND (GROUP_NAME=#{groupName})
+    </update>
+    <update id="writeDelete2">
+        UPDATE AUTH_GROUP SET DELETED=1, VERSION=VERSION+1 WHERE DELETED=0 AND (NAME=#{name})
+    </update>
     <select id="readGroupsUsingRole1" resultType="java.lang.String">
-        SELECT DISTINCT GROUP_NAME FROM GROUP_ROLE WHERE ROLE_NAME=#{roleName} ORDER BY GROUP_NAME
+        SELECT DISTINCT GROUP_NAME FROM GROUP_ROLE WHERE DELETED=0 AND (ROLE_NAME=#{roleName}) ORDER BY GROUP_NAME
     </select>
-    <insert id="writeInsertGroup1">
+    <insert id="writeInsertGroup1New">
         INSERT INTO AUTH_GROUP (NAME, DESCRIPTION, CREATED_AT) VALUES (#{name}, #{description}, #{createdAt})
     </insert>
-    <insert id="writeInsertGroupRoleIfAbsent1">
+    <!-- 只恢复墓碑；活跃行仍由唯一键阻止重复创建，版本不回退。 -->
+    <update id="restorewriteInsertGroup1">
+        UPDATE AUTH_GROUP SET DESCRIPTION=#{description}, CREATED_AT=#{createdAt}, VERSION=VERSION+1, DELETED=0
+        WHERE DELETED=1 AND NAME=#{name}
+    </update>
+
+    <insert id="writeInsertGroupRoleIfAbsent1New">
         INSERT INTO GROUP_ROLE (GROUP_NAME, ROLE_NAME, CREATED_AT) VALUES (#{groupName}, #{roleName}, #{createdAt})
     </insert>
+    <!-- 只恢复墓碑；活跃行仍由唯一键阻止重复创建，版本不回退。 -->
+    <update id="restorewriteInsertGroupRoleIfAbsent1">
+        UPDATE GROUP_ROLE SET CREATED_AT=#{createdAt}, DELETED=0
+        WHERE DELETED=1 AND GROUP_NAME=#{groupName} AND ROLE_NAME=#{roleName}
+    </update>
+
     <select id="readRolesOf1" resultType="java.lang.String">
-        SELECT ROLE_NAME FROM GROUP_ROLE WHERE GROUP_NAME=#{groupName} ORDER BY ROLE_NAME
+        SELECT ROLE_NAME FROM GROUP_ROLE WHERE DELETED=0 AND (GROUP_NAME=#{groupName}) ORDER BY ROLE_NAME
     </select>
 </mapper>

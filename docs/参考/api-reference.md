@@ -171,7 +171,7 @@ curl -s -X POST 'http://localhost:8080/chat/vision' \
 
 ### DELETE `/memory/profile`
 
-- 用途：清空当前用户长期画像（PII 合规删除）。
+- 用途：逻辑清空当前用户长期画像，标记 `DELETED=1` 后不再查询或召回；正文仍保留，不代表物理擦除。
 - 响应：`{ removed, tenantId }`。
 - 经网关：是。默认开启（同上）。
 
@@ -379,7 +379,7 @@ JSON 示例：
 
 ### DELETE `/workflow/data?chatId=u1`
 
-- 用途：PII 合规删除——清除本租户某 `chatId` 下全部工作流数据。需 `approve`。响应 `{ chatId, purgedInstances }`。经网关：是。
+- 用途：清理本租户某 `chatId` 下的工作流。自有 `WF_*` 业务记录标记 `DELETED=1`，Flowable 运行/历史实例由引擎清理；保留正文及幂等墓碑，不代表物理擦除。需 `approve`。响应 `{ chatId, purgedInstances }`。经网关：是。
 
 ---
 

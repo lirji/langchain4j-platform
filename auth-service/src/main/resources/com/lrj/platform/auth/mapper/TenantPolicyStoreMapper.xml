@@ -2,45 +2,63 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.lrj.platform.auth.mapper.TenantPolicyStoreMapper">
     <select id="readInit1" resultType="com.lrj.platform.auth.mapper.TenantPolicyStoreRow">
-        SELECT TENANT, VERSION, UPDATED_AT FROM TENANT_POLICY WHERE 1=0
+        SELECT TENANT, VERSION, UPDATED_AT FROM TENANT_POLICY WHERE DELETED=0 AND (1=0)
     </select>
     <select id="readInit2" resultType="com.lrj.platform.auth.mapper.TenantPolicyStoreRow">
-        SELECT TENANT, ROLE_NAME, CREATED_AT FROM TENANT_ROLE WHERE 1=0
+        SELECT TENANT, ROLE_NAME, CREATED_AT FROM TENANT_ROLE WHERE DELETED=0 AND (1=0)
     </select>
     <select id="readRolesOf1" resultType="java.lang.String">
-        SELECT ROLE_NAME FROM TENANT_ROLE WHERE TENANT=#{tenant} ORDER BY ROLE_NAME
+        SELECT ROLE_NAME FROM TENANT_ROLE WHERE DELETED=0 AND (TENANT=#{tenant}) ORDER BY ROLE_NAME
     </select>
     <select id="readVersionOf1" resultType="java.lang.Long">
-        SELECT VERSION FROM TENANT_POLICY WHERE TENANT=#{tenant}
+        SELECT VERSION FROM TENANT_POLICY WHERE DELETED=0 AND (TENANT=#{tenant})
     </select>
     <update id="writeReplaceRoles1">
-        UPDATE TENANT_POLICY SET VERSION=VERSION+1, UPDATED_AT=#{updatedAt} WHERE TENANT=#{tenant}
+        UPDATE TENANT_POLICY SET VERSION=VERSION+1, UPDATED_AT=#{updatedAt} WHERE DELETED=0 AND (TENANT=#{tenant})
     </update>
-    <insert id="writeReplaceRoles2">
+    <insert id="writeReplaceRoles2New">
         INSERT INTO TENANT_POLICY (TENANT, VERSION, UPDATED_AT) VALUES (#{tenant}, 0, #{updatedAt})
     </insert>
-    <insert id="writeReplaceRolesIfVersion1">
+    <!-- 只恢复墓碑；活跃行仍由唯一键阻止重复创建，版本不回退。 -->
+    <update id="restorewriteReplaceRoles2">
+        UPDATE TENANT_POLICY SET UPDATED_AT=#{updatedAt}, VERSION=VERSION+1, DELETED=0
+        WHERE DELETED=1 AND TENANT=#{tenant}
+    </update>
+
+    <insert id="writeReplaceRolesIfVersion1New">
         INSERT INTO TENANT_POLICY (TENANT, VERSION, UPDATED_AT) VALUES (#{tenant}, 0, #{updatedAt})
     </insert>
+    <!-- 只恢复墓碑；活跃行仍由唯一键阻止重复创建，版本不回退。 -->
+    <update id="restorewriteReplaceRolesIfVersion1">
+        UPDATE TENANT_POLICY SET UPDATED_AT=#{updatedAt}, VERSION=VERSION+1, DELETED=0
+        WHERE DELETED=1 AND TENANT=#{tenant}
+    </update>
+
     <update id="writeReplaceRolesIfVersion2">
-        UPDATE TENANT_POLICY SET VERSION=VERSION+1, UPDATED_AT=#{updatedAt} WHERE TENANT=#{tenant} AND VERSION=#{version}
+        UPDATE TENANT_POLICY SET VERSION=VERSION+1, UPDATED_AT=#{updatedAt} WHERE DELETED=0 AND (TENANT=#{tenant} AND VERSION=#{version})
     </update>
-    <delete id="writeClear1">
-        DELETE FROM TENANT_ROLE WHERE TENANT=#{tenant}
-    </delete>
-    <delete id="writeClear2">
-        DELETE FROM TENANT_POLICY WHERE TENANT=#{tenant}
-    </delete>
+    <update id="writeClear1">
+        UPDATE TENANT_ROLE SET DELETED=1 WHERE DELETED=0 AND (TENANT=#{tenant})
+    </update>
+    <update id="writeClear2">
+        UPDATE TENANT_POLICY SET DELETED=1, VERSION=VERSION+1 WHERE DELETED=0 AND (TENANT=#{tenant})
+    </update>
     <select id="readListPolicyTenants1" resultType="java.lang.String">
-        SELECT TENANT FROM TENANT_POLICY ORDER BY TENANT
+        SELECT TENANT FROM TENANT_POLICY  WHERE DELETED=0 ORDER BY TENANT
     </select>
     <select id="readTenantsUsingRole1" resultType="java.lang.String">
-        SELECT DISTINCT TENANT FROM TENANT_ROLE WHERE ROLE_NAME=#{roleName} ORDER BY TENANT
+        SELECT DISTINCT TENANT FROM TENANT_ROLE WHERE DELETED=0 AND (ROLE_NAME=#{roleName}) ORDER BY TENANT
     </select>
-    <delete id="writeRebuildRoles1">
-        DELETE FROM TENANT_ROLE WHERE TENANT=#{tenant}
-    </delete>
-    <insert id="writeRebuildRoles2">
+    <update id="writeRebuildRoles1">
+        UPDATE TENANT_ROLE SET DELETED=1 WHERE DELETED=0 AND (TENANT=#{tenant})
+    </update>
+    <insert id="writeRebuildRoles2New">
         INSERT INTO TENANT_ROLE (TENANT, ROLE_NAME, CREATED_AT) VALUES (#{tenant}, #{roleName}, #{createdAt})
     </insert>
+    <!-- 只恢复墓碑；活跃行仍由唯一键阻止重复创建，版本不回退。 -->
+    <update id="restorewriteRebuildRoles2">
+        UPDATE TENANT_ROLE SET CREATED_AT=#{createdAt}, DELETED=0
+        WHERE DELETED=1 AND TENANT=#{tenant} AND ROLE_NAME=#{roleName}
+    </update>
+
 </mapper>

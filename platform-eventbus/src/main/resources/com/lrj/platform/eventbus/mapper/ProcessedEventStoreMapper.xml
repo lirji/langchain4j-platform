@@ -2,6 +2,10 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.lrj.platform.eventbus.mapper.ProcessedEventStoreMapper">
     <select id="readInit1" resultType="com.lrj.platform.eventbus.mapper.ProcessedEventStoreRow">
-        SELECT EVENT_ID, PROCESSED_AT FROM PROCESSED_EVENT WHERE 1=0
+        SELECT EVENT_ID, PROCESSED_AT FROM PROCESSED_EVENT WHERE DELETED=0 AND (1=0)
     </select>
+    <update id="reclaim">
+        UPDATE PROCESSED_EVENT SET DELETED=0, PROCESSED_AT=#{processedAt}
+        WHERE EVENT_ID=#{eventId} AND DELETED=1
+    </update>
 </mapper>

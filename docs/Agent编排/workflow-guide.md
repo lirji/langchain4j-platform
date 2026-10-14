@@ -79,7 +79,7 @@ End
 | `POST` | `/workflow/tasks/{taskId}/unclaim` | `approve` | 取消认领，放回待领池 |
 | `POST` | `/workflow/tasks/{taskId}/complete` | `approve` | body `{approved, comment}` → 同步跑 resolve/reject → `{reply}`。并发双重审批 → **409** |
 | `GET` | `/workflow/instances/{instanceId}` | 已认证（本租户） | 实例状态 + reply；跨租户 → 404 |
-| `DELETE` | `/workflow/data?chatId=` | `approve` | PII 合规删除：同事务清本租户该 chatId 的运行/历史实例 + `WF_REPLY` + outbox + `WF_IDEMPOTENCY` |
+| `DELETE` | `/workflow/data?chatId=` | `approve` | 同事务清理引擎运行/历史实例，逻辑删除自有 `WF_REPLY`、两类 outbox、`WF_IDEMPOTENCY`，保留正文与幂等墓碑 |
 
 ### 全流程 curl（三条分支）
 
@@ -137,7 +137,9 @@ curl -X POST http://localhost:8080/workflow/refund/start \
   不传 `dedupeId` 仍使用随机 UUID，明确不提供幂等保证。
 - 传 `webhookUrl` → 流程终态时把答复经 outbox **可靠回推**（见 A.6），否则客户端轮询 status 端点。
 
-### PII 合规删除
+### 工作流数据清理
+
+自有关系表使用 `DELETED=1`，正常读取和回调投递均排除这些记录。Flowable 自有运行/历史表仍由引擎负责清理。本接口不保证物理擦除正文；已删除的幂等键保持占用，旧请求返回冲突，明确重新发起须使用新键。
 
 ```bash
 curl -X DELETE 'http://localhost:8080/workflow/data?chatId=u2' -H 'X-Api-Key: dev-key-acme'
@@ -159,7 +161,7 @@ curl happy path 测不出这些——全是"挂起期间出意外 / 渠道重试
 | 7 | **任务分配粒度 + 并发双重审批** | 两人同点同一 task → 第二次 complete 抛 `FlowableObjectNotFoundException`(500) | `claim`/`unclaim` 端点（已被他人领 → 409）；`complete`/`expireTask` 把竞态异常翻成友好 **409**；`TaskView` 加 `assignee` |
 | 8 | **回推"最后一公里"可靠性** | 流程 COMPLETED 但回推失败 → 系统以为办完、用户在干等 | 持久化 **outbox**（`WF_OUTBOX` 表）+ `WorkflowOutboxDispatcher` `@Scheduled` 指数退避重投，4xx/超阈 → DEAD DLQ，重启后接着投。补内存重试"进程一挂就丢"的缺口。见 A.6 |
 | 9 | **工作流可观测性** | LLM 指标不含工作流维度：挂起数 / 审批时长 / 超时率 / 分支占比 | `WorkflowMetrics`（Micrometer）：`workflow.tasks.pending`(gauge) / `workflow.approval.duration`(timer) / `workflow.completed`(counter, tag=outcome) / `workflow.started`(tag=priority) / `workflow.approval.timeout`(counter)，走 `/actuator/prometheus` |
-| 10 | **PII 合规删除** | `message`/`summary`/`reply` 含 PII 进了持久化表 | `WorkflowService.purge(chatId)` 用 workflow 事务原子删除运行/历史实例 + `WF_REPLY` + 两类 outbox + `WF_IDEMPOTENCY`；`DELETE /workflow/data`；审计 `workflow.data_purged` |
+| 10 | **工作流数据清理** | 用户要求停止并隐藏本对话的工作流 | `WorkflowService.purge(chatId)` 同事务清理引擎实例并逻辑删除自有记录；`DELETE /workflow/data`；审计 `workflow.data_purged`；不等同于物理擦除 |
 
 **#3 的降级取向**（关键权衡）：`assess`（抽工单）降级 = **强制 `priority=HIGH` 转人工**，不是默认 LOW——抽取失败时风险未知，宁可多一道人工审，绝不默认放过潜在高风险退款；`resolve`/`reject` 降级 = 写兜底话术。降级时审计 `reply.degraded`。
 

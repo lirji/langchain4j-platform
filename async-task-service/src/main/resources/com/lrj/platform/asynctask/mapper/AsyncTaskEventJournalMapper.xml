@@ -3,12 +3,13 @@
 <mapper namespace="com.lrj.platform.asynctask.mapper.AsyncTaskEventJournalMapper">
     <select id="readInit1" resultType="com.lrj.platform.asynctask.mapper.AsyncTaskEventJournalRow">
         SELECT TASK_ID, SEQUENCE, EVENT_KEY, EVENT_NAME, DATA_JSON, CREATED_AT, WORKER_ID
-        FROM ASYNC_TASK_EVENT WHERE 1=0
+        FROM ASYNC_TASK_EVENT WHERE DELETED=0 AND (1=0)
     </select>
     <select id="readAppend1" resultType="com.lrj.platform.asynctask.mapper.AsyncTaskEventJournalRow">
-        SELECT TASK_ID FROM ASYNC_TASK WHERE TASK_ID=#{taskId} FOR UPDATE
+        SELECT TASK_ID FROM ASYNC_TASK WHERE DELETED=0 AND (TASK_ID=#{taskId}) FOR UPDATE
     </select>
-    <select id="readAppend2" resultType="java.lang.Long">
+    <!-- 内部去重/序号读取包含墓碑，防止重投复活或复用事件序号；不可作为列表接口。 -->
+<select id="readAppend2" resultType="java.lang.Long">
         SELECT COALESCE(MAX(SEQUENCE), 0) FROM ASYNC_TASK_EVENT WHERE TASK_ID=#{taskId}
     </select>
     <insert id="writeAppend1">
@@ -18,19 +19,18 @@
     </insert>
     <select id="readEventsAfter1" resultType="com.lrj.platform.asynctask.mapper.AsyncTaskEventJournalRow">
         SELECT * FROM ASYNC_TASK_EVENT
-        WHERE TASK_ID=#{taskId} AND SEQUENCE&gt;#{sequence}
-        ORDER BY SEQUENCE
+        WHERE DELETED=0 AND (TASK_ID=#{taskId} AND SEQUENCE&gt;#{sequence}) ORDER BY SEQUENCE
     </select>
     <select id="readLatest1" resultType="com.lrj.platform.asynctask.mapper.AsyncTaskEventJournalRow">
         SELECT * FROM ASYNC_TASK_EVENT
-        WHERE TASK_ID=#{taskId}
-        ORDER BY SEQUENCE DESC
+        WHERE DELETED=0 AND (TASK_ID=#{taskId}) ORDER BY SEQUENCE DESC
         LIMIT 1
     </select>
-    <delete id="writeCleanupBefore1">
-        DELETE FROM ASYNC_TASK_EVENT WHERE CREATED_AT &lt; #{createdAt}
-    </delete>
-    <select id="readFindByEventKey1" resultType="com.lrj.platform.asynctask.mapper.AsyncTaskEventJournalRow">
+    <update id="writeCleanupBefore1">
+        UPDATE ASYNC_TASK_EVENT SET DELETED=1 WHERE DELETED=0 AND (CREATED_AT &lt; #{createdAt})
+    </update>
+    <!-- 内部去重/序号读取包含墓碑，防止重投复活或复用事件序号；不可作为列表接口。 -->
+<select id="readFindByEventKey1" resultType="com.lrj.platform.asynctask.mapper.AsyncTaskEventJournalRow">
         SELECT * FROM ASYNC_TASK_EVENT
         WHERE TASK_ID=#{taskId} AND EVENT_KEY=#{eventKey}
     </select>

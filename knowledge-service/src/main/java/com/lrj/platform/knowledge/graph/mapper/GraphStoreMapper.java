@@ -7,8 +7,6 @@ import org.apache.ibatis.annotations.Param;
 public interface GraphStoreMapper {
     /** 保留原readInit1操作的条件与影响行数契约。 */
     List<GraphStoreRow> readInit1();
-    /** 保留原writeAdd1操作的条件与影响行数契约。 */
-    int writeAdd1(@Param("graphId") String graphId);
     /** 保留原writeAdd2操作的条件与影响行数契约。 */
     int writeAdd2(
         @Param("graphId") String graphId,

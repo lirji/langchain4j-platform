@@ -24,13 +24,41 @@ public interface RoleStoreMapper {
     /** 保留原writeDelete2操作的条件与影响行数契约。 */
     int writeDelete2(@Param("name") String name);
     /** 保留原writeInsertRole1操作的条件与影响行数契约。 */
-    int writeInsertRole1(
+    default int writeInsertRole1(
+        @Param("name") String name,
+        @Param("scopes") String scopes,
+        @Param("description") String description,
+        @Param("createdAt") Long createdAt) {
+        if (restorewriteInsertRole1(name, scopes, description, createdAt) == 1) return 1;
+        return writeInsertRole1New(name, scopes, description, createdAt);
+    }
+    /** 墓碑条件恢复，不覆盖现有正常记录。 */
+    int restorewriteInsertRole1(
+        @Param("name") String name,
+        @Param("scopes") String scopes,
+        @Param("description") String description,
+        @Param("createdAt") Long createdAt);
+    /** 不存在墓碑时插入，由数据库唯一约束处理并发创建。 */
+    int writeInsertRole1New(
         @Param("name") String name,
         @Param("scopes") String scopes,
         @Param("description") String description,
         @Param("createdAt") Long createdAt);
     /** 保留原writeInsertRoleScopeIfAbsent1操作的条件与影响行数契约。 */
-    int writeInsertRoleScopeIfAbsent1(
+    default int writeInsertRoleScopeIfAbsent1(
+        @Param("roleName") String roleName,
+        @Param("scope") String scope,
+        @Param("createdAt") Long createdAt) {
+        if (restorewriteInsertRoleScopeIfAbsent1(roleName, scope, createdAt) == 1) return 1;
+        return writeInsertRoleScopeIfAbsent1New(roleName, scope, createdAt);
+    }
+    /** 墓碑条件恢复，不覆盖现有正常记录。 */
+    int restorewriteInsertRoleScopeIfAbsent1(
+        @Param("roleName") String roleName,
+        @Param("scope") String scope,
+        @Param("createdAt") Long createdAt);
+    /** 不存在墓碑时插入，由数据库唯一约束处理并发创建。 */
+    int writeInsertRoleScopeIfAbsent1New(
         @Param("roleName") String roleName,
         @Param("scope") String scope,
         @Param("createdAt") Long createdAt);

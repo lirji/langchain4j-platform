@@ -5,7 +5,7 @@
         SELECT OUTBOX_ID, TASK_ID, TENANT_ID, TARGET_URL, TASK_STATUS, PAYLOAD_JSON,
                STATUS, ATTEMPTS, NEXT_ATTEMPT_AT, LAST_ERROR, CLAIMED_BY, CLAIMED_UNTIL,
                CREATED_AT, UPDATED_AT
-        FROM ASYNC_TASK_WEBHOOK_OUTBOX WHERE 1=0
+        FROM ASYNC_TASK_WEBHOOK_OUTBOX WHERE DELETED=0 AND (1=0)
     </select>
     <insert id="writeEnqueue1">
         INSERT INTO ASYNC_TASK_WEBHOOK_OUTBOX
@@ -16,48 +16,44 @@
     <select id="readClaimDue1" resultType="java.lang.String">
         SELECT OUTBOX_ID
         FROM ASYNC_TASK_WEBHOOK_OUTBOX
-        WHERE (STATUS='PENDING' AND NEXT_ATTEMPT_AT &lt;= #{nextAttemptAt})
-           OR (STATUS='IN_PROGRESS' AND CLAIMED_UNTIL &lt;= #{claimedUntil})
-        ORDER BY NEXT_ATTEMPT_AT ASC LIMIT #{limit}
+        WHERE DELETED=0 AND ((STATUS='PENDING' AND NEXT_ATTEMPT_AT &lt;= #{nextAttemptAt})
+           OR (STATUS='IN_PROGRESS' AND CLAIMED_UNTIL &lt;= #{claimedUntil})) ORDER BY NEXT_ATTEMPT_AT ASC LIMIT #{limit}
     </select>
     <update id="writeMarkDelivered1">
         UPDATE ASYNC_TASK_WEBHOOK_OUTBOX
         SET STATUS='DELIVERED', CLAIMED_BY=NULL, CLAIMED_UNTIL=NULL, UPDATED_AT=#{updatedAt}
-        WHERE OUTBOX_ID=#{outboxId} AND STATUS='IN_PROGRESS'
-          AND CLAIMED_BY=#{claimedBy} AND CLAIMED_UNTIL &gt; #{claimedUntil}
+        WHERE DELETED=0 AND (OUTBOX_ID=#{outboxId} AND STATUS='IN_PROGRESS'
+          AND CLAIMED_BY=#{claimedBy} AND CLAIMED_UNTIL &gt; #{claimedUntil})
     </update>
-    <delete id="writePurgeDeliveredBefore1">
-        DELETE FROM ASYNC_TASK_WEBHOOK_OUTBOX
-        WHERE STATUS='DELIVERED' AND UPDATED_AT &lt; #{updatedAt}
-    </delete>
+    <update id="writePurgeDeliveredBefore1">
+        UPDATE ASYNC_TASK_WEBHOOK_OUTBOX SET DELETED=1 WHERE DELETED=0 AND (STATUS='DELIVERED' AND UPDATED_AT &lt; #{updatedAt})
+    </update>
     <update id="writeMarkRetry1">
         UPDATE ASYNC_TASK_WEBHOOK_OUTBOX
         SET STATUS='PENDING', ATTEMPTS=#{attempts}, NEXT_ATTEMPT_AT=#{nextAttemptAt}, LAST_ERROR=#{lastError},
             CLAIMED_BY=NULL, CLAIMED_UNTIL=NULL, UPDATED_AT=#{updatedAt}
-        WHERE OUTBOX_ID=#{outboxId} AND STATUS='IN_PROGRESS'
-          AND CLAIMED_BY=#{claimedBy} AND CLAIMED_UNTIL &gt; #{claimedUntil}
+        WHERE DELETED=0 AND (OUTBOX_ID=#{outboxId} AND STATUS='IN_PROGRESS'
+          AND CLAIMED_BY=#{claimedBy} AND CLAIMED_UNTIL &gt; #{claimedUntil})
     </update>
     <update id="writeMarkDead1">
         UPDATE ASYNC_TASK_WEBHOOK_OUTBOX
         SET STATUS='DEAD', ATTEMPTS=#{attempts}, LAST_ERROR=#{lastError},
             CLAIMED_BY=NULL, CLAIMED_UNTIL=NULL, UPDATED_AT=#{updatedAt}
-        WHERE OUTBOX_ID=#{outboxId} AND STATUS='IN_PROGRESS'
-          AND CLAIMED_BY=#{claimedBy} AND CLAIMED_UNTIL &gt; #{claimedUntil}
+        WHERE DELETED=0 AND (OUTBOX_ID=#{outboxId} AND STATUS='IN_PROGRESS'
+          AND CLAIMED_BY=#{claimedBy} AND CLAIMED_UNTIL &gt; #{claimedUntil})
     </update>
     <select id="readListDead1" resultType="com.lrj.platform.asynctask.mapper.AsyncTaskWebhookOutboxRow">
         SELECT OUTBOX_ID, TASK_ID, TENANT_ID, TARGET_URL, TASK_STATUS, STATUS, ATTEMPTS,
                LAST_ERROR, CREATED_AT, UPDATED_AT
         FROM ASYNC_TASK_WEBHOOK_OUTBOX
-        WHERE TENANT_ID=#{tenantId} AND STATUS='DEAD'
-        ORDER BY UPDATED_AT DESC LIMIT #{limit}
+        WHERE DELETED=0 AND (TENANT_ID=#{tenantId} AND STATUS='DEAD') ORDER BY UPDATED_AT DESC LIMIT #{limit}
     </select>
     <update id="claim">
         UPDATE ASYNC_TASK_WEBHOOK_OUTBOX SET STATUS='IN_PROGRESS', CLAIMED_BY=#{owner}, CLAIMED_UNTIL=#{until}, UPDATED_AT=#{now}
-        WHERE OUTBOX_ID IN <foreach collection="ids" item="id" open="(" close=")" separator=",">#{id}</foreach>
-        AND ((STATUS='PENDING' AND NEXT_ATTEMPT_AT &lt;= #{now}) OR (STATUS='IN_PROGRESS' AND CLAIMED_UNTIL &lt;= #{now}))
+        WHERE DELETED=0 AND (OUTBOX_ID IN <foreach collection="ids" item="id" open="(" close=")" separator=",">#{id}</foreach>
+        AND ((STATUS='PENDING' AND NEXT_ATTEMPT_AT &lt;= #{now}) OR (STATUS='IN_PROGRESS' AND CLAIMED_UNTIL &lt;= #{now})))
     </update>
     <select id="claimed" resultType="com.lrj.platform.asynctask.mapper.AsyncTaskWebhookOutboxRow">
-        SELECT OUTBOX_ID,TASK_ID,TENANT_ID,TARGET_URL,TASK_STATUS,PAYLOAD_JSON,ATTEMPTS,CLAIMED_BY FROM ASYNC_TASK_WEBHOOK_OUTBOX WHERE STATUS='IN_PROGRESS' AND CLAIMED_BY=#{owner} AND OUTBOX_ID IN <foreach collection="ids" item="id" open="(" close=")" separator=",">#{id}</foreach>
-        ORDER BY NEXT_ATTEMPT_AT ASC LIMIT #{limit}
+        SELECT OUTBOX_ID,TASK_ID,TENANT_ID,TARGET_URL,TASK_STATUS,PAYLOAD_JSON,ATTEMPTS,CLAIMED_BY FROM ASYNC_TASK_WEBHOOK_OUTBOX WHERE DELETED=0 AND (STATUS='IN_PROGRESS' AND CLAIMED_BY=#{owner} AND OUTBOX_ID IN <foreach collection="ids" item="id" open="(" close=")" separator=",">#{id}</foreach>) ORDER BY NEXT_ATTEMPT_AT ASC LIMIT #{limit}
     </select>
 </mapper>

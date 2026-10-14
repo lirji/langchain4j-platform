@@ -62,6 +62,19 @@ class ReadOnlyTaskDispatchTest {
     }
 
     @Test
+    void cleanupTombstonesTaskAndDispatchWithoutExposingThemToClaim() {
+        create("expired", "acme");
+        create("live", "globex");
+        jdbc.update("UPDATE ASYNC_TASK SET STATUS='SUCCEEDED',FINISHED_AT=? WHERE TASK_ID='expired'",
+                Instant.now().minus(Duration.ofDays(2)).toEpochMilli());
+        store.cleanup();
+        assertThat(store.get("expired")).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT DELETED FROM ASYNC_TASK WHERE TASK_ID='expired'", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT DELETED FROM ASYNC_TASK_DISPATCH WHERE TASK_ID='expired'", Integer.class)).isEqualTo(1);
+        assertThat(dispatch.claim("agentscope-platform.one").task().taskId()).isEqualTo("live");
+    }
+
+    @Test
     void contextCommitIsAtomicAndOnlyNarrowCredentialsAreIssued() {
         assertThatThrownBy(() -> new TransactionTemplate(new DataSourceTransactionManager(ds)).executeWithoutResult(s -> {
             create("rollback", "acme");

@@ -94,7 +94,7 @@ public class WorkflowController {
     }
 
     /**
-     * PII 合规删除（#10）：清除本租户某 {@code chatId} 下所有工作流持久化数据（运行/历史实例 + reply + outbox）。
+     * 清理本租户某 {@code chatId} 的工作流；自有业务表逻辑删除并保留正文，不承诺物理擦除。
      * 需 {@code SCOPE_approve}（破坏性操作）。返回 {@code {chatId, purgedInstances}}。
      */
     @DeleteMapping("/workflow/data")

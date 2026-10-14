@@ -53,6 +53,10 @@ class AsyncTaskWebhookOutboxTest {
         int deleted = outbox.purgeDeliveredBefore(5_000L);
 
         assertThat(deleted).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT DELETED FROM ASYNC_TASK_WEBHOOK_OUTBOX WHERE OUTBOX_ID='old-delivered'", Integer.class)).isEqualTo(1);
+        assertThat(outbox.purgeDeliveredBefore(5_000L)).isZero();
+        outbox.enqueue(task("old-delivered"), "http://callback.local/old", now);
+        assertThat(jdbc.queryForObject("SELECT DELETED FROM ASYNC_TASK_WEBHOOK_OUTBOX WHERE OUTBOX_ID='old-delivered'", Integer.class)).isEqualTo(1);
         assertThat(ids(jdbc)).containsExactlyInAnyOrder("new-delivered", "pending", "dead");
     }
 
@@ -140,6 +144,6 @@ class AsyncTaskWebhookOutboxTest {
     }
 
     private static java.util.List<String> ids(JdbcTemplate jdbc) {
-        return jdbc.queryForList("SELECT OUTBOX_ID FROM ASYNC_TASK_WEBHOOK_OUTBOX ORDER BY OUTBOX_ID", String.class);
+        return jdbc.queryForList("SELECT OUTBOX_ID FROM ASYNC_TASK_WEBHOOK_OUTBOX WHERE DELETED=0 ORDER BY OUTBOX_ID", String.class);
     }
 }

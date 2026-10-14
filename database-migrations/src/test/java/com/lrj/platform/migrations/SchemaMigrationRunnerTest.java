@@ -36,7 +36,7 @@ class SchemaMigrationRunnerTest {
                 url, "sa", "", SchemaName.AUTH);
 
         assertTrue(result.success());
-        assertEquals("3", result.targetVersion());
+        assertEquals("4", result.targetVersion());
     }
 
     @Test
@@ -70,6 +70,9 @@ class SchemaMigrationRunnerTest {
         assertEquals(2, count(dataSource, "SELECT COUNT(*) FROM ROLE_SCOPE WHERE ROLE_NAME='tax-analyst'"));
         assertEquals(0, count(dataSource, "SELECT VERSION FROM USERS WHERE USERNAME='alice'"));
         assertEquals(1, count(dataSource, "SELECT COUNT(*) FROM USERS WHERE USERNAME='alice'"));
+        assertEquals(0, count(dataSource, "SELECT DELETED FROM USERS WHERE USERNAME='alice'"));
+        org.junit.jupiter.api.Assertions.assertThrows(java.sql.SQLException.class,
+                () -> execute(dataSource, "UPDATE USERS SET DELETED=2 WHERE USERNAME='alice'"));
     }
 
     @Test
@@ -119,7 +122,7 @@ class SchemaMigrationRunnerTest {
         DataSource dataSource = h2("flowable_schema");
         SchemaMigrationRunner.Result result = SchemaMigrationRunner.migrate(dataSource, SchemaName.WORKFLOW);
 
-        assertEquals("3", result.targetVersion());
+        assertEquals("4", result.targetVersion());
         assertEquals(1, count(dataSource,
                 "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='ACT_RE_PROCDEF'"));
         assertEquals(1, count(dataSource,

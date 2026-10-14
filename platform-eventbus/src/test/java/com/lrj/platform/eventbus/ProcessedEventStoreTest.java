@@ -71,8 +71,12 @@ class ProcessedEventStoreTest {
 
         store.releaseClaim("evt-1");
 
+        var jdbc = new org.springframework.jdbc.core.JdbcTemplate(dataSource);
+        assertThat(jdbc.queryForObject("SELECT DELETED FROM PROCESSED_EVENT WHERE EVENT_ID='evt-1'", Integer.class)).isEqualTo(1);
         assertThat(store.isProcessed("evt-1")).isFalse();
         assertThat(store.markProcessed("evt-1")).isTrue();
+        assertThat(jdbc.queryForObject("SELECT DELETED FROM PROCESSED_EVENT WHERE EVENT_ID='evt-1'", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM PROCESSED_EVENT", Integer.class)).isEqualTo(1);
         // 归还不存在的 id 是 no-op，不报错
         store.releaseClaim("evt-missing");
     }

@@ -191,7 +191,7 @@ Compose 的 `migrate-conversation` 是应用前置；Helm 增加同名 schema ho
 | --- | --- | --- | --- |
 | POST | `/chat/memory` | 带长期记忆的对话：召回注入 + 异步更新画像 | `{"reply","chatId","tenantId","userId"}` |
 | GET | `/memory/profile` | 列出当前用户的长期记忆 | `{"count","items":[MemoryItem…],"tenantId"}` |
-| DELETE | `/memory/profile` | 清空在线画像内容，返回清除条数；保留最小所有者锁行，备份删除按保留策略 | `{"removed","tenantId"}` |
+| DELETE | `/memory/profile` | 逻辑清空画像，返回本次标记条数；正文墓碑保留，正常查询与召回不可见 | `{"removed","tenantId"}` |
 
 > 未开启时三个端点均返回 `{"error":"User profile memory not enabled. Set app.conversation.memory.profile.enabled=true.","tenantId":…}`。
 > `MemoryItem` 字段：`id`（归一文本 hashCode 十六进制，稳定去重键）、`text`、`type`、`createdAtEpochMs`、`sourceChatId`（来源会话，便于溯源）。
@@ -221,7 +221,7 @@ curl -s -X POST 'http://localhost:8080/chat/memory?chatId=s2' \
 curl -s 'http://localhost:8080/memory/profile' -H 'X-Api-Key: dev-key-acme'
 # → {"count":1,"items":[{"id":"...","text":"偏好邮件联系","type":"preference","createdAtEpochMs":...,"sourceChatId":"s1"}],"tenantId":"acme"}
 
-# 清空画像（PII 合规删除）
+# 逻辑清空画像（不等同于物理擦除）
 curl -s -X DELETE 'http://localhost:8080/memory/profile' -H 'X-Api-Key: dev-key-acme'
 # → {"removed":1,"tenantId":"acme"}
 ```
@@ -296,6 +296,6 @@ curl -s -X DELETE 'http://localhost:8080/memory/profile' -H 'X-Api-Key: dev-key-
 
 每个用户的总条目数仍遵循 max-items；候选只可替换旧的未固定候选，不能淘汰已确认内容。显式内部 add 保留历史兼容语义，业务抽取统一走 offer。单条正文上限2000字符，每轮模型输出最多处理20条；新治理能力仅在 JDBC 模式可用，内存开发实现不声称具有治理语义。
 
-清空与单条遗忘物理删除在线正文及来源引用；审计不保存正文，仍保留所有者、动作、记录号、版本和UTC时间。停用保留已有内容，但禁止召回和候选写入；重新启用也改变代次。备份和已开始推理的上下文不因在线删除自动撤销；备份到期清除由部署方策略决定，未编造法定保留期限。审计表持续增长，需纳入备份及容量监控；本轮不擅自自动删除审计。
+清空与单条遗忘使用 `DELETED=1` 逻辑删除，正文及来源引用仍保留在数据库墓碑中；所有正常查询与召回只读取 `DELETED=0`，并增加所有者代次阻止旧抽取回填。该接口不再表示物理擦除；审计不保存正文，仍保留所有者、动作、记录号、版本和UTC时间。停用保留已有内容，但禁止召回和候选写入；重新启用也改变代次。逻辑删除不释放存储空间，备份和已开始推理的上下文也不会自动撤销；备份到期清除由部署方策略决定，未编造法定保留期限。审计表持续增长，需纳入备份及容量监控；本轮不擅自自动删除审计。
 
 回滚：治理生效后旧应用不理解候选状态与代次，不能并行运行旧画像写入者。先关闭画像功能并停止在途任务，再回退应用；保留 V2 列/审计表，不反向清空迁移。重新启用需使用治理版。知识运营与完整数据保留策略见本轮设计文档。

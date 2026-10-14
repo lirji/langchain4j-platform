@@ -68,4 +68,6 @@ public interface AsyncTaskStoreMapper {
         @Param("pending") long pending,
         @Param("running") long running,
         @Param("limit") int limit);
+    /** 与任务清理同事务处理原外键级联的调度行。 */
+    int cleanupDispatch(@Param("cutoff") long cutoff);
 }

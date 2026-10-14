@@ -91,6 +91,8 @@ class InboundInboxStoreTest {
         assertThat(s.succeed(replay, 2100)).isTrue();
         s.receive(message("pending", "t1", "hash"));
         assertThat(s.cleanupSucceeded(3000, 100)).isEqualTo(1);
+        assertThat(s.cleanupSucceeded(3000, 100)).isZero();
+        if (jdbc) assertThat(s.receive(message("id", "t1", "hash"))).isFalse();
         assertThat(s.list("t1", 100)).extracting(InboundInboxMessage::inboxId).containsExactly("pending");
     }
 

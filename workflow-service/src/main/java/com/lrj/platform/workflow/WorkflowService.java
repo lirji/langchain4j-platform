@@ -570,10 +570,8 @@ public class WorkflowService {
     }
 
     /**
-     * PII 合规删除（#10）：清除本租户某 {@code chatId} 下的所有工作流持久化数据——运行中实例（强制删）、
-     * 历史实例（{@code ACT_HI_*}）、{@code WF_REPLY}、{@code WF_OUTBOX}、{@code WF_IDEMPOTENCY}。
-     * 覆盖个保法"删除我的数据"诉求；
-     * {@code message}/{@code summary}/{@code reply} 这些可能含 PII 的字段一并清掉。
+     * 清理本租户某 {@code chatId} 的工作流：引擎管理运行/历史实例，自有 WF_* 表逻辑删除。
+     * 自有表保留正文与幂等墓碑，防止迟到请求复活，不能将本接口解释为物理擦除。
      *
      * <p>按流程变量 {@code tenantId}+{@code chatId} 定位，跨租户删不到（租户隔离同 {@link #listTasks}）。
      * 返回删除的实例数。审计 {@link AuditEventType#WORKFLOW_DATA_PURGED}。

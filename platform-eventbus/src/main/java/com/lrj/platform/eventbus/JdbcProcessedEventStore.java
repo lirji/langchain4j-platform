@@ -37,6 +37,7 @@ public class JdbcProcessedEventStore implements ProcessedEventStore {
 
     @Override
     public boolean markProcessed(String eventId) {
+        if (db.reclaim(eventId, System.currentTimeMillis()) == 1) return true;
         try {
             var event = new ProcessedEventStoreRow();
             event.eventId = eventId; event.processedAt = System.currentTimeMillis();

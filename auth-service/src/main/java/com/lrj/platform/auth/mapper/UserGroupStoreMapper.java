@@ -20,5 +20,18 @@ public interface UserGroupStoreMapper {
     /** 保留原writeRemoveAllForGroup1操作的条件与影响行数契约。 */
     int writeRemoveAllForGroup1(@Param("groupName") String groupName);
     /** 保留原writeInsertIfAbsent1操作的条件与影响行数契约。 */
-    int writeInsertIfAbsent1(@Param("username") String username, @Param("groupName") String groupName, @Param("createdAt") Long createdAt);
+    default int writeInsertIfAbsent1(@Param("username") String username, @Param("groupName") String groupName, @Param("createdAt") Long createdAt) {
+        if (restorewriteInsertIfAbsent1(username, groupName, createdAt) == 1) return 1;
+        return writeInsertIfAbsent1New(username, groupName, createdAt);
+    }
+    /** 墓碑条件恢复，不覆盖现有正常记录。 */
+    int restorewriteInsertIfAbsent1(
+        @Param("username") String username,
+        @Param("groupName") String groupName,
+        @Param("createdAt") Long createdAt);
+    /** 不存在墓碑时插入，由数据库唯一约束处理并发创建。 */
+    int writeInsertIfAbsent1New(
+        @Param("username") String username,
+        @Param("groupName") String groupName,
+        @Param("createdAt") Long createdAt);
 }

@@ -43,7 +43,30 @@ public interface UserAccountStoreMapper {
     /** 保留原writeDelete2操作的条件与影响行数契约。 */
     int writeDelete2(@Param("username") String username);
     /** 保留原writeInsertUser1操作的条件与影响行数契约。 */
-    int writeInsertUser1(
+    default int writeInsertUser1(
+        @Param("username") String username,
+        @Param("passwordHash") String passwordHash,
+        @Param("tenant") String tenant,
+        @Param("userId") String userId,
+        @Param("scopes") String scopes,
+        @Param("roles") String roles,
+        @Param("enabled") Boolean enabled,
+        @Param("createdAt") Long createdAt) {
+        if (restorewriteInsertUser1(username, passwordHash, tenant, userId, scopes, roles, enabled, createdAt) == 1) return 1;
+        return writeInsertUser1New(username, passwordHash, tenant, userId, scopes, roles, enabled, createdAt);
+    }
+    /** 墓碑条件恢复，不覆盖现有正常记录。 */
+    int restorewriteInsertUser1(
+        @Param("username") String username,
+        @Param("passwordHash") String passwordHash,
+        @Param("tenant") String tenant,
+        @Param("userId") String userId,
+        @Param("scopes") String scopes,
+        @Param("roles") String roles,
+        @Param("enabled") Boolean enabled,
+        @Param("createdAt") Long createdAt);
+    /** 不存在墓碑时插入，由数据库唯一约束处理并发创建。 */
+    int writeInsertUser1New(
         @Param("username") String username,
         @Param("passwordHash") String passwordHash,
         @Param("tenant") String tenant,
@@ -53,7 +76,20 @@ public interface UserAccountStoreMapper {
         @Param("enabled") Boolean enabled,
         @Param("createdAt") Long createdAt);
     /** 保留原writeInsertUserRoleIfAbsent1操作的条件与影响行数契约。 */
-    int writeInsertUserRoleIfAbsent1(
+    default int writeInsertUserRoleIfAbsent1(
+        @Param("username") String username,
+        @Param("roleName") String roleName,
+        @Param("createdAt") Long createdAt) {
+        if (restorewriteInsertUserRoleIfAbsent1(username, roleName, createdAt) == 1) return 1;
+        return writeInsertUserRoleIfAbsent1New(username, roleName, createdAt);
+    }
+    /** 墓碑条件恢复，不覆盖现有正常记录。 */
+    int restorewriteInsertUserRoleIfAbsent1(
+        @Param("username") String username,
+        @Param("roleName") String roleName,
+        @Param("createdAt") Long createdAt);
+    /** 不存在墓碑时插入，由数据库唯一约束处理并发创建。 */
+    int writeInsertUserRoleIfAbsent1New(
         @Param("username") String username,
         @Param("roleName") String roleName,
         @Param("createdAt") Long createdAt);

@@ -58,6 +58,26 @@ class AsyncTaskEventJournalTest {
                 .isEqualTo(appended);
     }
 
+    @Test
+    void cleanupHidesEventsButPreservesIdempotencyAndSequence() {
+        var source = AsyncTaskTestDatabase.migrated("event_tombstones");
+        var mapper = new ObjectMapper();
+        var tx = new DataSourceTransactionManager(source);
+        var tasks = new JdbcAsyncTaskStore(source, mapper, Duration.ofHours(1), tx, JdbcAsyncTaskStoreTest.provider(null));
+        tasks.put(task("retained"));
+        var journal = new JdbcAsyncTaskEventJournal(source, mapper, tx);
+        var now = Instant.now();
+        var first = journal.append("retained", "old", "RUNNING", Map.of(), null, now);
+        assertThat(journal.cleanupBefore(now.plusSeconds(1))).isEqualTo(1);
+        assertThat(journal.cleanupBefore(now.plusSeconds(1))).isZero();
+        assertThat(journal.eventsAfter("retained", 0)).isEmpty();
+        assertThat(journal.latest("retained")).isEmpty();
+        assertThat(journal.append("retained", "old", "RUNNING", Map.of(), null, now)).isEqualTo(first);
+        assertThat(journal.append("retained", "new", "RUNNING", Map.of(), null, now.plusSeconds(2)).sequence()).isEqualTo(2);
+        var jdbc = new org.springframework.jdbc.core.JdbcTemplate(source);
+        assertThat(jdbc.queryForObject("SELECT DELETED FROM ASYNC_TASK_EVENT WHERE TASK_ID='retained' AND SEQUENCE=1", Integer.class)).isEqualTo(1);
+    }
+
     private static AsyncTask task(String taskId) {
         Instant now = Instant.now();
         return new AsyncTask(

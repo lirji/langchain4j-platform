@@ -2,13 +2,13 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.lrj.platform.conversation.memory.profile.mapper.UserProfileStoreMapper">
     <select id="readContract1" resultType="com.lrj.platform.conversation.memory.profile.mapper.UserProfileStoreRow">
-        SELECT GENERATION, MEMORY_ENABLED FROM USER_PROFILE_OWNER WHERE 1=0
+        SELECT GENERATION, MEMORY_ENABLED FROM USER_PROFILE_OWNER WHERE DELETED=0 AND (1=0)
     </select>
     <select id="readContract2" resultType="com.lrj.platform.conversation.memory.profile.mapper.UserProfileStoreRow">
-        SELECT RECORD_ID, MEMORY_ID, MEMORY_TEXT, MEMORY_TYPE, CREATED_AT, SOURCE_CHAT_ID, MEMORY_STATE, REVISION, PINNED, EXPIRES_AT FROM USER_PROFILE_MEMORY WHERE 1=0
+        SELECT RECORD_ID, MEMORY_ID, MEMORY_TEXT, MEMORY_TYPE, CREATED_AT, SOURCE_CHAT_ID, MEMORY_STATE, REVISION, PINNED, EXPIRES_AT FROM USER_PROFILE_MEMORY WHERE DELETED=0 AND (1=0)
     </select>
     <select id="readContract3" resultType="com.lrj.platform.conversation.memory.profile.mapper.UserProfileStoreRow">
-        SELECT AUDIT_ID FROM USER_PROFILE_AUDIT WHERE 1=0
+        SELECT AUDIT_ID FROM USER_PROFILE_AUDIT WHERE DELETED=0 AND (1=0)
     </select>
     <insert id="writeInsert1">
         INSERT INTO USER_PROFILE_MEMORY
@@ -16,40 +16,40 @@
         VALUES (#{ownerKey}, #{memoryId}, #{memoryText}, #{memoryType}, #{createdAt}, #{sourceChatId}, #{memoryState})
     </insert>
     <select id="readInsert1" resultType="java.lang.Long">
-        SELECT MAX(RECORD_ID) FROM USER_PROFILE_MEMORY WHERE OWNER_KEY=#{ownerKey}
+        SELECT MAX(RECORD_ID) FROM USER_PROFILE_MEMORY WHERE DELETED=0 AND (OWNER_KEY=#{ownerKey})
     </select>
-    <delete id="writeClear1">
-        DELETE FROM USER_PROFILE_MEMORY WHERE OWNER_KEY=#{ownerKey}
-    </delete>
+    <update id="writeClear1">
+        UPDATE USER_PROFILE_MEMORY SET DELETED=1 WHERE DELETED=0 AND (OWNER_KEY=#{ownerKey})
+    </update>
     <update id="writeDecide1">
         UPDATE USER_PROFILE_MEMORY SET MEMORY_TEXT=#{memoryText}, MEMORY_TYPE=#{memoryType}, MEMORY_STATE='ACTIVE',
-        REVISION=REVISION+1, PINNED=#{pinned}, EXPIRES_AT=#{expiresAt} WHERE OWNER_KEY=#{ownerKey} AND RECORD_ID=#{recordId} AND REVISION=#{revision}
+        REVISION=REVISION+1, PINNED=#{pinned}, EXPIRES_AT=#{expiresAt} WHERE DELETED=0 AND (OWNER_KEY=#{ownerKey} AND RECORD_ID=#{recordId} AND REVISION=#{revision})
     </update>
     <update id="writeSettings1">
-        UPDATE USER_PROFILE_OWNER SET MEMORY_ENABLED=#{memoryEnabled}, GENERATION=GENERATION+1 WHERE OWNER_KEY=#{ownerKey}
+        UPDATE USER_PROFILE_OWNER SET MEMORY_ENABLED=#{memoryEnabled}, GENERATION=GENERATION+1 WHERE DELETED=0 AND (OWNER_KEY=#{ownerKey})
     </update>
     <select id="readAudit1" resultType="com.lrj.platform.conversation.memory.profile.mapper.UserProfileStoreRow">
         SELECT AUDIT_ID, RECORD_ID, ACTION_CODE, REVISION, OCCURRED_AT FROM USER_PROFILE_AUDIT
-        WHERE OWNER_KEY=#{ownerKey} AND AUDIT_ID&lt;#{auditId} ORDER BY AUDIT_ID DESC LIMIT #{limit}
+        WHERE DELETED=0 AND (OWNER_KEY=#{ownerKey} AND AUDIT_ID&lt;#{auditId}) ORDER BY AUDIT_ID DESC LIMIT #{limit}
     </select>
     <insert id="writeLockOwner1">
         INSERT INTO USER_PROFILE_OWNER (OWNER_KEY, TENANT_ID, USER_ID) VALUES (#{ownerKey}, #{tenantId}, #{userId}) ON DUPLICATE KEY UPDATE OWNER_KEY=OWNER_KEY
     </insert>
     <select id="readLockOwner1" resultType="com.lrj.platform.conversation.memory.profile.mapper.UserProfileStoreRow">
-        SELECT GENERATION, MEMORY_ENABLED FROM USER_PROFILE_OWNER WHERE OWNER_KEY=#{ownerKey} FOR UPDATE
+        SELECT GENERATION, MEMORY_ENABLED FROM USER_PROFILE_OWNER WHERE DELETED=0 AND (OWNER_KEY=#{ownerKey}) FOR UPDATE
     </select>
     <update id="writeBump1">
-        UPDATE USER_PROFILE_OWNER SET GENERATION=GENERATION+1 WHERE OWNER_KEY=#{ownerKey}
+        UPDATE USER_PROFILE_OWNER SET GENERATION=GENERATION+1 WHERE DELETED=0 AND (OWNER_KEY=#{ownerKey})
     </update>
-    <delete id="writeDelete1">
-        DELETE FROM USER_PROFILE_MEMORY WHERE OWNER_KEY=#{ownerKey} AND RECORD_ID=#{recordId} AND REVISION=#{revision}
-    </delete>
+    <update id="writeDelete1">
+        UPDATE USER_PROFILE_MEMORY SET DELETED=1 WHERE DELETED=0 AND (OWNER_KEY=#{ownerKey} AND RECORD_ID=#{recordId} AND REVISION=#{revision})
+    </update>
     <insert id="writeAudit1">
         INSERT INTO USER_PROFILE_AUDIT (OWNER_KEY, RECORD_ID, ACTION_CODE, REVISION, OCCURRED_AT) VALUES (#{ownerKey}, #{recordId}, #{actionCode}, #{revision}, #{occurredAt})
     </insert>
     <select id="entries" resultType="com.lrj.platform.conversation.memory.profile.mapper.UserProfileStoreRow">
         SELECT RECORD_ID, MEMORY_ID, MEMORY_TEXT, MEMORY_TYPE, CREATED_AT, SOURCE_CHAT_ID, MEMORY_STATE, REVISION, PINNED, EXPIRES_AT
-        FROM USER_PROFILE_MEMORY WHERE OWNER_KEY=#{owner} ORDER BY RECORD_ID LIMIT #{limit}
+        FROM USER_PROFILE_MEMORY WHERE DELETED=0 AND (OWNER_KEY=#{owner}) ORDER BY RECORD_ID LIMIT #{limit}
         <if test="locked">FOR UPDATE</if>
     </select>
 </mapper>

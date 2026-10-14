@@ -13,34 +13,32 @@
     </insert>
     <select id="readFind1" resultType="com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreRow">
         SELECT * FROM KNOWLEDGE_INGESTION_JOB
-        WHERE TENANT_ID=#{tenantId} AND JOB_ID=#{jobId}
+        WHERE DELETED=0 AND (TENANT_ID=#{tenantId} AND JOB_ID=#{jobId})
     </select>
     <update id="writeSave1">
         UPDATE KNOWLEDGE_INGESTION_JOB
         SET REVISION=#{revision}, STATUS=#{status}, SINKS_JSON=#{sinksJson}, REQUIRED_SINKS_JSON=#{requiredSinksJson},
             ERROR_TEXT=#{errorText}, UPDATED_AT=#{updatedAt}, RETRY_COUNT=#{retryCount}, NEXT_RETRY_AT=#{nextRetryAt}, ERROR_CODE=#{errorCode}, FAILED_STAGE=#{failedStage}, LEASE_OWNER=#{leaseOwner}, LEASE_UNTIL=#{leaseUntil}
-        WHERE TENANT_ID=#{tenantId} AND JOB_ID=#{jobId} AND REVISION=#{revision2}
+        WHERE DELETED=0 AND (TENANT_ID=#{tenantId} AND JOB_ID=#{jobId} AND REVISION=#{revision2})
     </update>
     <select id="readFindRunnable1" resultType="com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreRow">
         SELECT * FROM KNOWLEDGE_INGESTION_JOB
-        WHERE STATUS IN ('RECEIVED','PROCESSING') AND LEASE_OWNER IS NULL
-        ORDER BY UPDATED_AT
+        WHERE DELETED=0 AND (STATUS IN ('RECEIVED','PROCESSING') AND LEASE_OWNER IS NULL) ORDER BY UPDATED_AT
         LIMIT #{limit}
     </select>
     <select id="readFindRecoverable1" resultType="com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreRow">
         SELECT * FROM KNOWLEDGE_INGESTION_JOB
-        WHERE (STATUS IN ('PARTIAL','FAILED') AND (NEXT_RETRY_AT IS NULL OR NEXT_RETRY_AT &lt;= #{nextRetryAt}))
+        WHERE DELETED=0 AND ((STATUS IN ('PARTIAL','FAILED') AND (NEXT_RETRY_AT IS NULL OR NEXT_RETRY_AT &lt;= #{nextRetryAt}))
            OR (STATUS='PROCESSING' AND ((LEASE_UNTIL IS NOT NULL AND LEASE_UNTIL &lt;= #{leaseUntil})
-               OR (LEASE_UNTIL IS NULL AND UPDATED_AT &lt; #{updatedAt})))
-        ORDER BY UPDATED_AT
+               OR (LEASE_UNTIL IS NULL AND UPDATED_AT &lt; #{updatedAt})))) ORDER BY UPDATED_AT
         LIMIT #{limit}
     </select>
     <select id="readFindByIdempotency1" resultType="com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreRow">
         SELECT * FROM KNOWLEDGE_INGESTION_JOB
-        WHERE TENANT_ID=#{tenantId} AND IDEMPOTENCY_KEY=#{idempotencyKey}
+        WHERE DELETED=0 AND (TENANT_ID=#{tenantId} AND IDEMPOTENCY_KEY=#{idempotencyKey})
     </select>
     <select id="readOldestPending1" resultType="java.sql.Timestamp">
-        SELECT MIN(CREATED_AT) FROM KNOWLEDGE_INGESTION_JOB WHERE STATUS IN ('RECEIVED','PROCESSING','PARTIAL','FAILED')
+        SELECT MIN(CREATED_AT) FROM KNOWLEDGE_INGESTION_JOB WHERE DELETED=0 AND (STATUS IN ('RECEIVED','PROCESSING','PARTIAL','FAILED'))
     </select>
     <select id="readInitialize1" resultType="com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreRow">
         SELECT TENANT_ID, JOB_ID, IDEMPOTENCY_KEY, USER_ID, SCOPES_JSON, DEPARTMENT,
@@ -48,9 +46,9 @@
                NEW_DOCUMENT, REVISION, SOURCE_BUCKET, SOURCE_OBJECT_KEY, SOURCE_HASH,
                SOURCE_CONTENT_TYPE, SOURCE_SIZE, STATUS, SINKS_JSON, REQUIRED_SINKS_JSON,
                ERROR_TEXT, CREATED_AT, UPDATED_AT, RETRY_COUNT, NEXT_RETRY_AT, ERROR_CODE, FAILED_STAGE, LEASE_OWNER, LEASE_UNTIL
-        FROM KNOWLEDGE_INGESTION_JOB WHERE 1=0
+        FROM KNOWLEDGE_INGESTION_JOB WHERE DELETED=0 AND (1=0)
     </select>
     <select id="countsByStatus" resultType="com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreRow">
-        SELECT STATUS, COUNT(*) AS TOTAL FROM KNOWLEDGE_INGESTION_JOB GROUP BY STATUS
+        SELECT STATUS, COUNT(*) AS TOTAL FROM KNOWLEDGE_INGESTION_JOB  WHERE DELETED=0 GROUP BY STATUS
     </select>
 </mapper>

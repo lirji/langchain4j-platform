@@ -3,22 +3,22 @@
 <mapper namespace="com.lrj.platform.auth.mapper.RefreshSessionStoreMapper">
     <select id="readInit1" resultType="com.lrj.platform.auth.mapper.RefreshSessionStoreRow">
         SELECT TOKEN_HASH, USERNAME, CREATED_AT, EXPIRES_AT, REVOKED
-        FROM AUTH_SESSION WHERE 1=0
+        FROM AUTH_SESSION WHERE DELETED=0 AND (1=0)
     </select>
     <insert id="writeCreate1">
         INSERT INTO AUTH_SESSION (TOKEN_HASH, USERNAME, CREATED_AT, EXPIRES_AT, REVOKED)
         VALUES (#{tokenHash}, #{username}, #{createdAt}, #{expiresAt}, #{revoked})
     </insert>
     <select id="readFindByTokenHash1" resultType="com.lrj.platform.auth.mapper.RefreshSessionStoreRow">
-        SELECT * FROM AUTH_SESSION WHERE TOKEN_HASH=#{tokenHash}
+        SELECT * FROM AUTH_SESSION WHERE DELETED=0 AND (TOKEN_HASH=#{tokenHash})
     </select>
     <update id="writeRevoke1">
-        UPDATE AUTH_SESSION SET REVOKED=TRUE WHERE TOKEN_HASH=#{tokenHash}
+        UPDATE AUTH_SESSION SET REVOKED=TRUE WHERE DELETED=0 AND (TOKEN_HASH=#{tokenHash})
     </update>
     <update id="writeRevokeByUsername1">
-        UPDATE AUTH_SESSION SET REVOKED=TRUE WHERE USERNAME=#{username} AND REVOKED=FALSE
+        UPDATE AUTH_SESSION SET REVOKED=TRUE WHERE DELETED=0 AND (USERNAME=#{username} AND REVOKED=FALSE)
     </update>
-    <delete id="writeDeleteByUsername1">
-        DELETE FROM AUTH_SESSION WHERE USERNAME=#{username}
-    </delete>
+    <update id="writeDeleteByUsername1">
+        UPDATE AUTH_SESSION SET DELETED=1 WHERE DELETED=0 AND (USERNAME=#{username})
+    </update>
 </mapper>

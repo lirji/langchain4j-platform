@@ -244,7 +244,7 @@ class JdbcUserProfileStoreTest {
                 row.version() + 2, GovernedProfileStore.Action.FORGET, null, null, null));
         assertThat(store.snapshot(tenant, "alice").items()).isEmpty();
         assertThat(new JdbcTemplate(source).queryForObject(
-                "SELECT COUNT(*) FROM USER_PROFILE_MEMORY WHERE RECORD_ID=?", Integer.class, row.recordId())).isZero();
+                "SELECT DELETED FROM USER_PROFILE_MEMORY WHERE RECORD_ID=?", Integer.class, row.recordId())).isEqualTo(1);
     }
 
     @Test

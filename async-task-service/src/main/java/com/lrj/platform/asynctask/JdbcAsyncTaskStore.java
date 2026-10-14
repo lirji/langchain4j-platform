@@ -320,7 +320,13 @@ public class JdbcAsyncTaskStore extends AsyncTaskStore {
             initialDelayString = "${app.async-task.cleanup-initial-delay-ms:60000}")
     public void cleanup() {
         long cutoff = Instant.now().minus(ttl).toEpochMilli();
-        int removed = db.writeCleanup1(cutoff);
+        Integer result = txTemplate.execute(status -> {
+            int removed = db.writeCleanup1(cutoff);
+            // 逻辑删除不会触发旧外键的ON DELETE CASCADE，因此在同一事务标记调度上下文。
+            db.cleanupDispatch(cutoff);
+            return removed;
+        });
+        int removed = result == null ? 0 : result;
         if (removed > 0) {
             log.info("async task jdbc cleanup removed {} expired tasks ttl={}", removed, ttl);
         }

@@ -3,67 +3,80 @@
 <mapper namespace="com.lrj.platform.auth.mapper.UserAccountStoreMapper">
     <select id="readInit1" resultType="com.lrj.platform.auth.mapper.UserAccountStoreRow">
         SELECT USERNAME, PASSWORD_HASH, TENANT, USER_ID, SCOPES, ROLES, ENABLED, VERSION, CREATED_AT
-        FROM USERS WHERE 1=0
+        FROM USERS WHERE DELETED=0 AND (1=0)
     </select>
     <select id="readInit2" resultType="com.lrj.platform.auth.mapper.UserAccountStoreRow">
-        SELECT USERNAME, ROLE_NAME, CREATED_AT FROM USER_ROLE WHERE 1=0
+        SELECT USERNAME, ROLE_NAME, CREATED_AT FROM USER_ROLE WHERE DELETED=0 AND (1=0)
     </select>
-    <select id="readInit3" resultType="java.lang.Integer">
+    <!-- 种子只用于从未初始化的库；墓碑也证明曾经初始化，重启不能复活删除数据。 -->
+<select id="readInit3" resultType="java.lang.Integer">
         SELECT COUNT(*) FROM USERS
     </select>
     <select id="readCount1" resultType="java.lang.Integer">
-        SELECT COUNT(*) FROM USERS
+        SELECT COUNT(*) FROM USERS WHERE DELETED=0
     </select>
     <select id="readFindByRole1" resultType="java.lang.String">
-        SELECT USERNAME FROM USER_ROLE WHERE ROLE_NAME=#{roleName} ORDER BY USERNAME
+        SELECT USERNAME FROM USER_ROLE WHERE DELETED=0 AND (ROLE_NAME=#{roleName}) ORDER BY USERNAME
     </select>
     <select id="readDistinctTenants1" resultType="java.lang.String">
-        SELECT DISTINCT TENANT FROM USERS WHERE TENANT IS NOT NULL ORDER BY TENANT
+        SELECT DISTINCT TENANT FROM USERS WHERE DELETED=0 AND (TENANT IS NOT NULL) ORDER BY TENANT
     </select>
     <update id="writeTouchVersionIfVersion1">
-        UPDATE USERS SET VERSION=VERSION+1 WHERE USERNAME=#{username} AND VERSION=#{version}
+        UPDATE USERS SET VERSION=VERSION+1 WHERE DELETED=0 AND (USERNAME=#{username} AND VERSION=#{version})
     </update>
     <update id="writeUpdateProfile1">
-        UPDATE USERS SET PASSWORD_HASH=#{passwordHash}, TENANT=#{tenant}, SCOPES=#{scopes}, ENABLED=#{enabled}, VERSION=VERSION+1 WHERE USERNAME=#{username}
+        UPDATE USERS SET PASSWORD_HASH=#{passwordHash}, TENANT=#{tenant}, SCOPES=#{scopes}, ENABLED=#{enabled}, VERSION=VERSION+1 WHERE DELETED=0 AND (USERNAME=#{username})
     </update>
     <select id="readVersionOf1" resultType="java.lang.Long">
-        SELECT VERSION FROM USERS WHERE USERNAME=#{username}
+        SELECT VERSION FROM USERS WHERE DELETED=0 AND (USERNAME=#{username})
     </select>
     <update id="writeUpdateProfileIfVersion1">
-        UPDATE USERS SET PASSWORD_HASH=#{passwordHash}, TENANT=#{tenant}, SCOPES=#{scopes}, ENABLED=#{enabled}, VERSION=VERSION+1 WHERE USERNAME=#{username} AND VERSION=#{version}
+        UPDATE USERS SET PASSWORD_HASH=#{passwordHash}, TENANT=#{tenant}, SCOPES=#{scopes}, ENABLED=#{enabled}, VERSION=VERSION+1 WHERE DELETED=0 AND (USERNAME=#{username} AND VERSION=#{version})
     </update>
-    <delete id="writeDoReplaceRoles1">
-        DELETE FROM USER_ROLE WHERE USERNAME=#{username}
-    </delete>
-    <delete id="writeDelete1">
-        DELETE FROM USER_ROLE WHERE USERNAME=#{username}
-    </delete>
-    <delete id="writeDelete2">
-        DELETE FROM USERS WHERE USERNAME=#{username}
-    </delete>
-    <insert id="writeInsertUser1">
+    <update id="writeDoReplaceRoles1">
+        UPDATE USER_ROLE SET DELETED=1 WHERE DELETED=0 AND (USERNAME=#{username})
+    </update>
+    <update id="writeDelete1">
+        UPDATE USER_ROLE SET DELETED=1 WHERE DELETED=0 AND (USERNAME=#{username})
+    </update>
+    <update id="writeDelete2">
+        UPDATE USERS SET DELETED=1, VERSION=VERSION+1 WHERE DELETED=0 AND (USERNAME=#{username})
+    </update>
+    <insert id="writeInsertUser1New">
         INSERT INTO USERS (USERNAME, PASSWORD_HASH, TENANT, USER_ID, SCOPES, ROLES, ENABLED, CREATED_AT)
         VALUES (#{username}, #{passwordHash}, #{tenant}, #{userId}, #{scopes}, #{roles}, #{enabled}, #{createdAt})
     </insert>
-    <insert id="writeInsertUserRoleIfAbsent1">
+    <!-- 只恢复墓碑；活跃行仍由唯一键阻止重复创建，版本不回退。 -->
+    <update id="restorewriteInsertUser1">
+        UPDATE USERS SET PASSWORD_HASH=#{passwordHash}, TENANT=#{tenant}, USER_ID=#{userId}, SCOPES=#{scopes}, ROLES=#{roles}, ENABLED=#{enabled}, CREATED_AT=#{createdAt}, VERSION=VERSION+1, DELETED=0
+        WHERE DELETED=1 AND USERNAME=#{username}
+    </update>
+
+    <insert id="writeInsertUserRoleIfAbsent1New">
         INSERT INTO USER_ROLE (USERNAME, ROLE_NAME, CREATED_AT) VALUES (#{username}, #{roleName}, #{createdAt})
     </insert>
+    <!-- 只恢复墓碑；活跃行仍由唯一键阻止重复创建，版本不回退。 -->
+    <update id="restorewriteInsertUserRoleIfAbsent1">
+        UPDATE USER_ROLE SET CREATED_AT=#{createdAt}, DELETED=0
+        WHERE DELETED=1 AND USERNAME=#{username} AND ROLE_NAME=#{roleName}
+    </update>
+
     <select id="readRolesOf1" resultType="java.lang.String">
-        SELECT ROLE_NAME FROM USER_ROLE WHERE USERNAME=#{username} ORDER BY ROLE_NAME
+        SELECT ROLE_NAME FROM USER_ROLE WHERE DELETED=0 AND (USERNAME=#{username}) ORDER BY ROLE_NAME
     </select>
     <select id="findUsers1" resultType="com.lrj.platform.auth.mapper.UserAccountStoreRow">
-        SELECT * FROM USERS WHERE USERNAME=#{username}
+        SELECT * FROM USERS WHERE DELETED=0 AND (USERNAME=#{username})
     </select>
     <select id="findUsers2" resultType="com.lrj.platform.auth.mapper.UserAccountStoreRow">
-        SELECT * FROM USERS ORDER BY USERNAME
+        SELECT * FROM USERS  WHERE DELETED=0 ORDER BY USERNAME
     </select>
     <select id="findUsers3" resultType="com.lrj.platform.auth.mapper.UserAccountStoreRow">
-        SELECT * FROM USERS ORDER BY USERNAME LIMIT #{limit} OFFSET #{offset}
+        SELECT * FROM USERS  WHERE DELETED=0 ORDER BY USERNAME LIMIT #{limit} OFFSET #{offset}
     </select>
     <select id="findUsers4" resultType="com.lrj.platform.auth.mapper.UserAccountStoreRow">
-        SELECT * FROM USERS WHERE TENANT=#{tenant} ORDER BY USERNAME
+        SELECT * FROM USERS WHERE DELETED=0 AND (TENANT=#{tenant}) ORDER BY USERNAME
     </select>
     <update id="updateRoles">
-        UPDATE USERS SET ROLES=#{roles}, VERSION=VERSION+1 WHERE USERNAME=#{username} <if test="expectedVersion != null">AND VERSION=#{expectedVersion}</if>
+        UPDATE USERS SET ROLES=#{roles}, VERSION=VERSION+1 WHERE DELETED=0 AND (USERNAME=#{username} <if test="expectedVersion != null">AND VERSION=#{expectedVersion}</if>)
     </update>
 </mapper>

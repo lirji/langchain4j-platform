@@ -64,14 +64,36 @@ class JdbcGraphStoreTest {
         assertThat(store.entities("globex", "org")).containsExactly("张三", "财务部");
     }
 
+    @Test
+    void removedTriplesKeepTombstonesAndExplicitReindexRestoresOneRow() {
+        var source = migratedSource();
+        var store = new JdbcGraphStore(source);
+        var triple = new Triple("one", "uses", "two", "doc#0", "acme", "manual");
+        store.add(List.of(triple));
+        assertThat(store.removeBySourcePrefix("globex", "doc#")).isZero();
+        assertThat(store.removeBySourcePrefix("acme", "doc#")).isEqualTo(1);
+        assertThat(store.removeBySourcePrefix("acme", "doc#")).isZero();
+        assertThat(store.size()).isZero();
+        var jdbc = new JdbcTemplate(source);
+        assertThat(jdbc.queryForObject("SELECT DELETED FROM RAG_GRAPH_TRIPLE", Integer.class)).isEqualTo(1);
+        store.add(List.of(triple));
+        assertThat(store.size()).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM RAG_GRAPH_TRIPLE", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT DELETED FROM RAG_GRAPH_TRIPLE", Integer.class)).isZero();
+    }
+
     private static JdbcGraphStore store() {
+        return new JdbcGraphStore(migratedSource());
+    }
+
+    private static DriverManagerDataSource migratedSource() {
         String url = System.getenv("MP_GRAPH_TEST_DB_URL");
         if (url != null && !url.contains("/lc4j_mp_it_")) throw new IllegalArgumentException("isolated test schema required");
         DriverManagerDataSource dataSource = url == null ? dataSource("graph-" + java.util.UUID.randomUUID())
                 : new DriverManagerDataSource(url, System.getenv("MP_TEST_DB_USER"), System.getenv("MP_TEST_DB_PASSWORD"));
         SchemaMigrationRunner.migrate(dataSource, SchemaName.KNOWLEDGE_GRAPH);
         if (url != null) new JdbcTemplate(dataSource).update("DELETE FROM RAG_GRAPH_TRIPLE");
-        return new JdbcGraphStore(dataSource);
+        return dataSource;
     }
 
     private static DriverManagerDataSource dataSource(String database) {

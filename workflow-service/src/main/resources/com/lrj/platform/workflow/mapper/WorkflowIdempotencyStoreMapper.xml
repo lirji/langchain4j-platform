@@ -4,7 +4,7 @@
     <select id="readInit1" resultType="com.lrj.platform.workflow.mapper.WorkflowIdempotencyStoreRow">
         SELECT TENANT_ID, OPERATION_NAME, IDEMPOTENCY_KEY_HASH, REQUEST_HASH,
                BUSINESS_KEY, INSTANCE_ID, CREATED_AT, UPDATED_AT
-        FROM WF_IDEMPOTENCY WHERE 1=0
+        FROM WF_IDEMPOTENCY WHERE DELETED=0 AND (1=0)
     </select>
     <insert id="writeClaim1">
         INSERT INTO WF_IDEMPOTENCY
@@ -12,22 +12,23 @@
            BUSINESS_KEY, INSTANCE_ID, CREATED_AT, UPDATED_AT)
         VALUES (#{tenantId}, #{operationName}, #{idempotencyKeyHash}, #{requestHash}, #{businessKey}, NULL, #{createdAt}, #{updatedAt})
     </insert>
+
     <select id="readClaim1" resultType="com.lrj.platform.workflow.mapper.WorkflowIdempotencyStoreRow">
         SELECT REQUEST_HASH, INSTANCE_ID
           FROM WF_IDEMPOTENCY
-         WHERE TENANT_ID = #{tenantId} AND OPERATION_NAME = #{operationName} AND IDEMPOTENCY_KEY_HASH = #{idempotencyKeyHash}
+         WHERE DELETED=0 AND (TENANT_ID = #{tenantId} AND OPERATION_NAME = #{operationName} AND IDEMPOTENCY_KEY_HASH = #{idempotencyKeyHash})
     </select>
     <update id="writeAttachInstance1">
         UPDATE WF_IDEMPOTENCY
            SET INSTANCE_ID = #{instanceId}, UPDATED_AT = #{updatedAt}
-         WHERE TENANT_ID = #{tenantId} AND OPERATION_NAME = #{operationName} AND IDEMPOTENCY_KEY_HASH = #{idempotencyKeyHash}
-           AND REQUEST_HASH = #{requestHash} AND INSTANCE_ID IS NULL
+         WHERE DELETED=0 AND (TENANT_ID = #{tenantId} AND OPERATION_NAME = #{operationName} AND IDEMPOTENCY_KEY_HASH = #{idempotencyKeyHash}
+           AND REQUEST_HASH = #{requestHash} AND INSTANCE_ID IS NULL)
     </update>
     <select id="readFindCommitted1" resultType="com.lrj.platform.workflow.mapper.WorkflowIdempotencyStoreRow">
         SELECT REQUEST_HASH, INSTANCE_ID FROM WF_IDEMPOTENCY
-        WHERE TENANT_ID=#{tenantId} AND OPERATION_NAME=#{operationName} AND IDEMPOTENCY_KEY_HASH=#{idempotencyKeyHash}
+        WHERE DELETED=0 AND (TENANT_ID=#{tenantId} AND OPERATION_NAME=#{operationName} AND IDEMPOTENCY_KEY_HASH=#{idempotencyKeyHash})
     </select>
-    <delete id="writeDeleteByInstance1">
-        DELETE FROM WF_IDEMPOTENCY WHERE INSTANCE_ID = #{instanceId}
-    </delete>
+    <update id="writeDeleteByInstance1">
+        UPDATE WF_IDEMPOTENCY SET DELETED=1 WHERE DELETED=0 AND (INSTANCE_ID = #{instanceId})
+    </update>
 </mapper>

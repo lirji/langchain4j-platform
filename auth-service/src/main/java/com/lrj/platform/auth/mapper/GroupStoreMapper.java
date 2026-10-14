@@ -28,9 +28,29 @@ public interface GroupStoreMapper {
     /** 保留原readGroupsUsingRole1操作的条件与影响行数契约。 */
     List<String> readGroupsUsingRole1(@Param("roleName") String roleName);
     /** 保留原writeInsertGroup1操作的条件与影响行数契约。 */
-    int writeInsertGroup1(@Param("name") String name, @Param("description") String description, @Param("createdAt") Long createdAt);
+    default int writeInsertGroup1(@Param("name") String name, @Param("description") String description, @Param("createdAt") Long createdAt) {
+        if (restorewriteInsertGroup1(name, description, createdAt) == 1) return 1;
+        return writeInsertGroup1New(name, description, createdAt);
+    }
+    /** 墓碑条件恢复，不覆盖现有正常记录。 */
+    int restorewriteInsertGroup1(@Param("name") String name, @Param("description") String description, @Param("createdAt") Long createdAt);
+    /** 不存在墓碑时插入，由数据库唯一约束处理并发创建。 */
+    int writeInsertGroup1New(@Param("name") String name, @Param("description") String description, @Param("createdAt") Long createdAt);
     /** 保留原writeInsertGroupRoleIfAbsent1操作的条件与影响行数契约。 */
-    int writeInsertGroupRoleIfAbsent1(
+    default int writeInsertGroupRoleIfAbsent1(
+        @Param("groupName") String groupName,
+        @Param("roleName") String roleName,
+        @Param("createdAt") Long createdAt) {
+        if (restorewriteInsertGroupRoleIfAbsent1(groupName, roleName, createdAt) == 1) return 1;
+        return writeInsertGroupRoleIfAbsent1New(groupName, roleName, createdAt);
+    }
+    /** 墓碑条件恢复，不覆盖现有正常记录。 */
+    int restorewriteInsertGroupRoleIfAbsent1(
+        @Param("groupName") String groupName,
+        @Param("roleName") String roleName,
+        @Param("createdAt") Long createdAt);
+    /** 不存在墓碑时插入，由数据库唯一约束处理并发创建。 */
+    int writeInsertGroupRoleIfAbsent1New(
         @Param("groupName") String groupName,
         @Param("roleName") String roleName,
         @Param("createdAt") Long createdAt);

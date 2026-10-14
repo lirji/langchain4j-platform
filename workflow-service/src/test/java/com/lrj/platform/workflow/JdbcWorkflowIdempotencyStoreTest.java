@@ -90,7 +90,12 @@ class JdbcWorkflowIdempotencyStoreTest {
 
         transaction.executeWithoutResult(status -> store.deleteByInstance("process-1"));
 
-        assertThat(rowCount()).isZero();
+        assertThat(rowCount()).isOne();
+        assertThat(store.findCommitted("acme", "refund_start", "key", "request")).isEmpty();
+        assertThatThrownBy(() -> transaction.executeWithoutResult(status ->
+                store.claim("acme", "refund_start", "key", "new-request", "new-business")))
+                .isInstanceOf(WorkflowIdempotencyStore.IdempotencyConflictException.class);
+        assertThat(rowCount()).isOne();
     }
 
     @Test

@@ -4,51 +4,54 @@
     <select id="readInit1" resultType="com.lrj.platform.workflow.mapper.WorkflowOutboxRow">
         SELECT INSTANCE_ID, TENANT_ID, TARGET_URL, STATUS, ATTEMPTS, NEXT_ATTEMPT_AT,
                LAST_ERROR, CLAIMED_BY, CLAIMED_UNTIL, CREATED_AT, UPDATED_AT
-        FROM WF_OUTBOX WHERE 1=0
+        FROM WF_OUTBOX WHERE DELETED=0 AND (1=0)
     </select>
     <insert id="writeEnqueue1">
         INSERT INTO WF_OUTBOX (INSTANCE_ID, TENANT_ID, TARGET_URL, STATUS, ATTEMPTS, NEXT_ATTEMPT_AT, LAST_ERROR, CREATED_AT, UPDATED_AT)
         VALUES (#{instanceId}, #{tenantId}, #{targetUrl}, 'PENDING', 0, #{nextAttemptAt}, NULL, #{createdAt}, #{updatedAt})
-        ON DUPLICATE KEY UPDATE TARGET_URL=VALUES(TARGET_URL), STATUS='PENDING', ATTEMPTS=0,
-          NEXT_ATTEMPT_AT=VALUES(NEXT_ATTEMPT_AT), LAST_ERROR=NULL,
-          CLAIMED_BY=NULL, CLAIMED_UNTIL=NULL, UPDATED_AT=VALUES(UPDATED_AT)
+        ON DUPLICATE KEY UPDATE TARGET_URL=CASE WHEN DELETED=0 THEN VALUES(TARGET_URL) ELSE TARGET_URL END,
+          STATUS=CASE WHEN DELETED=0 THEN 'PENDING' ELSE STATUS END,
+          ATTEMPTS=CASE WHEN DELETED=0 THEN 0 ELSE ATTEMPTS END,
+          NEXT_ATTEMPT_AT=CASE WHEN DELETED=0 THEN VALUES(NEXT_ATTEMPT_AT) ELSE NEXT_ATTEMPT_AT END,
+          LAST_ERROR=CASE WHEN DELETED=0 THEN NULL ELSE LAST_ERROR END,
+          CLAIMED_BY=CASE WHEN DELETED=0 THEN NULL ELSE CLAIMED_BY END,
+          CLAIMED_UNTIL=CASE WHEN DELETED=0 THEN NULL ELSE CLAIMED_UNTIL END,
+          UPDATED_AT=CASE WHEN DELETED=0 THEN VALUES(UPDATED_AT) ELSE UPDATED_AT END
     </insert>
     <select id="readClaimDue1" resultType="java.lang.String">
         SELECT INSTANCE_ID FROM WF_OUTBOX
-        WHERE (STATUS='PENDING' AND NEXT_ATTEMPT_AT &lt;= #{nextAttemptAt})
-           OR (STATUS='IN_PROGRESS' AND CLAIMED_UNTIL &lt;= #{claimedUntil})
-        ORDER BY NEXT_ATTEMPT_AT ASC LIMIT #{limit}
+        WHERE DELETED=0 AND ((STATUS='PENDING' AND NEXT_ATTEMPT_AT &lt;= #{nextAttemptAt})
+           OR (STATUS='IN_PROGRESS' AND CLAIMED_UNTIL &lt;= #{claimedUntil})) ORDER BY NEXT_ATTEMPT_AT ASC LIMIT #{limit}
     </select>
     <update id="writeMarkDelivered1">
         UPDATE WF_OUTBOX
         SET STATUS='DELIVERED', CLAIMED_BY=NULL, CLAIMED_UNTIL=NULL, UPDATED_AT=#{updatedAt}
-        WHERE INSTANCE_ID=#{instanceId} AND STATUS='IN_PROGRESS'
-          AND CLAIMED_BY=#{claimedBy} AND CLAIMED_UNTIL &gt; #{claimedUntil}
+        WHERE DELETED=0 AND (INSTANCE_ID=#{instanceId} AND STATUS='IN_PROGRESS'
+          AND CLAIMED_BY=#{claimedBy} AND CLAIMED_UNTIL &gt; #{claimedUntil})
     </update>
     <update id="writeMarkRetry1">
         UPDATE WF_OUTBOX
         SET STATUS='PENDING', ATTEMPTS=#{attempts}, NEXT_ATTEMPT_AT=#{nextAttemptAt}, LAST_ERROR=#{lastError},
             CLAIMED_BY=NULL, CLAIMED_UNTIL=NULL, UPDATED_AT=#{updatedAt}
-        WHERE INSTANCE_ID=#{instanceId} AND STATUS='IN_PROGRESS'
-          AND CLAIMED_BY=#{claimedBy} AND CLAIMED_UNTIL &gt; #{claimedUntil}
+        WHERE DELETED=0 AND (INSTANCE_ID=#{instanceId} AND STATUS='IN_PROGRESS'
+          AND CLAIMED_BY=#{claimedBy} AND CLAIMED_UNTIL &gt; #{claimedUntil})
     </update>
     <update id="writeMarkDead1">
         UPDATE WF_OUTBOX
         SET STATUS='DEAD', ATTEMPTS=#{attempts}, LAST_ERROR=#{lastError},
             CLAIMED_BY=NULL, CLAIMED_UNTIL=NULL, UPDATED_AT=#{updatedAt}
-        WHERE INSTANCE_ID=#{instanceId} AND STATUS='IN_PROGRESS'
-          AND CLAIMED_BY=#{claimedBy} AND CLAIMED_UNTIL &gt; #{claimedUntil}
+        WHERE DELETED=0 AND (INSTANCE_ID=#{instanceId} AND STATUS='IN_PROGRESS'
+          AND CLAIMED_BY=#{claimedBy} AND CLAIMED_UNTIL &gt; #{claimedUntil})
     </update>
-    <delete id="writeDelete1">
-        DELETE FROM WF_OUTBOX WHERE INSTANCE_ID=#{instanceId}
-    </delete>
+    <update id="writeDelete1">
+        UPDATE WF_OUTBOX SET DELETED=1 WHERE DELETED=0 AND (INSTANCE_ID=#{instanceId})
+    </update>
     <update id="claim">
         UPDATE WF_OUTBOX SET STATUS='IN_PROGRESS', CLAIMED_BY=#{owner}, CLAIMED_UNTIL=#{until}, UPDATED_AT=#{now}
-        WHERE INSTANCE_ID IN <foreach collection="ids" item="id" open="(" close=")" separator=",">#{id}</foreach>
-        AND ((STATUS='PENDING' AND NEXT_ATTEMPT_AT &lt;= #{now}) OR (STATUS='IN_PROGRESS' AND CLAIMED_UNTIL &lt;= #{now}))
+        WHERE DELETED=0 AND (INSTANCE_ID IN <foreach collection="ids" item="id" open="(" close=")" separator=",">#{id}</foreach>
+        AND ((STATUS='PENDING' AND NEXT_ATTEMPT_AT &lt;= #{now}) OR (STATUS='IN_PROGRESS' AND CLAIMED_UNTIL &lt;= #{now})))
     </update>
     <select id="claimed" resultType="com.lrj.platform.workflow.mapper.WorkflowOutboxRow">
-        SELECT INSTANCE_ID,TENANT_ID,TARGET_URL,ATTEMPTS,CLAIMED_BY FROM WF_OUTBOX WHERE STATUS='IN_PROGRESS' AND CLAIMED_BY=#{owner} AND INSTANCE_ID IN <foreach collection="ids" item="id" open="(" close=")" separator=",">#{id}</foreach>
-        ORDER BY NEXT_ATTEMPT_AT ASC LIMIT #{limit}
+        SELECT INSTANCE_ID,TENANT_ID,TARGET_URL,ATTEMPTS,CLAIMED_BY FROM WF_OUTBOX WHERE DELETED=0 AND (STATUS='IN_PROGRESS' AND CLAIMED_BY=#{owner} AND INSTANCE_ID IN <foreach collection="ids" item="id" open="(" close=")" separator=",">#{id}</foreach>) ORDER BY NEXT_ATTEMPT_AT ASC LIMIT #{limit}
     </select>
 </mapper>

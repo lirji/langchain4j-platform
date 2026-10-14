@@ -62,6 +62,16 @@ class JdbcOrderStoreMySqlIT {
     }
 
     @Test
+    void deletedCustomersDoNotLeakThroughLeftJoinAndDeletedOrdersAreHidden() {
+        TenantContext.set(new TenantContext.Tenant("tenantA", "analyst-a", java.util.Set.of()));
+        jdbc.update("UPDATE customers SET DELETED=1 WHERE id='1'");
+        assertThat(store.findByOrderNo("101").orElseThrow().customer()).isNull();
+        jdbc.update("UPDATE orders SET DELETED=1 WHERE id='101'");
+        assertThat(store.findByOrderNo("101")).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM orders WHERE id='101'", Integer.class)).isEqualTo(1);
+    }
+
+    @Test
     void returnsOrderForOwningTenant() {
         TenantContext.set(new TenantContext.Tenant("tenantA", "analyst-a", java.util.Set.of()));
 

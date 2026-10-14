@@ -46,7 +46,6 @@ public class JdbcGraphStore implements GraphStore {
         long now = Instant.now().toEpochMilli();
         for (Triple triple : triples) {
             String graphId = graphId(triple);
-            db.writeAdd1(graphId);
             db.writeAdd2(
                     graphId,
                     triple.tenantId(),

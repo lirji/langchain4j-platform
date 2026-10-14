@@ -93,7 +93,7 @@ public final class JdbcUserProfileStore implements GovernedProfileStore {
                 .map(Entry::legacy).toList();
     }
 
-    /** 物理删除正文并增加代次；保留所有者锁行及不含正文的操作审计。 */
+    /** 将记忆标记为已删除并增加代次；保留墓碑和审计，旧抽取不能回填。 */
     @Override
     public int clear(String tenant, String user) {
         String owner = ownerKey(tenant, user);

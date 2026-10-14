@@ -4,45 +4,42 @@
     <select id="readInit1" resultType="com.lrj.platform.knowledge.graph.mapper.GraphStoreRow">
         SELECT GRAPH_ID, TENANT_ID, CATEGORY, SUBJECT_TEXT, SUBJECT_KEY, RELATION_TEXT,
                OBJECT_TEXT, OBJECT_KEY, SOURCE_ID, CREATED_AT
-        FROM RAG_GRAPH_TRIPLE WHERE 1=0
+        FROM RAG_GRAPH_TRIPLE WHERE DELETED=0 AND (1=0)
     </select>
-    <delete id="writeAdd1">
-        DELETE FROM RAG_GRAPH_TRIPLE WHERE GRAPH_ID=#{graphId}
-    </delete>
     <insert id="writeAdd2">
         INSERT INTO RAG_GRAPH_TRIPLE
         (GRAPH_ID, TENANT_ID, CATEGORY, SUBJECT_TEXT, SUBJECT_KEY, RELATION_TEXT,
          OBJECT_TEXT, OBJECT_KEY, SOURCE_ID, CREATED_AT)
         VALUES (#{graphId}, #{tenantId}, #{category}, #{subjectText}, #{subjectKey}, #{relationText}, #{objectText}, #{objectKey}, #{sourceId}, #{createdAt})
+        ON DUPLICATE KEY UPDATE TENANT_ID=VALUES(TENANT_ID), CATEGORY=VALUES(CATEGORY),
+          SUBJECT_TEXT=VALUES(SUBJECT_TEXT), SUBJECT_KEY=VALUES(SUBJECT_KEY), RELATION_TEXT=VALUES(RELATION_TEXT),
+          OBJECT_TEXT=VALUES(OBJECT_TEXT), OBJECT_KEY=VALUES(OBJECT_KEY), SOURCE_ID=VALUES(SOURCE_ID),
+          CREATED_AT=VALUES(CREATED_AT), DELETED=0
     </insert>
     <select id="readEntities1" resultType="com.lrj.platform.knowledge.graph.mapper.GraphStoreRow">
         SELECT SUBJECT_TEXT, RELATION_TEXT, OBJECT_TEXT, SOURCE_ID, TENANT_ID, CATEGORY
         FROM RAG_GRAPH_TRIPLE
-        WHERE TENANT_ID=#{tenantId}
-        ORDER BY CREATED_AT ASC, GRAPH_ID ASC
+        WHERE DELETED=0 AND (TENANT_ID=#{tenantId}) ORDER BY CREATED_AT ASC, GRAPH_ID ASC
     </select>
     <select id="readEntities2" resultType="com.lrj.platform.knowledge.graph.mapper.GraphStoreRow">
         SELECT SUBJECT_TEXT, RELATION_TEXT, OBJECT_TEXT, SOURCE_ID, TENANT_ID, CATEGORY
         FROM RAG_GRAPH_TRIPLE
-        WHERE TENANT_ID=#{tenantId} AND CATEGORY=#{category}
-        ORDER BY CREATED_AT ASC, GRAPH_ID ASC
+        WHERE DELETED=0 AND (TENANT_ID=#{tenantId} AND CATEGORY=#{category}) ORDER BY CREATED_AT ASC, GRAPH_ID ASC
     </select>
-    <delete id="writeRemoveBySourcePrefix1">
-        DELETE FROM RAG_GRAPH_TRIPLE WHERE TENANT_ID=#{tenantId} AND SOURCE_ID LIKE #{sourceId}
-    </delete>
+    <update id="writeRemoveBySourcePrefix1">
+        UPDATE RAG_GRAPH_TRIPLE SET DELETED=1 WHERE DELETED=0 AND (TENANT_ID=#{tenantId} AND SOURCE_ID LIKE #{sourceId})
+    </update>
     <select id="readSize1" resultType="java.lang.Integer">
-        SELECT COUNT(*) FROM RAG_GRAPH_TRIPLE
+        SELECT COUNT(*) FROM RAG_GRAPH_TRIPLE WHERE DELETED=0
     </select>
     <select id="readTriplesForEntity1" resultType="com.lrj.platform.knowledge.graph.mapper.GraphStoreRow">
         SELECT SUBJECT_TEXT, RELATION_TEXT, OBJECT_TEXT, SOURCE_ID, TENANT_ID, CATEGORY
         FROM RAG_GRAPH_TRIPLE
-        WHERE TENANT_ID=#{tenantId} AND (SUBJECT_KEY=#{subjectKey} OR OBJECT_KEY=#{objectKey})
-        ORDER BY CREATED_AT ASC, GRAPH_ID ASC
+        WHERE DELETED=0 AND (TENANT_ID=#{tenantId} AND (SUBJECT_KEY=#{subjectKey} OR OBJECT_KEY=#{objectKey})) ORDER BY CREATED_AT ASC, GRAPH_ID ASC
     </select>
     <select id="readTriplesForEntity2" resultType="com.lrj.platform.knowledge.graph.mapper.GraphStoreRow">
         SELECT SUBJECT_TEXT, RELATION_TEXT, OBJECT_TEXT, SOURCE_ID, TENANT_ID, CATEGORY
         FROM RAG_GRAPH_TRIPLE
-        WHERE TENANT_ID=#{tenantId} AND CATEGORY=#{category} AND (SUBJECT_KEY=#{subjectKey} OR OBJECT_KEY=#{objectKey})
-        ORDER BY CREATED_AT ASC, GRAPH_ID ASC
+        WHERE DELETED=0 AND (TENANT_ID=#{tenantId} AND CATEGORY=#{category} AND (SUBJECT_KEY=#{subjectKey} OR OBJECT_KEY=#{objectKey})) ORDER BY CREATED_AT ASC, GRAPH_ID ASC
     </select>
 </mapper>

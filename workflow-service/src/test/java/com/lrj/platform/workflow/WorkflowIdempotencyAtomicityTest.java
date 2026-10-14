@@ -170,7 +170,7 @@ class WorkflowIdempotencyAtomicityTest {
     }
 
     @Test
-    void purgeRemovesWorkflowAndLedgerSoKeyCanBeReused() {
+    void purgeRetainsDeletedLedgerAndPreventsOldRequestFromRecreatingWorkflow() {
         WorkflowService.StartResult original = start(
                 "acme", "alice", "chat-1", "退款订单 101", "refund-101");
 
@@ -181,14 +181,23 @@ class WorkflowIdempotencyAtomicityTest {
             TenantContext.clear();
         }
         assertThat(processCount()).isZero();
-        assertThat(ledgerCount()).isZero();
+        assertThat(ledgerCount()).isOne();
+        assertThat(jdbc.queryForObject(
+                "SELECT DELETED FROM WF_IDEMPOTENCY WHERE INSTANCE_ID = ?",
+                Integer.class, original.instanceId())).isOne();
+
+        // 保留幂等墓碑，避免迟到重试重新触发已清理工作流的业务副作用。
+        assertThatThrownBy(() -> start("acme", "alice", "chat-1", "退款订单 101", "refund-101"))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+        assertThat(processCount()).isZero();
 
         WorkflowService.StartResult recreated = start(
-                "acme", "alice", "chat-1", "退款订单 101", "refund-101");
+                "acme", "alice", "chat-1", "退款订单 101", "refund-101-new");
         assertThat(recreated.instanceId()).isNotEqualTo(original.instanceId());
         assertThat(recreated.deduplicated()).isFalse();
         assertThat(processCount()).isOne();
-        assertThat(ledgerCount()).isOne();
+        assertThat(ledgerCount()).isEqualTo(2);
     }
 
     @Test

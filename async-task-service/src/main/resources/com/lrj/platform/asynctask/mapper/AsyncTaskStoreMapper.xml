@@ -5,7 +5,7 @@
         SELECT TASK_ID, TENANT_ID, USER_ID, KIND, STATUS, INPUT_JSON, RESULT_JSON,
                ERROR_TEXT, WEBHOOK_URL, CREATED_AT, UPDATED_AT, FINISHED_AT,
                LEASE_OWNER_ID, LEASE_EXPIRES_AT, LEASE_EPOCH
-        FROM ASYNC_TASK WHERE 1=0
+        FROM ASYNC_TASK WHERE DELETED=0 AND (1=0)
     </select>
     <insert id="writePut1">
         INSERT INTO ASYNC_TASK
@@ -13,50 +13,50 @@
         VALUES (#{taskId}, #{tenantId}, #{userId}, #{kind}, #{status}, #{inputJson}, #{resultJson}, #{errorText}, #{webhookUrl}, #{createdAt}, #{updatedAt}, #{finishedAt}, #{leaseOwnerId}, #{leaseExpiresAt}, #{leaseEpoch})
     </insert>
     <select id="readGet1" resultType="com.lrj.platform.asynctask.mapper.AsyncTaskStoreRow">
-        SELECT * FROM ASYNC_TASK WHERE TASK_ID=#{taskId}
+        SELECT * FROM ASYNC_TASK WHERE DELETED=0 AND (TASK_ID=#{taskId})
     </select>
     <update id="writeUpdate1">
         UPDATE ASYNC_TASK
         SET STATUS=#{status}, RESULT_JSON=#{resultJson}, ERROR_TEXT=#{errorText}, UPDATED_AT=#{updatedAt}, FINISHED_AT=#{finishedAt}, LEASE_OWNER_ID=#{leaseOwnerId}, LEASE_EXPIRES_AT=#{leaseExpiresAt}
-        WHERE TASK_ID=#{taskId}
+        WHERE DELETED=0 AND (TASK_ID=#{taskId})
     </update>
     <select id="readListByTenant1" resultType="com.lrj.platform.asynctask.mapper.AsyncTaskStoreRow">
         SELECT * FROM ASYNC_TASK
-        WHERE TENANT_ID=#{tenantId}
-        ORDER BY CREATED_AT DESC
+        WHERE DELETED=0 AND (TENANT_ID=#{tenantId}) ORDER BY CREATED_AT DESC
     </select>
     <select id="readListByOwner1" resultType="com.lrj.platform.asynctask.mapper.AsyncTaskStoreRow">
         SELECT * FROM ASYNC_TASK
-        WHERE TENANT_ID=#{tenantId} AND USER_ID=#{userId}
-        ORDER BY CREATED_AT DESC
+        WHERE DELETED=0 AND (TENANT_ID=#{tenantId} AND USER_ID=#{userId}) ORDER BY CREATED_AT DESC
     </select>
     <select id="readCountByStatus1" resultType="java.lang.Long">
-        SELECT COUNT(*) FROM ASYNC_TASK WHERE STATUS=#{status}
+        SELECT COUNT(*) FROM ASYNC_TASK WHERE DELETED=0 AND (STATUS=#{status})
     </select>
-    <delete id="writeCleanup1">
-        DELETE FROM ASYNC_TASK WHERE FINISHED_AT IS NOT NULL AND FINISHED_AT &lt; #{finishedAt}
-    </delete>
+    <update id="writeCleanup1">
+        UPDATE ASYNC_TASK SET DELETED=1 WHERE DELETED=0 AND (FINISHED_AT IS NOT NULL AND FINISHED_AT &lt; #{finishedAt})
+    </update>
     <select id="readGetForUpdate1" resultType="com.lrj.platform.asynctask.mapper.AsyncTaskStoreRow">
-        SELECT * FROM ASYNC_TASK WHERE TASK_ID=#{taskId} FOR UPDATE
+        SELECT * FROM ASYNC_TASK WHERE DELETED=0 AND (TASK_ID=#{taskId}) FOR UPDATE
     </select>
     <update id="writePersistMutable1">
         UPDATE ASYNC_TASK
         SET STATUS=#{status}, RESULT_JSON=#{resultJson}, ERROR_TEXT=#{errorText}, UPDATED_AT=#{updatedAt}, FINISHED_AT=#{finishedAt},
             LEASE_OWNER_ID=#{leaseOwnerId}, LEASE_EXPIRES_AT=#{leaseExpiresAt}, LEASE_EPOCH=#{leaseEpoch}
-        WHERE TASK_ID=#{taskId}
+        WHERE DELETED=0 AND (TASK_ID=#{taskId})
     </update>
     <select id="drainInventory" resultType="com.lrj.platform.asynctask.mapper.AsyncTaskStoreRow">
         SELECT KIND, STATUS, LEASE_OWNER_ID, COUNT(*) AS OPEN_TASKS FROM ASYNC_TASK
-        WHERE TENANT_ID=#{tenant} AND KIND IN <foreach collection="kinds" item="kind" open="(" close=")" separator=",">#{kind}</foreach>
-        AND STATUS IN <foreach collection="statuses" item="status" open="(" close=")" separator=",">#{status}</foreach>
-        GROUP BY KIND, STATUS, LEASE_OWNER_ID
+        WHERE DELETED=0 AND (TENANT_ID=#{tenant} AND KIND IN <foreach collection="kinds" item="kind" open="(" close=")" separator=",">#{kind}</foreach>
+        AND STATUS IN <foreach collection="statuses" item="status" open="(" close=")" separator=",">#{status}</foreach>) GROUP BY KIND, STATUS, LEASE_OWNER_ID
     </select>
     <select id="orphanIds" resultType="java.lang.String">
-        SELECT TASK_ID FROM ASYNC_TASK WHERE KIND IN <foreach collection="kinds" item="kind" open="(" close=")" separator=",">#{kind}</foreach>
+        SELECT TASK_ID FROM ASYNC_TASK WHERE DELETED=0 AND (KIND IN <foreach collection="kinds" item="kind" open="(" close=")" separator=",">#{kind}</foreach>
         AND KIND NOT LIKE 'agent.readonly.%'
         AND ((STATUS='PENDING' AND CREATED_AT &lt; #{pending})
           OR (STATUS='RUNNING' AND ((LEASE_EXPIRES_AT IS NOT NULL AND LEASE_EXPIRES_AT &lt; #{running})
-          OR (LEASE_EXPIRES_AT IS NULL AND UPDATED_AT &lt; #{running}))))
-        ORDER BY CREATED_AT LIMIT #{limit}
+          OR (LEASE_EXPIRES_AT IS NULL AND UPDATED_AT &lt; #{running}))))) ORDER BY CREATED_AT LIMIT #{limit}
     </select>
+    <update id="cleanupDispatch">
+        UPDATE ASYNC_TASK_DISPATCH SET DELETED=1 WHERE DELETED=0 AND TASK_ID IN
+          (SELECT TASK_ID FROM ASYNC_TASK WHERE DELETED=1 AND FINISHED_AT IS NOT NULL AND FINISHED_AT &lt; #{cutoff})
+    </update>
 </mapper>
