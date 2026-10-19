@@ -11,4 +11,10 @@ public interface IngestionSinkProcessor {
             PreparedIngestionDocument prepared,
             IngestionSink sink
     ) throws Exception;
+
+    /** 分批副作用检查执行权，既有简单实现仍由 worker 在阶段边界保护。 */
+    default void process(IngestionJob job, PreparedIngestionDocument prepared, IngestionSink sink,
+                         Runnable checkpoint) throws Exception {
+        checkpoint.run(); process(job,prepared,sink);
+    }
 }

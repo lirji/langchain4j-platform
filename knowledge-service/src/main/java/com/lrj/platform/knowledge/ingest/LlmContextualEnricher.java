@@ -21,13 +21,21 @@ public class LlmContextualEnricher implements ContextualEnricher {
 
     @Override
     public List<TextSegment> enrich(String docText, List<TextSegment> segments) {
+        return enrich(docText, segments, () -> { });
+    }
+
+    /** 检查点置于容错调用外，失租或预算错误不能被“增强失败保留原文”吞掉。 */
+    @Override
+    public List<TextSegment> enrich(String docText, List<TextSegment> segments, Runnable checkpoint) {
         if (segments == null || segments.isEmpty()) {
             return segments;
         }
         String docWindow = truncate(docText, maxDocChars);
         List<TextSegment> out = new ArrayList<>(segments.size());
         for (TextSegment seg : segments) {
+            checkpoint.run();
             String prefix = safeContext(docWindow, seg.text());
+            checkpoint.run();
             if (prefix == null || prefix.isBlank()) {
                 out.add(seg);
             } else {

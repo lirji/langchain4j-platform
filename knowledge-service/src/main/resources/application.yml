@@ -71,6 +71,21 @@ app:
       # 超限拒绝整份解析结果；该正文预算不能代替进程/页数/OCR 资源隔离。
       max-text-chars: ${RAG_PARSING_MAX_TEXT_CHARS:2000000}
     ingestion:
+      resources:
+        # 同时约束计费输入、临时盘与批次；tokenizer 估算需与实际模型核对。
+        max-input-bytes: ${RAG_INGESTION_MAX_INPUT_BYTES:52428800}
+        max-uploads: ${RAG_INGESTION_MAX_UPLOADS:4}
+        max-uploads-per-tenant: ${RAG_INGESTION_MAX_UPLOADS_PER_TENANT:1}
+        upload-timeout: ${RAG_INGESTION_UPLOAD_TIMEOUT:60s}
+        max-batch-segments: ${RAG_INGESTION_MAX_BATCH_SEGMENTS:32}
+        max-batch-tokens: ${RAG_INGESTION_MAX_BATCH_TOKENS:8192}
+        max-segment-tokens: ${RAG_INGESTION_MAX_SEGMENT_TOKENS:2048}
+        max-document-tokens: ${RAG_INGESTION_MAX_DOCUMENT_TOKENS:500000}
+        max-batch-bytes: ${RAG_INGESTION_MAX_BATCH_BYTES:1048576}
+        max-document-bytes: ${RAG_INGESTION_MAX_DOCUMENT_BYTES:16777216}
+        max-vector-bytes: ${RAG_INGESTION_MAX_VECTOR_BYTES:33554432}
+        tokenizer-model: ${RAG_INGESTION_TOKENIZER_MODEL:gpt-4o-mini}
+        preparation-timeout: ${RAG_INGESTION_PREPARATION_TIMEOUT:10m}
       prepared:
         # 写索引前持久化最终文本与向量；改变生成行为时提升版本，历史快照仍继续复用。
         max-bytes: ${RAG_INGESTION_PREPARED_MAX_BYTES:67108864}

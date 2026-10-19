@@ -16,6 +16,8 @@ def main():
     parser.add_argument("--s3-bucket", default="lc4j-knowledge-sources")
     parser.add_argument("--s3-access-key", default="lc4j-knowledge")
     parser.add_argument("--private-env", default="deploy/.dev-infra.env")
+    parser.add_argument("--tests", default="PreparedIngestionPersistenceTest,JdbcIngestionJobStoreTest")
+    parser.add_argument("--evidence-dir", default="kdp04")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     # 只读取已有项目凭据，不创建/轮换共享账号；不回显配置或命令环境。
@@ -31,14 +33,14 @@ def main():
                    "PREPARED_IT_S3_ENDPOINT": args.s3_endpoint, "PREPARED_IT_S3_BUCKET": args.s3_bucket,
                    "PREPARED_IT_S3_ACCESS_KEY": args.s3_access_key,
                    "PREPARED_IT_S3_SECRET_KEY": values["LC4J_S3_PASSWORD"]}
-    log = root / "knowledge-service/target/knowledge-parsing-hardening/kdp04/mysql-s3.log"
+    log = root / "knowledge-service/target/knowledge-parsing-hardening" / args.evidence_dir / "mysql-s3.log"
     log.parent.mkdir(parents=True, exist_ok=True)
     try:
         subprocess.run(command, input=f"CREATE DATABASE `{schema}` CHARACTER SET utf8mb4; CREATE USER '{user}'@'%' IDENTIFIED BY '{password}'; GRANT ALL ON `{schema}`.* TO '{user}'@'%';",
                        text=True, check=True, capture_output=True)
         with log.open("w") as output:
             result = subprocess.run(["mvn", "-o", "-B", "-pl", "knowledge-service", "-am",
-                                     "-Dtest=PreparedIngestionPersistenceTest,JdbcIngestionJobStoreTest",
+                                     "-Dtest=" + args.tests,
                                      "-Dsurefire.failIfNoSpecifiedTests=false", "test"],
                                     cwd=root, env=environment, stdout=output, stderr=subprocess.STDOUT)
         print(f"MySQL/S3 snapshot recovery: {'PASS' if result.returncode == 0 else 'FAIL'}; log={log}")

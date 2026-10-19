@@ -49,7 +49,7 @@ public class GraphIngestor {
         if (segments == null || segments.isEmpty()) {
             return;
         }
-        Runnable task = () -> ingestNow(segments);
+        Runnable task = () -> ingestSynchronously(segments, () -> { });
         if (async) {
             executor.execute(task);
         } else {
@@ -61,11 +61,14 @@ public class GraphIngestor {
         return graphStore.removeBySourcePrefix(tenantId, sourceIdPrefix);
     }
 
-    private void ingestNow(List<TextSegment> segments) {
+    /** 可靠任务必须等到真实写入完成再确认 sink；每块抽取和批次写入前检查执行权。 */
+    public void ingestSynchronously(List<TextSegment> segments, Runnable checkpoint) {
         List<Triple> triples = new ArrayList<>();
         for (int i = 0; i < segments.size(); i++) {
+            checkpoint.run();
             TextSegment segment = segments.get(i);
             ExtractedTriples extracted = extractor.extract(segment.text());
+            checkpoint.run();
             String tenantId = segment.metadata().getString("tenantId");
             String category = segment.metadata().getString("category");
             String sourceId = versionedSourceId(segment, i);
@@ -87,7 +90,9 @@ public class GraphIngestor {
                 accepted++;
             }
         }
+        checkpoint.run();
         graphStore.add(triples);
+        checkpoint.run();
         if (!triples.isEmpty()) {
             log.info("ingested graph triples count={}", triples.size());
         }

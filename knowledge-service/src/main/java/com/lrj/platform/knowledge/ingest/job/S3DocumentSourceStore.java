@@ -32,6 +32,18 @@ public class S3DocumentSourceStore implements DocumentSourceStore {
     @Override
     public DocumentSourceRef put(PutSource command) throws IOException {
         InMemoryDocumentSourceStore.validateCommand(command);
+        return putBody(command, RequestBody.fromInputStream(command.content(), command.size()));
+    }
+
+    /** SDK 可自行重开私有暂存文件，避免大请求重试依赖 InputStream 的有限 mark/reset 缓冲。 */
+    @Override
+    public DocumentSourceRef putFile(SourceDescriptor source, java.nio.file.Path file) throws IOException {
+        if (java.nio.file.Files.size(file) != source.size()) throw new IOException("staged source size mismatch");
+        return putBody(source.withContent(InputStream.nullInputStream()), RequestBody.fromFile(file));
+    }
+
+    private DocumentSourceRef putBody(PutSource command, RequestBody body) throws IOException {
+        InMemoryDocumentSourceStore.validateCommand(command);
         String key = prefix + InMemoryDocumentSourceStore.objectKey(command);
         try {
             client.putObject(
@@ -45,7 +57,7 @@ public class S3DocumentSourceStore implements DocumentSourceStore {
                                     "document-id", command.documentId(),
                                     "document-version", Long.toString(command.version())))
                             .build(),
-                    RequestBody.fromInputStream(command.content(), command.size()));
+                    body);
             return new DocumentSourceRef(
                     bucket, key, command.contentHash(), command.contentType(), command.size());
         } catch (SdkException ex) {

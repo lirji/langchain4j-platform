@@ -1,7 +1,6 @@
 package com.lrj.platform.knowledge.ingest.job;
 
 import com.lrj.platform.knowledge.DocumentSplitterFactory;
-import com.lrj.platform.knowledge.ChunkIndexing;
 import com.lrj.platform.knowledge.ingest.ContextualEnricher;
 import com.lrj.platform.knowledge.lifecycle.DocumentInfo;
 import com.lrj.platform.knowledge.lifecycle.DocumentTextExtractor;
@@ -29,6 +28,8 @@ public class DefaultIngestionDocumentPreparer implements IngestionDocumentPrepar
     private final EmbeddingModel embeddingModel;
     private final ChunkMetrics chunkMetrics;
     private final Clock clock;
+    private final IngestionResourceProperties resources;
+    private final IngestionBatcher batcher;
 
     public DefaultIngestionDocumentPreparer(
             DocumentSourceStore sources,
@@ -39,6 +40,14 @@ public class DefaultIngestionDocumentPreparer implements IngestionDocumentPrepar
             ChunkMetrics chunkMetrics,
             Clock clock
     ) {
+        this(sources,textExtractor,splitterFactory,contextualEnricher,embeddingModel,chunkMetrics,clock,new IngestionResourceProperties());
+    }
+
+    /** 生产预算与准备阶段边界由配置提供，便捷测试构造沿用安全缺省。 */
+    public DefaultIngestionDocumentPreparer(DocumentSourceStore sources, DocumentTextExtractor textExtractor,
+            DocumentSplitterFactory splitterFactory, ContextualEnricher contextualEnricher, EmbeddingModel embeddingModel,
+            ChunkMetrics chunkMetrics, Clock clock, IngestionResourceProperties resources) {
+        this.resources = resources; this.batcher = new IngestionBatcher(resources);
         this.sources = Objects.requireNonNull(sources);
         this.textExtractor = Objects.requireNonNull(textExtractor);
         this.splitterFactory = Objects.requireNonNull(splitterFactory);
@@ -50,11 +59,24 @@ public class DefaultIngestionDocumentPreparer implements IngestionDocumentPrepar
 
     @Override
     public PreparedIngestionDocument prepare(IngestionJob job) throws Exception {
+        return prepare(job, () -> { });
+    }
+
+    /** 整文预检查和批次检查同时执行；预算截止不能被任务心跳无限延长。 */
+    @Override
+    public PreparedIngestionDocument prepare(IngestionJob job, Runnable leaseCheckpoint) throws Exception {
+        long deadline = System.nanoTime() + resources.getPreparationTimeout().toNanos();
+        Runnable checkpoint = () -> {
+            leaseCheckpoint.run();
+            if (System.nanoTime() > deadline) throw new IngestionResourceException(IngestionResourceError.DEADLINE);
+        };
+        checkpoint.run();
         com.lrj.platform.knowledge.lifecycle.ParsedDocument parsed;
         try (InputStream input = sources.open(job.tenantId(), job.source())) {
             parsed = textExtractor.parse(input, job.displayName());
         }
         String text = parsed.text();
+        checkpoint.run();
         Document document = Document.from(text);
         document.metadata()
                 .put("tenantId", job.tenantId())
@@ -67,11 +89,15 @@ public class DefaultIngestionDocumentPreparer implements IngestionDocumentPrepar
         }
 
         List<TextSegment> segments = splitterFactory.split(parsed, document.metadata());
-        segments = contextualEnricher.enrich(text, segments);
+        // 在可选上下文模型调用前预检查原文，避免明显超限文档先产生额外计费调用。
+        batcher.embeddingBatches(segments);
+        checkpoint.run();
+        segments = contextualEnricher.enrich(text, segments, checkpoint);
+        checkpoint.run();
         if (chunkMetrics != null) {
             chunkMetrics.record(splitterFactory.strategy(), 1, segments);
         }
-        List<Embedding> embeddings = embeddingModel.embedAll(segments).content();
+        List<Embedding> embeddings = batcher.embed(embeddingModel,segments,checkpoint);
         DocumentInfo info = new DocumentInfo(
                 job.documentId(),
                 job.tenantId(),

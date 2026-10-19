@@ -122,3 +122,11 @@ Markdown 另以已有文本提取和语法分块测试作为证据，不把 MIME
 - Compose 组合重复 `/tmp` 已另作 `176d83b` 修复提交；四种 CI 组合静态检查与 runtime hardening gate 通过，远程 CI 待确认。源码专项与远程供应链门禁分别报告。
 
 - 最终自审发现超长代码若交给通用 recursive 兜底会规整原文空白，已专用分段并测试 chars/tokens 下逐字符还原。`kdp06b-final-focused.log` 34 项通过，含结构语料、同步/异步、真实 ES、引用原文；最终指纹已更新。973 项是之前全回归数，未把后补 34 项简单叠加为不重复用例数。
+
+## KDP-05-B1 流式输入与批次预算
+
+- 流式输入/Submission/Controller/S3 单测 15 项通过（`kdp05b-stream-tests.log`）；批次首轮 29 项通过（`kdp05b-batch-tests.log`）。后补 19 项中 18 通过、1 个真实 S3 条件测试跳过（`kdp05b-replay-tests.log`），不能简单相加为去重数量。
+- `python3 deploy/test-ingestion-prepared.py --evidence-dir kdp05b` 使用随机 MySQL schema/account 和只属于用例的 S3 对象，6 项全通过（`kdp05b/mysql-s3.log`），包含 5 MiB 流式源文件 SHA-256 往返与跨租户拒绝；完成后清理自有测试资源，不触及业务对象。测试脚本支持指定测试与证据子目录以保留既有结果。
+- 四种 CI Compose 组合与 `bash deploy/test-runtime-hardening-config.sh` 通过（`kdp05b-compose.log`）；`mvn -B -o -pl knowledge-service -am -DskipTests package` 成功（`kdp05b-package.log`）。没有部署业务服务或调用真实计费模型。
+- 首轮完整回归发现同步入口维度守卫回归，保留 `kdp05b-dimension-regression-failure.log`；恢复守卫后重跑 `KDP_ES_TEST_URL=http://127.0.0.1:49200 mvn -B -o -pl knowledge-service -am -Dparsing.test.artifact=$PWD/knowledge-service/target/knowledge-service-0.1.0-SNAPSHOT.jar test` 通过：**684 项、0 失败/错误、10 跳过，674 实际执行**。knowledge-service 504 项/6 跳过；真实 S3 条件测试已在独立集成命令执行通过。日志 `kdp05b-full-regression.log`。Boot artifact 是本轮打包版本，之后仅恢复同步入口维度守卫；该守卫由本轮源码测试验证，未宣称旧 jar 为最终发布制品。
+- 最终源码/配置/测试指纹 `32c2c3b37035c86661bb42ab3f0eac1d5572de179316608dbef379ec8e9e52e0`，31 文件，清单 `kdp05b/validated-files.json`。B1 验收通过；B2 跨副本公平调度继续实施，整个 KDP-05-B 尚未完成。

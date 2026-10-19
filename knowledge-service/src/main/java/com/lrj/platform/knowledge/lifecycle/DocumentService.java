@@ -79,6 +79,14 @@ public class DocumentService {
     private SegmentIndexer segmentIndexer = new NoopSegmentIndexer();
     // 细粒度授权钩子（接 auth-platform）：默认 Noop（关时零副作用、测试不受影响），app.rag.authz.mode=shadow|enforce 时注入 Real。
     private KnowledgeAuthz knowledgeAuthz = new NoopKnowledgeAuthz();
+    private com.lrj.platform.knowledge.ingest.job.IngestionBatcher batcher =
+            new com.lrj.platform.knowledge.ingest.job.IngestionBatcher(new com.lrj.platform.knowledge.ingest.job.IngestionResourceProperties());
+
+    /** 同步兼容入口也受模型批次预算保护，避免绕过可靠 worker 的容量限制。 */
+    @Autowired
+    public void setIngestionResources(com.lrj.platform.knowledge.ingest.job.IngestionResourceProperties resources) {
+        batcher = new com.lrj.platform.knowledge.ingest.job.IngestionBatcher(resources);
+    }
 
     @Autowired
     public DocumentService(EmbeddingStoreRouter storeRouter,
@@ -236,10 +244,7 @@ public class DocumentService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "no edit permission to overwrite existing document");
         }
         int nextVersion = existing
-                .map(prev -> {
-                    deleteInternal(prev);
-                    return prev.version() + 1;
-                })
+                .map(prev -> prev.version() + 1)
                 .orElse(1);
 
         Document doc = Document.from(text);
@@ -257,20 +262,15 @@ public class DocumentService {
                 ? ChunkIndexing.sequential(splitterFactory.create().split(doc))
                 : splitterFactory.split(parsed, doc.metadata());
         // Contextual Retrieval：入库前给每 chunk 加文档级上下文前缀再嵌入（默认关时为 no-op，原样返回）。
+        batcher.embeddingBatches(segments);
         segments = contextualEnricher.enrich(text, segments);
         // 切分质量打点（F5.3）：记录最终入库形态的尺寸分布/碎块/超大块（默认注入，null 时跳过）。
         if (chunkMetrics != null) {
             chunkMetrics.record(splitterFactory.strategy(), 1, segments);
         }
-        List<Embedding> embeddings = embeddingModel.embedAll(segments).content();
-        storeRouter.forTenant(tenantId, embeddingModel.dimension()).addAll(embeddings, segments);
-        documentMirror.add(segments);
-        // ES 全文索引（es-hybrid-rerank）：与向量写入同一批最终 chunk；默认 Noop，失败按 fail-fast/best-effort 由索引器处理。
-        segmentIndexer.index(segments);
-        if (graphIngestor != null) {
-            graphIngestor.ingest(segments);
-        }
-
+        // 同步入口使用当前模型，保留既有配置维度守卫；快照重试路径才以历史实际向量维度为准。
+        var store = storeRouter.forTenant(tenantId, embeddingModel.dimension());
+        List<Embedding> embeddings = batcher.embed(embeddingModel, segments, () -> { });
         DocumentInfo info = new DocumentInfo(
                 docId,
                 tenantId,
@@ -281,6 +281,17 @@ public class DocumentService {
                 nextVersion,
                 Instant.now(),
                 category == null || category.isBlank() ? null : category);
+        var prepared = new com.lrj.platform.knowledge.ingest.job.PreparedIngestionDocument(info, segments, embeddings);
+        var batches = batcher.sinkBatches(prepared);
+        // 先完成可拒绝的模型/容量检查再替换旧版本；同步兼容路径仍不具备可靠任务的原子可见性。
+        existing.ifPresent(this::deleteInternal);
+        for (var batch : batches) {
+            var part = segments.subList(batch.from(), batch.to());
+            store.addAll(embeddings.subList(batch.from(), batch.to()), part);
+            documentMirror.add(part);
+            segmentIndexer.index(part);
+            if (graphIngestor != null) { graphIngestor.ingest(part); }
+        }
         registry.put(info);
         // 双写授权关系：仅【新建】文档写 owner + home_dept（上传人部门）；同名覆盖保留原 owner（不夺权）。默认 Noop。
         if (!shared && existing.isEmpty()) {

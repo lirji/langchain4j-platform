@@ -57,6 +57,49 @@ class DefaultIngestionSinkProcessorTest {
         assertThat(registry.get("acme", "doc-1")).contains(prepared.info());
     }
 
+    @SuppressWarnings("unchecked")
+    @Test
+    void partialBatchReplayUsesGlobalStableIdsAndNeverPublishesEarly() {
+        EmbeddingStore<TextSegment> store = mock(EmbeddingStore.class);
+        var router = mock(EmbeddingStoreRouter.class); when(router.forTenant("acme",1)).thenReturn(store);
+        var limits = new IngestionResourceProperties(); limits.setMaxBatchSegments(2);
+        var registry = new InMemoryDocumentRegistry();
+        var processor = new DefaultIngestionSinkProcessor(router,mock(dev.langchain4j.model.embedding.EmbeddingModel.class),
+                new RecordingIndexer(),null,new NoopKnowledgeAuthz(),registry,limits);
+        var job = job(); var base = prepared(job);
+        var segments = java.util.stream.IntStream.range(0,5).mapToObj(i -> TextSegment.from("row-"+i)).toList();
+        var document = new PreparedIngestionDocument(base.info(),segments,
+                segments.stream().map(s -> Embedding.from(new float[]{1})).toList());
+        var calls = new java.util.ArrayList<List<String>>(); var fail = new java.util.concurrent.atomic.AtomicBoolean(true);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            List<String> ids = invocation.getArgument(0); calls.add(List.copyOf(ids));
+            if(calls.size()==2 && fail.getAndSet(false)) throw new IllegalStateException("partial timeout");
+            return null;
+        }).when(store).addAll(org.mockito.ArgumentMatchers.anyList(),org.mockito.ArgumentMatchers.anyList(),org.mockito.ArgumentMatchers.anyList());
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> processor.process(job,document,IngestionSink.VECTOR))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(registry.get("acme","doc-1")).isEmpty();
+        processor.process(job,document,IngestionSink.VECTOR);
+        assertThat(calls).extracting(List::size).containsExactly(2,2,2,2,1);
+        assertThat(calls.get(0)).isEqualTo(calls.get(2)); assertThat(calls.get(1)).isEqualTo(calls.get(3));
+        assertThat(calls.subList(2,5).stream().flatMap(List::stream).toList()).doesNotHaveDuplicates();
+        assertThat(registry.get("acme","doc-1")).isEmpty();
+    }
+
+    @Test
+    void reliableGraphSinkWaitsForWriteEvenWhenLegacyAsyncIsEnabled() {
+        var tasks = new java.util.ArrayList<Runnable>();
+        var graphStore = mock(com.lrj.platform.knowledge.graph.GraphStore.class);
+        var extractor = mock(com.lrj.platform.knowledge.graph.GraphExtractor.class);
+        when(extractor.extract("hello")).thenReturn(new com.lrj.platform.knowledge.graph.ExtractedTriples(List.of()));
+        var graph = new com.lrj.platform.knowledge.graph.GraphIngestor(extractor,graphStore,10,Set.of(),java.util.Map.of(),tasks::add,true);
+        var processor = new DefaultIngestionSinkProcessor(mock(EmbeddingStoreRouter.class),
+                mock(dev.langchain4j.model.embedding.EmbeddingModel.class),new RecordingIndexer(),graph,
+                new NoopKnowledgeAuthz(),new InMemoryDocumentRegistry());
+        processor.process(job(),prepared(job()),IngestionSink.GRAPH);
+        assertThat(tasks).isEmpty(); verify(graphStore).add(List.of());
+    }
+
     private static IngestionJob job() {
         return IngestionJob.received(
                 "job-1", "key-1", "acme", "alice", Set.of("ingest"),

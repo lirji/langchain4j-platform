@@ -37,6 +37,14 @@ public class KnowledgeExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(KnowledgeExceptionHandler.class);
 
+    /** 资源预算和暂时准入失败沿用统一错误响应，稳定 code 不依赖异常文案判断。 */
+    @ExceptionHandler(com.lrj.platform.knowledge.ingest.job.IngestionResourceException.class)
+    public ResponseEntity<Map<String, Object>> onIngestionResource(
+            com.lrj.platform.knowledge.ingest.job.IngestionResourceException exception) {
+        return ResponseEntity.status(exception.error().status())
+                .body(Map.of("error",exception.error().code(),"message",exception.error().message()));
+    }
+
     /** 保留 controller 主动抛出的状态语义（如 ingest/public-ingest scope 不足的 403）。 */
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, Object>> onStatus(ResponseStatusException ex) {

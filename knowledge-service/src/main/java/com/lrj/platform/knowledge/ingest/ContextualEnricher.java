@@ -15,4 +15,12 @@ public interface ContextualEnricher {
 
     /** 返回增强后的 segments（数量、顺序、metadata 保持不变，仅 text 可能被加前缀）。 */
     List<TextSegment> enrich(String docText, List<TextSegment> segments);
+
+    /** 可靠入库在可选模型调用边界检查租约与预算，旧 SPI 实现保持兼容。 */
+    default List<TextSegment> enrich(String docText, List<TextSegment> segments, Runnable checkpoint) {
+        checkpoint.run();
+        List<TextSegment> enriched = enrich(docText, segments);
+        checkpoint.run();
+        return enriched;
+    }
 }

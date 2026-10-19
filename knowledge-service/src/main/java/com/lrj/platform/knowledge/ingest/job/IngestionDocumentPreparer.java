@@ -7,4 +7,9 @@ package com.lrj.platform.knowledge.ingest.job;
 public interface IngestionDocumentPreparer {
 
     PreparedIngestionDocument prepare(IngestionJob job) throws Exception;
+
+    /** 兼容既有实现；支持分批的实现必须在外部调用前后执行检查点。 */
+    default PreparedIngestionDocument prepare(IngestionJob job, Runnable checkpoint) throws Exception {
+        checkpoint.run(); return prepare(job);
+    }
 }

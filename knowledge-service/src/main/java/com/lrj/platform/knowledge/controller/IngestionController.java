@@ -50,7 +50,7 @@ public class IngestionController {
         if (file.isEmpty()) {
             throw new IllegalArgumentException("file is empty");
         }
-        IngestionJob job = submissions.submit(new IngestionSubmissionService.SubmitCommand(
+        IngestionSubmissionService.SubmitRequest command = new IngestionSubmissionService.SubmitRequest(
                 idempotencyKey,
                 tenant.tenantId(),
                 tenant.userId(),
@@ -67,8 +67,11 @@ public class IngestionController {
                 documentVersion,
                 file.getContentType() == null
                         ? MediaType.APPLICATION_OCTET_STREAM_VALUE
-                        : file.getContentType(),
-                file.getBytes()));
+                        : file.getContentType());
+        IngestionJob job;
+        try (var input = file.getInputStream()) {
+            job = submissions.submitStream(command, input, file.getSize());
+        }
         return ResponseEntity.accepted()
                 .location(java.net.URI.create("/rag/ingestions/" + job.jobId()))
                 .body(IngestionJobView.from(job));

@@ -138,6 +138,29 @@ class IngestionJobWorkerTest {
         }
     }
 
+    @Test
+    void lossOfOwnershipInsidePreparationStopsBeforeSnapshotAndSinks() {
+        var job = store.createOrGet(job("lost-batch"));
+        var sinks = new AtomicInteger();
+        IngestionDocumentPreparer preparer = new IngestionDocumentPreparer() {
+            @Override public PreparedIngestionDocument prepare(IngestionJob current) { throw new AssertionError("checkpoint path required"); }
+            @Override public PreparedIngestionDocument prepare(IngestionJob current, Runnable checkpoint) {
+                checkpoint.run();
+                var saved = store.find("acme", job.jobId()).orElseThrow();
+                store.save(saved.withExecution(saved.execution().lease("another-worker", NOW.plusSeconds(60))),saved.revision());
+                checkpoint.run();
+                throw new AssertionError("lost worker must stop");
+            }
+        };
+        try(var worker = new IngestionJobWorker(store,preparer,(current,document,sink)->sinks.incrementAndGet(),clock)) {
+            assertThat(worker.process("acme", job.jobId())).isFalse();
+            var persisted = store.find("acme",job.jobId()).orElseThrow();
+            assertThat(persisted.execution().leaseOwner()).isEqualTo("another-worker");
+            assertThat(persisted.preparation().bound()).isFalse();
+            assertThat(sinks).hasValue(0);
+        }
+    }
+
     private IngestionJob job(String jobId) {
         return job(jobId, Set.of(IngestionSink.VECTOR, IngestionSink.REGISTRY));
     }

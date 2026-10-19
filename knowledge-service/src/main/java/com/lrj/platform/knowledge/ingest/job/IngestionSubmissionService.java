@@ -7,11 +7,7 @@ import com.lrj.platform.knowledge.lifecycle.DocumentRegistry;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
-import java.time.Instant;
-import java.util.HexFormat;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -28,6 +24,7 @@ public class IngestionSubmissionService {
     private final KnowledgeAuthz authorization;
     private final Clock clock;
     private final Set<IngestionSink> enabledSinks;
+    private final IngestionUploadStager uploads;
 
     public IngestionSubmissionService(
             DocumentSourceStore sources,
@@ -37,6 +34,14 @@ public class IngestionSubmissionService {
             Clock clock,
             Set<IngestionSink> enabledSinks
     ) {
+        this(sources,jobs,registry,authorization,clock,enabledSinks,new IngestionResourceProperties());
+    }
+
+    /** 生产注入资源预算；旧编程式构造保持相同默认行为。 */
+    public IngestionSubmissionService(DocumentSourceStore sources, IngestionJobStore jobs, DocumentRegistry registry,
+                                      KnowledgeAuthz authorization, Clock clock, Set<IngestionSink> enabledSinks,
+                                      IngestionResourceProperties limits) {
+        this.uploads = new IngestionUploadStager(limits);
         this.sources = Objects.requireNonNull(sources);
         this.jobs = Objects.requireNonNull(jobs);
         this.registry = Objects.requireNonNull(registry);
@@ -48,55 +53,43 @@ public class IngestionSubmissionService {
         }
     }
 
+    /** 兼容旧 byte[] 调用方；multipart 改走 submitStream，避免创建完整字节数组。 */
     public IngestionJob submit(SubmitCommand command) throws IOException {
+        Objects.requireNonNull(command, "command");
+        if (command.content == null || command.content.length == 0)
+            throw new IngestionResourceException(IngestionResourceError.INPUT_SIZE);
+        return submitStream(command.request(), new ByteArrayInputStream(command.content), command.content.length);
+    }
+
+    /** 输入边读边哈希后以可重开文件落对象存储，调用方持有并关闭原始输入流。 */
+    public IngestionJob submitStream(SubmitRequest command, java.io.InputStream input, long declaredSize) throws IOException {
         validate(command);
-        // 外层类可读取 record 私有快照；只计算一次指纹，避免每次 accessor 防御性拷贝整个文件。
-        String contentHash = "sha256:" + sha256(command.content);
         var existing = jobs.findByIdempotency(command.tenantId(), command.idempotencyKey());
-        if (existing.isPresent()) {
-            validateReplay(command, existing.get(), contentHash);
-            return existing.get();
+        if (existing.isPresent()) requireOwner(existing.get(), command.userId());
+        DocumentInfo registered = registry.get(command.tenantId(), command.documentId()).orElse(null);
+        if (existing.isEmpty()) validateVersionAndAuthorization(command, registered);
+        try (var staged = uploads.stage(command.tenantId(), input, declaredSize)) {
+            String contentHash = staged.hash();
+            if (existing.isPresent()) {
+                validateReplay(command,existing.get(),contentHash); return existing.get();
+            }
+            DocumentSourceRef source = sources.putFile(new DocumentSourceStore.SourceDescriptor(
+                    command.tenantId(),command.documentId(),command.documentVersion(),command.contentType(),
+                    staged.size(),contentHash),staged.path());
+            IngestionJob candidate = IngestionJob.received(UUID.randomUUID().toString(), command.idempotencyKey(),
+                    command.tenantId(),command.userId(),command.scopes(),command.department(),command.traceId(),
+                    command.documentId(),command.displayName(),command.category(),command.documentVersion(),
+                    registered == null,source,enabledSinks,clock.instant());
+            // 数据库结果未知时对象可能已被获胜任务引用，只清理本地暂存，不能删除权威原文。
+            IngestionJob result = jobs.createOrGet(candidate);
+            validateReplay(command,result,contentHash); return result;
+        } catch (IOException failure) {
+            throw new IngestionResourceException(IngestionResourceError.INPUT_UNAVAILABLE,failure);
         }
-
-        DocumentInfo registered = registry
-                .get(command.tenantId(), command.documentId())
-                .orElse(null);
-        boolean newDocument = registered == null;
-        validateVersionAndAuthorization(command, registered);
-
-        DocumentSourceRef source = sources.put(new DocumentSourceStore.PutSource(
-                command.tenantId(),
-                command.documentId(),
-                command.documentVersion(),
-                command.contentType(),
-                command.content.length,
-                contentHash,
-                new ByteArrayInputStream(command.content)));
-        Instant now = clock.instant();
-        IngestionJob candidate = IngestionJob.received(
-                UUID.randomUUID().toString(),
-                command.idempotencyKey(),
-                command.tenantId(),
-                command.userId(),
-                command.scopes(),
-                command.department(),
-                command.traceId(),
-                command.documentId(),
-                command.displayName(),
-                command.category(),
-                command.documentVersion(),
-                newDocument,
-                source,
-                enabledSinks,
-                now);
-        // 对象键可能被并发获胜任务复用；数据库失败/响应丢失时不得删除可能已被引用的原文。
-        IngestionJob result = jobs.createOrGet(candidate);
-        validateReplay(command, result, contentHash);
-        return result;
     }
 
     /** 重放也检查请求指纹与提交者；相同租户不能通过猜测幂等键读取他人任务。 */
-    private void validateReplay(SubmitCommand command, IngestionJob existing, String contentHash) {
+    private void validateReplay(SubmitRequest command, IngestionJob existing, String contentHash) {
         requireOwner(existing, command.userId());
         if (!existing.documentId().equals(command.documentId())
                 || existing.documentVersion() != command.documentVersion()
@@ -144,10 +137,9 @@ public class IngestionSubmissionService {
                 .orElseThrow(() -> new IngestionJobNotFoundException(jobId));
     }
 
-    private static void validate(SubmitCommand command) {
+    private static void validate(SubmitRequest command) {
         Objects.requireNonNull(command, "command");
-        if (command.idempotencyKey() == null || command.idempotencyKey().isBlank()
-                || command.content == null || command.content.length == 0) {
+        if (command.idempotencyKey() == null || command.idempotencyKey().isBlank()) {
             throw new IllegalArgumentException("idempotencyKey and non-empty content are required");
         }
         if (command.tenantId() == null || command.userId() == null || command.documentId() == null
@@ -162,7 +154,7 @@ public class IngestionSubmissionService {
     }
 
     private void validateVersionAndAuthorization(
-            SubmitCommand command,
+            SubmitRequest command,
             DocumentInfo registered
     ) {
         if (registered == null) {
@@ -192,12 +184,15 @@ public class IngestionSubmissionService {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
-    private static String sha256(byte[] content) {
-        try {
-            return HexFormat.of().formatHex(
-                    MessageDigest.getInstance("SHA-256").digest(content));
-        } catch (NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("SHA-256 is unavailable", ex);
+    /** 不携带原文字节的提交元数据，所有身份仍由认证入口提供。 */
+    public record SubmitRequest(String idempotencyKey, String tenantId, String userId, Set<String> scopes,
+                                String department, String traceId, String documentId, String displayName, String category,
+                                long documentVersion, String contentType) {
+        public SubmitRequest {
+            idempotencyKey=normalized(idempotencyKey);tenantId=normalized(tenantId);userId=normalized(userId);
+            documentId=normalized(documentId);displayName=normalized(displayName);category=normalized(category);
+            department=normalized(department);contentType=normalized(contentType);scopes=Set.copyOf(scopes);
+            traceId=traceId==null || traceId.isBlank()?UUID.randomUUID().toString():traceId;
         }
     }
 
@@ -227,6 +222,11 @@ public class IngestionSubmissionService {
             traceId = traceId == null || traceId.isBlank() ? UUID.randomUUID().toString() : traceId;
             scopes = Set.copyOf(scopes);
             content = content == null ? null : content.clone();
+        }
+
+        /** 复用已经复制的身份字段，不通过 content() 再复制大字节数组。 */
+        public SubmitRequest request() {
+            return new SubmitRequest(idempotencyKey,tenantId,userId,scopes,department,traceId,documentId,displayName,category,documentVersion,contentType);
         }
 
         @Override

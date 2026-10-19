@@ -107,7 +107,7 @@ public class IngestionJobWorker implements AutoCloseable {
                     IngestionJob running = lease.change(j -> IngestionJobStateMachine.beginSink(j, next, clock.instant()));
                     long sinkStarted = System.nanoTime();
                     try {
-                        processWithContext(running, prepared, next);
+                        processWithContext(running, prepared, next, lease::checkActive);
                         lease.change(j -> {
                             IngestionJob succeeded = IngestionJobStateMachine.sinkSucceeded(j, next, clock.instant());
                             return succeeded.status() == IngestionStatus.READY
@@ -175,6 +175,19 @@ public class IngestionJobWorker implements AutoCloseable {
 
         synchronized IngestionJob current() { return current; }
 
+        /** 每批从权威存储核对 owner/revision，不能仅依赖尚未执行的本地心跳。 */
+        synchronized void checkActive() {
+            IngestionJob persisted = store.find(current.tenantId(), current.jobId()).orElse(null);
+            if (lost || Thread.currentThread().isInterrupted() || persisted == null
+                    || current.execution().leaseUntil() == null
+                    || !current.execution().leaseUntil().isAfter(clock.instant())
+                    || persisted.revision() != current.revision()
+                    || !Objects.equals(persisted.execution().leaseOwner(), current.execution().leaseOwner())) {
+                lost = true;
+                throw new IngestionJobConflictException("ingestion lease lost");
+            }
+        }
+
         synchronized IngestionJob change(java.util.function.UnaryOperator<IngestionJob> operation) {
             if (lost || current.execution().leaseUntil() == null
                     || !current.execution().leaseUntil().isAfter(clock.instant())) {
@@ -216,6 +229,7 @@ public class IngestionJobWorker implements AutoCloseable {
     }
 
     private PreparedIngestionDocument prepareOrLoad(Lease lease, IngestionJob original) throws Exception {
+        lease.checkActive();
         IngestionPreparation preparation = lease.current().preparation();
         if (preparation == null) {
             // 旧 PROCESSING 即使所有 sink 被 reconciler 重置，也无法证明没有历史副作用。
@@ -233,8 +247,12 @@ public class IngestionJobWorker implements AutoCloseable {
             throw new PreparedResultException(PreparedResultError.LEGACY);
         }
         IngestionJob preparing = lease.current();
-        IngestionPreparation saved = withContext(preparing,
-                () -> preparedStore.save(preparing, preparer.prepare(preparing)));
+        IngestionPreparation saved = withContext(preparing, () -> {
+            PreparedIngestionDocument document = preparer.prepare(preparing, lease::checkActive);
+            lease.checkActive();
+            return preparedStore.save(preparing, document);
+        });
+        lease.checkActive();
         PreparedIngestionDocument frozen = withContext(preparing, () -> preparedStore.load(preparing, saved));
         lease.change(j -> j.withPreparation(saved));
         return frozen;
@@ -243,10 +261,11 @@ public class IngestionJobWorker implements AutoCloseable {
     private void processWithContext(
             IngestionJob job,
             PreparedIngestionDocument prepared,
-            IngestionSink sink
+            IngestionSink sink,
+            Runnable checkpoint
     ) throws Exception {
         withContext(job, () -> {
-            processor.process(job, prepared, sink);
+            processor.process(job, prepared, sink, checkpoint);
             return null;
         });
     }

@@ -406,6 +406,9 @@ services:
 
   knowledge-service:
     <<: *app-security
+    # combined 同时容纳受限上传和解析私有目录；split 各角色可覆盖。
+    tmpfs:
+      - /tmp:size=768m,mode=1777
     build:
       context: ../knowledge-service
     extra_hosts:

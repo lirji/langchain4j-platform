@@ -106,6 +106,40 @@ class PreparedIngestionPersistenceTest {
         }
     }
 
+    @Test
+    void streamingSourceRoundTripPreservesHashAndRejectsCrossTenant() throws Exception {
+        String endpoint = System.getenv("PREPARED_IT_S3_ENDPOINT");
+        org.junit.jupiter.api.Assumptions.assumeTrue(endpoint != null, "real S3 requires isolated test configuration");
+        var limits = new IngestionResourceProperties();
+        var root = java.nio.file.Files.createTempDirectory("kdp-stream-it-"); limits.setUploadTempRoot(root);
+        var stager = new IngestionUploadStager(limits);
+        try (var client = client(endpoint)) {
+            var objects = new S3DocumentSourceStore(client,System.getenv("PREPARED_IT_S3_BUCKET"),"documents/prepared-it/"+UUID.randomUUID());
+            // 数据按小块生成，证明 putFile 路径不要求完整 byte[] 驻留。
+            long size = 5L*1024*1024; var remaining = new java.util.concurrent.atomic.AtomicLong(size);
+            var source = new java.io.InputStream() {
+                @Override public int read() { return remaining.getAndDecrement()>0 ? 65 : -1; }
+                @Override public int read(byte[] bytes,int off,int len) {
+                    int count=(int)Math.min(remaining.get(),len); if(count<=0)return -1;
+                    java.util.Arrays.fill(bytes,off,off+count,(byte)65);remaining.addAndGet(-count);return count;
+                }
+            };
+            try(var staged=stager.stage("stream-tenant",source,size)) {
+                var ref=objects.putFile(new DocumentSourceStore.SourceDescriptor("stream-tenant","test-"+UUID.randomUUID(),1,
+                        "text/plain",size,staged.hash()),staged.path());
+                try {
+                    var digest=java.security.MessageDigest.getInstance("SHA-256");
+                    try(var input=new java.security.DigestInputStream(objects.open("stream-tenant",ref),digest)) {
+                        assertThat(input.transferTo(java.io.OutputStream.nullOutputStream())).isEqualTo(size);
+                    }
+                    assertThat("sha256:"+java.util.HexFormat.of().formatHex(digest.digest())).isEqualTo(staged.hash());
+                    assertThatThrownBy(() -> objects.open("other",ref)).isInstanceOf(SecurityException.class);
+                } finally { objects.delete("stream-tenant",ref); }
+            }
+            try(var files=java.nio.file.Files.list(root)) { assertThat(files).isEmpty(); }
+        } finally { java.nio.file.Files.delete(root); }
+    }
+
     private S3Client client(String endpoint) {
         return S3Client.builder().endpointOverride(URI.create(endpoint)).region(Region.US_EAST_1)
                 .httpClientBuilder(UrlConnectionHttpClient.builder())

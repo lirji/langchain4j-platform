@@ -84,6 +84,9 @@ services:
       - "${KNOWLEDGE_QUERY_HOST_PORT:-18084}:8084"
 
   knowledge-ingest-api:
+    # 4 份 50 MiB 上传暂存，加 multipart 落盘及运行时余量；按实例控制。
+    tmpfs: !override
+      - /tmp:size=512m,mode=1777
     extends:
       file: docker-compose.yml
       service: knowledge-service
@@ -141,6 +144,8 @@ services:
       RAG_SOURCE_S3_ACCESS_KEY: ${KNOWLEDGE_WORKER_S3_ACCESS_KEY:-knowledge-worker}
       RAG_SOURCE_S3_SECRET_KEY: ${KNOWLEDGE_WORKER_S3_SECRET_KEY:-knowledge-worker-dev-secret}
       RAG_EMBEDDING_PROVIDER: ${KNOWLEDGE_SPLIT_EMBEDDING_PROVIDER:-hash}
+      # 持久化 job 已负责有界重试，避免 SDK 重试与任务重试相乘。
+      RAG_EMBEDDING_MAX_RETRIES: "0"
       RAG_EMBEDDING_MODEL: ${KNOWLEDGE_SPLIT_EMBEDDING_MODEL:-text-embedding-v4}
       RAG_EMBEDDING_BASE_URL: ${KNOWLEDGE_SPLIT_EMBEDDING_BASE_URL:-}
       RAG_EMBEDDING_API_KEY: ${KNOWLEDGE_SPLIT_EMBEDDING_API_KEY:-}

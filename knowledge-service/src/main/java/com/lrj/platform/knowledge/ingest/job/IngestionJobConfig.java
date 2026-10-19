@@ -97,7 +97,8 @@ public class IngestionJobConfig {
             DocumentSourceStore sources,
             IngestionJobStore jobs,
             DocumentRegistry registry,
-            ObjectProvider<KnowledgeAuthz> authorization
+            ObjectProvider<KnowledgeAuthz> authorization,
+            IngestionResourceProperties resources
     ) {
         return new IngestionSubmissionService(
                 sources,
@@ -110,7 +111,7 @@ public class IngestionJobConfig {
                         IngestionSink.ELASTICSEARCH,
                         IngestionSink.GRAPH,
                         IngestionSink.REGISTRY,
-                        IngestionSink.AUTHORIZATION));
+                        IngestionSink.AUTHORIZATION), resources);
     }
 
     @Bean
@@ -123,7 +124,8 @@ public class IngestionJobConfig {
             DocumentSplitterFactory splitterFactory,
             ObjectProvider<ContextualEnricher> contextualEnricher,
             EmbeddingModel embeddingModel,
-            ObjectProvider<ChunkMetrics> chunkMetrics
+            ObjectProvider<ChunkMetrics> chunkMetrics,
+            IngestionResourceProperties resources
     ) {
         return new DefaultIngestionDocumentPreparer(
                 sources,
@@ -132,7 +134,7 @@ public class IngestionJobConfig {
                 contextualEnricher.getIfAvailable(NoopContextualEnricher::new),
                 embeddingModel,
                 chunkMetrics.getIfAvailable(),
-                Clock.systemUTC());
+                Clock.systemUTC(), resources);
     }
 
     @Bean
@@ -145,7 +147,8 @@ public class IngestionJobConfig {
             ObjectProvider<SegmentIndexer> segmentIndexer,
             ObjectProvider<GraphIngestor> graphIngestor,
             ObjectProvider<KnowledgeAuthz> authorization,
-            DocumentRegistry registry
+            DocumentRegistry registry,
+            IngestionResourceProperties resources
     ) {
         return new DefaultIngestionSinkProcessor(
                 storeRouter,
@@ -153,7 +156,7 @@ public class IngestionJobConfig {
                 segmentIndexer.getIfAvailable(NoopSegmentIndexer::new),
                 graphIngestor.getIfAvailable(),
                 authorization.getIfAvailable(NoopKnowledgeAuthz::new),
-                registry);
+                registry, resources);
     }
 
     @Bean

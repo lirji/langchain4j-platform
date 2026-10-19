@@ -24,6 +24,9 @@ public final class IngestionRetryPolicy {
             permanent = !prepared.error().retryable();
             code = prepared.error().code();
         }
+        if (failure instanceof IngestionResourceException resource) {
+            permanent = !resource.error().retryable(); code = resource.error().code();
+        }
         if (job.execution().retries() >= properties.getMaxRetries()) {
             permanent = true;
             code = "RETRY_EXHAUSTED";

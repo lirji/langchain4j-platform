@@ -46,7 +46,7 @@ class IngestionControllerTest {
         TenantContext.set(new TenantContext.Tenant(
                 "acme", "alice", Set.of("ingest", "chat"), "acme_engineering"));
         MDC.put(TraceIdFilter.MDC_KEY, "trace-1");
-        when(submissions.submit(any())).thenReturn(job());
+        when(submissions.submitStream(any(), any(), org.mockito.ArgumentMatchers.anyLong())).thenReturn(job());
 
         mvc.perform(multipart("/rag/ingestions")
                         .file(new MockMultipartFile(
@@ -61,9 +61,9 @@ class IngestionControllerTest {
                 .andExpect(jsonPath("$.status").value("RECEIVED"))
                 .andExpect(jsonPath("$.traceId").value("trace-1"));
 
-        ArgumentCaptor<IngestionSubmissionService.SubmitCommand> command =
-                ArgumentCaptor.forClass(IngestionSubmissionService.SubmitCommand.class);
-        verify(submissions).submit(command.capture());
+        ArgumentCaptor<IngestionSubmissionService.SubmitRequest> command =
+                ArgumentCaptor.forClass(IngestionSubmissionService.SubmitRequest.class);
+        verify(submissions).submitStream(command.capture(), any(), org.mockito.ArgumentMatchers.eq(5L));
         assertThat(command.getValue().tenantId()).isEqualTo("acme");
         assertThat(command.getValue().userId()).isEqualTo("alice");
         assertThat(command.getValue().scopes()).contains("ingest", "chat");
@@ -84,7 +84,7 @@ class IngestionControllerTest {
                         .param("documentVersion", "1"))
                 .andExpect(status().isForbidden());
 
-        verify(submissions, never()).submit(any());
+        verify(submissions, never()).submitStream(any(), any(), org.mockito.ArgumentMatchers.anyLong());
     }
 
     @Test
@@ -95,6 +95,26 @@ class IngestionControllerTest {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/rag/ingestions/job-1"))
                 .andExpect(status().isNotFound());
         verify(submissions).get("acme", "bob", "job-1");
+    }
+
+    @Test
+    void streamsMultipartAndClosesItWhenSubmissionFails() throws Exception {
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("ingest")));
+        var closed = new java.util.concurrent.atomic.AtomicBoolean();
+        var input = new java.io.ByteArrayInputStream("hello".getBytes()) {
+            @Override public void close() { closed.set(true); }
+        };
+        var file = new MockMultipartFile("file", "guide.txt", "text/plain", "hello".getBytes()) {
+            @Override public byte[] getBytes() { throw new AssertionError("must stream multipart"); }
+            @Override public java.io.InputStream getInputStream() { return input; }
+        };
+        when(submissions.submitStream(any(), any(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenThrow(new com.lrj.platform.knowledge.ingest.job.IngestionResourceException(
+                        com.lrj.platform.knowledge.ingest.job.IngestionResourceError.UPLOAD_BUSY));
+        mvc.perform(multipart("/rag/ingestions").file(file).header("Idempotency-Key", "key")
+                .param("documentId", "doc-1").param("documentVersion", "1"))
+                .andExpect(status().isTooManyRequests()).andExpect(jsonPath("$.error").value("INGESTION_UPLOAD_BUSY"));
+        assertThat(closed).isTrue();
     }
 
     private IngestionJob job() {
