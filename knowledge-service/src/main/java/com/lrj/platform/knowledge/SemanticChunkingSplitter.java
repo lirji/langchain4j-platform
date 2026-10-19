@@ -40,8 +40,8 @@ import java.util.regex.Pattern;
  *       不足 {@code minSize} 的碎块向前并块</li>
  * </ol>
  *
- * <p><strong>代价</strong>：入库时每句多一次 embedding 调用（切分阶段），换来更贴主题的边界。
- * 大语料用云 embedding 时注意成本；本地 Ollama/vLLM embedding 影响小。
+ * <p><strong>代价</strong>：入库时额外向量化句子窗口（切分阶段按预算分批），换来更贴主题的边界。
+ * 大语料用云 embedding 时注意成本；本地 Ollama/vLLM 同样占用 CPU/GPU 与时间预算。
  *
  * <p><strong>韧性</strong>：embedding 调用失败时不让入库整体崩——降级用 {@code fallbackForLongChunk}
  * 把整篇按 recursive 切（log warn）。
@@ -50,6 +50,7 @@ import java.util.regex.Pattern;
  * （null=字符，非 null=token），与 knowledge-service 后续 splitter factory 的 {@code unit} 对齐。
  */
 public class SemanticChunkingSplitter implements DocumentSplitter {
+    public static final String ACTUAL_STRATEGY = "chunking_actual_strategy";
 
     private static final Logger log = LoggerFactory.getLogger(SemanticChunkingSplitter.class);
 
@@ -69,6 +70,8 @@ public class SemanticChunkingSplitter implements DocumentSplitter {
     private final int minSize;
     private final DocumentSplitter fallbackForLongChunk;
     private final TokenCountEstimator tokenEstimator;
+    private final com.lrj.platform.knowledge.ingest.job.IngestionModelWork work;
+    private final boolean interpolatePercentile;
 
     public SemanticChunkingSplitter(EmbeddingModel embeddingModel,
                                     int bufferSize,
@@ -77,9 +80,16 @@ public class SemanticChunkingSplitter implements DocumentSplitter {
                                     int minSize,
                                     DocumentSplitter fallbackForLongChunk,
                                     TokenCountEstimator tokenEstimator) {
+        this(embeddingModel,bufferSize,breakpointPercentile,maxSize,minSize,fallbackForLongChunk,tokenEstimator,null,false);
+    }
+
+    /** 显式共享文档预算；线性分位是可选实验，缺省 nearest-rank 行为不变。 */
+    public SemanticChunkingSplitter(EmbeddingModel embeddingModel,int bufferSize,double breakpointPercentile,
+            int maxSize,int minSize,DocumentSplitter fallbackForLongChunk,TokenCountEstimator tokenEstimator,
+            com.lrj.platform.knowledge.ingest.job.IngestionModelWork work,boolean interpolatePercentile) {
         if (embeddingModel == null) throw new IllegalArgumentException("embeddingModel is required");
         if (maxSize <= 0) throw new IllegalArgumentException("maxSize must be > 0");
-        if (breakpointPercentile <= 0 || breakpointPercentile > 100) {
+        if (!Double.isFinite(breakpointPercentile) || breakpointPercentile <= 0 || breakpointPercentile > 100) {
             throw new IllegalArgumentException("breakpointPercentile must be in (0, 100]");
         }
         this.embeddingModel = embeddingModel;
@@ -89,6 +99,7 @@ public class SemanticChunkingSplitter implements DocumentSplitter {
         this.minSize = Math.max(0, minSize);
         this.fallbackForLongChunk = fallbackForLongChunk;
         this.tokenEstimator = tokenEstimator;
+        this.work=work;this.interpolatePercentile=interpolatePercentile;
     }
 
     @Override
@@ -102,25 +113,30 @@ public class SemanticChunkingSplitter implements DocumentSplitter {
         List<String> sentences = splitSentences(text);
         // 0/1 句无从算「相邻距离」，整篇 1 块（仍走 size 上限兜底）
         if (sentences.size() <= 1) {
-            return emit(List.of(text.strip()), baseMeta);
+            return actual(emit(List.of(text.strip()), baseMeta),"semantic");
         }
 
         List<String> groups;
         try {
-            double[] distances = adjacentDistances(sentences);
-            double threshold = percentile(distances, breakpointPercentile);
+            var documentWork=work==null?new com.lrj.platform.knowledge.ingest.job.IngestionModelWork(
+                    new com.lrj.platform.knowledge.ingest.job.IngestionResourceProperties(),()->{}):work;
+            double[] distances = adjacentDistances(sentences,documentWork);
+            double threshold = interpolatePercentile ? linearPercentile(distances,breakpointPercentile) : percentile(distances, breakpointPercentile);
             groups = group(sentences, distances, threshold);
+        } catch (com.lrj.platform.knowledge.ingest.job.IngestionResourceException
+                 | com.lrj.platform.knowledge.ingest.job.IngestionJobConflictException stopped) {
+            // 预算/失租是停止指令，不能伪装模型降级后继续最终 embedding。
+            throw stopped;
         } catch (Exception e) {
-            // embedding 后端故障：降级整篇 recursive，绝不让入库崩
-            log.warn("Semantic chunking failed ({}), falling back to recursive split", e.toString());
-            return fallbackForLongChunk != null
+            log.warn("Semantic embedding unavailable; falling back to recursive split");
+            return actual(fallbackForLongChunk != null
                     ? fallbackForLongChunk.split(Document.from(text, baseMeta))
-                    : emit(List.of(text.strip()), baseMeta);
+                    : emit(List.of(text.strip()), baseMeta),"recursive-fallback");
         }
         if (minSize > 0) {
             groups = mergeTiny(groups);
         }
-        return emit(groups, baseMeta);
+        return actual(emit(groups, baseMeta),"semantic");
     }
 
     /** 把分好的语义块落成 segment：超长块 fallback 再切，metadata 注入连续 index。 */
@@ -142,17 +158,23 @@ public class SemanticChunkingSplitter implements DocumentSplitter {
     }
 
     /** 相邻窗口的 cosine 距离 {@code 1 - similarity}；窗口 = 句子 ± bufferSize 个邻居拼接。 */
-    private double[] adjacentDistances(List<String> sentences) {
+    private double[] adjacentDistances(List<String> sentences,com.lrj.platform.knowledge.ingest.job.IngestionModelWork documentWork) {
+        documentWork.preflightWindowCount(sentences.size());long tokens=0,bytes=0;
         List<TextSegment> windows = new ArrayList<>(sentences.size());
         for (int i = 0; i < sentences.size(); i++) {
             int from = Math.max(0, i - bufferSize);
-            int to = Math.min(sentences.size() - 1, i + bufferSize);
-            windows.add(TextSegment.from(String.join(" ", sentences.subList(from, to + 1))));
+            int to = (int)Math.min(sentences.size() - 1, (long)i + bufferSize);
+            String window=String.join(" ", sentences.subList(from, to + 1));
+            var size=documentWork.preflightWindow(window,tokens,bytes);tokens=size.tokens();bytes=size.bytes();
+            windows.add(TextSegment.from(window));
         }
-        List<Embedding> embeddings = embeddingModel.embedAll(windows).content();
+        List<Embedding> embeddings = documentWork.embed(embeddingModel,windows,
+                com.lrj.platform.knowledge.ingest.job.IngestionModelWork.Stage.SEMANTIC);
         double[] distances = new double[embeddings.size() - 1];
         for (int i = 0; i < distances.length; i++) {
             distances[i] = 1.0 - CosineSimilarity.between(embeddings.get(i), embeddings.get(i + 1));
+            if(!Double.isFinite(distances[i])) throw new com.lrj.platform.knowledge.ingest.job.IngestionResourceException(
+                    com.lrj.platform.knowledge.ingest.job.IngestionResourceError.MODEL_RESPONSE);
         }
         return distances;
     }
@@ -165,6 +187,18 @@ public class SemanticChunkingSplitter implements DocumentSplitter {
         int rank = (int) Math.ceil(p / 100.0 * sorted.length) - 1;
         rank = Math.max(0, Math.min(sorted.length - 1, rank));
         return sorted[rank];
+    }
+
+    /** 线性分位避免少量距离在 p95 落到最大值；仅实验开关开启时使用，不承诺检索收益。 */
+    static double linearPercentile(double[] values,double p) {
+        if(values.length==0) return 0;
+        double[] sorted=values.clone();Arrays.sort(sorted);
+        double at=(sorted.length-1)*p/100.0;int lower=(int)Math.floor(at),upper=(int)Math.ceil(at);
+        return sorted[lower]+(sorted[upper]-sorted[lower])*(at-lower);
+    }
+    private static List<TextSegment> actual(List<TextSegment> segments,String strategy) {
+        return segments.stream().map(segment->{var metadata=segment.metadata().copy();metadata.put(ACTUAL_STRATEGY,strategy);
+            return TextSegment.from(segment.text(),metadata);}).toList();
     }
 
     /** 距离 {@code > threshold} 的间隙即断点，断点之间的句子合成一块。 */

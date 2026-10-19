@@ -31,6 +31,7 @@ class IngestionPreparedConfigTest {
         new ApplicationContextRunner().withUserConfiguration(IngestionPreparedConfig.class)
                 .withBean(ObjectMapper.class, ObjectMapper::new)
                 .withBean(DocumentSourceProperties.class, DocumentSourceProperties::new)
+                .withBean(IngestionResourceProperties.class, IngestionResourceProperties::new)
                 .withBean(DocumentSplitterFactory.class, () -> factory)
                 .withBean(S3Client.class, () -> client)
                 .withPropertyValues("app.rag.runtime.role=ingest-worker", "app.rag.source.store=s3",

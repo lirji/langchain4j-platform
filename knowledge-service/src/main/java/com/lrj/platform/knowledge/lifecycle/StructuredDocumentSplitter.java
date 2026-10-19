@@ -151,6 +151,8 @@ public final class StructuredDocumentSplitter {
     }
     private void add(List<TextSegment> out, String text, Metadata metadata) {
         if (out.size() >= maxChunks || size(text) > maxSize) fail();
+        if(metadata.getString(com.lrj.platform.knowledge.SemanticChunkingSplitter.ACTUAL_STRATEGY)==null)
+            metadata.put(com.lrj.platform.knowledge.SemanticChunkingSplitter.ACTUAL_STRATEGY,"structure");
         out.add(TextSegment.from(text,metadata));
     }
     private int size(String value) { return estimator == null ? value.length() : estimator.estimateTokenCountInText(value); }

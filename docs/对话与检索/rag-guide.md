@@ -114,6 +114,7 @@ RAG_REGISTRY_STORE=in-memory   # 单机/单测；默认是 redis
 - `app.rag.chunking.unit`：`chars`（默认）| `tokens`
 - `app.rag.chunking.max-size` / `app.rag.chunking.overlap`
 - `parent-child`、`semantic` 各有 `app.rag.chunking.parent.*` / `app.rag.chunking.semantic.*` 细项
+- 结构边界优先；模型逻辑调用/token 总预算、邻近章节 Contextual、可选线性分位和 metadata 上限见[可靠入库接入](可靠入库接入.md#模型工作量与上下文成本kdp-06-d)。缺省策略不因候选实验自动改变。
 
 ---
 

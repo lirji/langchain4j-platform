@@ -70,44 +70,50 @@ public class DefaultIngestionDocumentPreparer implements IngestionDocumentPrepar
             leaseCheckpoint.run();
             if (System.nanoTime() > deadline) throw new IngestionResourceException(IngestionResourceError.DEADLINE);
         };
-        checkpoint.run();
-        com.lrj.platform.knowledge.lifecycle.ParsedDocument parsed;
-        try (InputStream input = sources.open(job.tenantId(), job.source())) {
-            parsed = textExtractor.parse(input, job.displayName());
-        }
-        String text = parsed.text();
-        checkpoint.run();
-        Document document = Document.from(text);
-        document.metadata()
-                .put("tenantId", job.tenantId())
-                .put("docId", job.documentId())
-                .put("displayName", job.displayName())
-                .put("file_name", job.displayName())
-                .put("version", Long.toString(job.documentVersion()));
-        if (job.category() != null) {
-            document.metadata().put("category", job.category());
-        }
+        var work=new IngestionModelWork(resources,checkpoint);
+        try {
+            checkpoint.run();
+            com.lrj.platform.knowledge.lifecycle.ParsedDocument parsed;
+            try (InputStream input = sources.open(job.tenantId(), job.source())) {
+                parsed = textExtractor.parse(input, job.displayName());
+            }
+            String text = parsed.text();
+            checkpoint.run();
+            Document document = Document.from(text);
+            document.metadata()
+                    .put("tenantId", job.tenantId())
+                    .put("docId", job.documentId())
+                    .put("displayName", job.displayName())
+                    .put("file_name", job.displayName())
+                    .put("version", Long.toString(job.documentVersion()));
+            if (job.category() != null) {
+                document.metadata().put("category", job.category());
+            }
 
-        List<TextSegment> segments = splitterFactory.split(parsed, document.metadata());
-        // 在可选上下文模型调用前预检查原文，避免明显超限文档先产生额外计费调用。
-        batcher.embeddingBatches(segments);
-        checkpoint.run();
-        segments = contextualEnricher.enrich(text, segments, checkpoint);
-        checkpoint.run();
-        if (chunkMetrics != null) {
-            chunkMetrics.record(splitterFactory.strategy(), 1, segments);
+            List<TextSegment> segments = splitterFactory.split(parsed, document.metadata(),work);
+            // 在可选上下文模型调用前预检查原文，避免明显超限文档先产生额外计费调用。
+            batcher.embeddingBatches(segments);
+            checkpoint.run();
+            segments = contextualEnricher.enrich(text, segments, work);
+            work.validateMetadata(segments);
+            checkpoint.run();
+            if (chunkMetrics != null) {
+                chunkMetrics.record(splitterFactory.strategy(), 1, segments);
+            }
+            List<Embedding> embeddings = work.embed(embeddingModel,segments,IngestionModelWork.Stage.FINAL_EMBEDDING);
+            DocumentInfo info = new DocumentInfo(
+                    job.documentId(),
+                    job.tenantId(),
+                    job.displayName(),
+                    job.source().contentType(),
+                    job.source().size(),
+                    segments.size(),
+                    Math.toIntExact(job.documentVersion()),
+                    clock.instant(),
+                    job.category());
+            return new PreparedIngestionDocument(info, segments, embeddings);
+        } finally {
+            if(chunkMetrics!=null) chunkMetrics.recordModelWork(work.snapshot());
         }
-        List<Embedding> embeddings = batcher.embed(embeddingModel,segments,checkpoint);
-        DocumentInfo info = new DocumentInfo(
-                job.documentId(),
-                job.tenantId(),
-                job.displayName(),
-                job.source().contentType(),
-                job.source().size(),
-                segments.size(),
-                Math.toIntExact(job.documentVersion()),
-                clock.instant(),
-                job.category());
-        return new PreparedIngestionDocument(info, segments, embeddings);
     }
 }

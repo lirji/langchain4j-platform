@@ -36,6 +36,14 @@ public class DocumentSplitterFactory {
     private final int semanticMinSize;
     private final EmbeddingModel embeddingModel;
     private int maxChunks = 20_000;
+    private boolean interpolatePercentile;
+    private com.lrj.platform.knowledge.ingest.job.IngestionResourceProperties resources = new com.lrj.platform.knowledge.ingest.job.IngestionResourceProperties();
+
+    /** 显式启用候选分位算法，保留既有缺省配置及其可重复行为。 */
+    @Value("${app.rag.chunking.semantic.interpolate-percentile:false}")
+    public void setInterpolatePercentile(boolean value) { interpolatePercentile=value; }
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setIngestionResources(com.lrj.platform.knowledge.ingest.job.IngestionResourceProperties value) { resources=value; }
 
     /** 超多碎块会放大模型与索引请求，按文档限制总数而非静默丢弃。 */
     @Value("${app.rag.chunking.max-chunks:20000}")
@@ -47,9 +55,16 @@ public class DocumentSplitterFactory {
     /** 文件结构先限定表格/章节/页边界；旧 JSON 文本入口仍可使用 create()。 */
     public java.util.List<dev.langchain4j.data.segment.TextSegment> split(
             com.lrj.platform.knowledge.lifecycle.ParsedDocument document, dev.langchain4j.data.document.Metadata metadata) {
+        return split(document,metadata,new com.lrj.platform.knowledge.ingest.job.IngestionModelWork(resources,()->{}));
+    }
+
+    /** 所有结构块共享本份文档的语义/增强/最终模型预算，不能按页重置额度。 */
+    public java.util.List<dev.langchain4j.data.segment.TextSegment> split(
+            com.lrj.platform.knowledge.lifecycle.ParsedDocument document, dev.langchain4j.data.document.Metadata metadata,
+            com.lrj.platform.knowledge.ingest.job.IngestionModelWork work) {
         TokenCountEstimator estimator = "tokens".equals(unit) ? new OpenAiTokenCountEstimator(tokenizerModel) : null;
         return new com.lrj.platform.knowledge.lifecycle.StructuredDocumentSplitter(
-                "semantic".equals(strategy) ? semanticMaxSize : maxSize, maxChunks, create(), estimator).split(document, metadata);
+                "semantic".equals(strategy) ? semanticMaxSize : maxSize, maxChunks, create(work), estimator).split(document, metadata);
     }
 
     public DocumentSplitterFactory(
@@ -84,6 +99,12 @@ public class DocumentSplitterFactory {
     }
 
     public DocumentSplitter create() {
+        // 返回可复用 splitter，但每次独立文档调用新建额度；结构块内部通过显式 work 共享。
+        return document -> create(new com.lrj.platform.knowledge.ingest.job.IngestionModelWork(resources,()->{})).split(document);
+    }
+
+    /** 同步正文和可靠文件入口显式传入同一个准备上下文。 */
+    public DocumentSplitter create(com.lrj.platform.knowledge.ingest.job.IngestionModelWork work) {
         boolean tokenMode = "tokens".equals(unit);
         TokenCountEstimator estimator = tokenMode ? new OpenAiTokenCountEstimator(tokenizerModel) : null;
         DocumentSplitter recursive = tokenMode
@@ -94,7 +115,7 @@ public class DocumentSplitterFactory {
             case "recursive" -> recursive;
             case "markdown-header" -> new MarkdownHeaderSplitter(maxSize, recursive, estimator, minSectionSize);
             case "parent-child" -> new ParentChildSplitter(buildParentSplitter(estimator), recursive);
-            case "semantic" -> buildSemanticSplitter(estimator);
+            case "semantic" -> buildSemanticSplitter(estimator,work);
             default -> {
                 log.warn("Unknown app.rag.chunking.strategy '{}', falling back to recursive", strategy);
                 yield recursive;
@@ -102,15 +123,21 @@ public class DocumentSplitterFactory {
         };
         log.info("Knowledge chunking: strategy={} unit={} max-size={} overlap={}",
                 strategy, unit, maxSize, overlap);
-        return splitter;
+        return document -> splitter.split(document).stream().map(segment -> {
+            var metadata=segment.metadata().copy();
+            if(metadata.getString(SemanticChunkingSplitter.ACTUAL_STRATEGY)==null)
+                metadata.put(SemanticChunkingSplitter.ACTUAL_STRATEGY,
+                        java.util.Set.of("recursive","markdown-header","parent-child","semantic").contains(strategy)?strategy:"recursive-fallback");
+            return dev.langchain4j.data.segment.TextSegment.from(segment.text(),metadata);
+        }).toList();
     }
 
-    private DocumentSplitter buildSemanticSplitter(TokenCountEstimator estimator) {
+    private DocumentSplitter buildSemanticSplitter(TokenCountEstimator estimator,com.lrj.platform.knowledge.ingest.job.IngestionModelWork work) {
         DocumentSplitter fallback = estimator != null
                 ? DocumentSplitters.recursive(semanticMaxSize, overlap, estimator)
                 : DocumentSplitters.recursive(semanticMaxSize, overlap);
         return new SemanticChunkingSplitter(embeddingModel, semanticBufferSize, semanticPercentile,
-                semanticMaxSize, semanticMinSize, fallback, estimator);
+                semanticMaxSize, semanticMinSize, fallback, estimator,work,interpolatePercentile);
     }
 
     private DocumentSplitter buildParentSplitter(TokenCountEstimator estimator) {
@@ -145,6 +172,7 @@ public class DocumentSplitterFactory {
                 java.util.Map.entry("parentOverlap", Integer.toString(parentOverlap)),
                 java.util.Map.entry("semanticBufferSize", Integer.toString(semanticBufferSize)),
                 java.util.Map.entry("semanticPercentile", Double.toString(semanticPercentile)),
+                java.util.Map.entry("semanticInterpolatePercentile", Boolean.toString(interpolatePercentile)),
                 java.util.Map.entry("semanticMaxSize", Integer.toString(semanticMaxSize)),
                 java.util.Map.entry("semanticMinSize", Integer.toString(semanticMinSize)));
     }

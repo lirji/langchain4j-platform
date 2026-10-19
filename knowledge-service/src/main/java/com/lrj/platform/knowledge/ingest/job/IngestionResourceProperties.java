@@ -18,6 +18,8 @@ public class IngestionResourceProperties {
     private long maxVectorBytes = 32L * 1024 * 1024;
     private String tokenizerModel = "gpt-4o-mini";
     private Duration preparationTimeout = Duration.ofMinutes(10);
+    private long maxModelInputTokens = 1_000_000, maxMetadataBytes = 16L * 1024 * 1024;
+    private int maxModelCalls = 512, maxContextualCalls = 128, maxContextPromptTokens = 8192, maxContextPrefixTokens = 256;
 
     /** 输入限制与 servlet 上传限制需同时配置；实际字节数始终重新计量。 */
     public long getMaxInputBytes() { return maxInputBytes; }
@@ -50,5 +52,19 @@ public class IngestionResourceProperties {
     /** 每批前后检查预算；单次远程 I/O 仍由模型/存储客户端超时终止等待。 */
     public Duration getPreparationTimeout() { return preparationTimeout; }
     public void setPreparationTimeout(Duration value) { positive(value.toMillis()); preparationTimeout=value; }
+    /** 跨语义窗口、上下文与最终向量的每次准备预算；不是租户账单或提供方精确 token。 */
+    public long getMaxModelInputTokens() { return maxModelInputTokens; }
+    public void setMaxModelInputTokens(long value) { positive(value); maxModelInputTokens=value; }
+    public int getMaxModelCalls() { return maxModelCalls; }
+    public void setMaxModelCalls(int value) { positive(value); maxModelCalls=value; }
+    public int getMaxContextualCalls() { return maxContextualCalls; }
+    public void setMaxContextualCalls(int value) { positive(value); maxContextualCalls=value; }
+    public int getMaxContextPromptTokens() { return maxContextPromptTokens; }
+    public void setMaxContextPromptTokens(int value) { positive(value); maxContextPromptTokens=value; }
+    public int getMaxContextPrefixTokens() { return maxContextPrefixTokens; }
+    public void setMaxContextPrefixTokens(int value) { positive(value); maxContextPrefixTokens=value; }
+    /** metadata 包含重复父块与原文，必须在最终模型调用和 sink 前校验整体放大。 */
+    public long getMaxMetadataBytes() { return maxMetadataBytes; }
+    public void setMaxMetadataBytes(long value) { positive(value); maxMetadataBytes=value; }
     private static void positive(long value) { if(value<=0) throw new IllegalArgumentException("ingestion resource limits must be positive"); }
 }

@@ -1,6 +1,6 @@
 # 文档同步地图
 
-本表从本次明确涉及的区域开始维护，不代表已审查全仓库文档。同步基线：`1faa657`；同步日期：2026-10-19，任务 `knowledge-parsing-hardening`（KDP-06-C 选择性 OCR）。
+本表从本次明确涉及的区域开始维护，不代表已审查全仓库文档。同步基线：`19e026c`；同步日期：2026-10-19，任务 `knowledge-parsing-hardening`（KDP-06-D 模型工作量与上下文成本）。
 
 | 代码区域 | 权威文档 | 本次同步 |
 | --- | --- | --- |
@@ -15,5 +15,6 @@
 | 结构解析、格式切分与检索来源 | [KDP-06-B](delivery/knowledge-parsing-hardening/KDP-06-B.md)、[结构报告](delivery/knowledge-parsing-hardening/KDP-06-B-structure.json) | 格式位置、表头同块率、告警、源文/增强分离、ES/API 加法字段及验证限制 |
 | 流式上传、模型/索引分批与公平调度 | [KDP-05-B](delivery/knowledge-parsing-hardening/KDP-05-B.md) | B1/B2 验证通过；共享额度迁移、关闭、上下文与资源边界 |
 | PDF 选择性 OCR 与本地引擎镜像 | [KDP-06-C](delivery/knowledge-parsing-hardening/KDP-06-C.md)、[可靠入库接入](对话与检索/可靠入库接入.md) | 选择/预算/来源/退出、默认开关及真实 Linux 验证范围 |
+| 语义窗口/上下文/最终向量总预算与 metadata 放大 | [KDP-06-D](delivery/knowledge-parsing-hardening/KDP-06-D.md)、[固定对照](delivery/knowledge-parsing-hardening/KDP-06-D-cost.json) | 模型逻辑调用、估算 token、实际策略、父块重复量及保留缺省的理由 |
 
 实际生产部署、吞吐及复杂版面质量不在合成验收范围；本阶段无数据库结构或线上数据变更。

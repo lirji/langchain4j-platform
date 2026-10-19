@@ -7,7 +7,7 @@ import java.util.List;
 /**
  * Contextual Retrieval 入库增强 SPI（移植单体 {@code ContextualEnricher} / Anthropic 那套）：
  * 入库时给每个 chunk 生成一句「安放回全文」的上下文前缀（消解代词/缩写、点明位置）再嵌入，
- * 使 chunk 自洽、显著降低召回失败率。与切分策略正交。
+ * 为孤立片段补充可检索线索；收益需用业务评测确认。与切分策略正交。
  *
  * <p>默认 {@link NoopContextualEnricher}（不改 chunk）；开启后每 chunk 一次 LLM 调用（失败保留原文）。
  */
@@ -22,5 +22,11 @@ public interface ContextualEnricher {
         List<TextSegment> enriched = enrich(docText, segments);
         checkpoint.run();
         return enriched;
+    }
+
+    /** 平台内置模型增强使用显式整文预算；已有无模型/自定义 SPI 继续兼容原方法。 */
+    default List<TextSegment> enrich(String docText,List<TextSegment> segments,
+            com.lrj.platform.knowledge.ingest.job.IngestionModelWork work) {
+        return enrich(docText,segments,work::checkpoint);
     }
 }

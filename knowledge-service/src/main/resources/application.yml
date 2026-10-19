@@ -17,6 +17,7 @@ spring:
 platform:
   gateway:
     base-url: ${GATEWAY_BASE_URL:http://localhost:4000/v1}
+    max-retries: ${GATEWAY_MAX_RETRIES:3}
     api-key: ${GATEWAY_API_KEY:sk-litellm-master}
     # knowledge 只用确定性同步模型（RAG 增强），无流式需求 —— 关掉自动装配的 streamingChatModel 省一个 Bean。
     streaming:
@@ -55,6 +56,8 @@ app:
       legacy-write-enabled: ${RAG_LEGACY_WRITE_ENABLED:true}
     chunking:
       max-chunks: ${RAG_CHUNKING_MAX_CHUNKS:20000}
+      semantic:
+        interpolate-percentile: ${RAG_CHUNKING_SEMANTIC_INTERPOLATE_PERCENTILE:false}
     parsing:
       ocr:
         enabled: ${RAG_PARSING_OCR_ENABLED:false}
@@ -95,6 +98,12 @@ app:
         max-batch-tokens: ${RAG_INGESTION_MAX_BATCH_TOKENS:8192}
         max-segment-tokens: ${RAG_INGESTION_MAX_SEGMENT_TOKENS:2048}
         max-document-tokens: ${RAG_INGESTION_MAX_DOCUMENT_TOKENS:500000}
+        max-model-input-tokens: ${RAG_INGESTION_MAX_MODEL_INPUT_TOKENS:1000000}
+        max-model-calls: ${RAG_INGESTION_MAX_MODEL_CALLS:512}
+        max-contextual-calls: ${RAG_INGESTION_MAX_CONTEXTUAL_CALLS:128}
+        max-context-prompt-tokens: ${RAG_INGESTION_MAX_CONTEXT_PROMPT_TOKENS:8192}
+        max-context-prefix-tokens: ${RAG_INGESTION_MAX_CONTEXT_PREFIX_TOKENS:256}
+        max-metadata-bytes: ${RAG_INGESTION_MAX_METADATA_BYTES:16777216}
         max-batch-bytes: ${RAG_INGESTION_MAX_BATCH_BYTES:1048576}
         max-document-bytes: ${RAG_INGESTION_MAX_DOCUMENT_BYTES:16777216}
         max-vector-bytes: ${RAG_INGESTION_MAX_VECTOR_BYTES:33554432}
@@ -103,7 +112,7 @@ app:
       prepared:
         # 写索引前持久化最终文本与向量；改变生成行为时提升版本，历史快照仍继续复用。
         max-bytes: ${RAG_INGESTION_PREPARED_MAX_BYTES:67108864}
-        processing-version: ${RAG_INGESTION_PROCESSING_VERSION:knowledge-structured-v3}
+        processing-version: ${RAG_INGESTION_PROCESSING_VERSION:knowledge-structured-v4}
       version-gc:
         enabled: ${RAG_INGESTION_VERSION_GC_ENABLED:false}
         retain-versions: ${RAG_INGESTION_VERSION_GC_RETAIN_VERSIONS:2}

@@ -1,0 +1,98 @@
+{
+  "scope" : "synthetic structure and logical-cost comparison; deterministic stub; no provider billing or online recall",
+  "table" : [ {
+    "modelWork" : {
+      "usage" : [ {
+        "stage" : "semantic",
+        "estimatedInputTokens" : 1005,
+        "logicalCalls" : 4
+      }, {
+        "stage" : "contextual",
+        "estimatedInputTokens" : 0,
+        "logicalCalls" : 0
+      }, {
+        "stage" : "final_embedding",
+        "estimatedInputTokens" : 1005,
+        "logicalCalls" : 1
+      } ],
+      "metadataBytes" : 357,
+      "repeatedParentBytes" : 0
+    },
+    "case" : "csv-flat-semantic",
+    "chunks" : 7,
+    "rowsWithHeader" : 16
+  }, {
+    "modelWork" : {
+      "usage" : [ {
+        "stage" : "semantic",
+        "estimatedInputTokens" : 0,
+        "logicalCalls" : 0
+      }, {
+        "stage" : "contextual",
+        "estimatedInputTokens" : 0,
+        "logicalCalls" : 0
+      }, {
+        "stage" : "final_embedding",
+        "estimatedInputTokens" : 1142,
+        "logicalCalls" : 1
+      } ],
+      "metadataBytes" : 2338,
+      "repeatedParentBytes" : 0
+    },
+    "case" : "csv-structure-first",
+    "chunks" : 7,
+    "rowsWithHeader" : 100
+  } ],
+  "parentPayload" : [ {
+    "metadataBytes" : 1580,
+    "repeatedParentBytes" : 0,
+    "sourceBytes" : 7920,
+    "strategy" : "recursive",
+    "chunks" : 30
+  }, {
+    "metadataBytes" : 40910,
+    "repeatedParentBytes" : 37983,
+    "sourceBytes" : 7920,
+    "strategy" : "parent-child",
+    "chunks" : 33
+  } ],
+  "contextual" : [ {
+    "enabled" : false,
+    "modelWork" : {
+      "usage" : [ {
+        "stage" : "semantic",
+        "estimatedInputTokens" : 0,
+        "logicalCalls" : 0
+      }, {
+        "stage" : "contextual",
+        "estimatedInputTokens" : 0,
+        "logicalCalls" : 0
+      }, {
+        "stage" : "final_embedding",
+        "estimatedInputTokens" : 9,
+        "logicalCalls" : 1
+      } ],
+      "metadataBytes" : 4,
+      "repeatedParentBytes" : 0
+    }
+  }, {
+    "enabled" : true,
+    "modelWork" : {
+      "usage" : [ {
+        "stage" : "semantic",
+        "estimatedInputTokens" : 0,
+        "logicalCalls" : 0
+      }, {
+        "stage" : "contextual",
+        "estimatedInputTokens" : 339,
+        "logicalCalls" : 2
+      }, {
+        "stage" : "final_embedding",
+        "estimatedInputTokens" : 17,
+        "logicalCalls" : 1
+      } ],
+      "metadataBytes" : 222,
+      "repeatedParentBytes" : 0
+    }
+  } ]
+}

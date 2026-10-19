@@ -150,3 +150,13 @@ B2 远程补正：`54f8b1f` 的 AgentScope CI `39193808050` 在持久化静态�
 - 容器峰值 570646528 字节，单份 1.231～4.241 秒；未测多租户 OCR 吞吐、真实业务 Recall 或复杂版面准确率。宿主/容器系统包版本不是跨平台锁定承诺。
 - Compose base/readonly-worker/conversation-shadow/knowledge-split 四组合 config -q、runtime hardening、MyBatis boundary、git diff --check 通过。官方 HTTP 源最初 502/大索引连接失败，日志保留；改 HTTPS/保留签名校验/有界重试后成功。
 - 21 个代码/测试/运行配置文件最终指纹 `319ca43a08d3e2ca6ed49d813c01ab66835741d02504fdfd49d40137f8fdfb0b`（`kdp06c/validated-files.json`）。所有证据在既有忽略目录，未把日志或私有环境提交。
+
+
+## KDP-06-D 模型工作量与上下文成本
+
+- 首轮 38 项聚焦通过；扩大测试首轮 45 项中 `IngestionPreparedConfigTest` 因 Spring Mock Factory 缺新增资源 bean 失败，修正夹具后最终 **46 项、0 失败/错误**。原日志 `kdp06d-fixture-dependency-failure.log` 保留；最终 `kdp06d-cost-regression.log`。
+- `mvn -B -o -pl knowledge-service -am -DskipTests package` 后，`KDP_ES_TEST_URL=http://127.0.0.1:49200 mvn -B -o -pl knowledge-service -am -Dparsing.test.artifact=$PWD/knowledge-service/target/knowledge-service-0.1.0-SNAPSHOT.jar test`：**715 项、0 失败/错误、10 跳过，705 实际执行**，knowledge 535/6 跳过；真实 ES/Boot 开启。`kdp06d-package.log`、`kdp06d-full-regression.log`。
+- 完整回归后自审发现旧 JSON Markdown 仅 `section` 时章节相邻过滤需兼容；改为 breadcrumb/section 共用判断，`ContextualEnricherTest,DocumentProcessingCostTest` **8 项通过**，`kdp06d-section-regression.log`。该最后局部修改不影响已验证的解析子进程代码，未重复构建 OCR 镜像。
+- 覆盖跨阶段逻辑调用/token 累计、失败不返还、预检查零调用、失租不降级、巨大 buffer 不先放大内存、短文线性候选/同主题、尾部同章上下文、前缀长度/模型输出上限、父块重复预算和历史快照兼容。没有调用计费模型；[成本对照](KDP-06-D-cost.json) 不代表线上 Recall/引用准确率/金额。
+- 四种 Compose config、runtime hardening、MyBatis boundary、git diff --check 通过。只配置 split worker 的 SDK retries=0，不改变全平台网关默认值。Graph 实际为规则抽取，无虚构 LLM 调用。
+- 22 个代码/测试/配置文件指纹 `97f981ac38aab284e57bc5df27b5a611ce8d20940b53f20a6b353159d6b0660a`；清单 `kdp06d/validated-files.json`。未执行生产迁移/部署/重建索引。

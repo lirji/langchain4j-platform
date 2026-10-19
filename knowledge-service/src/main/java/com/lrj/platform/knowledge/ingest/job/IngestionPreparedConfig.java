@@ -38,7 +38,10 @@ public class IngestionPreparedConfig {
                 "app.rag.embedding.ollama.model-name", "app.rag.contextual.enabled", "app.rag.llm.model-name",
                 "app.rag.parsing.ocr.enabled", "app.rag.parsing.ocr.languages", "app.rag.parsing.ocr.dpi",
                 "app.rag.parsing.ocr.min-native-chars", "app.rag.parsing.ocr.image-coverage",
-                "app.rag.parsing.ocr.min-confidence")) {
+                "app.rag.parsing.ocr.min-confidence", "app.rag.contextual.max-doc-chars",
+                "app.rag.ingestion.resources.max-model-input-tokens", "app.rag.ingestion.resources.max-model-calls",
+                "app.rag.ingestion.resources.max-contextual-calls", "app.rag.ingestion.resources.max-context-prefix-tokens",
+                "app.rag.ingestion.resources.max-context-prompt-tokens", "app.rag.ingestion.resources.max-metadata-bytes")) {
             profile.put(key, environment.getProperty(key, ""));
         }
         return new ObjectStorageIngestionPreparedStore(objects, mapper, prepared, profile);

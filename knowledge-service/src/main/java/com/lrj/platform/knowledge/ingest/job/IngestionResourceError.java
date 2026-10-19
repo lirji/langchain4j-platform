@@ -7,6 +7,8 @@ public enum IngestionResourceError {
     UPLOAD_BUSY("INGESTION_UPLOAD_BUSY","ingestion upload capacity is busy; retry later",429,true),
     INPUT_UNAVAILABLE("INGESTION_INPUT_UNAVAILABLE","document upload could not be completed; retry later",503,true),
     MODEL_INPUT_LIMIT("INGESTION_MODEL_INPUT_LIMIT","document exceeds model input budget",400,false),
+    MODEL_WORK_LIMIT("INGESTION_MODEL_WORK_LIMIT","document exceeds combined model work budget",400,false),
+    METADATA_LIMIT("INGESTION_METADATA_LIMIT","document metadata exceeds prepared payload budget",400,false),
     MODEL_RESPONSE("INGESTION_MODEL_RESPONSE_INVALID","embedding response is incomplete or invalid",503,false),
     VECTOR_LIMIT("INGESTION_VECTOR_LIMIT","document exceeds prepared vector budget",400,false),
     BATCH_LIMIT("INGESTION_BATCH_LIMIT","document segment exceeds sink batch budget",400,false),

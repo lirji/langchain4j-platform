@@ -20,6 +20,38 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class SemanticChunkingSplitterTest {
 
+    @Test void shortDocumentLinearCandidateSplitsTopicBoundaryWithoutChangingDefault() {
+        String text=topic("猫",2)+topic("股票",1);
+        assertThat(splitter(new KeywordEmbeddingModel(),1000,95).split(Document.from(text))).hasSize(1);
+        var candidate=new SemanticChunkingSplitter(new KeywordEmbeddingModel(),0,95,1000,0,
+                DocumentSplitters.recursive(1000,0),null,null,true);
+        var result=candidate.split(Document.from(text));
+        assertThat(result).hasSize(2);assertThat(result.getFirst().text()).contains("猫").doesNotContain("股票");
+        assertThat(candidate.split(Document.from(topic("猫",3)))).hasSize(1);
+    }
+
+    @Test void semanticBudgetAndLeaseStopSignalsCannotBecomeRecursiveFallback() {
+        var limits=new com.lrj.platform.knowledge.ingest.job.IngestionResourceProperties();limits.setMaxModelCalls(1);limits.setMaxBatchSegments(1);
+        for(Runnable checkpoint:List.<Runnable>of(()->{},()->{throw new com.lrj.platform.knowledge.ingest.job.IngestionJobConflictException("lost");})) {
+            var work=new com.lrj.platform.knowledge.ingest.job.IngestionModelWork(limits,checkpoint);
+            var splitter=new SemanticChunkingSplitter(new KeywordEmbeddingModel(),0,95,1000,0,
+                    DocumentSplitters.recursive(1000,0),null,work,false);
+            org.assertj.core.api.Assertions.assertThatThrownBy(()->splitter.split(Document.from(topic("猫",3))))
+                    .isInstanceOfAny(com.lrj.platform.knowledge.ingest.job.IngestionResourceException.class,
+                            com.lrj.platform.knowledge.ingest.job.IngestionJobConflictException.class);
+        }
+    }
+
+    @Test void enormousBufferCannotOverflowOrMaterializeUnboundedWindows() {
+        var calls=new java.util.concurrent.atomic.AtomicInteger();
+        EmbeddingModel model=batch->{calls.incrementAndGet();return Response.from(batch.stream().map(s->Embedding.from(new float[]{1,0})).toList());};
+        var splitter=new SemanticChunkingSplitter(model,Integer.MAX_VALUE,95,1000,0,
+                DocumentSplitters.recursive(1000,0),null);
+        org.assertj.core.api.Assertions.assertThatThrownBy(()->splitter.split(Document.from(topic("猫",500))))
+                .isInstanceOf(com.lrj.platform.knowledge.ingest.job.IngestionResourceException.class);
+        assertThat(calls).hasValue(0);
+    }
+
     @Test
     void englishPeriodsSplitWithoutBreakingDecimalVersionsOrUrls() {
         assertThat(SemanticChunkingSplitter.splitSentences(
@@ -122,6 +154,7 @@ class SemanticChunkingSplitterTest {
 
         // 没抛异常，降级 recursive 切出 ≥1 块
         assertThat(segs).isNotEmpty();
+        assertThat(segs).allSatisfy(s->assertThat(s.metadata().getString(SemanticChunkingSplitter.ACTUAL_STRATEGY)).isEqualTo("recursive-fallback"));
         assertThat(String.join("", segs.stream().map(TextSegment::text).toList())).contains("猫");
     }
 

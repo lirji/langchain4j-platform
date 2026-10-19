@@ -81,10 +81,12 @@ public class DocumentService {
     private KnowledgeAuthz knowledgeAuthz = new NoopKnowledgeAuthz();
     private com.lrj.platform.knowledge.ingest.job.IngestionBatcher batcher =
             new com.lrj.platform.knowledge.ingest.job.IngestionBatcher(new com.lrj.platform.knowledge.ingest.job.IngestionResourceProperties());
+    private com.lrj.platform.knowledge.ingest.job.IngestionResourceProperties resources = new com.lrj.platform.knowledge.ingest.job.IngestionResourceProperties();
 
     /** 同步兼容入口也受模型批次预算保护，避免绕过可靠 worker 的容量限制。 */
     @Autowired
     public void setIngestionResources(com.lrj.platform.knowledge.ingest.job.IngestionResourceProperties resources) {
+        this.resources=resources;
         batcher = new com.lrj.platform.knowledge.ingest.job.IngestionBatcher(resources);
     }
 
@@ -258,62 +260,73 @@ public class DocumentService {
             doc.metadata().put("category", category);
         }
 
-        List<TextSegment> segments = parsed == null
-                ? ChunkIndexing.sequential(splitterFactory.create().split(doc))
-                : splitterFactory.split(parsed, doc.metadata());
-        // Contextual Retrieval：入库前给每 chunk 加文档级上下文前缀再嵌入（默认关时为 no-op，原样返回）。
-        batcher.embeddingBatches(segments);
-        segments = contextualEnricher.enrich(text, segments);
-        // 切分质量打点（F5.3）：记录最终入库形态的尺寸分布/碎块/超大块（默认注入，null 时跳过）。
-        if (chunkMetrics != null) {
-            chunkMetrics.record(splitterFactory.strategy(), 1, segments);
-        }
-        // 同步入口使用当前模型，保留既有配置维度守卫；快照重试路径才以历史实际向量维度为准。
-        var store = storeRouter.forTenant(tenantId, embeddingModel.dimension());
-        List<Embedding> embeddings = batcher.embed(embeddingModel, segments, () -> { });
-        DocumentInfo info = new DocumentInfo(
-                docId,
-                tenantId,
-                displayName,
-                contentType == null ? "text/plain" : contentType,
-                sourceSizeBytes > 0 ? sourceSizeBytes : text.getBytes(StandardCharsets.UTF_8).length,
-                segments.size(),
-                nextVersion,
-                Instant.now(),
-                category == null || category.isBlank() ? null : category);
-        var prepared = new com.lrj.platform.knowledge.ingest.job.PreparedIngestionDocument(info, segments, embeddings);
-        var batches = batcher.sinkBatches(prepared);
-        // 先完成可拒绝的模型/容量检查再替换旧版本；同步兼容路径仍不具备可靠任务的原子可见性。
-        existing.ifPresent(this::deleteInternal);
-        for (var batch : batches) {
-            var part = segments.subList(batch.from(), batch.to());
-            store.addAll(embeddings.subList(batch.from(), batch.to()), part);
-            documentMirror.add(part);
-            segmentIndexer.index(part);
-            if (graphIngestor != null) { graphIngestor.ingest(part); }
-        }
-        registry.put(info);
-        // 双写授权关系：仅【新建】文档写 owner + home_dept（上传人部门）；同名覆盖保留原 owner（不夺权）。默认 Noop。
-        if (!shared && existing.isEmpty()) {
-            String department = TenantContext.current().department();
-            // enforce 下无法确定上传人部门 → 拒绝新建（不写无归属的孤儿文档，只有 owner 能看）；disabled/shadow 不拦。
-            if (knowledgeAuthz.mode() == AuthzMode.ENFORCE && (department == null || department.isBlank())) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                        "cannot determine uploader's home department; refusing document creation under enforce");
+        long deadline=System.nanoTime()+resources.getPreparationTimeout().toNanos();
+        var work=new com.lrj.platform.knowledge.ingest.job.IngestionModelWork(resources,()->{
+            if(System.nanoTime()>deadline) throw new com.lrj.platform.knowledge.ingest.job.IngestionResourceException(
+                    com.lrj.platform.knowledge.ingest.job.IngestionResourceError.DEADLINE);
+        });
+        try {
+            List<TextSegment> segments = parsed == null
+                    ? ChunkIndexing.sequential(splitterFactory.create(work).split(doc))
+                    : splitterFactory.split(parsed, doc.metadata(),work);
+            // Contextual Retrieval：入库前给每 chunk 加文档级上下文前缀再嵌入（默认关时为 no-op，原样返回）。
+            batcher.embeddingBatches(segments);
+            segments = contextualEnricher.enrich(text, segments,work);
+            work.validateMetadata(segments);
+            // 切分质量打点（F5.3）：记录最终入库形态的尺寸分布/碎块/超大块（默认注入，null 时跳过）。
+            if (chunkMetrics != null) {
+                chunkMetrics.record(splitterFactory.strategy(), 1, segments);
             }
-            knowledgeAuthz.onDocumentCreated(tenantId, docId, TenantContext.current().userId(), department);
+            // 同步入口使用当前模型，保留既有配置维度守卫；快照重试路径才以历史实际向量维度为准。
+            var store = storeRouter.forTenant(tenantId, embeddingModel.dimension());
+            List<Embedding> embeddings = work.embed(embeddingModel,segments,
+                    com.lrj.platform.knowledge.ingest.job.IngestionModelWork.Stage.FINAL_EMBEDDING);
+            DocumentInfo info = new DocumentInfo(
+                    docId,
+                    tenantId,
+                    displayName,
+                    contentType == null ? "text/plain" : contentType,
+                    sourceSizeBytes > 0 ? sourceSizeBytes : text.getBytes(StandardCharsets.UTF_8).length,
+                    segments.size(),
+                    nextVersion,
+                    Instant.now(),
+                    category == null || category.isBlank() ? null : category);
+            var prepared = new com.lrj.platform.knowledge.ingest.job.PreparedIngestionDocument(info, segments, embeddings);
+            var batches = batcher.sinkBatches(prepared);
+            // 先完成可拒绝的模型/容量检查再替换旧版本；同步兼容路径仍不具备可靠任务的原子可见性。
+            existing.ifPresent(this::deleteInternal);
+            for (var batch : batches) {
+                var part = segments.subList(batch.from(), batch.to());
+                store.addAll(embeddings.subList(batch.from(), batch.to()), part);
+                documentMirror.add(part);
+                segmentIndexer.index(part);
+                if (graphIngestor != null) { graphIngestor.ingest(part); }
+            }
+            registry.put(info);
+            // 双写授权关系：仅【新建】文档写 owner + home_dept（上传人部门）；同名覆盖保留原 owner（不夺权）。默认 Noop。
+            if (!shared && existing.isEmpty()) {
+                String department = TenantContext.current().department();
+                // enforce 下无法确定上传人部门 → 拒绝新建（不写无归属的孤儿文档，只有 owner 能看）；disabled/shadow 不拦。
+                if (knowledgeAuthz.mode() == AuthzMode.ENFORCE && (department == null || department.isBlank())) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                            "cannot determine uploader's home department; refusing document creation under enforce");
+                }
+                knowledgeAuthz.onDocumentCreated(tenantId, docId, TenantContext.current().userId(), department);
+            }
+            audit.record(AuditEventType.DOCUMENT_UPLOADED, Map.of(
+                    "docId", docId,
+                    "displayName", displayName,
+                    "version", nextVersion,
+                    "segments", segments.size(),
+                    "sizeBytes", info.sizeBytes(),
+                    "category", category == null ? "" : category));
+            log.info("uploaded knowledge doc tenant={} docId={} name='{}' version={} segments={}",
+                    tenantId, docId, displayName, nextVersion, segments.size());
+            invalidateSemanticCache();
+            return info;
+        } finally {
+            if(chunkMetrics!=null) chunkMetrics.recordModelWork(work.snapshot());
         }
-        audit.record(AuditEventType.DOCUMENT_UPLOADED, Map.of(
-                "docId", docId,
-                "displayName", displayName,
-                "version", nextVersion,
-                "segments", segments.size(),
-                "sizeBytes", info.sizeBytes(),
-                "category", category == null ? "" : category));
-        log.info("uploaded knowledge doc tenant={} docId={} name='{}' version={} segments={}",
-                tenantId, docId, displayName, nextVersion, segments.size());
-        invalidateSemanticCache();
-        return info;
     }
 
     public List<DocumentInfo> list() {

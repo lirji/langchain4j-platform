@@ -54,6 +54,11 @@ public class ChunkMetrics {
         int tiny = 0;
         int oversize = 0;
         for (TextSegment seg : segments) {
+            String actual=seg.metadata().getString(com.lrj.platform.knowledge.SemanticChunkingSplitter.ACTUAL_STRATEGY);
+            if(actual!=null) registry.counter("rag.chunk.actual", "strategy",safeStrategy(actual)).increment();
+            String contextual=seg.metadata().getString(com.lrj.platform.knowledge.ingest.LlmContextualEnricher.STATUS);
+            if(contextual!=null) registry.counter("rag.contextual.result","outcome",
+                    java.util.Set.of("applied","fallback","prefix-limit").contains(contextual)?contextual:"unknown").increment();
             int len = seg.text() == null ? 0 : seg.text().length();
             registry.summary("rag.chunk.size", tags).record(len);
             if (len < tinyChars) {
@@ -70,5 +75,18 @@ public class ChunkMetrics {
         if (oversize > 0) {
             registry.counter("rag.chunk.oversize", tags).increment(oversize);
         }
+    }
+
+    /** 逻辑请求/估算输入量与真实网关账单分开命名；失败尝试也计入，标签不含文档身份。 */
+    public void recordModelWork(com.lrj.platform.knowledge.ingest.job.IngestionModelWork.Snapshot snapshot) {
+        for(var usage:snapshot.usage()) {
+            registry.counter("rag.ingest.model.logical.calls","stage",usage.stage()).increment(usage.logicalCalls());
+            registry.counter("rag.ingest.model.estimated.input.tokens","stage",usage.stage()).increment(usage.estimatedInputTokens());
+        }
+        registry.summary("rag.ingest.metadata.bytes").record(snapshot.metadataBytes());
+        registry.summary("rag.ingest.repeated.parent.bytes").record(snapshot.repeatedParentBytes());
+    }
+    private static String safeStrategy(String value) {
+        return java.util.Set.of("recursive","markdown-header","parent-child","semantic","structure","recursive-fallback").contains(value)?value:"unknown";
     }
 }

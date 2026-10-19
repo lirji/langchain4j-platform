@@ -13,6 +13,44 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ContextualEnricherTest {
 
+    @Test void tailSectionUsesNearbyOriginalTextInsteadOfDocumentBeginning() {
+        for(String headingKey:List.of("breadcrumb","section")) {
+        var windows=new java.util.ArrayList<String>();
+        var input=List.of(TextSegment.from("UNRELATED_INTRO",Metadata.from(headingKey,"开篇")),
+                TextSegment.from("BILLING_REFERENCE",Metadata.from(headingKey,"结算")),
+                TextSegment.from("PAYMENT_WITHIN_30_DAYS",Metadata.from(headingKey,"结算")));
+        new LlmContextualEnricher((window,chunk)->{windows.add(window);return "context";},256)
+                .enrich("UNRELATED_INTRO".repeat(1000),input);
+        assertThat(windows.get(2)).contains("结算","BILLING_REFERENCE","PAYMENT_WITHIN_30_DAYS").doesNotContain("UNRELATED_INTRO");
+        assertThat(windows).allSatisfy(w->assertThat(w.length()).isLessThanOrEqualTo(256));
+        }
+    }
+
+    @Test void entireContextCallPlanIsRejectedBeforeFirstCallAndLongPrefixIsDiscarded() {
+        var limits=new com.lrj.platform.knowledge.ingest.job.IngestionResourceProperties();limits.setMaxContextualCalls(1);limits.setMaxContextPrefixTokens(2);
+        var calls=new java.util.concurrent.atomic.AtomicInteger();
+        var enricher=new LlmContextualEnricher((d,c)->{calls.incrementAndGet();return "a much longer generated prefix with irrelevant context";},8000);
+        var work=new com.lrj.platform.knowledge.ingest.job.IngestionModelWork(limits,()->{});
+        org.assertj.core.api.Assertions.assertThatThrownBy(()->enricher.enrich("doc",List.of(seg("a","d"),seg("b","d")),work))
+                .isInstanceOf(com.lrj.platform.knowledge.ingest.job.IngestionResourceException.class);
+        assertThat(calls).hasValue(0);
+        var result=enricher.enrich("doc",List.of(seg("original evidence","d")),work);
+        assertThat(result.getFirst().text()).isEqualTo("original evidence");
+        assertThat(result.getFirst().metadata().getString(LlmContextualEnricher.STATUS)).isEqualTo("prefix-limit");
+    }
+
+    @Test void configuredContextModelReceivesOutputTokenLimit() {
+        var model=org.mockito.Mockito.mock(dev.langchain4j.model.chat.ChatModel.class);
+        org.mockito.Mockito.when(model.chat(org.mockito.ArgumentMatchers.any(dev.langchain4j.model.chat.request.ChatRequest.class)))
+                .thenReturn(dev.langchain4j.model.chat.response.ChatResponse.builder().aiMessage(dev.langchain4j.data.message.AiMessage.from("prefix")).build());
+        var limits=new com.lrj.platform.knowledge.ingest.job.IngestionResourceProperties();limits.setMaxContextPrefixTokens(32);
+        new ContextualEnrichmentConfig().llmContextualEnricher(model,8000,limits)
+                .enrich("doc",List.of(seg("original","d")),new com.lrj.platform.knowledge.ingest.job.IngestionModelWork(limits,()->{}));
+        var capture=org.mockito.ArgumentCaptor.forClass(dev.langchain4j.model.chat.request.ChatRequest.class);
+        org.mockito.Mockito.verify(model).chat(capture.capture());
+        assertThat(capture.getValue().parameters().maxOutputTokens()).isEqualTo(32);
+    }
+
     private static TextSegment seg(String text, String docId) {
         return TextSegment.from(text, Metadata.from("docId", docId));
     }
