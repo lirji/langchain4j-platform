@@ -174,3 +174,5 @@ B2 远程补正：`54f8b1f` 的 AgentScope CI `39193808050` 在持久化静态�
 - `python3 deploy/test-parsing-additional.py`：最终 jar 的 10 个真实格式/编码场景通过，非 root/只读/禁网/3GiB/2CPU/256pids/512MiB tmpfs，临时目录清理通过。固定报告 [KDP-06-E-formats.json](KDP-06-E-formats.json)，本地 `kdp06e/{docker-build,container-smoke}.log`、`kdp06e-linux.log`；容器峰值 420552704 字节、单份 1.076～3.152 秒，不作 SLA/吞吐结论。
 - DOC 夹具元数据和 OLE 条目核查在 `kdp06e/doc-metadata.log`，所有内容自有；没有宏或附件目录。四种 Compose config、runtime hardening、MyBatis boundary 均通过（`kdp06e-static.log`）。本批没有变更 SQL 或 OCR 算法，沿用之前对应真实 MySQL/S3 与七场景 OCR 证据，不将本批声明为生产迁移/部署验收。
 - 10 个代码/配置/测试资源/验证脚本文件指纹 `0c5eebb40bffdca1c320c0a767020097619555e48f227bcedf8cc5c5d4aa0269`，清单 `kdp06e/validated-files.json`；验证后未再改执行代码。文档同步、链接与 diff 校验另行确认。原失败日志保留。
+
+最终代码 `ef9b70c` 的远程 AgentScope `39197749121`、Tax AI `39197748986` 成功；Java supply chain `39197748980` 在 aggregate dependency SBOM 扫描失败，后续镜像/发布作业跳过。链接与交付范围见 [DELIVERY_RESULT](DELIVERY_RESULT.md)。本地文档路径目标与 diff 校验通过，未把功能验证当作供应链发布门禁通过。

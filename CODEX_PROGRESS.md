@@ -1,6 +1,6 @@
 # Codex Progress
 
-- 当前任务：`knowledge-parsing-hardening`（2026-10-19），KDP-01～05 与 KDP-06-A～D2 已交付；KDP-06-E 已通过聚焦、Linux 和最终回归，正在完成 Git 交付。实际提交与证据见唯一状态文档。
+- 当前任务：`knowledge-parsing-hardening`（2026-10-19），KDP-01～05 与 KDP-06-A～E 的代码、格式验收和文档已完成，代码已交付 main；供应链发布门禁仍失败。实际提交、最终文档交付与证据见唯一状态文档。
 - 唯一状态与恢复入口：[PROGRESS_STATE](docs/delivery/knowledge-parsing-hardening/PROGRESS_STATE.md)。
 - 问题与验收：[知识库文档解析生产优化](docs/对话与检索/知识库文档解析生产优化.md)。
 - 当前格式范围：[知识库文档支持范围](docs/对话与检索/知识库文档支持范围.md)。
