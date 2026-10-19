@@ -14,6 +14,8 @@ EXCEPTIONS = {
     "knowledge-service/src/main/java/com/lrj/platform/knowledge/store/doris/DorisEmbeddingStore.java",
     "database-migrations/src/main/java/com/lrj/platform/migrations/AnalyticsDemoDataMigration.java",
     "database-migrations/src/main/java/com/lrj/platform/migrations/LegacyExpandMigration.java",
+    # V11 独立 migrator：读取历史列定义并修复 collation，真实 MySQL 双方向回归覆盖；业务进程不执行 DDL。
+    "database-migrations/src/main/java/com/lrj/platform/migrations/KnowledgeTenantCollationMigration.java",
     "database-migrations/src/main/java/com/lrj/platform/migrations/SchemaMigrationRunner.java",
 }
 errors = []
