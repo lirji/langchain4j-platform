@@ -30,13 +30,9 @@ public final class IngestionModelWork {
     /** 整组预检查，按真实逻辑请求记账；失败调用仍消耗额度，禁止以降级退回预算。 */
     public List<Embedding> embed(EmbeddingModel model,List<TextSegment> segments,Stage stage) {
         checkpoint.run();
-        var batches=batcher.embeddingBatches(segments);
-        preflight(embeddingTokens(segments),batches.size());
-        EmbeddingModel counted=batch -> {
-            checkpoint.run();charge(stage,embeddingTokens(batch));
-            return model.embedAll(batch);
-        };
-        return batcher.embed(counted,segments,checkpoint);
+        var batches=batcher.embeddingBatches(model,segments);
+        preflight(embeddingTokens(model,segments),batches.size());
+        return batcher.embed(model,segments,checkpoint,batch->charge(stage,embeddingTokens(model,batch)));
     }
 
     /** 在窗口字符串全部驻留前拒绝明显超量；条数只是批次次数下界，实际调用还会核验 token/字节。 */
@@ -44,8 +40,9 @@ public final class IngestionModelWork {
         checkpoint.run();preflight(0,Math.toIntExact(((long)count+limits.getMaxBatchSegments()-1)/limits.getMaxBatchSegments()));
     }
     /** 构造每个窗口后立即校验，避免大 buffer 在进入批次器前先放大堆占用。 */
-    public WindowSize preflightWindow(String text,long previousTokens,long previousBytes) {
+    public WindowSize preflightWindow(EmbeddingModel model,String text,long previousTokens,long previousBytes) {
         checkpoint.run();
+        text=IngestionBatcher.modelInput(model,text);
         if(text.length()>limits.getMaxBatchBytes()) throw new IngestionResourceException(IngestionResourceError.MODEL_INPUT_LIMIT);
         int count=tokenizer.estimateTokenCountInText(text),bytes=text.getBytes(StandardCharsets.UTF_8).length;
         long totalTokens=previousTokens+count,totalBytes=previousBytes+bytes;
@@ -55,6 +52,14 @@ public final class IngestionModelWork {
         preflight(totalTokens,0);return new WindowSize(totalTokens,totalBytes);
     }
     public record WindowSize(long tokens,long bytes) { }
+
+    /** dimension() 可能隐式 embed("test")，保守占一次逻辑操作；固定维度返回也不退还额度。 */
+    public int dimension(EmbeddingModel model) {
+        checkpoint.run();charge(Stage.DIMENSION,tokenizer.estimateTokenCountInText("test"));
+        int dimension=model.dimension();checkpoint.run();
+        if(dimension<1) throw new IngestionResourceException(IngestionResourceError.MODEL_RESPONSE);
+        return dimension;
+    }
 
     /** 提示词包含任务说明、章节/邻近上下文、原片段和少量 framing 余量。 */
     public int promptTokens(String prompt) {
@@ -97,8 +102,8 @@ public final class IngestionModelWork {
         return new Snapshot(java.util.Arrays.stream(Stage.values())
                 .map(stage->new Usage(stage.code,inputTokens.getOrDefault(stage,0L),calls.getOrDefault(stage,0))).toList(),metadataBytes,parentBytes);
     }
-    private long embeddingTokens(List<TextSegment> segments) {
-        return segments.stream().mapToLong(s->tokenizer.estimateTokenCountInText(s.text())).sum();
+    private long embeddingTokens(EmbeddingModel model,List<TextSegment> segments) {
+        return segments.stream().mapToLong(s->tokenizer.estimateTokenCountInText(IngestionBatcher.modelInput(model,s.text()))).sum();
     }
     private void preflight(long addedTokens,int addedCalls) {
         if(addedTokens>limits.getMaxModelInputTokens()-tokens || addedCalls>limits.getMaxModelCalls()-totalCalls) fail();
@@ -110,7 +115,7 @@ public final class IngestionModelWork {
     private static void fail() { throw new IngestionResourceException(IngestionResourceError.MODEL_WORK_LIMIT); }
     /** 显式稳定代码供低基数指标使用，新增阶段不改变历史值。 */
     public enum Stage {
-        SEMANTIC("semantic"), CONTEXTUAL("contextual"), FINAL_EMBEDDING("final_embedding");
+        SEMANTIC("semantic"), CONTEXTUAL("contextual"), FINAL_EMBEDDING("final_embedding"), DIMENSION("dimension");
         private final String code;
         Stage(String code) {this.code=code;}
         public String code() {return code;}

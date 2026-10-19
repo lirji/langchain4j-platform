@@ -160,3 +160,9 @@ B2 远程补正：`54f8b1f` 的 AgentScope CI `39193808050` 在持久化静态�
 - 覆盖跨阶段逻辑调用/token 累计、失败不返还、预检查零调用、失租不降级、巨大 buffer 不先放大内存、短文线性候选/同主题、尾部同章上下文、前缀长度/模型输出上限、父块重复预算和历史快照兼容。没有调用计费模型；[成本对照](KDP-06-D-cost.json) 不代表线上 Recall/引用准确率/金额。
 - 四种 Compose config、runtime hardening、MyBatis boundary、git diff --check 通过。只配置 split worker 的 SDK retries=0，不改变全平台网关默认值。Graph 实际为规则抽取，无虚构 LLM 调用。
 - 22 个代码/测试/配置文件指纹 `97f981ac38aab284e57bc5df27b5a611ce8d20940b53f20a6b353159d6b0660a`；清单 `kdp06d/validated-files.json`。未执行生产迁移/部署/重建索引。
+
+### D2 前缀预算与隐式维度探测追补
+
+- `mvn -B -o -pl knowledge-service -am -Dtest=IngestionModelWorkTest,IngestionBatcherTest,SemanticChunkingSplitterTest,DocumentServiceTest,PrefixingEmbeddingModelTest,PreparedIngestionRecoveryTest,DocumentProcessingCostTest -Dsurefire.failIfNoSpecifiedTests=false test`：44 项通过，`kdp06d2-prefix-dimension.log`。覆盖前缀导致的单段/总 token/批次字节超限零调用、只计一次且保留原文、维度探测共享额度、覆盖旧版不再多探测且超限保留旧版本。
+- `mvn -B -o -pl knowledge-service -am -Dtest=TenantIsolationTest,EmbeddingStoreRouterTest,KnowledgeExceptionHandlerTest -Dsurefire.failIfNoSpecifiedTests=false test`：14 项通过，`kdp06d2-dimension-compat.log`；保留当前模型维度守卫、租户路由及原 HTTP 错误映射。
+- 8 个追补代码/测试文件指纹 `e75a48e9714ebfb9abc93baa8f881b5559cff3a6c66f682ff21aca9038d44060`，清单 `kdp06d2/validated-files.json`。E 的尚未通过格式用例不混入本次交付；后续 E 完整回归会覆盖合并结果。

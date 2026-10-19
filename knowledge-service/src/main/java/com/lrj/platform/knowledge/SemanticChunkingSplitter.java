@@ -165,7 +165,7 @@ public class SemanticChunkingSplitter implements DocumentSplitter {
             int from = Math.max(0, i - bufferSize);
             int to = (int)Math.min(sentences.size() - 1, (long)i + bufferSize);
             String window=String.join(" ", sentences.subList(from, to + 1));
-            var size=documentWork.preflightWindow(window,tokens,bytes);tokens=size.tokens();bytes=size.bytes();
+            var size=documentWork.preflightWindow(embeddingModel,window,tokens,bytes);tokens=size.tokens();bytes=size.bytes();
             windows.add(TextSegment.from(window));
         }
         List<Embedding> embeddings = documentWork.embed(embeddingModel,windows,

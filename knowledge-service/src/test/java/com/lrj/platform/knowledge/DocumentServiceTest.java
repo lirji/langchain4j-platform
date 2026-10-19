@@ -29,6 +29,22 @@ import static org.mockito.Mockito.mock;
  * 版本递增覆盖、多模态原始字节大小、开启 GraphRAG 时三元组随上传/删除同步，以及语义缓存失效器的调用与容错。
  */
 class DocumentServiceTest {
+    @Test void overwriteReusesDimensionGuardAndDimensionProbeSharesUploadBudget() {
+        TenantContext.set(new TenantContext.Tenant("acme","alice",Set.of("ingest")));
+        var calls=new java.util.concurrent.atomic.AtomicInteger();
+        dev.langchain4j.model.embedding.EmbeddingModel model=values->{calls.incrementAndGet();return dev.langchain4j.model.output.Response.from(
+                values.stream().map(s->dev.langchain4j.data.embedding.Embedding.from(new float[]{1,0})).toList());};
+        var svc=new DocumentService(new InMemoryEmbeddingStore<>(),model,new DocumentMirror(),splitterFactory(),
+                new InMemoryDocumentRegistry(),mock(AuditLogger.class));
+        calls.set(0); // store 构造时的一次维度初始化不属于任何上传准备。
+        svc.upload("guard.txt","text/plain","first",null);
+        svc.upload("guard.txt","text/plain","second",null);
+        assertThat(calls).hasValue(4); // 每次维度探测 + 最终向量；删除旧版不再加一次探测。
+        var limits=new com.lrj.platform.knowledge.ingest.job.IngestionResourceProperties();limits.setMaxModelCalls(1);svc.setIngestionResources(limits);
+        org.assertj.core.api.Assertions.assertThatThrownBy(()->svc.upload("guard.txt","text/plain","third",null))
+                .isInstanceOf(com.lrj.platform.knowledge.ingest.job.IngestionResourceException.class);
+        assertThat(calls).hasValue(5);assertThat(svc.list()).singleElement().satisfies(info->assertThat(info.version()).isEqualTo(2));
+    }
 
     private final DocumentMirror mirror = new DocumentMirror();
     private final DocumentRegistry registry = new InMemoryDocumentRegistry();

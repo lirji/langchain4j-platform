@@ -92,7 +92,7 @@ public class DefaultIngestionDocumentPreparer implements IngestionDocumentPrepar
 
             List<TextSegment> segments = splitterFactory.split(parsed, document.metadata(),work);
             // 在可选上下文模型调用前预检查原文，避免明显超限文档先产生额外计费调用。
-            batcher.embeddingBatches(segments);
+            batcher.embeddingBatches(embeddingModel,segments);
             checkpoint.run();
             segments = contextualEnricher.enrich(text, segments, work);
             work.validateMetadata(segments);

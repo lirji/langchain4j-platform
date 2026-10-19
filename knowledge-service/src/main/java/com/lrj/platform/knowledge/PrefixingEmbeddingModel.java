@@ -54,6 +54,12 @@ public class PrefixingEmbeddingModel implements EmbeddingModel {
         return delegate.dimension();
     }
 
+    /** 预算必须看真实发送的文档前缀，但持久化/引用仍保存调用方原文；支持已有包装器嵌套。 */
+    public String documentInput(String text) {
+        String input=documentPrefix+text;
+        return delegate instanceof PrefixingEmbeddingModel nested?nested.documentInput(input):input;
+    }
+
     private TextSegment withDocumentPrefix(TextSegment segment) {
         if (documentPrefix.isEmpty()) {
             return segment;

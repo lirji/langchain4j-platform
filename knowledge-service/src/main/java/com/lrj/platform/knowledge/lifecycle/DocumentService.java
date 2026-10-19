@@ -270,7 +270,7 @@ public class DocumentService {
                     ? ChunkIndexing.sequential(splitterFactory.create(work).split(doc))
                     : splitterFactory.split(parsed, doc.metadata(),work);
             // Contextual Retrieval：入库前给每 chunk 加文档级上下文前缀再嵌入（默认关时为 no-op，原样返回）。
-            batcher.embeddingBatches(segments);
+            batcher.embeddingBatches(embeddingModel,segments);
             segments = contextualEnricher.enrich(text, segments,work);
             work.validateMetadata(segments);
             // 切分质量打点（F5.3）：记录最终入库形态的尺寸分布/碎块/超大块（默认注入，null 时跳过）。
@@ -278,7 +278,7 @@ public class DocumentService {
                 chunkMetrics.record(splitterFactory.strategy(), 1, segments);
             }
             // 同步入口使用当前模型，保留既有配置维度守卫；快照重试路径才以历史实际向量维度为准。
-            var store = storeRouter.forTenant(tenantId, embeddingModel.dimension());
+            var store = storeRouter.forTenant(tenantId, work.dimension(embeddingModel));
             List<Embedding> embeddings = work.embed(embeddingModel,segments,
                     com.lrj.platform.knowledge.ingest.job.IngestionModelWork.Stage.FINAL_EMBEDDING);
             DocumentInfo info = new DocumentInfo(
@@ -294,7 +294,7 @@ public class DocumentService {
             var prepared = new com.lrj.platform.knowledge.ingest.job.PreparedIngestionDocument(info, segments, embeddings);
             var batches = batcher.sinkBatches(prepared);
             // 先完成可拒绝的模型/容量检查再替换旧版本；同步兼容路径仍不具备可靠任务的原子可见性。
-            existing.ifPresent(this::deleteInternal);
+            existing.ifPresent(previous->deleteInternal(previous,store));
             for (var batch : batches) {
                 var part = segments.subList(batch.from(), batch.to());
                 store.addAll(embeddings.subList(batch.from(), batch.to()), part);
@@ -460,6 +460,11 @@ public class DocumentService {
     }
 
     private void deleteInternal(DocumentInfo info) {
+        deleteInternal(info,null);
+    }
+
+    /** 覆盖上传复用已通过当前模型维度守卫的 store，避免清理旧版时额外探测模型。 */
+    private void deleteInternal(DocumentInfo info,EmbeddingStore<TextSegment> validatedStore) {
         // 物理痕迹清理（向量库 / 词法镜像 / ES / 图谱）一律【尽力而为】：以 registry 元数据删除为逻辑删除的准绳，
         // 任一物理 sink 失败都不得让整个删除返回 500——单条清理失败只记 WARN（残留孤儿向量/边由运维对账），
         // 保证文档仍能从用户工作区消失。
@@ -472,7 +477,8 @@ public class DocumentService {
             Filter filter = Filter.and(
                     metadataKey("tenantId").isEqualTo(info.tenantId()),
                     metadataKey("docId").isEqualTo(info.docId()));
-            storeRouter.forTenant(info.tenantId(), embeddingModel.dimension()).removeAll(filter);
+            var target=validatedStore!=null?validatedStore:storeRouter.forTenant(info.tenantId(),embeddingModel.dimension());
+            target.removeAll(filter);
         } catch (RuntimeException ex) {
             log.warn("vector store delete failed (best-effort; leaving orphaned vectors) tenant={} docId={}: {}",
                     info.tenantId(), info.docId(), ex.toString());

@@ -13,6 +13,34 @@ import static com.lrj.platform.knowledge.ingest.job.IngestionModelWork.Stage.*;
 
 /** 确认不同阶段共享额度、失败不返还、预检查零调用及父块放大限制。 */
 class IngestionModelWorkTest {
+    @Test void taskPrefixParticipatesInEveryInputAndBatchBudget() {
+        var limits=new IngestionResourceProperties();limits.setMaxSegmentTokens(2);var calls=new AtomicInteger();
+        var model=new com.lrj.platform.knowledge.PrefixingEmbeddingModel(model(calls),"query:","a long document task prefix ");
+        var work=new IngestionModelWork(limits,()->{});
+        assertThatThrownBy(()->work.embed(model,List.of(TextSegment.from("x")),FINAL_EMBEDDING)).isInstanceOf(IngestionResourceException.class);
+        assertThat(calls).hasValue(0);
+        limits.setMaxSegmentTokens(2048);limits.setMaxModelInputTokens(2);
+        assertThatThrownBy(()->new IngestionModelWork(limits,()->{}).embed(model,List.of(TextSegment.from("x")),SEMANTIC)).isInstanceOf(IngestionResourceException.class);
+        assertThat(calls).hasValue(0);
+        limits.setMaxModelInputTokens(1000);limits.setMaxBatchBytes(5);
+        assertThatThrownBy(()->new IngestionModelWork(limits,()->{}).embed(model,List.of(TextSegment.from("x")),FINAL_EMBEDDING)).isInstanceOf(IngestionResourceException.class);
+        assertThat(calls).hasValue(0);
+    }
+    @Test void prefixIsCountedOnceAndOriginalInputIsNotChanged() {
+        var calls=new AtomicInteger();var work=new IngestionModelWork(new IngestionResourceProperties(),()->{});
+        var model=new com.lrj.platform.knowledge.PrefixingEmbeddingModel(model(calls),"query:","search_document: ");
+        var input=TextSegment.from("original");work.embed(model,List.of(input),FINAL_EMBEDDING);
+        long expected=new dev.langchain4j.model.openai.OpenAiTokenCountEstimator("gpt-4o-mini").estimateTokenCountInText("search_document: original");
+        assertThat(work.snapshot().usage().stream().filter(u->u.stage().equals("final_embedding")).findFirst().orElseThrow().estimatedInputTokens()).isEqualTo(expected);
+        assertThat(input.text()).isEqualTo("original");assertThat(calls).hasValue(1);
+    }
+    @Test void implicitDimensionProbeConsumesTheSameBudgetBeforeFinalInput() {
+        var limits=new IngestionResourceProperties();limits.setMaxModelCalls(1);var calls=new AtomicInteger();
+        var model=model(calls);var work=new IngestionModelWork(limits,()->{});
+        assertThat(work.dimension(model)).isEqualTo(2);assertThat(calls).hasValue(1);
+        assertThatThrownBy(()->work.embed(model,List.of(TextSegment.from("content")),FINAL_EMBEDDING)).isInstanceOf(IngestionResourceException.class);
+        assertThat(calls).hasValue(1);
+    }
     @Test void semanticBatchesConsumeTheSameLogicalCallBudgetAsFinalEmbedding() {
         var limits=new IngestionResourceProperties();limits.setMaxBatchSegments(2);limits.setMaxModelCalls(3);
         var work=new IngestionModelWork(limits,()->{});var calls=new AtomicInteger();
