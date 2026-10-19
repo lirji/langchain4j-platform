@@ -1,0 +1,35 @@
+{
+  "status": "PASS",
+  "observedAt": "2026-10-19T06:54:55.215620+00:00",
+  "services": {
+    "knowledge-service": {
+      "image": "langchain4j-platform-knowledge-service:80080dff9f55",
+      "imageId": "sha256:583717ddec3b34b619ef9715111167015272871835eb71254abe0d167a0d5d1a",
+      "revision": "80080dff9f55ce8deee94effa2b38754a4d8a017",
+      "startedAt": "2026-10-19T06:54:19.149662506Z"
+    },
+    "capability-showcase-frontend": {
+      "image": "langchain4j-platform-capability-showcase-frontend:80080dff9f55",
+      "imageId": "sha256:6301b8791705e201cd12d620d5f7917f262f78a5c3be234a4f319788207e95d6",
+      "revision": "80080dff9f55ce8deee94effa2b38754a4d8a017",
+      "startedAt": "2026-10-19T06:54:18.887672297Z"
+    }
+  },
+  "knowledgeReadiness": "UP",
+  "frontendStatus": 200,
+  "assetsVerified": 2,
+  "newUiTextVerified": true,
+  "ocrEnabled": true,
+  "ocrLanguages": [
+    "chi_sim",
+    "eng",
+    "osd"
+  ],
+  "packagedJarSha256": "da25518a51d3699212519026814d8f6c65ad9c8643e2871baaa0f2ad503f5a58",
+  "existingJobsPreserved": 35,
+  "totalJobs": 35,
+  "unchangedOtherContainers": true,
+  "workerErrorsSinceRestart": 0,
+  "realDocumentsResubmitted": false,
+  "paidModelProbeExecuted": false
+}
