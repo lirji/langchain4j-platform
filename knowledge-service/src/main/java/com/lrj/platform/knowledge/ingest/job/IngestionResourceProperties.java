@@ -21,6 +21,17 @@ public class IngestionResourceProperties {
     private long maxModelInputTokens = 1_000_000, maxMetadataBytes = 16L * 1024 * 1024;
     private int maxModelCalls = 512, maxContextualCalls = 128, maxContextPromptTokens = 8192, maxContextPrefixTokens = 256;
     private int maxContextualConsecutiveFailures = 3;
+    private int maxContentCandidates = 100, maxContentionRetries = 3;
+
+    /** 历史重复候选与并发重新检查均有界；耗尽预算时不跳过去重。 */
+    public int getMaxContentCandidates() { return maxContentCandidates; }
+    public void setMaxContentCandidates(int value) {
+        positive(value);
+        if (value == Integer.MAX_VALUE) throw new IllegalArgumentException("invalid content candidate limit");
+        maxContentCandidates = value;
+    }
+    public int getMaxContentionRetries() { return maxContentionRetries; }
+    public void setMaxContentionRetries(int value) { positive(value); maxContentionRetries = value; }
 
     /** 输入限制与 servlet 上传限制需同时配置；实际字节数始终重新计量。 */
     public long getMaxInputBytes() { return maxInputBytes; }

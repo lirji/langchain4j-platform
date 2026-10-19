@@ -6,6 +6,7 @@
  * （docVisibility 仅作兜底/校验）；query 命中用服务端 KnowledgeHit.visibility。删共享需 public-ingest（后端 403 兜底）。
  */
 import type { RunContext } from '../types/api'
+import { IngestionDuplicateCode, type IngestionDuplicateNotice } from '../types/knowledge'
 import type {
   DocumentInfo,
   IngestionJobView,
@@ -16,7 +17,7 @@ import type {
 } from '../types/knowledge'
 import { API_KEY_HEADER, AUTH_HEADER } from './client'
 import { authorizedFetch } from './authorizedFetch'
-import { ApiError } from './errors'
+import { ApiError, apiErrorCode } from './errors'
 import { tryParseJson } from '../utils/json'
 
 /** 凭证互斥二选一（复用能力路径逻辑）：手输 api-key 优先，否则登录 Bearer。 */
@@ -80,6 +81,24 @@ export const deleteDocument = (docId: string, visibility: Visibility, ctx: RunCo
 /** 按 jobId 查询 durable ingestion 状态；无列表接口，只能点查。 */
 export const getIngestionJob = (jobId: string, ctx: RunContext): Promise<IngestionJobView> =>
   edgeJson<IngestionJobView>(`/rag/ingestions/${encodeURIComponent(jobId)}`, ctx)
+
+/** 只接受明确的重复业务码和有效引用；损坏响应不构造任务，也不把任意 409 当成成功。 */
+export function ingestionDuplicate(error: unknown): IngestionDuplicateNotice | null {
+  if (!(error instanceof ApiError) || error.status !== 409) return null
+  const code = apiErrorCode(error) as IngestionDuplicateCode
+  if (!Object.values(IngestionDuplicateCode).includes(code)) return null
+  const raw = (error.body as Record<string, unknown>).duplicate
+  if (!raw || typeof raw !== 'object') return null
+  const value = raw as Record<string, unknown>
+  if (typeof value.documentAvailable !== 'boolean') return null
+  const text = (key: string) => typeof value[key] === 'string' && value[key].trim() ? value[key] as string : null
+  const version = Number.isSafeInteger(value.documentVersion) && Number(value.documentVersion) > 0
+    ? value.documentVersion as number : null
+  if (code === IngestionDuplicateCode.Ready && (!value.documentAvailable || !text('documentId') || !version)) return null
+  if (value.documentAvailable && code !== IngestionDuplicateCode.Ready) return null
+  return { code, documentId: text('documentId'), displayName: text('displayName'), documentVersion: version,
+    jobId: text('jobId'), documentAvailable: value.documentAvailable }
+}
 
 /** 同一提交意图始终复用调用方保存的幂等键；浏览器负责 multipart boundary。 */
 export async function submitIngestion(input: IngestionSubmission, ctx: RunContext): Promise<IngestionJobView> {

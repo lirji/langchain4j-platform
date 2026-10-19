@@ -73,6 +73,25 @@ class IngestionControllerTest {
     }
 
     @Test
+    void duplicateResponseIsConflictWithAuthorizedReferenceInsteadOfFakeAcceptedJob() throws Exception {
+        TenantContext.set(new TenantContext.Tenant("acme", "bob", Set.of("ingest")));
+        when(submissions.submitStream(any(), any(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenThrow(new com.lrj.platform.knowledge.ingest.job.IngestionDuplicateException(
+                        com.lrj.platform.knowledge.ingest.job.IngestionDuplicateException.Kind.READY,
+                        new com.lrj.platform.knowledge.ingest.job.IngestionDuplicateException.Reference("existing", "guide.txt", 1L, null, true)));
+        mvc.perform(multipart("/rag/ingestions")
+                        .file(new MockMultipartFile("file", "renamed.txt", "text/plain", "hello".getBytes()))
+                        .header("Idempotency-Key", "new-key").param("documentId", "new-doc").param("documentVersion", "1"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("INGESTION_DUPLICATE_READY"))
+                .andExpect(jsonPath("$.duplicate.documentId").value("existing"))
+                .andExpect(jsonPath("$.duplicate.documentAvailable").value(true))
+                .andExpect(jsonPath("$.duplicate.jobId").isEmpty())
+                .andExpect(jsonPath("$.jobId").doesNotExist())
+                .andExpect(jsonPath("$.traceId").doesNotExist());
+    }
+
+    @Test
     void missingIngestScopeFailsClosedBeforeSourceWrite() throws Exception {
         TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("chat")));
 

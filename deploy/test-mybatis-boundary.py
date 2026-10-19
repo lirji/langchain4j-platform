@@ -16,6 +16,8 @@ EXCEPTIONS = {
     "database-migrations/src/main/java/com/lrj/platform/migrations/LegacyExpandMigration.java",
     # V11 独立 migrator：读取历史列定义并修复 collation，真实 MySQL 双方向回归覆盖；业务进程不执行 DDL。
     "database-migrations/src/main/java/com/lrj/platform/migrations/KnowledgeTenantCollationMigration.java",
+    # V12 独立 migrator：继承历史租户比较规则并建内容守卫/索引；有双 collation 和并发 MySQL 回归。
+    "database-migrations/src/main/java/com/lrj/platform/migrations/KnowledgeContentDedupMigration.java",
     "database-migrations/src/main/java/com/lrj/platform/migrations/SchemaMigrationRunner.java",
 }
 errors = []
@@ -65,6 +67,13 @@ for path in xmls:
                 sql, re.I,
             ):
                 errors.append(f"coordination read must lock the fixed admission guard only: {relative}")
+            continue
+        # 内容守卫仅保存协调序号，没有业务软删除；逐语句限定租户和 hash，禁止扩大读取范围。
+        if path.name == "IngestionJobStoreMapper.xml" and statement.attrib.get("id") in {"contentGeneration", "lockContentGuard"}:
+            lock = r"\s+FOR\s+UPDATE" if statement.attrib["id"] == "lockContentGuard" else ""
+            if not re.fullmatch(r"\s*SELECT\s+GENERATION\s+FROM\s+KNOWLEDGE_INGESTION_CONTENT_GUARD\s+"
+                                r"WHERE\s+TENANT_ID\s*=\s*#\{tenantId\}\s+AND\s+SOURCE_HASH\s*=\s*#\{contentHash\}" + lock + r"\s*", sql, re.I):
+                errors.append(f"content guard read must bind one tenant and hash: {relative}#{statement.attrib.get('id')}")
             continue
         if (path.name, statement.attrib.get("id")) not in including_tombstones and not re.search(r"\bDELETED\s*=\s*0", sql, re.I):
             errors.append(f"normal read must exclude tombstones: {relative}#{statement.attrib.get('id')}")

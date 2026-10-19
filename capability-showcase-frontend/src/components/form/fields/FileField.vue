@@ -27,6 +27,8 @@ function revoke(): void {
 }
 watch(model, (v) => {
   revoke()
+  // 父表单重置也同步原生 input，否则再次选择同一文件不会触发 change。
+  if (v == null && inputEl.value) inputEl.value.value = ''
   if (
     typeof File !== 'undefined' &&
     v instanceof File &&
@@ -44,6 +46,8 @@ watch(model, (v) => {
 onBeforeUnmount(revoke)
 
 function pick(files: FileList | null): void {
+  // fieldset 会禁用原生 input，但不会禁用 div 的拖放事件；未知提交结果期间保持文件身份。
+  if (inputEl.value?.matches(':disabled')) return
   model.value = files && files.length ? files[0] : null
 }
 function onDrop(e: DragEvent): void {

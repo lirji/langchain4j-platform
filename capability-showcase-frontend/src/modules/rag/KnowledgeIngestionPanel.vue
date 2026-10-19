@@ -2,21 +2,21 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useCatalogStore } from '../../stores/catalog'
 import { useSessionStore } from '../../stores/session'
-import { getIngestionJob, retryIngestion, submitIngestion } from '../../api/knowledge'
+import { getIngestionJob, ingestionDuplicate, retryIngestion, submitIngestion } from '../../api/knowledge'
 import { ApiError, isAbortError } from '../../api/errors'
-import { IngestionStatus, type IngestionJobView } from '../../types/knowledge'
+import { IngestionDuplicateCode, IngestionStatus, type IngestionJobView } from '../../types/knowledge'
 import { executionGate } from '../../utils/gate'
 import FileField from '../../components/form/fields/FileField.vue'
 import WorkbenchSection from '../_shared/WorkbenchSection.vue'
 import InfoNote from '../_shared/InfoNote.vue'
 import { useKnowledgeScope } from './useKnowledgeScope'
 import { useIngestionState } from './ingestionState'
-import { DOCUMENT_ACCEPT, DOCUMENT_FORMAT_HINT, OCR_HINT, INGESTION_PREPARATION_HINT, POLL_INTERVAL_MS, POLL_MAX_ROUNDS,
+import { DOCUMENT_ACCEPT, DOCUMENT_FORMAT_HINT, OCR_HINT, INGESTION_PREPARATION_HINT, INGESTION_DEDUP_HINT, duplicateHint, POLL_INTERVAL_MS, POLL_MAX_ROUNDS,
   ingestionErrorHint, ingestionRequestError, isRejectedSubmission, jobLabel, jobTone, knowledgeDate, mayRetry,
   shouldPoll, sinkLabel, stageLabel, TRACKED_JOB_LIMIT } from './knowledgePresentation'
 
 withDefaults(defineProps<{ showUpload?: boolean }>(), { showUpload: true })
-const emit = defineEmits<{ ready: [job: IngestionJobView]; openDocument: [job: IngestionJobView] }>()
+const emit = defineEmits<{ ready: [job: IngestionJobView]; openDocument: [document: Pick<IngestionJobView, 'documentId'>] }>()
 const session = useSessionStore(), catalog = useCatalogStore(), state = useIngestionState()
 const scope = useKnowledgeScope()
 const jobIdInput = ref(''), taskError = ref(''), taskNote = ref('')
@@ -34,6 +34,10 @@ const monitoring = computed(() => !paused.value && state.jobs.some(shouldPoll))
 
 function accept(job: IngestionJobView) {
   state.upsert(job)
+  if (state.duplicate?.jobId === job.jobId && job.status === IngestionStatus.Ready) {
+    state.duplicate = { ...state.duplicate, code: IngestionDuplicateCode.Ready, documentAvailable: true,
+      documentId: job.documentId, documentVersion: job.documentVersion }
+  }
   if (job.status === IngestionStatus.Ready && !readySeen.has(job.jobId)) {
     readySeen.add(job.jobId)
     emit('ready', job)
@@ -102,6 +106,7 @@ async function submit() {
     state.submitError = '请填写文档 ID，版本必须是大于零的安全整数。'; return
   }
   const input = state.command()
+  state.duplicate = null
   const req = startRequest('submit')
   state.phase = 'submitting'
   try {
@@ -113,10 +118,22 @@ async function submit() {
     resume()
   } catch (error) {
     if (!current(req)) return
+    const duplicate = ingestionDuplicate(error)
+    if (duplicate) {
+      state.phase = 'duplicate'
+      state.duplicate = duplicate
+      return
+    }
     // 只有明确的客户端拒绝可修改请求；断网/服务故障必须保留原文件和幂等身份。
     state.phase = isRejectedSubmission(error) ? 'rejected' : 'uncertain'
     state.submitError = ingestionRequestError(error)
   } finally { finish('submit', req.controller) }
+}
+async function trackDuplicate() {
+  const id = state.duplicate?.jobId
+  if (!id) return
+  jobIdInput.value = id
+  await track()
 }
 /** 只停止浏览器等待，服务端是否已受理仍需用原幂等身份确认。 */
 function stopWaiting() {
@@ -176,6 +193,7 @@ onBeforeUnmount(() => {
     <InfoNote v-if="!gate.allowed" tone="warning">{{ gate.reason }}</InfoNote>
     <p class="ki-hint">{{ DOCUMENT_FORMAT_HINT }}</p>
     <p class="ki-hint">{{ OCR_HINT }}</p>
+    <p class="ki-hint">{{ INGESTION_DEDUP_HINT }}</p>
     <form class="ki-form" @submit.prevent="submit">
       <fieldset :disabled="state.locked" class="ki-fields">
         <div class="ki-field ki-wide"><label for="ingestion-file">文件（必填）</label><FileField field-id="ingestion-file" v-model="state.file" :accept="DOCUMENT_ACCEPT" /></div>
@@ -186,10 +204,24 @@ onBeforeUnmount(() => {
         <details class="ki-wide ki-receipt"><summary>恢复没有收到回执的提交</summary><div class="ki-field"><label for="ingestion-recovery">原提交编号</label><input id="ingestion-recovery" v-model="state.recoveryKey" class="form-control" aria-describedby="ingestion-recovery-tip" /><small id="ingestion-recovery-tip">新上传请留空。恢复时填入原提交编号，并选择完全相同的文件、文档 ID、版本、名称与类目；服务端会核对并返回原任务。</small></div></details>
       </fieldset>
       <InfoNote v-if="state.submitError" tone="danger" role="alert">{{ state.submitError }}</InfoNote>
+      <InfoNote v-if="state.duplicate" tone="neutral" role="status">
+        <p>{{ duplicateHint(state.duplicate) }}</p>
+        <dl v-if="state.duplicate.documentId" class="ki-facts">
+          <dt>已有文档</dt><dd>{{ state.duplicate.displayName || '未提供名称' }}</dd>
+          <dt>文档 ID</dt><dd>{{ state.duplicate.documentId }}</dd>
+          <dt>版本</dt><dd>{{ state.duplicate.documentVersion }}</dd>
+        </dl>
+        <p v-if="!state.duplicate.jobId && !state.duplicate.documentAvailable" class="ki-hint">原任务由其他用户提交，任务详情仅对提交者开放。可稍后重新检查本文件。</p>
+        <div class="ki-actions">
+          <button v-if="state.duplicate.documentAvailable && state.duplicate.documentId" type="button" class="btn btn--primary" @click="emit('openDocument', { documentId: state.duplicate.documentId })">查看已有文档</button>
+          <button v-if="state.duplicate.jobId" type="button" class="btn btn--ghost" :disabled="busyIds.includes(state.duplicate.jobId)" @click="trackDuplicate">查看我的原任务</button>
+        </div>
+      </InfoNote>
       <InfoNote v-if="state.phase === 'uncertain'" tone="warning">结果尚未确认。原文件与提交编号已保留，请点击“确认原提交结果”。不要关闭或刷新本页。</InfoNote>
       <InfoNote v-if="state.phase === 'accepted'" tone="success" role="status">已收到入库回执，请在下方查看任务。已受理不代表已可检索。</InfoNote>
       <div class="ki-actions">
-        <button v-if="state.phase !== 'accepted'" type="submit" class="btn btn--primary" :disabled="!gate.allowed || state.phase === 'submitting'">{{ state.phase === 'submitting' ? '正在提交…' : state.phase === 'uncertain' ? '确认原提交结果' : state.phase === 'rejected' ? '重新提交' : '提交入库' }}</button>
+        <button v-if="state.phase !== 'accepted'" type="submit" class="btn btn--primary" :disabled="!gate.allowed || state.phase === 'submitting'">{{ state.phase === 'submitting' ? '正在提交…' : state.phase === 'uncertain' ? '确认原提交结果' : state.phase === 'duplicate' ? '重新检查本文件' : state.phase === 'rejected' ? '重新提交' : '提交入库' }}</button>
+        <button v-if="state.phase === 'duplicate'" type="button" class="btn btn--ghost" @click="state.changeDuplicateFile()">更换文件</button>
         <button v-if="state.phase === 'submitting'" type="button" class="btn btn--ghost" @click="stopWaiting">停止等待</button>
         <button v-if="state.phase === 'accepted'" type="button" class="btn btn--primary" @click="state.newDocument()">继续上传新文档</button>
       </div>

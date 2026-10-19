@@ -96,6 +96,41 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
 
     @Override
     public IngestionJob createOrGet(IngestionJob job) {
+        return createWithContentGuard(job, null).orElseThrow();
+    }
+
+    @Override
+    public Optional<IngestionJob> createIfContentUnchanged(IngestionJob job, long generation) {
+        return createWithContentGuard(job, generation);
+    }
+
+    /** 在同一短事务内锁守卫、检查序号、插入任务并推进序号；未知结果由幂等键恢复。 */
+    private Optional<IngestionJob> createWithContentGuard(IngestionJob job, Long expectedGeneration) {
+        return admission.execute(transaction -> {
+            String hash = job.source().contentHash();
+            db.ensureContentGuard(job.tenantId(), hash);
+            long generation = db.lockContentGuard(job.tenantId(), hash);
+            var replay = findByIdempotency(job.tenantId(), job.idempotencyKey());
+            if (replay.isPresent()) return replay;
+            if (expectedGeneration != null && generation != expectedGeneration) return Optional.empty();
+            var result = insertOrReplay(job);
+            if (result.jobId().equals(job.jobId()) && db.advanceContentGeneration(job.tenantId(), hash) != 1)
+                throw new IngestionJobConflictException("content guard missing");
+            return Optional.of(result);
+        });
+    }
+
+    @Override
+    public ContentSnapshot contentSnapshot(String tenantId, String contentHash, int limit) {
+        if (limit < 1 || limit == Integer.MAX_VALUE) throw new IllegalArgumentException("invalid content candidate limit");
+        // 顺序不可反转：读候选之后再读序号会遗漏两次查询之间创建的并发任务。
+        Long generation = db.contentGeneration(tenantId, contentHash);
+        var matches = Rows.map(db.contentMatches(tenantId, contentHash, limit + 1), rowMapper);
+        return new ContentSnapshot(generation == null ? 0L : generation,
+                matches.subList(0, Math.min(limit, matches.size())), matches.size() > limit);
+    }
+
+    private IngestionJob insertOrReplay(IngestionJob job) {
         try {
             db.writeCreateOrGet1(
                     job.tenantId(),
@@ -251,6 +286,8 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
 
     private void initialize() {
         db.readInitialize1();
+        // 校验 V12 已运行；启动读取不创建业务守卫行。
+        db.contentGeneration("", "");
         // 启动时检测 V10 缺失，避免服务健康而领取轮询持续失败；自动提交查询立即释放锁。
         if (db.lockAdmission() == null) throw new IngestionResourceException(IngestionResourceError.ADMISSION_CONFIG);
     }

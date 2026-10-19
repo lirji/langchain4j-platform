@@ -50,12 +50,17 @@ class KnowledgeTenantCollationMigrationTest {
 
         var result = SchemaMigrationRunner.migrate(source, SchemaName.KNOWLEDGE_INGESTION);
         assertTrue(result.success());
-        assertEquals("11", result.targetVersion());
-        assertEquals(1, result.migrationsExecuted());
+        assertEquals("12", result.targetVersion());
+        assertEquals(2, result.migrationsExecuted());
         try (Connection connection = source.getConnection()) {
             assertEquals(42, joinedGrant(connection));
             assertEquals(expected, collation(connection, "KNOWLEDGE_INGESTION_JOB"));
             assertEquals(expected, collation(connection, "KNOWLEDGE_INGESTION_TENANT_TURN"));
+            assertEquals(expected, collation(connection, "KNOWLEDGE_INGESTION_CONTENT_GUARD"));
+            execute(connection, "INSERT INTO KNOWLEDGE_INGESTION_CONTENT_GUARD VALUES ('TenantA','hash',7)");
+            // 同任务表的大小写比较语义也保护相同内容的并发提交。
+            assertThrows(SQLException.class, () -> execute(connection,
+                    "INSERT INTO KNOWLEDGE_INGESTION_CONTENT_GUARD VALUES ('tenanta','hash',0)"));
             try (var statement = connection.createStatement(); var rows = statement.executeQuery(
                     "SELECT TENANT_ID,STATUS,DISPLAY_NAME FROM KNOWLEDGE_INGESTION_JOB")) {
                 assertTrue(rows.next());

@@ -5,6 +5,13 @@ import org.apache.ibatis.annotations.Param;
 
 /** 类型化持久化入口；SQL在同名XML，调用者不能传入SQL文本。 */
 public interface IngestionJobStoreMapper {
+    /** 内容守卫只锁定短事务，远程权限/注册表查询不进入此边界。 */
+    int ensureContentGuard(@Param("tenantId") String tenantId, @Param("contentHash") String contentHash);
+    Long contentGeneration(@Param("tenantId") String tenantId, @Param("contentHash") String contentHash);
+    long lockContentGuard(@Param("tenantId") String tenantId, @Param("contentHash") String contentHash);
+    int advanceContentGeneration(@Param("tenantId") String tenantId, @Param("contentHash") String contentHash);
+    List<IngestionJobStoreRow> contentMatches(@Param("tenantId") String tenantId,
+                                            @Param("contentHash") String contentHash, @Param("limit") int limit);
     /** 保留原writeCreateOrGet1操作的条件与影响行数契约。 */
     int writeCreateOrGet1(
         @Param("tenantId") String tenantId,

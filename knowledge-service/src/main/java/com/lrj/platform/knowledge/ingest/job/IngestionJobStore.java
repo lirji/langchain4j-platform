@@ -14,6 +14,17 @@ public interface IngestionJobStore {
      */
     IngestionJob createOrGet(IngestionJob job);
 
+    /** 先读内容序号、再读有界候选；外部注册表和权限检查在数据库事务之外执行。 */
+    ContentSnapshot contentSnapshot(String tenantId, String contentHash, int limit);
+
+    /** 仅在锁外检查期间没有同内容新任务时原子创建；竞争失败返回空，由调用方重新检查。 */
+    Optional<IngestionJob> createIfContentUnchanged(IngestionJob job, long generation);
+
+    /** truncated 表示不能证明没有重复，调用方必须保守拒绝，不能悄悄漏检。 */
+    record ContentSnapshot(long generation, List<IngestionJob> matches, boolean truncated) {
+        public ContentSnapshot { matches = List.copyOf(matches); }
+    }
+
     Optional<IngestionJob> find(String tenantId, String jobId);
 
     Optional<IngestionJob> findByIdempotency(String tenantId, String idempotencyKey);

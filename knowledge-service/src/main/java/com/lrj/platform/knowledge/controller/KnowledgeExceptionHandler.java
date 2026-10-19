@@ -35,6 +35,14 @@ import java.util.Map;
 @Order(Ordered.LOWEST_PRECEDENCE)
 public class KnowledgeExceptionHandler extends ResponseEntityExceptionHandler {
 
+    /** 内容重复不创建新任务；响应只包含应用层筛选后的可见引用。 */
+    @ExceptionHandler(com.lrj.platform.knowledge.ingest.job.IngestionDuplicateException.class)
+    public ResponseEntity<Map<String, Object>> onDuplicateContent(
+            com.lrj.platform.knowledge.ingest.job.IngestionDuplicateException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", exception.kind().code(),
+                "message", exception.getMessage(), "duplicate", exception.duplicate()));
+    }
+
     private static final Logger log = LoggerFactory.getLogger(KnowledgeExceptionHandler.class);
 
     /** 资源预算和暂时准入失败沿用统一错误响应，稳定 code 不依赖异常文案判断。 */

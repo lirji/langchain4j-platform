@@ -1,6 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreMapper">
+    <insert id="ensureContentGuard">
+        INSERT INTO KNOWLEDGE_INGESTION_CONTENT_GUARD (TENANT_ID,SOURCE_HASH,GENERATION)
+        VALUES (#{tenantId},#{contentHash},0) ON DUPLICATE KEY UPDATE GENERATION=GENERATION
+    </insert>
+    <select id="contentGeneration" resultType="java.lang.Long">
+        SELECT GENERATION FROM KNOWLEDGE_INGESTION_CONTENT_GUARD WHERE TENANT_ID=#{tenantId} AND SOURCE_HASH=#{contentHash}
+    </select>
+    <select id="lockContentGuard" resultType="long">
+        SELECT GENERATION FROM KNOWLEDGE_INGESTION_CONTENT_GUARD
+        WHERE TENANT_ID=#{tenantId} AND SOURCE_HASH=#{contentHash} FOR UPDATE
+    </select>
+    <update id="advanceContentGeneration">
+        UPDATE KNOWLEDGE_INGESTION_CONTENT_GUARD SET GENERATION=GENERATION+1
+        WHERE TENANT_ID=#{tenantId} AND SOURCE_HASH=#{contentHash}
+    </update>
+    <select id="contentMatches" resultType="com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreRow">
+        SELECT * FROM KNOWLEDGE_INGESTION_JOB
+        WHERE TENANT_ID=#{tenantId} AND SOURCE_HASH=#{contentHash} AND DELETED=0 ORDER BY JOB_ID LIMIT #{limit}
+    </select>
     <insert id="writeCreateOrGet1">
         INSERT INTO KNOWLEDGE_INGESTION_JOB (
           TENANT_ID, JOB_ID, IDEMPOTENCY_KEY, USER_ID, SCOPES_JSON,

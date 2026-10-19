@@ -6,6 +6,7 @@ public enum IngestionResourceError {
     INPUT_SIZE("INGESTION_INPUT_SIZE","document size does not match the supplied size",400,false),
     UPLOAD_BUSY("INGESTION_UPLOAD_BUSY","ingestion upload capacity is busy; retry later",429,true),
     INPUT_UNAVAILABLE("INGESTION_INPUT_UNAVAILABLE","document upload could not be completed; retry later",503,true),
+    DEDUPLICATION_BUSY("INGESTION_DEDUPLICATION_BUSY","content verification is busy; retry the original submission later",503,true),
     MODEL_INPUT_LIMIT("INGESTION_MODEL_INPUT_LIMIT","document exceeds model input budget",400,false),
     MODEL_WORK_LIMIT("INGESTION_MODEL_WORK_LIMIT","document exceeds combined model work budget",400,false),
     METADATA_LIMIT("INGESTION_METADATA_LIMIT","document metadata exceeds prepared payload budget",400,false),

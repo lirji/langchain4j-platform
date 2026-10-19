@@ -94,6 +94,8 @@ app:
         max-input-bytes: ${RAG_INGESTION_MAX_INPUT_BYTES:52428800}
         max-uploads: ${RAG_INGESTION_MAX_UPLOADS:4}
         max-uploads-per-tenant: ${RAG_INGESTION_MAX_UPLOADS_PER_TENANT:1}
+        max-content-candidates: ${RAG_INGESTION_MAX_CONTENT_CANDIDATES:100}
+        max-contention-retries: ${RAG_INGESTION_MAX_CONTENTION_RETRIES:3}
         upload-timeout: ${RAG_INGESTION_UPLOAD_TIMEOUT:60s}
         max-batch-segments: ${RAG_INGESTION_MAX_BATCH_SEGMENTS:32}
         max-batch-tokens: ${RAG_INGESTION_MAX_BATCH_TOKENS:8192}

@@ -1,11 +1,19 @@
 import { ApiError, apiErrorCode, humanizeError } from '../../api/errors'
-import { IngestionStatus, type IngestionJobView } from '../../types/knowledge'
+import { IngestionDuplicateCode, IngestionStatus, type IngestionDuplicateNotice, type IngestionJobView } from '../../types/knowledge'
 
 /** 文件选择范围来自已验收格式；它是选择提示，真实格式由后端内容检测决定。 */
 export const DOCUMENT_ACCEPT = '.txt,.md,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.html,.htm,.rtf,.odt'
 export const DOCUMENT_FORMAT_HINT = '支持 PDF、Word、Markdown、Excel、CSV、TXT、PowerPoint、HTML、RTF 和 ODT。复杂版面、合并表头及修订内容请结合解析提示核对。'
 export const OCR_HINT = '标准部署默认启用扫描及混合 PDF 的选择性 OCR，管理员可显式关闭。本页无法读取或修改运行开关，请以检索结果的实际提取方式与解析提示为准。'
 export const INGESTION_PREPARATION_HINT = '入库先进行文档解析、可选上下文增强和向量生成，再执行下方写入步骤。准备期间，下方步骤显示“等待处理”；准备阶段暂不显示细分进度。'
+export const INGESTION_DEDUP_HINT = '提交时自动检查文件内容；改名也会识别重复。已存在或正在处理的相同文件不会重复入库。只在当前租户和可见权限范围内检查。'
+export function duplicateHint(duplicate: IngestionDuplicateNotice): string {
+  if (duplicate.code === IngestionDuplicateCode.Ready) return '相同内容已入库，本次没有新建文档或任务。可以直接查看已有文档。'
+  if (duplicate.code === IngestionDuplicateCode.Processing) return '相同文件已有入库任务，本次没有重复提交。请等待原任务完成后查看文档。'
+  return duplicate.jobId
+    ? '相同文件的原任务需要处理，本次没有新建任务。请查看原任务，处理原因后重试。'
+    : '相同文件的原任务需要处理，本次没有新建任务。请联系原上传者或管理员处理，再重新检查。'
+}
 export const TRACKED_JOB_LIMIT = 8
 export const POLL_INTERVAL_MS = 2500
 export const POLL_MAX_ROUNDS = 120
@@ -63,6 +71,7 @@ const ERROR_HINTS: Record<string, string> = {
   INGESTION_INPUT_SIZE: '上传内容大小不一致，请重新选择原文件。',
   INGESTION_UPLOAD_BUSY: '上传容量暂满，请稍后使用原提交信息重试。',
   INGESTION_INPUT_UNAVAILABLE: '上传暂未完成，请使用原提交信息确认结果。',
+  INGESTION_DEDUPLICATION_BUSY: '内容检查暂未完成，请稍后使用原提交信息重试；系统不会跳过去重。',
   INGESTION_MODEL_INPUT_LIMIT: '内容超过模型输入预算，请拆分文件或调整处理配置。',
   INGESTION_MODEL_WORK_LIMIT: '文档超过模型工作量预算，请联系管理员评估。',
   INGESTION_METADATA_LIMIT: '来源信息超过预算，请联系管理员检查文档结构。',

@@ -56,6 +56,7 @@ public final class SchemaMigrationRunner {
         if (schema == SchemaName.KNOWLEDGE_INGESTION) {
             // 新轮转表必须沿用历史任务表的租户比较规则，不能假定数据库默认 collation 未变。
             javaMigrations.add(new KnowledgeTenantCollationMigration());
+            javaMigrations.add(new KnowledgeContentDedupMigration());
         }
 
         FluentConfiguration configuration = Flyway.configure()

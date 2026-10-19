@@ -85,6 +85,21 @@ export interface IngestionSubmission {
   file: File
 }
 
+/** 内容重复的业务回执；不包含他人的任务 ID、错误或追踪信息。 */
+export enum IngestionDuplicateCode {
+  Ready = 'INGESTION_DUPLICATE_READY',
+  Processing = 'INGESTION_DUPLICATE_PROCESSING',
+  Attention = 'INGESTION_DUPLICATE_ATTENTION',
+}
+export interface IngestionDuplicateNotice {
+  code: IngestionDuplicateCode
+  documentId: string | null
+  displayName: string | null
+  documentVersion: number | null
+  jobId: string | null
+  documentAvailable: boolean
+}
+
 /** 后端 `IngestionJobView`（`GET /rag/ingestions/{jobId}`）。status/sinks 为枚举名字符串。 */
 export interface IngestionJobView {
   jobId: string

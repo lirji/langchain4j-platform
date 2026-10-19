@@ -25,6 +25,7 @@ public class IngestionSubmissionService {
     private final Clock clock;
     private final Set<IngestionSink> enabledSinks;
     private final IngestionUploadStager uploads;
+    private final IngestionResourceProperties limits;
 
     public IngestionSubmissionService(
             DocumentSourceStore sources,
@@ -42,6 +43,7 @@ public class IngestionSubmissionService {
                                       KnowledgeAuthz authorization, Clock clock, Set<IngestionSink> enabledSinks,
                                       IngestionResourceProperties limits) {
         this.uploads = new IngestionUploadStager(limits);
+        this.limits = limits;
         this.sources = Objects.requireNonNull(sources);
         this.jobs = Objects.requireNonNull(jobs);
         this.registry = Objects.requireNonNull(registry);
@@ -53,16 +55,21 @@ public class IngestionSubmissionService {
         }
     }
 
-    /** 兼容旧 byte[] 调用方；multipart 改走 submitStream，避免创建完整字节数组。 */
+    /** 受控数据源/审核发布按外部记录与发布意图管理身份，不把相同正文的独立来源自动合并。 */
     public IngestionJob submit(SubmitCommand command) throws IOException {
         Objects.requireNonNull(command, "command");
         if (command.content == null || command.content.length == 0)
             throw new IngestionResourceException(IngestionResourceError.INPUT_SIZE);
-        return submitStream(command.request(), new ByteArrayInputStream(command.content), command.content.length);
+        return submitStream(command.request(), new ByteArrayInputStream(command.content), command.content.length, false);
     }
 
     /** 输入边读边哈希后以可重开文件落对象存储，调用方持有并关闭原始输入流。 */
     public IngestionJob submitStream(SubmitRequest command, java.io.InputStream input, long declaredSize) throws IOException {
+        return submitStream(command, input, declaredSize, true);
+    }
+
+    private IngestionJob submitStream(SubmitRequest command, java.io.InputStream input, long declaredSize,
+                                      boolean deduplicateContent) throws IOException {
         validate(command);
         var existing = jobs.findByIdempotency(command.tenantId(), command.idempotencyKey());
         if (existing.isPresent()) requireOwner(existing.get(), command.userId());
@@ -73,19 +80,82 @@ public class IngestionSubmissionService {
             if (existing.isPresent()) {
                 validateReplay(command,existing.get(),contentHash); return existing.get();
             }
-            DocumentSourceRef source = sources.putFile(new DocumentSourceStore.SourceDescriptor(
-                    command.tenantId(),command.documentId(),command.documentVersion(),command.contentType(),
-                    staged.size(),contentHash),staged.path());
-            IngestionJob candidate = IngestionJob.received(UUID.randomUUID().toString(), command.idempotencyKey(),
-                    command.tenantId(),command.userId(),command.scopes(),command.department(),command.traceId(),
-                    command.documentId(),command.displayName(),command.category(),command.documentVersion(),
-                    registered == null,source,enabledSinks,clock.instant());
-            // 数据库结果未知时对象可能已被获胜任务引用，只清理本地暂存，不能删除权威原文。
-            IngestionJob result = jobs.createOrGet(candidate);
-            validateReplay(command,result,contentHash); return result;
+            IngestionJob candidate = null;
+            for (int attempt = 0; attempt < limits.getMaxContentionRetries(); attempt++) {
+                // 竞争者可能使用同一提交编号；幂等回放必须优先于内容重复提示。
+                var replay = jobs.findByIdempotency(command.tenantId(), command.idempotencyKey());
+                if (replay.isPresent()) {
+                    validateReplay(command, replay.get(), contentHash);
+                    return replay.get();
+                }
+                var snapshot = deduplicateContent
+                        ? jobs.contentSnapshot(command.tenantId(), contentHash, limits.getMaxContentCandidates()) : null;
+                if (snapshot != null) {
+                    for (var match : snapshot.matches()) {
+                        if (match.idempotencyKey().equals(command.idempotencyKey())) {
+                            validateReplay(command, match, contentHash);
+                            return match;
+                        }
+                    }
+                    var readable = authorization.filterReadable(command.tenantId(), command.userId(),
+                            snapshot.matches().stream().map(IngestionJob::documentId).collect(java.util.stream.Collectors.toSet()));
+                    IngestionDuplicateException duplicate = null;
+                    for (var match : snapshot.matches()) {
+                        var found = duplicateFor(command, match, readable);
+                        if (found != null && (duplicate == null || duplicatePriority(found) > duplicatePriority(duplicate))) duplicate = found;
+                    }
+                    if (duplicate != null) throw duplicate;
+                    if (snapshot.truncated()) throw new IngestionResourceException(IngestionResourceError.DEDUPLICATION_BUSY);
+                }
+                if (candidate == null) {
+                    DocumentSourceRef source = sources.putFile(new DocumentSourceStore.SourceDescriptor(
+                            command.tenantId(), command.documentId(), command.documentVersion(), command.contentType(),
+                            staged.size(), contentHash), staged.path());
+                    candidate = IngestionJob.received(UUID.randomUUID().toString(), command.idempotencyKey(),
+                            command.tenantId(), command.userId(), command.scopes(), command.department(), command.traceId(),
+                            command.documentId(), command.displayName(), command.category(), command.documentVersion(),
+                            registered == null, source, enabledSinks, clock.instant());
+                }
+                // 源文件 I/O、注册表和授权均在锁外；事务只验证快照并创建任务。
+                var result = snapshot == null ? java.util.Optional.of(jobs.createOrGet(candidate))
+                        : jobs.createIfContentUnchanged(candidate, snapshot.generation());
+                if (result.isPresent()) {
+                    validateReplay(command, result.get(), contentHash);
+                    return result.get();
+                }
+            }
+            // 数据库结果未知时对象可能已被获胜任务引用，不删除权威原文；客户端沿用原提交编号恢复。
+            throw new IngestionResourceException(IngestionResourceError.DEDUPLICATION_BUSY);
         } catch (IOException failure) {
             throw new IngestionResourceException(IngestionResourceError.INPUT_UNAVAILABLE,failure);
         }
+    }
+
+    /** 以当前发布版本和真实 view 权限判断重复，不用文件名/部门标签猜测共享范围。 */
+    private IngestionDuplicateException duplicateFor(SubmitRequest command, IngestionJob match, Set<String> readable) {
+        if (match.status() == IngestionStatus.DELETED) return null;
+        var current = registry.get(command.tenantId(), match.documentId()).orElse(null);
+        if (current != null && (current.deleted() || current.version() > match.documentVersion())) return null;
+        boolean published = current != null && current.version() == match.documentVersion();
+        // 历史 READY 任务的文档已移除，不能用任务历史阻止再次上传。
+        if (match.status() == IngestionStatus.READY && !published) return null;
+        boolean owner = match.userId().equals(command.userId());
+        if (!(current == null && owner) && !readable.contains(match.documentId())) return null;
+        var kind = published ? IngestionDuplicateException.Kind.READY
+                : switch (match.status()) {
+                    case RECEIVED, PROCESSING, DELETING -> IngestionDuplicateException.Kind.PROCESSING;
+                    default -> IngestionDuplicateException.Kind.ATTENTION;
+                };
+        return new IngestionDuplicateException(kind, new IngestionDuplicateException.Reference(
+                published || owner ? match.documentId() : null,
+                published ? current.displayName() : owner ? match.displayName() : null,
+                published || owner ? match.documentVersion() : null,
+                owner ? match.jobId() : null, published));
+    }
+
+    /** 历史副本并存时优先可用文档，其次是本人能恢复的任务，避免被旧失败记录遮住。 */
+    private static int duplicatePriority(IngestionDuplicateException duplicate) {
+        return (duplicate.duplicate().documentAvailable() ? 2 : 0) + (duplicate.duplicate().jobId() != null ? 1 : 0);
     }
 
     /** 重放也检查请求指纹与提交者；相同租户不能通过猜测幂等键读取他人任务。 */

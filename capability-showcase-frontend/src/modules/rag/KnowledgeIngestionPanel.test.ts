@@ -6,6 +6,7 @@ import { useAuthStore } from '../../stores/auth'
 import { useIngestionState } from './ingestionState'
 import KnowledgeIngestionPanel from './KnowledgeIngestionPanel.vue'
 import { POLL_INTERVAL_MS } from './knowledgePresentation'
+import { IngestionDuplicateCode } from '../../types/knowledge'
 
 const job = (overrides = {}) => ({ jobId: 'job-1', documentId: 'manual', documentVersion: 1, status: 'PROCESSING', sinks: { VECTOR: 'RUNNING' }, retryCount: 0, ...overrides })
 function fill() {
@@ -19,6 +20,84 @@ beforeEach(() => { setupCatalog(); vi.useFakeTimers() })
 afterEach(() => { wrappers.forEach(wrapper => wrapper.unmount()); wrappers.length = 0; vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 describe('异步文档入库', () => {
+  const duplicate = (code = IngestionDuplicateCode.Ready, overrides = {}) => ({ error: code, duplicate: {
+    documentId: 'existing-doc', displayName: '已经上传的文档.docx', documentVersion: 1,
+    jobId: null, documentAvailable: code === IngestionDuplicateCode.Ready, ...overrides,
+  } })
+
+  it('相同内容已入库时展示原文档入口，不伪造新任务或发出入库完成事件', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(duplicate(), 409))
+    vi.stubGlobal('fetch', fetchMock)
+    const wrapper = render(); const state = fill()
+    await wrapper.get('.ki-form').trigger('submit'); await flushPromises()
+    expect(state.phase).toBe('duplicate')
+    expect(state.jobs).toHaveLength(0)
+    expect(wrapper.text()).toContain('相同内容已入库，本次没有新建文档或任务')
+    expect(wrapper.text()).toContain('已经上传的文档.docx')
+    expect(wrapper.emitted('ready')).toBeUndefined()
+    await buttonByText(wrapper, '查看已有文档').trigger('click')
+    expect(wrapper.emitted('openDocument')).toEqual([[{ documentId: 'existing-doc' }]])
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 2)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('他人处理中只提示等待，重新检查沿用原文件，不查询他人的任务', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(duplicate(IngestionDuplicateCode.Processing,
+      { documentId: null, displayName: null, documentVersion: null }), 409))
+      .mockResolvedValueOnce(jsonResponse(duplicate(), 409))
+    vi.stubGlobal('fetch', fetchMock)
+    const wrapper = render(); const state = fill()
+    await wrapper.get('.ki-form').trigger('submit'); await flushPromises()
+    expect(wrapper.text()).toContain('相同文件已有入库任务')
+    expect(wrapper.text()).toContain('任务详情仅对提交者开放')
+    expect(wrapper.findAll('button').some(b => b.text() === '查看我的原任务')).toBe(false)
+    expect(wrapper.findAll('button').some(b => b.text() === '查看已有文档')).toBe(false)
+    const key = state.attempt!.idempotencyKey
+    await buttonByText(wrapper, '重新检查本文件').trigger('submit'); await flushPromises()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(new Headers(fetchMock.mock.calls[1][1].headers).get('Idempotency-Key')).toBe(key)
+    expect(state.phase).toBe('duplicate')
+    expect(wrapper.text()).toContain('查看已有文档')
+  })
+
+  it('本人失败的重复任务可以查询并使用原任务重试入口', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(duplicate(IngestionDuplicateCode.Attention, { jobId: 'job-1' }), 409))
+      .mockResolvedValueOnce(jsonResponse(job({ status: 'FAILED' })))
+    vi.stubGlobal('fetch', fetchMock)
+    const wrapper = render(); fill()
+    await wrapper.get('.ki-form').trigger('submit'); await flushPromises()
+    expect(wrapper.text()).toContain('相同文件的原任务需要处理')
+    await buttonByText(wrapper, '查看我的原任务').trigger('click'); await flushPromises()
+    expect(fetchMock.mock.calls[1][0]).toBe('/rag/ingestions/job-1')
+    expect(wrapper.text()).toContain('已处理原因，重试原任务')
+    expect(useIngestionState().selectedId).toBe('job-1')
+  })
+
+  it('重复后更换文件保留原更新版本目标，身份切换清除旧文档引用', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(duplicate(), 409)))
+    const wrapper = render(); const state = fill(); state.documentVersion = 2
+    await wrapper.get('.ki-form').trigger('submit'); await flushPromises()
+    await buttonByText(wrapper, '更换文件').trigger('click')
+    expect(state.phase).toBe('idle')
+    expect(state.documentId).toBe('manual'); expect(state.documentVersion).toBe(2)
+    expect(state.file).toBeNull(); expect(state.attempt).toBeNull(); expect(state.duplicate).toBeNull()
+    state.file = new File(['content'], 'next.txt')
+    await wrapper.get('.ki-form').trigger('submit'); await flushPromises()
+    useSessionStore().apiKey = 'different-key'
+    await flushPromises()
+    expect(state.duplicate).toBeNull()
+    expect(wrapper.text()).not.toContain('已经上传的文档.docx')
+  })
+
+  it('损坏的重复回执不显示虚假的文档入口', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(duplicate(IngestionDuplicateCode.Ready,
+      { documentId: null, documentAvailable: true }), 409)))
+    const wrapper = render(); const state = fill()
+    await wrapper.get('.ki-form').trigger('submit'); await flushPromises()
+    expect(state.duplicate).toBeNull(); expect(state.phase).toBe('rejected')
+    expect(wrapper.findAll('button').some(b => b.text() === '查看已有文档')).toBe(false)
+  })
+
   it('按真实 multipart 契约提交，202 不宣称完成，READY 后才通知文档刷新', async () => {
     const fetchMock = vi.fn().mockImplementation((url: string) => Promise.resolve(jsonResponse(job(url.endsWith('/job-1') ? { status: 'READY', sinks: { VECTOR: 'SUCCEEDED', REGISTRY: 'SUCCEEDED' } } : {}), 202)))
     vi.stubGlobal('fetch', fetchMock)
@@ -51,6 +130,9 @@ describe('异步文档入库', () => {
     const key = state.attempt!.idempotencyKey
     expect(state.phase).toBe('uncertain')
     expect(wrapper.get('fieldset').attributes('disabled')).toBeDefined()
+    const originalFile = state.file
+    await wrapper.get('.dropzone').trigger('drop', { dataTransfer: { files: [new File(['changed'], 'changed.txt')] } })
+    expect(state.file).toBe(originalFile)
     expect(wrapper.text()).toContain('确认原提交结果')
     expect(state.newDocument()).toBe(false)
     await wrapper.get('.ki-form').trigger('submit'); await flushPromises()

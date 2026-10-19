@@ -12,6 +12,7 @@ public class InMemoryIngestionJobStore implements IngestionJobStore {
 
     private final Map<String, IngestionJob> jobs = new LinkedHashMap<>();
     private final Map<String, String> idempotencyIndex = new LinkedHashMap<>();
+    private final Map<String, Long> contentGenerations = new LinkedHashMap<>();
 
     @Override
     public synchronized IngestionJob createOrGet(IngestionJob job) {
@@ -31,7 +32,28 @@ public class InMemoryIngestionJobStore implements IngestionJobStore {
         }
         jobs.put(key, job);
         idempotencyIndex.put(idempotency, job.jobId());
+        contentGenerations.merge(tenantKey(job.tenantId(), job.source().contentHash()), 1L, Long::sum);
         return job;
+    }
+
+    /** 与 JDBC 相同的条件创建语义；仅用于单进程开发和测试。 */
+    @Override
+    public synchronized Optional<IngestionJob> createIfContentUnchanged(IngestionJob job, long generation) {
+        var replay = findByIdempotency(job.tenantId(), job.idempotencyKey());
+        if (replay.isPresent()) return replay;
+        if (contentGenerations.getOrDefault(tenantKey(job.tenantId(), job.source().contentHash()), 0L) != generation)
+            return Optional.empty();
+        return Optional.of(createOrGet(job));
+    }
+
+    @Override
+    public synchronized ContentSnapshot contentSnapshot(String tenantId, String contentHash, int limit) {
+        if (limit < 1 || limit == Integer.MAX_VALUE) throw new IllegalArgumentException("invalid content candidate limit");
+        var matches = jobs.values().stream().filter(job -> job.tenantId().equals(tenantId)
+                && job.source().contentHash().equals(contentHash))
+                .sorted(Comparator.comparing(IngestionJob::jobId)).limit((long) limit + 1).toList();
+        return new ContentSnapshot(contentGenerations.getOrDefault(tenantKey(tenantId, contentHash), 0L),
+                matches.subList(0, Math.min(limit, matches.size())), matches.size() > limit);
     }
 
     @Override

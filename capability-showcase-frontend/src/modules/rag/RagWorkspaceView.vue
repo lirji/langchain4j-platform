@@ -349,7 +349,7 @@ async function newVersion(document: DocumentInfo) {
   await nextTick()
   uploadAnchor.value?.scrollIntoView?.({ block: 'start' })
 }
-function openIngestedDocument(job: IngestionJobView) { void viewDetail(job.documentId, 'tenant') }
+function openIngestedDocument(document: Pick<IngestionJobView, 'documentId'>) { void viewDetail(document.documentId, 'tenant') }
 
 // 启动时探测 rag 配置；凭证到位后再探一次（登录/填 Key 后共享分区才能出现）。
 onMounted(() => {

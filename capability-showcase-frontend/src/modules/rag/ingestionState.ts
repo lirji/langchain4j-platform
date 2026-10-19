@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
-import type { DocumentInfo, IngestionJobView, IngestionSubmission } from '../../types/knowledge'
+import type { DocumentInfo, IngestionDuplicateNotice, IngestionJobView, IngestionSubmission } from '../../types/knowledge'
 import { useKnowledgeScope } from './useKnowledgeScope'
 import { TRACKED_JOB_LIMIT } from './knowledgePresentation'
 
@@ -14,12 +14,13 @@ export const useIngestionState = defineStore('knowledge-ingestion', () => {
   const recoveryKey = ref('')
   const file = ref<File | null>(null)
   const attempt = ref<IngestionSubmission | null>(null)
-  const phase = ref<'idle' | 'submitting' | 'uncertain' | 'accepted' | 'rejected'>('idle')
+  const phase = ref<'idle' | 'submitting' | 'uncertain' | 'accepted' | 'rejected' | 'duplicate'>('idle')
+  const duplicate = ref<IngestionDuplicateNotice | null>(null)
   const jobs = ref<IngestionJobView[]>([])
   const selectedId = ref('')
   const submitError = ref('')
   const uncertainRetries = ref<string[]>([])
-  const locked = computed(() => ['submitting', 'uncertain', 'accepted'].includes(phase.value))
+  const locked = computed(() => ['submitting', 'uncertain', 'accepted', 'duplicate'].includes(phase.value))
 
   function newDocument(document?: DocumentInfo) {
     if (phase.value === 'submitting' || phase.value === 'uncertain') return false
@@ -32,7 +33,17 @@ export const useIngestionState = defineStore('knowledge-ingestion', () => {
     attempt.value = null
     phase.value = 'idle'
     submitError.value = ''
+    duplicate.value = null
     return true
+  }
+  /** 重复文件换选时保留新建/更新目标，不能把“更新版本”意图悄悄变成新文档。 */
+  function changeDuplicateFile() {
+    if (phase.value !== 'duplicate') return
+    duplicate.value = null
+    file.value = null
+    attempt.value = null
+    recoveryKey.value = ''
+    phase.value = 'idle'
   }
   function command(): IngestionSubmission {
     const current = {
@@ -63,5 +74,5 @@ export const useIngestionState = defineStore('knowledge-ingestion', () => {
     uncertainRetries.value = []
   }, { immediate: true, flush: 'sync' })
   return { documentId, documentVersion, displayName, category, recoveryKey, file, attempt, phase, jobs, selectedId,
-    submitError, uncertainRetries, locked, newDocument, command, upsert }
+    submitError, duplicate, uncertainRetries, locked, newDocument, changeDuplicateFile, command, upsert }
 })
