@@ -31,6 +31,7 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
     private static final TypeReference<Set<String>> STRING_SET = new TypeReference<>() {
     };
 
+    private static final TypeReference<IngestionPreparation> PREPARATION = new TypeReference<>() { };
     private final IngestionJobStoreMapper db;
     private final ObjectMapper mapper;
     private final java.util.function.BiFunction<IngestionJobStoreRow, Integer, IngestionJob> rowMapper = (rs, rowNum) -> {
@@ -70,7 +71,8 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
                 rs.updatedAt.toInstant(),
                 new IngestionExecution(Rows.intValue(rs.retryCount), instant(rs.nextRetryAt),
                         rs.errorCode, rs.failedStage,
-                        rs.leaseOwner, instant(rs.leaseUntil)));
+                        rs.leaseOwner, instant(rs.leaseUntil)),
+                rs.preparationJson == null ? null : read(rs.preparationJson, PREPARATION));
     };
 
     public JdbcIngestionJobStore(DataSource dataSource, ObjectMapper mapper) {
@@ -113,7 +115,8 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
                     job.execution().errorCode(),
                     job.execution().failedStage(),
                     job.execution().leaseOwner(),
-                    timestamp(job.execution().leaseUntil()));
+                    timestamp(job.execution().leaseUntil()),
+                    job.preparation() == null ? null : write(job.preparation()));
             return job;
         } catch (DuplicateKeyException ex) {
             return findByIdempotency(job.tenantId(), job.idempotencyKey())
@@ -149,7 +152,9 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
                 timestamp(job.execution().leaseUntil()),
                 job.tenantId(),
                 job.jobId(),
-                expectedRevision);
+                expectedRevision,
+                job.preparation() == null ? null : write(job.preparation()),
+                write(IngestionPreparation.PENDING));
         if (updated != 1) {
             throw new IngestionJobConflictException("stale ingestion job revision");
         }

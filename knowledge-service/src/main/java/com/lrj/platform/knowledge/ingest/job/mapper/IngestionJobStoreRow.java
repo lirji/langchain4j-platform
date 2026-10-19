@@ -2,6 +2,8 @@ package com.lrj.platform.knowledge.ingest.job.mapper;
 
 /** 数据库读取投影，与领域/API对象分离；包装类型保留SQL NULL。 */
 public class IngestionJobStoreRow {
+    /** 准备结果协议与引用；NULL 保留旧任务语义。 */
+    public String preparationJson;
     /** SINKS_JSON 的数据库值。 */
     public String sinksJson;
     /** REQUIRED_SINKS_JSON 的数据库值。 */

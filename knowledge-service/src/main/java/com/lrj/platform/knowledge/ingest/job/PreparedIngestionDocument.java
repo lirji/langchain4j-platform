@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * 从权威原文一次性解析出的派生数据。它只在单次 worker 执行中存在，不作为任务持久化格式。
+ * 从权威原文准备或从不可变快照恢复的派生数据；持久化格式由结果存储的版本化 DTO 定义。
  */
 public record PreparedIngestionDocument(
         DocumentInfo info,

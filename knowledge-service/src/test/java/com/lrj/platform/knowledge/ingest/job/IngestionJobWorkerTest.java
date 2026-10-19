@@ -17,6 +17,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -105,7 +107,42 @@ class IngestionJobWorkerTest {
                 store, clock, Duration.ofMinutes(5), 10).reconcile()).isZero();
     }
 
+    @Test
+    void retryAfterVectorSuccessMustReuseTheSamePreparedContent() {
+        var job = store.createOrGet(job("retry-snapshot",
+                Set.of(IngestionSink.VECTOR, IngestionSink.ELASTICSEARCH, IngestionSink.REGISTRY)));
+        var preparations = new AtomicInteger();
+        var vectorText = new AtomicReference<String>();
+        var esText = new AtomicReference<String>();
+        var failEsOnce = new AtomicBoolean(true);
+        try (var worker = new IngestionJobWorker(store, current -> {
+            var original = prepared(current);
+            // 模拟切分配置变化或外部模型恢复；第二次准备会产生不同内容。
+            return new PreparedIngestionDocument(original.info(),
+                    List.of(TextSegment.from("generation-" + preparations.incrementAndGet())), original.embeddings());
+        }, (current, document, sink) -> {
+            if (sink == IngestionSink.VECTOR) vectorText.set(document.segments().getFirst().text());
+            if (sink == IngestionSink.ELASTICSEARCH) {
+                if (failEsOnce.getAndSet(false)) throw new IllegalStateException("temporary ES failure");
+                esText.set(document.segments().getFirst().text());
+            }
+        }, clock)) {
+            assertThat(worker.process("acme", job.jobId())).isTrue();
+            assertThat(store.find("acme", job.jobId()).orElseThrow().sinks().get(IngestionSink.VECTOR))
+                    .isEqualTo(IngestionSinkState.SUCCEEDED);
+            assertThat(new IngestionReconciler(store, Clock.offset(clock, Duration.ofSeconds(5)),
+                    Duration.ofMinutes(5), 10).reconcile()).isEqualTo(1);
+            assertThat(worker.process("acme", job.jobId())).isTrue();
+            assertThat(esText.get()).isEqualTo(vectorText.get());
+            assertThat(preparations).hasValue(1);
+        }
+    }
+
     private IngestionJob job(String jobId) {
+        return job(jobId, Set.of(IngestionSink.VECTOR, IngestionSink.REGISTRY));
+    }
+
+    private IngestionJob job(String jobId, Set<IngestionSink> sinks) {
         return IngestionJob.received(
                 jobId,
                 "key-" + jobId,
@@ -125,7 +162,7 @@ class IngestionJobWorkerTest {
                         "sha256:abc",
                         "text/plain",
                         5),
-                Set.of(IngestionSink.VECTOR, IngestionSink.REGISTRY),
+                sinks,
                 NOW);
     }
 

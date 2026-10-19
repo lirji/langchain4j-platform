@@ -18,7 +18,7 @@ import java.util.Objects;
 
 /**
  * worker 侧原文准备器：读取对象存储并完成解析、切分、上下文增强和 embedding。
- * 任一 sink 重试时会重新生成确定性的派生数据，但不会把框架对象写入任务表。
+ * 仅尚未绑定准备结果时运行；worker 将最终结果持久化，sink 重试不再调用解析或模型。
  */
 public class DefaultIngestionDocumentPreparer implements IngestionDocumentPreparer {
 

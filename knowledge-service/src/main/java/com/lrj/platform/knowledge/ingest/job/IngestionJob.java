@@ -31,8 +31,32 @@ public record IngestionJob(
         String error,
         Instant createdAt,
         Instant updatedAt,
-        IngestionExecution execution
+        IngestionExecution execution,
+        IngestionPreparation preparation
 ) {
+
+    /** 兼容旧任务构造方式，未携带准备标记的任务按旧恢复协议处理。 */
+    public IngestionJob(String jobId, String idempotencyKey, String tenantId, String userId,
+                        Set<String> scopes, String department, String traceId, String documentId,
+                        String displayName, String category, long documentVersion, boolean newDocument,
+                        long revision, DocumentSourceRef source, IngestionStatus status,
+                        Map<IngestionSink, IngestionSinkState> sinks, Set<IngestionSink> requiredSinks,
+                        String error, Instant createdAt, Instant updatedAt, IngestionExecution execution) {
+        this(jobId, idempotencyKey, tenantId, userId, scopes, department, traceId, documentId,
+                displayName, category, documentVersion, newDocument, revision, source, status,
+                sinks, requiredSinks, error, createdAt, updatedAt, execution, null);
+    }
+
+    /** 已绑定引用不可被替换或清空；失租后的绑定仍由存储 revision 拦截。 */
+    public IngestionJob withPreparation(IngestionPreparation value) {
+        Objects.requireNonNull(value, "preparation");
+        if (preparation != null && preparation.bound() && !preparation.equals(value)) {
+            throw new IngestionJobConflictException("prepared result is immutable");
+        }
+        return new IngestionJob(jobId, idempotencyKey, tenantId, userId, scopes, department,
+                traceId, documentId, displayName, category, documentVersion, newDocument,
+                revision, source, status, sinks, requiredSinks, error, createdAt, updatedAt, execution, value);
+    }
 
     /** 保留旧构造签名；迁移前任务从空恢复状态开始。 */
     public IngestionJob(String jobId, String idempotencyKey, String tenantId, String userId,
@@ -50,7 +74,7 @@ public record IngestionJob(
     public IngestionJob withExecution(IngestionExecution value) {
         return new IngestionJob(jobId, idempotencyKey, tenantId, userId, scopes, department,
                 traceId, documentId, displayName, category, documentVersion, newDocument,
-                revision, source, status, sinks, requiredSinks, error, createdAt, updatedAt, value);
+                revision, source, status, sinks, requiredSinks, error, createdAt, updatedAt, value, preparation);
     }
 
     public IngestionJob {
@@ -108,7 +132,7 @@ public record IngestionJob(
                 scopes, department, traceId, documentId,
                 displayName, category, documentVersion, newDocument,
                 0, source, IngestionStatus.RECEIVED, states, required,
-                null, now, now);
+                null, now, now, IngestionExecution.EMPTY, IngestionPreparation.PENDING);
     }
 
     public IngestionJob withRevision(long nextRevision) {
@@ -116,7 +140,7 @@ public record IngestionJob(
                 scopes, department, traceId, documentId,
                 displayName, category, documentVersion, newDocument,
                 nextRevision, source, status, sinks, requiredSinks,
-                error, createdAt, updatedAt, execution);
+                error, createdAt, updatedAt, execution, preparation);
     }
 
     private static Map<IngestionSink, IngestionSinkState> immutableSinkMap(

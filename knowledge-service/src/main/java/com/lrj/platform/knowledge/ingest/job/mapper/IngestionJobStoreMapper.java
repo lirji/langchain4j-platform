@@ -36,7 +36,8 @@ public interface IngestionJobStoreMapper {
         @Param("errorCode") String errorCode,
         @Param("failedStage") String failedStage,
         @Param("leaseOwner") String leaseOwner,
-        @Param("leaseUntil") java.sql.Timestamp leaseUntil);
+        @Param("leaseUntil") java.sql.Timestamp leaseUntil,
+        @Param("preparationJson") String preparationJson);
     /** 保留原readFind1操作的条件与影响行数契约。 */
     List<IngestionJobStoreRow> readFind1(@Param("tenantId") String tenantId, @Param("jobId") String jobId);
     /** 保留原writeSave1操作的条件与影响行数契约。 */
@@ -55,7 +56,9 @@ public interface IngestionJobStoreMapper {
         @Param("leaseUntil") java.sql.Timestamp leaseUntil,
         @Param("tenantId") String tenantId,
         @Param("jobId") String jobId,
-        @Param("revision2") Long revision2);
+        @Param("revision2") Long revision2,
+        @Param("preparationJson") String preparationJson,
+        @Param("pendingPreparationJson") String pendingPreparationJson);
     /** 保留原readFindRunnable1操作的条件与影响行数契约。 */
     List<IngestionJobStoreRow> readFindRunnable1(@Param("limit") Integer limit);
     /** 保留原readFindRecoverable1操作的条件与影响行数契约。 */

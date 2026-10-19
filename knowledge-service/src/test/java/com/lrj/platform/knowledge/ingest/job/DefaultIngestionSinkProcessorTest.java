@@ -29,8 +29,8 @@ class DefaultIngestionSinkProcessorTest {
         EmbeddingStore<TextSegment> store = mock(EmbeddingStore.class);
         EmbeddingStoreRouter router = mock(EmbeddingStoreRouter.class);
         when(router.forTenant("acme", 64)).thenReturn(store);
-        KnowledgeEmbeddingConfig.HashEmbeddingModel model =
-                new KnowledgeEmbeddingConfig.HashEmbeddingModel();
+        var model = mock(dev.langchain4j.model.embedding.EmbeddingModel.class);
+        when(model.dimension()).thenReturn(1024);
         InMemoryDocumentRegistry registry = new InMemoryDocumentRegistry();
         RecordingIndexer indexer = new RecordingIndexer();
         DefaultIngestionSinkProcessor processor = new DefaultIngestionSinkProcessor(
@@ -42,6 +42,7 @@ class DefaultIngestionSinkProcessorTest {
         processor.process(job, prepared, IngestionSink.VECTOR);
         processor.process(job, prepared, IngestionSink.ELASTICSEARCH);
 
+        verify(model, org.mockito.Mockito.never()).dimension();
         verify(store, times(2)).addAll(
                 List.of("79d832b9-a282-329f-8c2e-ff80fa37df9a"),
                 prepared.embeddings(),

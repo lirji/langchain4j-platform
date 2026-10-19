@@ -165,10 +165,11 @@ public class IngestionJobConfig {
             IngestionDocumentPreparer preparer,
             IngestionSinkProcessor processor,
             IngestionTaskLifecycle lifecycle,
-            IngestionJobProperties properties
+            IngestionJobProperties properties,
+            IngestionPreparedStore preparedStore
     ) {
         return new IngestionJobWorker(
-                store, preparer, processor, lifecycle, Clock.systemUTC(), properties);
+                store, preparer, processor, lifecycle, Clock.systemUTC(), properties, preparedStore);
     }
 
     @Bean

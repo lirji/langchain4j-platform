@@ -58,6 +58,10 @@ public class InMemoryIngestionJobStore implements IngestionJobStore {
         if (current.revision() != expectedRevision || job.revision() != expectedRevision) {
             throw new IngestionJobConflictException("stale ingestion job revision");
         }
+        if (current.preparation() != null && current.preparation().bound()
+                && !current.preparation().equals(job.preparation())) {
+            throw new IngestionJobConflictException("prepared result is immutable");
+        }
         IngestionJob saved = job.withRevision(expectedRevision + 1);
         jobs.put(key, saved);
         return saved;

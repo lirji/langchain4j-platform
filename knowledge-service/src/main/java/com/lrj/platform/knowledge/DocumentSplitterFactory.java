@@ -114,4 +114,21 @@ public class DocumentSplitterFactory {
     public String strategy() {
         return strategy;
     }
+
+    /** 快照记录实际生成配置，便于复现；只包含切分参数，不导出环境或凭据。 */
+    public java.util.Map<String, String> processingConfiguration() {
+        return java.util.Map.ofEntries(
+                java.util.Map.entry("strategy", strategy), java.util.Map.entry("unit", unit),
+                java.util.Map.entry("maxSize", Integer.toString(maxSize)),
+                java.util.Map.entry("overlap", Integer.toString(overlap)),
+                java.util.Map.entry("minSectionSize", Integer.toString(minSectionSize)),
+                java.util.Map.entry("tokenizerModel", tokenizerModel == null ? "" : tokenizerModel),
+                java.util.Map.entry("parentStrategy", parentStrategy),
+                java.util.Map.entry("parentSize", Integer.toString(parentSize)),
+                java.util.Map.entry("parentOverlap", Integer.toString(parentOverlap)),
+                java.util.Map.entry("semanticBufferSize", Integer.toString(semanticBufferSize)),
+                java.util.Map.entry("semanticPercentile", Double.toString(semanticPercentile)),
+                java.util.Map.entry("semanticMaxSize", Integer.toString(semanticMaxSize)),
+                java.util.Map.entry("semanticMinSize", Integer.toString(semanticMinSize)));
+    }
 }

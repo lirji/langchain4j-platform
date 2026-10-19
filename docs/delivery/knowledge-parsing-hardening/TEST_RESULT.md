@@ -75,3 +75,21 @@ application/vnd.oasis.opendocument.text
 Markdown 另以已有文本提取和语法分块测试作为证据，不把 MIME 注册探针当作真实格式解析测试。按格式的能力和未验证项集中在[文档支持范围](../../对话与检索/知识库文档支持范围.md)。下一阶段的优先级和验收是规划，尚未执行这些专项。
 
 本次文档校验：7 个 Markdown 文件，102 个本地链接及锚点有效，`git diff --check` 通过；24 个源码/配置/测试文件的指纹仍与交付指纹一致，未重复运行 Maven。
+
+## KDP-04 持久化准备结果（2026-10-19）
+
+基线 `a63a167`。先复现再修复；在原项目任务分支实施。没有执行线上迁移、真实模型或生产部署。
+
+| 验证 | 结果 | 日志/证据 |
+| --- | --- | --- |
+| 旧 worker 失败回归 | 4 项、1 项预期失败；VECTOR generation-1 / ES generation-2 | `kdp04/baseline.log` |
+| 聚焦入库回归 | 44 项、0 失败/错误/跳过 | `kdp04/focused.log` |
+| 真实 MySQL 8.4 + MinIO | 5 项通过；重建 JDBC/S3 adapter 与 worker、处理版本变化、引用不可替换、租户隔离 | `python3 deploy/test-ingestion-prepared.py`；`kdp04/mysql-s3.log` |
+| 最终模块及上游完整回归 | 613 项、0 失败/错误、9 跳过，604 项实际执行；knowledge-service 433 项、5 跳过 | `mvn -B -o -pl knowledge-service -am test`；`kdp04/full-regression.log` |
+| Compose/差异静态校验 | PASS；未发布 IAM 策略 | `docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.knowledge-split.yml config -q`；`git diff --check` |
+
+首次真实集成运行因前一 Mapper 用例残留任务使 reconcile 计数为 2 而失败；修正随机测试 schema 的夹具清理后重跑通过，原日志保留为 `kdp04/mysql-s3-fixture-failure.log`。只创建/清理本轮随机 schema、账号和已知测试对象，未改业务数据。
+
+新增验收映射：`ObjectStorageIngestionPreparedStoreTest` 覆盖精确类型、字节预算、hash/上下文/schema 校验；`PreparedIngestionRecoveryTest` 覆盖旧任务、绑定对象不可用、写对象后失租、CAS 响应丢失；`PreparedIngestionPersistenceTest` 以 H2/内存及真实 MySQL/S3 验证部分成功后的恢复；`IngestionPreparedConfigTest` 覆盖角色装配与配置绑定；VECTOR 测试确认不使用变更后的当前模型维度。
+
+源码证据清单为 `kdp04/validated-files.json`，33 个文件，SHA-256 `ee2b8b68fc0086dc14718c670f98a73ac33b466f637d98f96e4f94e9e7926382`。完整回归后仅补文档，没有修改可执行代码。外部 Redis/IAM 9 项仍跳过；没有以适配器重建冒充真实服务器断电恢复、没有真实 ES/向量写入与资源压力验证，后续依赖 KDP-05/06。

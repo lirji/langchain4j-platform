@@ -8,8 +8,8 @@
           DOCUMENT_VERSION, NEW_DOCUMENT, REVISION, SOURCE_BUCKET, SOURCE_OBJECT_KEY,
           SOURCE_HASH, SOURCE_CONTENT_TYPE, SOURCE_SIZE, STATUS, SINKS_JSON,
           REQUIRED_SINKS_JSON, ERROR_TEXT, CREATED_AT, UPDATED_AT,
-          RETRY_COUNT, NEXT_RETRY_AT, ERROR_CODE, FAILED_STAGE, LEASE_OWNER, LEASE_UNTIL
-        ) VALUES (#{tenantId},#{jobId},#{idempotencyKey},#{userId},#{scopesJson},#{department},#{traceId},#{documentId},#{displayName},#{category},#{documentVersion},#{newDocument},#{revision},#{sourceBucket},#{sourceObjectKey},#{sourceHash},#{sourceContentType},#{sourceSize},#{status},#{sinksJson},#{requiredSinksJson},#{errorText},#{createdAt},#{updatedAt},#{retryCount},#{nextRetryAt},#{errorCode},#{failedStage},#{leaseOwner},#{leaseUntil})
+          RETRY_COUNT, NEXT_RETRY_AT, ERROR_CODE, FAILED_STAGE, LEASE_OWNER, LEASE_UNTIL, PREPARATION_JSON
+        ) VALUES (#{tenantId},#{jobId},#{idempotencyKey},#{userId},#{scopesJson},#{department},#{traceId},#{documentId},#{displayName},#{category},#{documentVersion},#{newDocument},#{revision},#{sourceBucket},#{sourceObjectKey},#{sourceHash},#{sourceContentType},#{sourceSize},#{status},#{sinksJson},#{requiredSinksJson},#{errorText},#{createdAt},#{updatedAt},#{retryCount},#{nextRetryAt},#{errorCode},#{failedStage},#{leaseOwner},#{leaseUntil},#{preparationJson})
     </insert>
     <select id="readFind1" resultType="com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreRow">
         SELECT * FROM KNOWLEDGE_INGESTION_JOB
@@ -18,8 +18,10 @@
     <update id="writeSave1">
         UPDATE KNOWLEDGE_INGESTION_JOB
         SET REVISION=#{revision}, STATUS=#{status}, SINKS_JSON=#{sinksJson}, REQUIRED_SINKS_JSON=#{requiredSinksJson},
-            ERROR_TEXT=#{errorText}, UPDATED_AT=#{updatedAt}, RETRY_COUNT=#{retryCount}, NEXT_RETRY_AT=#{nextRetryAt}, ERROR_CODE=#{errorCode}, FAILED_STAGE=#{failedStage}, LEASE_OWNER=#{leaseOwner}, LEASE_UNTIL=#{leaseUntil}
+            ERROR_TEXT=#{errorText}, UPDATED_AT=#{updatedAt}, RETRY_COUNT=#{retryCount}, NEXT_RETRY_AT=#{nextRetryAt}, ERROR_CODE=#{errorCode}, FAILED_STAGE=#{failedStage}, LEASE_OWNER=#{leaseOwner}, LEASE_UNTIL=#{leaseUntil}, PREPARATION_JSON=#{preparationJson}
         WHERE DELETED=0 AND (TENANT_ID=#{tenantId} AND JOB_ID=#{jobId} AND REVISION=#{revision2})
+          AND (PREPARATION_JSON IS NULL OR PREPARATION_JSON=#{preparationJson}
+               OR PREPARATION_JSON=#{pendingPreparationJson})
     </update>
     <select id="readFindRunnable1" resultType="com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreRow">
         SELECT * FROM KNOWLEDGE_INGESTION_JOB
@@ -45,7 +47,7 @@
                TRACE_ID, DOCUMENT_ID, DISPLAY_NAME, CATEGORY, DOCUMENT_VERSION,
                NEW_DOCUMENT, REVISION, SOURCE_BUCKET, SOURCE_OBJECT_KEY, SOURCE_HASH,
                SOURCE_CONTENT_TYPE, SOURCE_SIZE, STATUS, SINKS_JSON, REQUIRED_SINKS_JSON,
-               ERROR_TEXT, CREATED_AT, UPDATED_AT, RETRY_COUNT, NEXT_RETRY_AT, ERROR_CODE, FAILED_STAGE, LEASE_OWNER, LEASE_UNTIL
+               ERROR_TEXT, CREATED_AT, UPDATED_AT, RETRY_COUNT, NEXT_RETRY_AT, ERROR_CODE, FAILED_STAGE, LEASE_OWNER, LEASE_UNTIL, PREPARATION_JSON
         FROM KNOWLEDGE_INGESTION_JOB WHERE DELETED=0 AND (1=0)
     </select>
     <select id="countsByStatus" resultType="com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreRow">

@@ -20,6 +20,10 @@ public final class IngestionRetryPolicy {
                 || failure instanceof IngestionJobConflictException;
         String code = parsing != null ? parsing.error().code()
                 : permanent ? "INVALID_INPUT_OR_PERMISSION" : "DEPENDENCY_FAILURE";
+        if (failure instanceof PreparedResultException prepared) {
+            permanent = !prepared.error().retryable();
+            code = prepared.error().code();
+        }
         if (job.execution().retries() >= properties.getMaxRetries()) {
             permanent = true;
             code = "RETRY_EXHAUSTED";

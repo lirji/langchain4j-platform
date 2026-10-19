@@ -21,7 +21,6 @@ import java.util.UUID;
 public class DefaultIngestionSinkProcessor implements IngestionSinkProcessor {
 
     private final EmbeddingStoreRouter storeRouter;
-    private final EmbeddingModel embeddingModel;
     private final SegmentIndexer segmentIndexer;
     private final GraphIngestor graphIngestor;
     private final KnowledgeAuthz authorization;
@@ -36,7 +35,7 @@ public class DefaultIngestionSinkProcessor implements IngestionSinkProcessor {
             DocumentRegistry registry
     ) {
         this.storeRouter = Objects.requireNonNull(storeRouter);
-        this.embeddingModel = Objects.requireNonNull(embeddingModel);
+        Objects.requireNonNull(embeddingModel);
         this.segmentIndexer = Objects.requireNonNull(segmentIndexer);
         this.graphIngestor = graphIngestor;
         this.authorization = Objects.requireNonNull(authorization);
@@ -73,7 +72,8 @@ public class DefaultIngestionSinkProcessor implements IngestionSinkProcessor {
 
     private void writeVectors(IngestionJob job, PreparedIngestionDocument prepared) {
         EmbeddingStore<TextSegment> store = storeRouter.forTenant(
-                job.tenantId(), embeddingModel.dimension());
+                // 重试可能已经更换模型；集合维度守卫必须检查快照实际向量，不能询问当前模型。
+                job.tenantId(), prepared.embeddings().getFirst().dimension());
         List<String> ids = new ArrayList<>(prepared.segments().size());
         for (int index = 0; index < prepared.segments().size(); index++) {
             String versionedKey = job.tenantId() + "/" + job.documentId()

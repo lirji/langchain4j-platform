@@ -57,6 +57,10 @@ app:
       # 超限拒绝整份解析结果；该正文预算不能代替进程/页数/OCR 资源隔离。
       max-text-chars: ${RAG_PARSING_MAX_TEXT_CHARS:2000000}
     ingestion:
+      prepared:
+        # 写索引前持久化最终文本与向量；改变生成行为时提升版本，历史快照仍继续复用。
+        max-bytes: ${RAG_INGESTION_PREPARED_MAX_BYTES:67108864}
+        processing-version: ${RAG_INGESTION_PROCESSING_VERSION:knowledge-prepared-v1}
       version-gc:
         enabled: ${RAG_INGESTION_VERSION_GC_ENABLED:false}
         retain-versions: ${RAG_INGESTION_VERSION_GC_RETAIN_VERSIONS:2}

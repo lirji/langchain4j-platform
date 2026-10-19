@@ -143,6 +143,6 @@ public final class IngestionJobStateMachine {
                 job.scopes(), job.department(), job.traceId(),
                 job.documentId(), job.displayName(), job.category(),
                 job.documentVersion(), job.newDocument(), job.revision(), job.source(), status, sinks,
-                job.requiredSinks(), error, job.createdAt(), now, job.execution());
+                job.requiredSinks(), error, job.createdAt(), now, job.execution(), job.preparation());
     }
 }

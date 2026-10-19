@@ -15,6 +15,7 @@ public class IngestionJobWorker implements AutoCloseable {
 
     private final IngestionJobStore store;
     private final IngestionDocumentPreparer preparer;
+    private final IngestionPreparedStore preparedStore;
     private final IngestionSinkProcessor processor;
     private final IngestionTaskLifecycle lifecycle;
     private final Clock clock;
@@ -53,7 +54,18 @@ public class IngestionJobWorker implements AutoCloseable {
     public IngestionJobWorker(IngestionJobStore store, IngestionDocumentPreparer preparer,
                               IngestionSinkProcessor processor, IngestionTaskLifecycle lifecycle,
                               Clock clock, IngestionJobProperties properties) {
+        // 便捷构造只服务于单实例 dev/test；生产配置必须显式注入跨进程共享的结果存储。
+        this(store, preparer, processor, lifecycle, clock, properties,
+                new ObjectStorageIngestionPreparedStore(new InMemoryDocumentSourceStore(),
+                        new com.fasterxml.jackson.databind.ObjectMapper(), new IngestionPreparedProperties(), java.util.Map.of()));
+    }
+
+    /** 引用持久化和任务 CAS 分开，允许写入后崩溃恢复但禁止索引先于引用绑定。 */
+    public IngestionJobWorker(IngestionJobStore store, IngestionDocumentPreparer preparer,
+                              IngestionSinkProcessor processor, IngestionTaskLifecycle lifecycle,
+                              Clock clock, IngestionJobProperties properties, IngestionPreparedStore preparedStore) {
         this.properties = properties;
+        this.preparedStore = Objects.requireNonNull(preparedStore);
         this.retryPolicy = new IngestionRetryPolicy(properties);
         this.store = Objects.requireNonNull(store);
         this.preparer = Objects.requireNonNull(preparer);
@@ -80,7 +92,7 @@ public class IngestionJobWorker implements AutoCloseable {
                 long preparationStarted = System.nanoTime();
                 try {
                     synchronizeWithContext(lease.current(), true);
-                    prepared = prepareWithContext(lease.current());
+                    prepared = prepareOrLoad(lease, job);
                     recordStage("PREPARATION", preparationStarted, "success");
                 } catch (Exception ex) {
                     recordStage("PREPARATION", preparationStarted, "failure");
@@ -203,8 +215,29 @@ public class IngestionJobWorker implements AutoCloseable {
         }
     }
 
-    private PreparedIngestionDocument prepareWithContext(IngestionJob job) throws Exception {
-        return withContext(job, () -> preparer.prepare(job));
+    private PreparedIngestionDocument prepareOrLoad(Lease lease, IngestionJob original) throws Exception {
+        IngestionPreparation preparation = lease.current().preparation();
+        if (preparation == null) {
+            // 旧 PROCESSING 即使所有 sink 被 reconciler 重置，也无法证明没有历史副作用。
+            if (original.status() != IngestionStatus.RECEIVED
+                    || original.sinks().values().stream().anyMatch(state -> state != IngestionSinkState.PENDING)) {
+                throw new PreparedResultException(PreparedResultError.LEGACY);
+            }
+            lease.change(j -> j.withPreparation(IngestionPreparation.PENDING));
+        } else if (preparation.schemaVersion() != IngestionPreparation.CURRENT_SCHEMA) {
+            throw new PreparedResultException(PreparedResultError.VERSION);
+        } else if (preparation.bound()) {
+            return withContext(lease.current(), () -> preparedStore.load(lease.current(), preparation));
+        }
+        if (lease.current().sinks().values().stream().anyMatch(state -> state != IngestionSinkState.PENDING)) {
+            throw new PreparedResultException(PreparedResultError.LEGACY);
+        }
+        IngestionJob preparing = lease.current();
+        IngestionPreparation saved = withContext(preparing,
+                () -> preparedStore.save(preparing, preparer.prepare(preparing)));
+        PreparedIngestionDocument frozen = withContext(preparing, () -> preparedStore.load(preparing, saved));
+        lease.change(j -> j.withPreparation(saved));
+        return frozen;
     }
 
     private void processWithContext(
@@ -245,9 +278,4 @@ public class IngestionJobWorker implements AutoCloseable {
         T execute() throws Exception;
     }
 
-    private static String safeMessage(Exception ex) {
-        return ex.getMessage() == null || ex.getMessage().isBlank()
-                ? ex.getClass().getSimpleName()
-                : ex.getMessage();
-    }
 }

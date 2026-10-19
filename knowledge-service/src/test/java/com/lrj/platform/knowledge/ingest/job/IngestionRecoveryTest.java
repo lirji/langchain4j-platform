@@ -63,7 +63,7 @@ class IngestionRecoveryTest {
         try (var worker = new IngestionJobWorker(spy, j -> {
             entered.countDown();
             assertThat(release.await(5, TimeUnit.SECONDS)).isTrue();
-            return null;
+            return prepared(j);
         }, (j, prepared, sink) -> {}, new NoopIngestionTaskLifecycle(), time, properties);
              var callers = Executors.newVirtualThreadPerTaskExecutor()) {
             var result = callers.submit(() -> worker.process("acme", "job"));
@@ -91,9 +91,9 @@ class IngestionRecoveryTest {
         try (var old = new IngestionJobWorker(store, j -> {
             entered.countDown();
             assertThat(release.await(5, TimeUnit.SECONDS)).isTrue();
-            return null;
+            return prepared(j);
         }, (j, prepared, sink) -> writes.incrementAndGet(), time);
-             var fresh = new IngestionJobWorker(store, j -> null, (j, prepared, sink) -> writes.incrementAndGet(), time);
+             var fresh = new IngestionJobWorker(store, IngestionRecoveryTest::prepared, (j, prepared, sink) -> writes.incrementAndGet(), time);
              var callers = Executors.newVirtualThreadPerTaskExecutor()) {
             var result = callers.submit(() -> old.process("acme", "job"));
             try {
@@ -114,7 +114,7 @@ class IngestionRecoveryTest {
         var time = new MutableClock();
         var properties = new IngestionJobProperties();
         properties.setMaxRetries(1);
-        try (var worker = new IngestionJobWorker(store, j -> null,
+        try (var worker = new IngestionJobWorker(store, IngestionRecoveryTest::prepared,
                 (j, prepared, sink) -> { throw new IllegalStateException("secret internal endpoint"); },
                 new NoopIngestionTaskLifecycle(), time, properties)) {
             worker.process("acme", "job");
@@ -132,6 +132,14 @@ class IngestionRecoveryTest {
             assertThat(exhausted.execution().errorCode()).isEqualTo("RETRY_EXHAUSTED");
             assertThat(reconciler.reconcile()).isZero();
         }
+    }
+
+    private static PreparedIngestionDocument prepared(IngestionJob job) {
+        return new PreparedIngestionDocument(new com.lrj.platform.knowledge.lifecycle.DocumentInfo(
+                job.documentId(), job.tenantId(), job.displayName(), job.source().contentType(), job.source().size(),
+                1, (int) job.documentVersion(), NOW, job.category()),
+                java.util.List.of(dev.langchain4j.data.segment.TextSegment.from("content")),
+                java.util.List.of(dev.langchain4j.data.embedding.Embedding.from(new float[]{1f})));
     }
 
     private static IngestionJob job() {
