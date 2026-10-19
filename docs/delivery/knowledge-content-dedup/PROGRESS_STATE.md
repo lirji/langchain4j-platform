@@ -21,8 +21,13 @@
 - 初版聚焦测试通过；真实 MySQL 并发/回放/回滚/历史候选已通过。时间精度测试曾失败，已改为整秒 fixture；并行 Maven 曾竞争编译输出，后续 Maven 验证改顺序执行。
 - V12 两种历史 MySQL collation 迁移与大小写守卫唯一性通过。前端 609 项、类型检查及构建通过（保留原 bundle 体积提示）。
 - 知识服务及上游完整测试通过：768 项/755 通过/13 条件跳过。最终 MySQL 聚焦、两个迁移方向、前端 609 项/类型/构建、边界门禁、Java 包构建均通过，见 [VALIDATION](VALIDATION.md)。
-- 浏览器 4 组操作通过，宽/中/窄屏无溢出；修复实测发现的 file input 清空与锁定拖放问题。隔离 Vite session `7193` 在 5178，交付时关闭；业务认证参数保持。
-- 本机预检：V11，36 个历史任务均 READY，30 个项目容器已记录于私有 `deploy/.dev-infra-state/knowledge-content-dedup/`。尚未变更业务库或运行容器。
-- 下一步：按验证过的代码创建实现提交，构建固定知识服务/前端/V12 migrator；私有备份后停止旧知识入口，执行 V12，仅更新目标容器并验证原任务/其他容器保留；正常合并推送 main，补齐部署证据。
+- 浏览器 4 组操作通过，宽/中/窄屏无溢出；修复实测发现的 file input 清空与锁定拖放问题。隔离 Vite 已关闭；业务认证参数保持。
+- 本机预检：V11，36 个历史任务均 READY，30 个项目容器已记录于私有 `deploy/.dev-infra-state/knowledge-content-dedup/`。
+- 实现提交 `6a562bec34bfb5a5eddd35fb7f0132aba5253550`，验证指纹 `317f485e136dbe5bb2223f4e5d9cc354f7fce72d2ad86be335a4c0dc75e092a4`（27 个代码/配置/测试文件）。
+- 固定知识服务/前端/V12 migrator 镜像已构建通过；私有目录内 `image-manifest.json` 固定 image ID，wrapper 继承前任务配置，仅改这 3 个镜像与版本标签。
+- V12 迁移已成功：`initial=11 target=12 migrations=1 success=true`，exit 0；不得重复迁移。私有 `pre-v12.sql`（0600，55008 字节，SHA-256 `682470c39758c9fa309fdbd90384f720aafedf66adcefa08fdd1d3ac6ecfcd1f`）保留。
+- 本机部署 **PASS**：知识服务 readiness UP，前端/资产 HTTP 200，实际 JAR 与构建产物一致，新增去重代码已在页面资产中；V12 及表/字段注释/索引存在。36 个原任务的状态/版本/准备摘要均保留，其他 27 个容器 ID 保持，重启后入库错误 0。OCR 开启且中英语言包保留，未重传真实文档或调用付费模型。见 [RUNTIME_EVIDENCE](RUNTIME_EVIDENCE.json)。
+- 运行与构建进程均结束，无临时预览或新建 worktree。源码、验证、本机部署无剩余工作；Git 实现和交付证据按两个逻辑提交，正常合并推送 main。最终结果以 `knowledge-service/target/knowledge-content-dedup/delivery.json`、`remote-checks.json` 和 `main` / `origin/main` 核对，不为补填自身提交号循环制造提交。
+- 旧镜像、私有备份/日志保留用于追溯；其他任务 worktree 不处理。V12 为扩展，回退旧应用无需回滚 SQL，但旧版本没有内容去重；生产供应链 HOLD 沿用前任务，本次不是生产发布。
 - 规范：根 AGENTS；`platform-java-feature`、`frontend-design`；架构规范的业务建模、持久化、分布式契约、并发、安全、容量、发布治理；个人技术栈并发/事务章节；共享前端偏好与异步反馈规范。
 - 证据：`knowledge-service/target/knowledge-content-dedup/`；MySQL `knowledge-service/target/knowledge-parsing-hardening/knowledge-content-dedup/`；collation `database-migrations/target/knowledge-content-dedup/`；浏览器 `capability-showcase-frontend/target/knowledge-content-dedup/`（均忽略）。

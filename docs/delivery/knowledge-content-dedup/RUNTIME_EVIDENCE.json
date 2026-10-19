@@ -1,0 +1,44 @@
+{
+  "status": "PASS",
+  "observedAt": "2026-10-19T09:27:02.464063+00:00",
+  "services": {
+    "knowledge-service": {
+      "image": "langchain4j-platform-knowledge-service:6a562bec34bf",
+      "imageId": "sha256:b8a478441d83b41c03e1a65106d049f1a79f366091876baa94d10a4cc6b16e95",
+      "revision": "6a562bec34bfb5a5eddd35fb7f0132aba5253550",
+      "startedAt": "2026-10-19T09:26:46.05814442Z"
+    },
+    "capability-showcase-frontend": {
+      "image": "langchain4j-platform-capability-showcase-frontend:6a562bec34bf",
+      "imageId": "sha256:5072171bf5f0bf6e7a2dc393e382ebb381827b7f66ceb0d17e771aa4d0948d96",
+      "revision": "6a562bec34bfb5a5eddd35fb7f0132aba5253550",
+      "startedAt": "2026-10-19T09:26:46.434586087Z"
+    },
+    "migrate-knowledge-ingestion": {
+      "image": "langchain4j-platform-migrate-knowledge-ingestion:6a562bec34bf",
+      "imageId": "sha256:c6a070e2aa8e8c708b77a0d439a0c1ab9058ce69650352e518c07ccd6b827297",
+      "revision": "6a562bec34bfb5a5eddd35fb7f0132aba5253550",
+      "startedAt": "2026-10-19T09:26:07.6729855Z"
+    }
+  },
+  "knowledgeReadiness": "UP",
+  "frontendStatus": 200,
+  "assetsVerified": 2,
+  "newUiTextVerified": true,
+  "ocrEnabled": true,
+  "ocrLanguages": [
+    "chi_sim",
+    "eng",
+    "osd"
+  ],
+  "packagedJarSha256": "5783beb79b7cfb91ef881a1a752cdb383f5a0565c6367b1fa7dc496ab36fc612",
+  "existingJobsPreserved": 36,
+  "totalJobs": 36,
+  "unchangedOtherContainers": true,
+  "workerErrorsSinceRestart": 0,
+  "schemaVersion": "12",
+  "contentGuardColumnComments": 3,
+  "contentIndexColumns": 4,
+  "realDocumentsResubmitted": false,
+  "paidModelProbeExecuted": false
+}
