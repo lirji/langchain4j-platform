@@ -55,6 +55,15 @@ for path in xmls:
         if statement.tag != "select":
             continue
         sql = " ".join(statement.itertext())
+        # V10 守卫是固定单行协调状态，不是可软删除业务实体；仅允许该精确锁行查询。
+        if (path.name, statement.attrib.get("id")) == ("IngestionJobStoreMapper.xml", "lockAdmission"):
+            if not re.fullmatch(
+                r"\s*SELECT\s+GRANT_SEQUENCE\s*,\s*GLOBAL_LIMIT\s*,\s*TENANT_LIMIT\s+"
+                r"FROM\s+KNOWLEDGE_INGESTION_ADMISSION\s+WHERE\s+GUARD_ID\s*=\s*1\s+FOR\s+UPDATE\s*",
+                sql, re.I,
+            ):
+                errors.append(f"coordination read must lock the fixed admission guard only: {relative}")
+            continue
         if (path.name, statement.attrib.get("id")) not in including_tombstones and not re.search(r"\bDELETED\s*=\s*0", sql, re.I):
             errors.append(f"normal read must exclude tombstones: {relative}#{statement.attrib.get('id')}")
     expected = path.relative_to(ROOT / path.parts[len(ROOT.parts)] / "src/main/resources").with_suffix("").as_posix().replace("/", ".")
