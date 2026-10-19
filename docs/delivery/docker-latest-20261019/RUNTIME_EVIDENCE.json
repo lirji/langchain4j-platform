@@ -1,0 +1,883 @@
+{
+  "timeUtc": "2026-10-19T04:23:11Z",
+  "javaReadiness": {
+    "edge-gateway": {
+      "http": 200,
+      "status": "UP"
+    },
+    "conversation-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "workflow-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "analytics-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "knowledge-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "async-task-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "channel-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "interop-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "vision-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "voice-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "auth-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "order-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "tax-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "config-server": {
+      "http": 200,
+      "status": "UP"
+    }
+  },
+  "frontend": {
+    "http": 200
+  },
+  "casdoor": {
+    "http": 200,
+    "status": null,
+    "count": 0
+  },
+  "agentReadiness": {
+    "http": 200,
+    "status": "UP",
+    "count": 0
+  },
+  "anonymousSync": {
+    "http": 401
+  },
+  "authorizedSync": {
+    "http": 200,
+    "count": 0
+  },
+  "authorizedQuality": {
+    "http": 200,
+    "count": 0
+  },
+  "preservedHistoricalContainers": [
+    "/infra-smoke-7fb94cef3e7c",
+    "/infra-smoke-32bf704108d3",
+    "/infra-smoke-96e528df4e73",
+    "/infra-smoke-4e4fe1b77e34"
+  ],
+  "transientVerificationContainers": [],
+  "containers": [
+    {
+      "name": "/langchain4j-platform-edge-gateway-1",
+      "image": "langchain4j-platform-edge-gateway:5e8c4d9",
+      "imageId": "sha256:8f3ee3652a4e66dc5a2ae46a2063833db32549e05ec77e116ae9a8133d21f974",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "running",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-interop-service-1",
+      "image": "langchain4j-platform-interop-service:5e8c4d9",
+      "imageId": "sha256:c8eebb48cee37a7560fce170cea306a49fe0c02745245013b4793668d77bde7f",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "running",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-agentscope-orchestrator-1",
+      "image": "agentscope-platform:3cb39f6",
+      "imageId": "sha256:8bd78ad6daa069c82ec08c9988398c3720fcb917721d02c865c4e6d3d9d7a046",
+      "revision": "3cb39f6e125a17d5be40430d85dc3aea39bad045",
+      "status": "running",
+      "exitCode": 0,
+      "health": "healthy",
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-workflow-service-1",
+      "image": "langchain4j-platform-workflow-service:5e8c4d9",
+      "imageId": "sha256:fa8ec225e4368b1bdcee56e63060d65ae0229029079068d2c3a576f23d52e9d9",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "running",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-voice-service-1",
+      "image": "langchain4j-platform-voice-service:5e8c4d9",
+      "imageId": "sha256:6c81a7ecad61cc7839d59f808d46ff04fb1ce0f1bdb6891f51caaf30d64fb402",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "running",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-conversation-service-1",
+      "image": "langchain4j-platform-conversation-service:5e8c4d9",
+      "imageId": "sha256:15924221d63631952c8b0856c2063aee3e62e047ecaa4db132602bda5452334f",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "running",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-tax-service-1",
+      "image": "langchain4j-platform-tax-service:5e8c4d9",
+      "imageId": "sha256:2b0c4cc0356fd2615ccc94335796132dd38bcbf1321a08e4c757d24ab69b4bf0",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "running",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-knowledge-service-1",
+      "image": "langchain4j-platform-knowledge-service:5e8c4d9",
+      "imageId": "sha256:89c0cfd4ddf6114a44b05d50ab0e484c1101878cfbbdaaee28e3b30c4de1821a",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "running",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-channel-service-1",
+      "image": "langchain4j-platform-channel-service:5e8c4d9",
+      "imageId": "sha256:81323c858449cb40550ca4f1be46f56597035dba67672769dc3e309d3db5ceac",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "running",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-config-server-1",
+      "image": "langchain4j-platform-config-server:5e8c4d9",
+      "imageId": "sha256:119a7248d52a5a9063287dd1217b1161b0a821ba63ae5b6b7483ccb3446239ea",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "running",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-order-service-1",
+      "image": "langchain4j-platform-order-service:5e8c4d9",
+      "imageId": "sha256:8080c921b4b2a84a23bd7063f320c56f78d7e96638f232ea10f660c7ac143a5a",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "running",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-async-task-service-1",
+      "image": "langchain4j-platform-async-task-service:5e8c4d9",
+      "imageId": "sha256:c2aa53ec0645d9c27578fc645c5959345ece9de5eca47d455ee8795a263faa8e",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "running",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-capability-showcase-frontend-1",
+      "image": "langchain4j-platform-capability-showcase-frontend:5e8c4d9",
+      "imageId": "sha256:5a526a300c5b8f1df3e63d3134081c4bd8b082301ae9764edf78b53074d2783e",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "running",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-auth-service-1",
+      "image": "langchain4j-platform-auth-service:5e8c4d9",
+      "imageId": "sha256:2f62ad65f2af5c63176b350d64bc933dba6edfe52f6982e37e7ae44c310e2c93",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "running",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-vision-service-1",
+      "image": "langchain4j-platform-vision-service:5e8c4d9",
+      "imageId": "sha256:01f79632d20dc29b1f1e16f487cab51ae57824653ab41562ec8089181544b407",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "running",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-analytics-service-1",
+      "image": "langchain4j-platform-analytics-service:5e8c4d9",
+      "imageId": "sha256:1a2074f2696cba5e00a5db7734de4bb951ef2aaa63be58e42b48f55c9aa1a58f",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "running",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-migrate-auth-1",
+      "image": "platform-database-migrations:5e8c4d9",
+      "imageId": "sha256:5d466d195ffbf4b051583d5ec0cb4e8773d79490a85ab2dc936913d40acf030b",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "exited",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-migrate-conversation-1",
+      "image": "platform-database-migrations:5e8c4d9",
+      "imageId": "sha256:5d466d195ffbf4b051583d5ec0cb4e8773d79490a85ab2dc936913d40acf030b",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "exited",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-migrate-async-task-1",
+      "image": "platform-database-migrations:5e8c4d9",
+      "imageId": "sha256:5d466d195ffbf4b051583d5ec0cb4e8773d79490a85ab2dc936913d40acf030b",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "exited",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-migrate-channel-1",
+      "image": "platform-database-migrations:5e8c4d9",
+      "imageId": "sha256:5d466d195ffbf4b051583d5ec0cb4e8773d79490a85ab2dc936913d40acf030b",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "exited",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-migrate-order-1",
+      "image": "platform-database-migrations:5e8c4d9",
+      "imageId": "sha256:5d466d195ffbf4b051583d5ec0cb4e8773d79490a85ab2dc936913d40acf030b",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "exited",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-migrate-knowledge-ingestion-1",
+      "image": "platform-database-migrations:5e8c4d9",
+      "imageId": "sha256:5d466d195ffbf4b051583d5ec0cb4e8773d79490a85ab2dc936913d40acf030b",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "exited",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-migrate-analytics-demo-1",
+      "image": "platform-database-migrations:5e8c4d9",
+      "imageId": "sha256:5d466d195ffbf4b051583d5ec0cb4e8773d79490a85ab2dc936913d40acf030b",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "exited",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-migrate-knowledge-graph-1",
+      "image": "platform-database-migrations:5e8c4d9",
+      "imageId": "sha256:5d466d195ffbf4b051583d5ec0cb4e8773d79490a85ab2dc936913d40acf030b",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "exited",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-migrate-workflow-1",
+      "image": "platform-database-migrations:5e8c4d9",
+      "imageId": "sha256:5d466d195ffbf4b051583d5ec0cb4e8773d79490a85ab2dc936913d40acf030b",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "status": "exited",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-litellm-1",
+      "image": "ghcr.io/berriai/litellm:v1.74.3-stable",
+      "imageId": "sha256:229665e372493ab0948f36ca813a5a20f352e258424383d6a7043bf088eb12fb",
+      "revision": "fe7aee26944261fc74e25eabf15d99a0b627cf74",
+      "status": "running",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    }
+  ],
+  "imageVerification": true,
+  "imageManifest": [
+    {
+      "image": "agentscope-platform:3cb39f6",
+      "imageId": "sha256:8bd78ad6daa069c82ec08c9988398c3720fcb917721d02c865c4e6d3d9d7a046",
+      "revision": "3cb39f6e125a17d5be40430d85dc3aea39bad045",
+      "created": "2026-10-14T14:13:03.873120963Z"
+    },
+    {
+      "image": "langchain4j-platform-analytics-service:5e8c4d9",
+      "imageId": "sha256:1a2074f2696cba5e00a5db7734de4bb951ef2aaa63be58e42b48f55c9aa1a58f",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "created": "2026-10-14T13:47:52.157396875Z"
+    },
+    {
+      "image": "langchain4j-platform-async-task-service:5e8c4d9",
+      "imageId": "sha256:c2aa53ec0645d9c27578fc645c5959345ece9de5eca47d455ee8795a263faa8e",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "created": "2026-10-19T04:18:10.142012502Z"
+    },
+    {
+      "image": "langchain4j-platform-auth-service:5e8c4d9",
+      "imageId": "sha256:2f62ad65f2af5c63176b350d64bc933dba6edfe52f6982e37e7ae44c310e2c93",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "created": "2026-10-14T13:47:52.177418708Z"
+    },
+    {
+      "image": "langchain4j-platform-capability-showcase-frontend:5e8c4d9",
+      "imageId": "sha256:5a526a300c5b8f1df3e63d3134081c4bd8b082301ae9764edf78b53074d2783e",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "created": "2026-10-14T13:46:45.722073178Z"
+    },
+    {
+      "image": "langchain4j-platform-channel-service:5e8c4d9",
+      "imageId": "sha256:81323c858449cb40550ca4f1be46f56597035dba67672769dc3e309d3db5ceac",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "created": "2026-10-14T13:47:51.584282139Z"
+    },
+    {
+      "image": "langchain4j-platform-config-server:5e8c4d9",
+      "imageId": "sha256:119a7248d52a5a9063287dd1217b1161b0a821ba63ae5b6b7483ccb3446239ea",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "created": "2026-09-16T15:16:27.918532883Z"
+    },
+    {
+      "image": "langchain4j-platform-conversation-service:5e8c4d9",
+      "imageId": "sha256:15924221d63631952c8b0856c2063aee3e62e047ecaa4db132602bda5452334f",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "created": "2026-10-14T13:47:51.341410472Z"
+    },
+    {
+      "image": "langchain4j-platform-edge-gateway:5e8c4d9",
+      "imageId": "sha256:8f3ee3652a4e66dc5a2ae46a2063833db32549e05ec77e116ae9a8133d21f974",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "created": "2026-10-14T13:47:50.36202968Z"
+    },
+    {
+      "image": "langchain4j-platform-interop-service:5e8c4d9",
+      "imageId": "sha256:c8eebb48cee37a7560fce170cea306a49fe0c02745245013b4793668d77bde7f",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "created": "2026-10-14T13:47:51.489152847Z"
+    },
+    {
+      "image": "langchain4j-platform-knowledge-service:5e8c4d9",
+      "imageId": "sha256:89c0cfd4ddf6114a44b05d50ab0e484c1101878cfbbdaaee28e3b30c4de1821a",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "created": "2026-10-19T04:18:14.762367004Z"
+    },
+    {
+      "image": "langchain4j-platform-order-service:5e8c4d9",
+      "imageId": "sha256:8080c921b4b2a84a23bd7063f320c56f78d7e96638f232ea10f660c7ac143a5a",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "created": "2026-10-14T13:47:51.316762639Z"
+    },
+    {
+      "image": "langchain4j-platform-tax-service:5e8c4d9",
+      "imageId": "sha256:2b0c4cc0356fd2615ccc94335796132dd38bcbf1321a08e4c757d24ab69b4bf0",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "created": "2026-10-14T13:47:52.197859208Z"
+    },
+    {
+      "image": "langchain4j-platform-vision-service:5e8c4d9",
+      "imageId": "sha256:01f79632d20dc29b1f1e16f487cab51ae57824653ab41562ec8089181544b407",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "created": "2026-10-14T13:47:51.588276639Z"
+    },
+    {
+      "image": "langchain4j-platform-voice-service:5e8c4d9",
+      "imageId": "sha256:6c81a7ecad61cc7839d59f808d46ff04fb1ce0f1bdb6891f51caaf30d64fb402",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "created": "2026-10-14T13:47:50.568015555Z"
+    },
+    {
+      "image": "langchain4j-platform-workflow-service:5e8c4d9",
+      "imageId": "sha256:fa8ec225e4368b1bdcee56e63060d65ae0229029079068d2c3a576f23d52e9d9",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "created": "2026-10-14T13:47:52.179702541Z"
+    },
+    {
+      "image": "platform-database-migrations:5e8c4d9",
+      "imageId": "sha256:5d466d195ffbf4b051583d5ec0cb4e8773d79490a85ab2dc936913d40acf030b",
+      "revision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+      "created": "2026-10-19T04:18:05.741627125Z"
+    },
+    {
+      "image": "ghcr.io/berriai/litellm:v1.74.3-stable",
+      "imageId": "sha256:229665e372493ab0948f36ca813a5a20f352e258424383d6a7043bf088eb12fb",
+      "revision": "fe7aee26944261fc74e25eabf15d99a0b627cf74",
+      "created": "2025-07-18T00:27:35.613829244Z"
+    }
+  ],
+  "pass": true,
+  "sourceRevision": "5e8c4d986e3c411b5df5037c41f8993c58e88551",
+  "dockerContext": "desktop-linux",
+  "targetEnvironment": "local-development-demo",
+  "migrations": {
+    "before": {
+      "lc4j_auth": [
+        [
+          "0",
+          "<< Flyway Baseline >>",
+          "1"
+        ],
+        [
+          "1",
+          "auth schema",
+          "1"
+        ],
+        [
+          "2",
+          "expand and backfill legacy auth schema",
+          "1"
+        ],
+        [
+          "3",
+          "tax review scope",
+          "1"
+        ],
+        [
+          "4",
+          "logical delete",
+          "1"
+        ]
+      ],
+      "lc4j_async_task": [
+        [
+          "0",
+          "<< Flyway Baseline >>",
+          "1"
+        ],
+        [
+          "1",
+          "async task schema",
+          "1"
+        ],
+        [
+          "2",
+          "expand and backfill legacy async-task schema",
+          "1"
+        ],
+        [
+          "3",
+          "readonly task dispatch",
+          "1"
+        ],
+        [
+          "4",
+          "logical delete",
+          "1"
+        ],
+        [
+          "5",
+          "dag checkpoint",
+          "1"
+        ]
+      ],
+      "lc4j_flowable": [
+        [
+          "0",
+          "<< Flyway Baseline >>",
+          "1"
+        ],
+        [
+          "1",
+          "workflow platform schema",
+          "1"
+        ],
+        [
+          "2",
+          "expand and backfill legacy workflow schema",
+          "1"
+        ],
+        [
+          "3",
+          "flowable 7.1 schema",
+          "1"
+        ],
+        [
+          "4",
+          "logical delete",
+          "1"
+        ]
+      ],
+      "lc4j_knowledge_graph": [
+        [
+          "0",
+          "<< Flyway Baseline >>",
+          "1"
+        ],
+        [
+          "1",
+          "knowledge graph schema",
+          "1"
+        ],
+        [
+          "2",
+          "expand and backfill legacy knowledge-graph schema",
+          "1"
+        ],
+        [
+          "3",
+          "logical delete",
+          "1"
+        ]
+      ],
+      "lc4j_knowledge_ingestion": [
+        [
+          "0",
+          "<< Flyway Baseline >>",
+          "1"
+        ],
+        [
+          "1",
+          "knowledge ingestion schema",
+          "1"
+        ],
+        [
+          "2",
+          "expand and backfill legacy knowledge-ingestion schema",
+          "1"
+        ],
+        [
+          "3",
+          "ingestion recovery",
+          "1"
+        ],
+        [
+          "4",
+          "knowledge operations",
+          "1"
+        ],
+        [
+          "5",
+          "logical delete",
+          "1"
+        ],
+        [
+          "6",
+          "retrieval quality",
+          "1"
+        ],
+        [
+          "7",
+          "knowledge http sync",
+          "1"
+        ],
+        [
+          "8",
+          "knowledge sync operations",
+          "1"
+        ]
+      ],
+      "lc4j_order_service": [
+        [
+          "0",
+          "<< Flyway Baseline >>",
+          "1"
+        ],
+        [
+          "1",
+          "order schema",
+          "1"
+        ],
+        [
+          "2",
+          "expand and backfill legacy order schema",
+          "1"
+        ],
+        [
+          "3",
+          "logical delete",
+          "1"
+        ]
+      ],
+      "lc4j_conversation": [
+        [
+          "1",
+          "user profile memory",
+          "1"
+        ],
+        [
+          "2",
+          "memory governance",
+          "1"
+        ],
+        [
+          "3",
+          "logical delete",
+          "1"
+        ]
+      ],
+      "lc4j_channel": [
+        [
+          "1",
+          "channel schema",
+          "1"
+        ],
+        [
+          "2",
+          "durable inbound inbox",
+          "1"
+        ],
+        [
+          "3",
+          "logical delete",
+          "1"
+        ]
+      ],
+      "lc4j_nl2sql_demo": [
+        [
+          "0",
+          "<< Flyway Baseline >>",
+          "1"
+        ],
+        [
+          "1",
+          "analytics demo schema",
+          "1"
+        ],
+        [
+          "2",
+          "seed analytics demo data",
+          "1"
+        ]
+      ]
+    },
+    "after": {
+      "lc4j_auth": [
+        "4",
+        "logical delete",
+        "1"
+      ],
+      "lc4j_async_task": [
+        "5",
+        "dag checkpoint",
+        "1"
+      ],
+      "lc4j_flowable": [
+        "4",
+        "logical delete",
+        "1"
+      ],
+      "lc4j_knowledge_graph": [
+        "3",
+        "logical delete",
+        "1"
+      ],
+      "lc4j_knowledge_ingestion": [
+        "10",
+        "ingestion fair admission",
+        "1"
+      ],
+      "lc4j_order_service": [
+        "3",
+        "logical delete",
+        "1"
+      ],
+      "lc4j_conversation": [
+        "3",
+        "logical delete",
+        "1"
+      ],
+      "lc4j_channel": [
+        "3",
+        "logical delete",
+        "1"
+      ],
+      "lc4j_nl2sql_demo": [
+        "2",
+        "seed analytics demo data",
+        "1"
+      ]
+    },
+    "containers": [
+      {
+        "name": "/langchain4j-platform-migrate-analytics-demo-1",
+        "image": "platform-database-migrations:5e8c4d9",
+        "status": "exited",
+        "exitCode": 0
+      },
+      {
+        "name": "/langchain4j-platform-migrate-async-task-1",
+        "image": "platform-database-migrations:5e8c4d9",
+        "status": "exited",
+        "exitCode": 0
+      },
+      {
+        "name": "/langchain4j-platform-migrate-auth-1",
+        "image": "platform-database-migrations:5e8c4d9",
+        "status": "exited",
+        "exitCode": 0
+      },
+      {
+        "name": "/langchain4j-platform-migrate-channel-1",
+        "image": "platform-database-migrations:5e8c4d9",
+        "status": "exited",
+        "exitCode": 0
+      },
+      {
+        "name": "/langchain4j-platform-migrate-conversation-1",
+        "image": "platform-database-migrations:5e8c4d9",
+        "status": "exited",
+        "exitCode": 0
+      },
+      {
+        "name": "/langchain4j-platform-migrate-knowledge-graph-1",
+        "image": "platform-database-migrations:5e8c4d9",
+        "status": "exited",
+        "exitCode": 0
+      },
+      {
+        "name": "/langchain4j-platform-migrate-knowledge-ingestion-1",
+        "image": "platform-database-migrations:5e8c4d9",
+        "status": "exited",
+        "exitCode": 0
+      },
+      {
+        "name": "/langchain4j-platform-migrate-order-1",
+        "image": "platform-database-migrations:5e8c4d9",
+        "status": "exited",
+        "exitCode": 0
+      },
+      {
+        "name": "/langchain4j-platform-migrate-workflow-1",
+        "image": "platform-database-migrations:5e8c4d9",
+        "status": "exited",
+        "exitCode": 0
+      }
+    ]
+  },
+  "smoke": {
+    "status": "PASS",
+    "database": "lc4j_ingestion_smoke_146a77d6",
+    "tenant": "infra-smoke-7fb94cef3e7c",
+    "jobId": "8615c7bf-8a19-4bad-8080-621310779df8",
+    "jobStatus": "READY",
+    "idempotency": "same jobId on repeat upload",
+    "sinks": {
+      "GRAPH": "SUCCEEDED",
+      "ELASTICSEARCH": "SUCCEEDED",
+      "AUTHORIZATION": "SUCCEEDED",
+      "VECTOR": "SUCCEEDED",
+      "REGISTRY": "SUCCEEDED"
+    },
+    "preparationSchemaVersion": 1,
+    "processingVersion": "knowledge-structured-v5",
+    "retrieval": {
+      "query": {
+        "hits": 1,
+        "sources": [
+          "hybrid"
+        ]
+      },
+      "esQuery": {
+        "hits": 1,
+        "sources": [
+          "es"
+        ]
+      }
+    },
+    "embeddingProvider": "hash",
+    "paidInferenceInvoked": false,
+    "businessJobsAfter": {
+      "READY": 34
+    },
+    "temporaryContainer": "stopped",
+    "testData": "retained in isolated database and tenant"
+  },
+  "frontendAssets": [
+    {
+      "path": "/assets/index-B8sfQTWH.js",
+      "http": 200,
+      "bytes": 554020
+    },
+    {
+      "path": "/assets/index-izVE6zSH.css",
+      "http": 200,
+      "bytes": 176841
+    }
+  ],
+  "supplyChain": {
+    "run": 39198357117,
+    "conclusion": "failure",
+    "failedStep": "Scan aggregate dependency SBOM",
+    "url": "https://github.com/lirji/langchain4j-platform/actions/runs/39198357117"
+  },
+  "productionGate": "HOLD",
+  "backup": {
+    "file": "knowledge-ingestion-before.sql",
+    "bytes": 48340,
+    "sha256": "86ec60a728913791ec9001194166de87b18ee3424085b3c30b0ed83684848dec",
+    "storage": "private ignored directory; not committed"
+  },
+  "runtimeConfiguration": {
+    "knowledge": {
+      "RAG_PARSING_OCR_ENABLED": null,
+      "RAG_RUNTIME_ROLE": null,
+      "RAG_EMBEDDING_PROVIDER": "openai",
+      "RAG_EMBEDDING_MODEL": "text-embedding-v4",
+      "RAG_EMBEDDING_DIMENSIONS": "1024",
+      "RAG_VECTOR_STORE_BASE_COLLECTION": "knowledge_segments_bailian_v4",
+      "RAG_INGESTION_STORE": "jdbc",
+      "RAG_SOURCE_STORE": "s3",
+      "RAG_REGISTRY_STORE": "redis"
+    },
+    "casdoorMode": "only",
+    "ocrEffective": false,
+    "knowledgeRoleEffective": "combined"
+  }
+}
