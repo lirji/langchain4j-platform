@@ -11,6 +11,11 @@ public enum DocumentParsingError {
     STRUCTURE_LIMIT("DOCUMENT_STRUCTURE_LIMIT", "document structure exceeds the configured limit", false),
     RESOURCE_LIMIT("DOCUMENT_RESOURCE_LIMIT", "document parsing exceeded its resource budget", false),
     TIMEOUT("DOCUMENT_PARSE_TIMEOUT", "document parsing exceeded its execution deadline", false),
+    OCR_UNAVAILABLE("DOCUMENT_OCR_UNAVAILABLE", "local OCR engine or language data is unavailable", false),
+    OCR_FAILED("DOCUMENT_OCR_FAILED", "local OCR did not complete successfully", false),
+    OCR_LIMIT("DOCUMENT_OCR_LIMIT", "document exceeds OCR page or pixel budget", false),
+    OCR_TIMEOUT("DOCUMENT_OCR_TIMEOUT", "document OCR exceeded its execution deadline", false),
+    OCR_QUALITY("DOCUMENT_OCR_QUALITY", "OCR result is empty or below the configured confidence threshold", false),
     PROCESS_FAILED("DOCUMENT_PARSER_PROCESS_FAILED", "isolated document parser failed", false),
     TERMINATION_FAILED("DOCUMENT_PARSER_TERMINATION_FAILED", "document parser termination requires operator attention", false),
     PROCESS_UNAVAILABLE("DOCUMENT_PARSER_UNAVAILABLE", "isolated document parser is unavailable; retry later", true),
@@ -38,6 +43,6 @@ public enum DocumentParsingError {
 
     /** 执行器损坏需人工处理，但仍属于服务故障；不能因禁止自动重试就向客户端归类为坏输入。 */
     public boolean serviceFailure() {
-        return retryable || this == PROCESS_FAILED || this == TERMINATION_FAILED;
+        return retryable || this == PROCESS_FAILED || this == TERMINATION_FAILED || this == OCR_UNAVAILABLE || this == OCR_FAILED;
     }
 }

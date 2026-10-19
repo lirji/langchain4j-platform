@@ -9,6 +9,7 @@ import java.util.Set;
 /** 来源字段白名单：结构定位可跨检索源流转，租户/权限/任意模型配置不能经扩展 metadata 注入。 */
 public final class SourceProvenance {
     private static final Set<String> KEYS = Set.of("source_format","source_block","source_kind","source_location",
+            "source_extraction_method","source_native_chars","source_ocr_chars","source_ocr_confidence",
             "source_page","source_rotation","source_sheet","source_paragraph","source_table","source_row_start","source_row_end",
             "source_line_start","source_line_end","source_columns","source_row_fragment","source_code_fragment","source_pages_without_text",
             "parsing_warnings","section","breadcrumb");

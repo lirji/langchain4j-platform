@@ -9,6 +9,8 @@ public final class ParsingProcessMain {
     static final String INPUT = "input";
     static final String OUTPUT = "output.txt";
     static final String ERROR = "error-code";
+    static final String OCR_POLICY = "ocr-policy.json";
+    static final int MAX_POLICY_BYTES = 8192;
     private ParsingProcessMain() { }
 
     /** 错误通道只输出稳定 code；详细正文和 JVM 输出不通过父进程响应暴露。 */
@@ -21,6 +23,7 @@ public final class ParsingProcessMain {
                 try { Thread.sleep(250); }
                 catch (InterruptedException ignored) { Thread.currentThread().interrupt(); break; }
             }
+            TesseractOcrEngine.stopActive();
             Runtime.getRuntime().halt(70);
         });
         var properties = new DocumentParsingProperties();
@@ -28,7 +31,13 @@ public final class ParsingProcessMain {
         properties.setMaxTextChars(Integer.parseInt(args[1]));
         properties.setMaxPages(Integer.parseInt(args[2]));
         properties.setMaxStructureUnits(Integer.parseInt(args[6]));
+        Runtime.getRuntime().addShutdownHook(new Thread(TesseractOcrEngine::stopActive, "ocr-shutdown"));
         try (var input = Files.newInputStream(directory.resolve(INPUT))) {
+            Path policy = directory.resolve(OCR_POLICY);
+            if (Files.exists(policy)) {
+                if (Files.size(policy) > MAX_POLICY_BYTES) throw new DocumentParsingException(DocumentParsingError.OCR_LIMIT,null);
+                properties.getOcr().apply(new com.fasterxml.jackson.databind.ObjectMapper().readValue(policy.toFile(),DocumentOcrProperties.Settings.class));
+            }
             if (Boolean.parseBoolean(args[4])) {
                 var parsed = new StructuredDocumentParser(properties).parse(directory.resolve(INPUT), args[5]);
                 ParsedDocumentCodec.write(directory.resolve(OUTPUT), parsed);

@@ -159,6 +159,9 @@ final class ForkedDocumentParser implements AutoCloseable {
         String suffix = filename == null ? "" : filename.toLowerCase(java.util.Locale.ROOT);
         args.add(suffix.endsWith(".csv") ? ".csv" : suffix.endsWith(".md") || suffix.endsWith(".markdown") ? ".md" : "");
         args.add(Integer.toString(limits.getMaxStructureUnits()));
+        if (limits.getOcr().isEnabled()) {
+            new com.fasterxml.jackson.databind.ObjectMapper().writeValue(directory.resolve(ParsingProcessMain.OCR_POLICY).toFile(),limits.getOcr().snapshot());
+        }
         var builder = new ProcessBuilder(args).directory(directory.toFile());
         builder.environment().clear();
         builder.environment().putAll(Map.of("LANG", "C.UTF-8", "TMPDIR", directory.toString()));
@@ -207,13 +210,22 @@ final class ForkedDocumentParser implements AutoCloseable {
     }
 
     private static boolean terminate(Process process, Duration timeout) {
-        // 固定解析 main 禁止自动 OCR/外部子命令，仍清理可见后代，防止库错误拉起进程后遗留。
+        // 先让解析 JVM 的 shutdown hook 停止受控 OCR，再强制清理可见后代；不能把中断当退出。
         List<ProcessHandle> children = process.descendants().toList();
-        children.forEach(ProcessHandle::destroyForcibly);
-        process.destroyForcibly();
         boolean interrupted = Thread.interrupted();
         try {
             long deadline = System.nanoTime() + timeout.toNanos();
+            process.destroy();
+            long grace = Math.min(deadline, System.nanoTime() + TimeUnit.SECONDS.toNanos(3));
+            while (process.isAlive() && System.nanoTime() < grace) {
+                try { TimeUnit.MILLISECONDS.sleep(POLL_MILLIS); }
+                catch (InterruptedException ex) { interrupted = true; }
+            }
+            var allChildren = new java.util.HashSet<>(children);
+            allChildren.addAll(process.descendants().toList());
+            children = List.copyOf(allChildren);
+            children.forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
             while (System.nanoTime() < deadline) {
                 if (!process.isAlive() && children.stream().noneMatch(ProcessHandle::isAlive)) return true;
                 try { TimeUnit.MILLISECONDS.sleep(POLL_MILLIS); }

@@ -35,7 +35,10 @@ public class IngestionPreparedConfig {
         var profile = new LinkedHashMap<>(splitters.processingConfiguration());
         // 严格允许列表，禁止将 Environment 整体导出到包含用户正文的对象中。
         for (String key : List.of("app.rag.embedding.provider", "app.rag.embedding.model-name",
-                "app.rag.embedding.ollama.model-name", "app.rag.contextual.enabled", "app.rag.llm.model-name")) {
+                "app.rag.embedding.ollama.model-name", "app.rag.contextual.enabled", "app.rag.llm.model-name",
+                "app.rag.parsing.ocr.enabled", "app.rag.parsing.ocr.languages", "app.rag.parsing.ocr.dpi",
+                "app.rag.parsing.ocr.min-native-chars", "app.rag.parsing.ocr.image-coverage",
+                "app.rag.parsing.ocr.min-confidence")) {
             profile.put(key, environment.getProperty(key, ""));
         }
         return new ObjectStorageIngestionPreparedStore(objects, mapper, prepared, profile);

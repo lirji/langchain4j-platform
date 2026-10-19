@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "app.rag.ingestion.prepared")
 public class IngestionPreparedProperties {
     public static final int DEFAULT_MAX_BYTES = 64 * 1024 * 1024;
-    public static final String DEFAULT_PROCESSING_VERSION = "knowledge-structured-v2";
+    public static final String DEFAULT_PROCESSING_VERSION = "knowledge-structured-v3";
     private int maxBytes = DEFAULT_MAX_BYTES;
     private String processingVersion = DEFAULT_PROCESSING_VERSION;
 

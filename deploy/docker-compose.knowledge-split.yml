@@ -127,6 +127,8 @@ services:
     extends:
       file: docker-compose.yml
       service: knowledge-service
+    build:
+      target: ocr
     # 进程内预算之外的容器硬边界；这些是保护性缺省，不是已验证的生产容量承诺。
     mem_limit: ${KNOWLEDGE_WORKER_MEMORY_LIMIT:-3g}
     cpus: ${KNOWLEDGE_WORKER_CPUS:-2.0}
@@ -138,6 +140,7 @@ services:
       RAG_RUNTIME_ROLE: ingest-worker
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=25.0"
       RAG_PARSING_EXECUTION_MODE: forked
+      RAG_PARSING_OCR_ENABLED: ${RAG_PARSING_OCR_ENABLED:-false}
       RAG_PARSING_MAX_PROCESSES: ${RAG_PARSING_MAX_PROCESSES:-2}
       RAG_PARSING_TIMEOUT: ${RAG_PARSING_TIMEOUT:-120s}
       RAG_PARSING_HEAP_MIB: ${RAG_PARSING_HEAP_MIB:-256}

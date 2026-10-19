@@ -12,6 +12,10 @@ public class DocumentParsingProperties {
     public static final int DEFAULT_MAX_TEXT_CHARS = 2_000_000;
     private static final String INVALID_LIMIT = "app.rag.parsing.max-text-chars must be positive";
     private int maxTextChars = DEFAULT_MAX_TEXT_CHARS;
+    private final DocumentOcrProperties ocr = new DocumentOcrProperties();
+
+    /** OCR 单独 opt-in，默认原生解析行为保持不变。 */
+    public DocumentOcrProperties getOcr() { return ocr; }
     public static final String IN_PROCESS = "in-process";
     public static final String FORKED = "forked";
     private String executionMode = FORKED;

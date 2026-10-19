@@ -237,6 +237,16 @@ final class StructuredDocumentParser {
                 @Override public void flush() { }
                 @Override public void close() { }
             });
+            if (limits.getOcr().isEnabled()) {
+                var processed = new PdfPageOcr(limits,new TesseractOcrEngine(limits.getOcr())).apply(document,blocks,
+                        warning -> warn(warning.code(),warning.location()));
+                long oldChars=blocks.stream().mapToLong(b -> b.text().length()).sum();
+                reserve(processed.stream().mapToLong(b -> b.text().length()).sum()-oldChars,0);
+                blocks.clear();blocks.addAll(processed);
+                // 已补齐文字的页不再保留“无文本”告警；真实空白页仍保留覆盖事实。
+                warnings.removeIf(w -> ParsingWarnings.PDF_NO_TEXT.equals(w.code()) && w.location().page()!=null
+                        && !blocks.get(w.location().page()-1).text().isBlank());
+            }
         }
     }
 

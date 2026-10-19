@@ -6,6 +6,9 @@ public final class ParsingWarnings {
     public static final String FORMULA_CACHE = "FORMULA_CACHED_VALUE_NOT_RECALCULATED";
     public static final String MERGED_CELLS = "MERGED_CELLS_NOT_EXPANDED";
     public static final String HIDDEN_CONTENT = "HIDDEN_SHEET_OR_ROW_INCLUDED";
+    public static final String PDF_OCR = "PDF_OCR_APPLIED";
+    public static final String PDF_OCR_MERGED = "PDF_NATIVE_OCR_MERGED_READING_ORDER_UNVERIFIED";
+    public static final String PDF_BLANK = "PDF_BLANK_PAGE";
     public static final String PDF_NO_TEXT = "PDF_PAGE_WITHOUT_TEXT";
     public static final String PDF_READING_ORDER = "PDF_READING_ORDER_UNVERIFIED";
     public static final String PDF_ROTATED = "PDF_ROTATED_PAGE";

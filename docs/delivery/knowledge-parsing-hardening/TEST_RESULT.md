@@ -139,3 +139,14 @@ Markdown 另以已有文本提取和语法分块测试作为证据，不把 MIME
 - 最终源码/配置/测试指纹 `99a2a6aab4703cd3b45d68c10cc2089a1fe7e638c07fd18196e42eb0899e6df8`，18 文件，清单 `kdp05b2/validated-files.json`。B1/B2 验收通过，KDP-05-B 完成；未执行生产迁移或部署。
 
 B2 远程补正：`54f8b1f` 的 AgentScope CI `39193808050` 在持久化静态边界失败：新增 `lockAdmission` 读取固定协调守卫，没有业务软删除字段。检查器现只允许该方法的精确 `SELECT GRANT_SEQUENCE, GLOBAL_LIMIT, TENANT_LIMIT ... WHERE GUARD_ID=1 FOR UPDATE`，未放宽普通业务查询或其他 Mapper；`python3 deploy/test-mybatis-boundary.py` 通过（`kdp05b2-boundary.log`）。供应链 CI `39193808043` 仍失败；源码和真实 MySQL 验证与此静态规则修正分开报告。
+
+
+## KDP-06-C 选择性 OCR（2026-10-19）
+
+- `mvn -B -o -pl knowledge-service -am -Dtest=PdfPageOcrTest,TesseractOcrEngineTest,StructuredDocumentParsingTest,ForkedDocumentParserTest -Dsurefire.failIfNoSpecifiedTests=false test`：43 项通过，`kdp06c-cleanup-regression.log`。初始 300ms 夹具未进入 native 就截止造成 PID 缺失，修为 2s；原失败 `kdp06c-initial-test-failure.log` 保留。
+- package 后 `KDP_ES_TEST_URL=http://127.0.0.1:49200 mvn -B -o -pl knowledge-service -am -Dparsing.test.artifact=$PWD/knowledge-service/target/knowledge-service-0.1.0-SNAPSHOT.jar test`：**703 项、0 失败/错误、10 跳过，693 实际执行**；knowledge 523/6 跳过。真实 Boot 和 ES 已启用；`kdp06c-full-regression.log`。未重复操作业务数据或全量迁移。
+- 完整回归后仅增加准备 profile/版本标记和更保守的整行按次数去重：`IngestionPreparedConfigTest,ObjectStorageIngestionPreparedStoreTest,PreparedIngestionRecoveryTest` 11 项通过（`kdp06c-snapshot-regression.log`）；`PdfPageOcrTest,TesseractOcrEngineTest` 9 项通过（`kdp06c-merge-regression.log`）。之后重新 package，最终 jar 用于 Linux 验收。
+- `python3 deploy/test-parsing-ocr.py` 通过：构建 OCR target、引擎与语言检查、7 个真实 PDF 场景、临时目录无残留；Tesseract 5.5.0，chi_sim/eng/osd 4.1.0，禁网/只读/UID10001/3GiB/2CPU/256pids/512MiB tmpfs。固定报告 `KDP-06-C-ocr.json`；本地 `kdp06c/{container-smoke,engine-version,engine-languages,packages,docker-build}.log`。最终镜像含最终 jar，无旧 jar 冒充最终制品。
+- 容器峰值 570646528 字节，单份 1.231～4.241 秒；未测多租户 OCR 吞吐、真实业务 Recall 或复杂版面准确率。宿主/容器系统包版本不是跨平台锁定承诺。
+- Compose base/readonly-worker/conversation-shadow/knowledge-split 四组合 config -q、runtime hardening、MyBatis boundary、git diff --check 通过。官方 HTTP 源最初 502/大索引连接失败，日志保留；改 HTTPS/保留签名校验/有界重试后成功。
+- 21 个代码/测试/运行配置文件最终指纹 `319ca43a08d3e2ca6ed49d813c01ab66835741d02504fdfd49d40137f8fdfb0b`（`kdp06c/validated-files.json`）。所有证据在既有忽略目录，未把日志或私有环境提交。

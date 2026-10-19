@@ -64,7 +64,22 @@ public record ParsedDocument(int schemaVersion, String format, List<Block> block
     }
     /** 仅声明能够回查的定位，PDF 不伪造 bbox，CSV 行号指逻辑记录而非包含引号换行的物理行。 */
     public record Location(Integer page, Integer rotation, String sheet, Integer paragraph, Integer table,
-                           Integer rowStart, Integer rowEnd, Integer lineStart, Integer lineEnd) {
+                           Integer rowStart, Integer rowEnd, Integer lineStart, Integer lineEnd,
+                           String extractionMethod, Integer nativeChars, Integer ocrChars, Double ocrConfidence) {
+        public Location {
+            if ((nativeChars != null && nativeChars < 0) || (ocrChars != null && ocrChars < 0)
+                    || (ocrConfidence != null && (!Double.isFinite(ocrConfidence) || ocrConfidence < 0 || ocrConfidence > 100))
+                    || (extractionMethod != null && !List.of(PdfPageOcr.NATIVE,PdfPageOcr.OCR,PdfPageOcr.MIXED,PdfPageOcr.BLANK).contains(extractionMethod)))
+                throw invalid();
+        }
+        /** 既有格式和旧解析结果缺失 OCR 字段时继续保留原位置契约。 */
+        public Location(Integer page,Integer rotation,String sheet,Integer paragraph,Integer table,
+                        Integer rowStart,Integer rowEnd,Integer lineStart,Integer lineEnd) {
+            this(page,rotation,sheet,paragraph,table,rowStart,rowEnd,lineStart,lineEnd,null,null,null,null);
+        }
+        public Location withExtraction(String method,int nativeCount,int ocrCount,Double confidence) {
+            return new Location(page,rotation,sheet,paragraph,table,rowStart,rowEnd,lineStart,lineEnd,method,nativeCount,ocrCount,confidence);
+        }
         public static Location none() { return new Location(null, null, null, null, null, null, null, null, null); }
         public Map<String, String> metadata() {
             Map<String, String> values = new LinkedHashMap<>();
@@ -72,6 +87,8 @@ public record ParsedDocument(int schemaVersion, String format, List<Block> block
             put(values, "source_paragraph", paragraph); put(values, "source_table", table);
             put(values, "source_row_start", rowStart); put(values, "source_row_end", rowEnd);
             put(values, "source_line_start", lineStart); put(values, "source_line_end", lineEnd);
+            put(values, "source_extraction_method", extractionMethod); put(values, "source_native_chars", nativeChars);
+            put(values, "source_ocr_chars", ocrChars); put(values, "source_ocr_confidence", ocrConfidence);
             if (!values.isEmpty()) values.put(SOURCE_LOCATION, values.entrySet().stream()
                     .map(e -> e.getKey().substring(7) + "=" + e.getValue()).collect(java.util.stream.Collectors.joining(";")));
             return values;
