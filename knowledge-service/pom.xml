@@ -48,6 +48,12 @@
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-document-parser-apache-tika</artifactId>
         </dependency>
+        <!-- 按语法节点定位真实标题，避免正则把代码围栏或 HTML 注释切成章节。 -->
+        <dependency>
+            <groupId>org.commonmark</groupId>
+            <artifactId>commonmark</artifactId>
+            <version>0.25.1</version>
+        </dependency>
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-qdrant</artifactId>

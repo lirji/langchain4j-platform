@@ -14,6 +14,9 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * 语义切分（semantic / embedding-based chunking）：不靠标点/标题硬切，而是按<strong>主题连续性</strong>下刀。
@@ -51,7 +54,13 @@ public class SemanticChunkingSplitter implements DocumentSplitter {
     private static final Logger log = LoggerFactory.getLogger(SemanticChunkingSplitter.class);
 
     /** 句末标点：中文 。！？； + 英文 .!?; + 省略号 + 换行。 */
-    private static final String ENDERS = "。！？；!?;…\n";
+    private static final String ENDERS = "。！？；.!?;…\n";
+
+    /** 常见非句末缩写；网址/版本等词内句点另由相邻字符判断，不扩大为自然语言识别器。 */
+    private static final Set<String> ABBREVIATIONS = Set.of(
+            "mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "vs", "e.g", "i.e");
+    private static final Pattern INITIALISM = Pattern.compile("(?:[a-z]\\.)+[a-z]");
+    private static final String CLOSING_PUNCTUATION = "\"')]}»”’";
 
     private final EmbeddingModel embeddingModel;
     private final int bufferSize;
@@ -129,7 +138,7 @@ public class SemanticChunkingSplitter implements DocumentSplitter {
             }
             idx++;
         }
-        return out;
+        return ChunkIndexing.sequential(out);
     }
 
     /** 相邻窗口的 cosine 距离 {@code 1 - similarity}；窗口 = 句子 ± bufferSize 个邻居拼接。 */
@@ -206,10 +215,17 @@ public class SemanticChunkingSplitter implements DocumentSplitter {
             char c = text.charAt(i);
             cur.append(c);
             if (ENDERS.indexOf(c) >= 0) {
-                // 小数点 / 千分位：1.5、3,000 之间的 . 不当句末
-                if ((c == '.' || c == ';') && i > 0 && i < n - 1
+                if (c == '.' && !isPeriodBoundary(text, i)) {
+                    continue;
+                }
+                // 保留既有数字之间分号的行为；小数和版本号由词内句点检查保护。
+                if (c == ';' && i > 0 && i < n - 1
                         && Character.isDigit(text.charAt(i - 1)) && Character.isDigit(text.charAt(i + 1))) {
                     continue;
+                }
+                // 引号/括号留在前一句，避免下一块以孤立的关闭符号开头。
+                while (i + 1 < n && CLOSING_PUNCTUATION.indexOf(text.charAt(i + 1)) >= 0) {
+                    cur.append(text.charAt(++i));
                 }
                 String s = cur.toString().strip();
                 if (!s.isEmpty()) out.add(s);
@@ -219,5 +235,29 @@ public class SemanticChunkingSplitter implements DocumentSplitter {
         String tail = cur.toString().strip();
         if (!tail.isEmpty()) out.add(tail);
         return out;
+    }
+
+    /** 句号只在词尾形成边界，避免拆开 URL、小数、版本、姓名首字母和常用缩写。 */
+    private static boolean isPeriodBoundary(String text, int index) {
+        int after = index + 1;
+        while (after < text.length() && CLOSING_PUNCTUATION.indexOf(text.charAt(after)) >= 0) after++;
+        if (after == text.length()) {
+            return true;
+        }
+        char next = text.charAt(after);
+        if (!Character.isWhitespace(next)) {
+            return false;
+        }
+        int start = index;
+        while (start > 0) {
+            char previous = text.charAt(start - 1);
+            if (!Character.isLetter(previous) && previous != '.') break;
+            start--;
+        }
+        String token = text.substring(start, index).toLowerCase(Locale.ROOT);
+        if (ABBREVIATIONS.contains(token)) return false;
+        // J. Brown / U.S. policy 保持在一起；省略号的最终句点仍可以结束句子。
+        return !(token.length() == 1 && Character.isUpperCase(text.charAt(start)))
+                && !INITIALISM.matcher(token).matches();
     }
 }

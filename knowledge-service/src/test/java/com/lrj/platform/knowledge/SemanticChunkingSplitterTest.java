@@ -20,6 +20,26 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class SemanticChunkingSplitterTest {
 
+    @Test
+    void englishPeriodsSplitWithoutBreakingDecimalVersionsOrUrls() {
+        assertThat(SemanticChunkingSplitter.splitSentences(
+                "First topic. Use v1.2.3 and 3.5 units. See https://example.com/docs. Done."))
+                .containsExactly("First topic.", "Use v1.2.3 and 3.5 units.",
+                        "See https://example.com/docs.", "Done.");
+    }
+
+    @Test
+    void commonAbbreviationsAndInitialsStayWithTheirSentence() {
+        assertThat(SemanticChunkingSplitter.splitSentences("Dr. Smith met J. Brown. Use e.g. Java. Next topic."))
+                .containsExactly("Dr. Smith met J. Brown.", "Use e.g. Java.", "Next topic.");
+    }
+
+    @Test
+    void closingQuotesAndParenthesesStayWithThePreviousSentence() {
+        assertThat(SemanticChunkingSplitter.splitSentences("He said \"Hello.\" Next topic. Use x. (Done.) Final!"))
+                .containsExactly("He said \"Hello.\"", "Next topic.", "Use x.", "(Done.)", "Final!");
+    }
+
     /**
      * 桩：句子含「猫」→ 向量 [1,0]；含「股票」→ [0,1]；否则 [0,0,...] 退化。
      * 同话题 cosine=1（距离 0），跨话题 cosine=0（距离 1）→ 边界处必有断崖。

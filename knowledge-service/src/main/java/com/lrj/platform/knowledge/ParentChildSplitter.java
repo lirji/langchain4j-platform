@@ -69,6 +69,6 @@ public class ParentChildSplitter implements DocumentSplitter {
             }
             parentIdx++;
         }
-        return children;
+        return ChunkIndexing.sequential(children);
     }
 }

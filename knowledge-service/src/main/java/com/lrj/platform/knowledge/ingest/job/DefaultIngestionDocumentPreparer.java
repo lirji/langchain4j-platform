@@ -1,6 +1,7 @@
 package com.lrj.platform.knowledge.ingest.job;
 
 import com.lrj.platform.knowledge.DocumentSplitterFactory;
+import com.lrj.platform.knowledge.ChunkIndexing;
 import com.lrj.platform.knowledge.ingest.ContextualEnricher;
 import com.lrj.platform.knowledge.lifecycle.DocumentInfo;
 import com.lrj.platform.knowledge.lifecycle.DocumentTextExtractor;
@@ -65,12 +66,7 @@ public class DefaultIngestionDocumentPreparer implements IngestionDocumentPrepar
             document.metadata().put("category", job.category());
         }
 
-        List<TextSegment> segments = splitterFactory.create().split(document);
-        for (int index = 0; index < segments.size(); index++) {
-            if (segments.get(index).metadata().getString("index") == null) {
-                segments.get(index).metadata().put("index", Integer.toString(index));
-            }
-        }
+        List<TextSegment> segments = ChunkIndexing.sequential(splitterFactory.create().split(document));
         segments = contextualEnricher.enrich(text, segments);
         if (chunkMetrics != null) {
             chunkMetrics.record(splitterFactory.strategy(), 1, segments);

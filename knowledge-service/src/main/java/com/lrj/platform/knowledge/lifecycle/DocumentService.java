@@ -4,6 +4,7 @@ import com.lrj.platform.audit.AuditEventType;
 import com.lrj.platform.audit.AuditLogger;
 import com.lrj.platform.knowledge.DocumentMirror;
 import com.lrj.platform.knowledge.DocumentSplitterFactory;
+import com.lrj.platform.knowledge.ChunkIndexing;
 import com.lrj.platform.knowledge.cache.SemanticCacheInvalidator;
 import com.lrj.platform.knowledge.graph.GraphIngestor;
 import com.lrj.platform.knowledge.es.NoopSegmentIndexer;
@@ -242,7 +243,7 @@ public class DocumentService {
         }
 
         DocumentSplitter splitter = splitterFactory.create();
-        List<TextSegment> segments = splitter.split(doc);
+        List<TextSegment> segments = ChunkIndexing.sequential(splitter.split(doc));
         // Contextual Retrieval：入库前给每 chunk 加文档级上下文前缀再嵌入（默认关时为 no-op，原样返回）。
         segments = contextualEnricher.enrich(text, segments);
         // 切分质量打点（F5.3）：记录最终入库形态的尺寸分布/碎块/超大块（默认注入，null 时跳过）。

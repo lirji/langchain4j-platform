@@ -17,6 +17,59 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class MarkdownHeaderSplitterTest {
 
+    @Test
+    void codeFencesAndHtmlCommentsDoNotCreateSections() {
+        String md = "# Guide\n## Example\n```bash\n## shell comment\necho hi\n```\n"
+                + "~~~text\n# literal heading\n~~~\n<!--\n## hidden\n-->\n## Next\ntext";
+        List<TextSegment> chunks = new MarkdownHeaderSplitter(10_000, null).split(Document.from(md));
+        assertThat(chunks.stream().map(s -> s.metadata().getString("section")))
+                .containsExactly("Guide", "Example", "Next");
+        assertThat(chunks.get(1).text()).contains("## shell comment", "# literal heading", "## hidden", "echo hi");
+    }
+
+    @Test
+    void laterH1StartsANewHierarchyEvenWhenH2Exists() {
+        List<TextSegment> chunks = splitter.split(Document.from("# A\n## One\ntext A\n# B\n## Two\ntext B"));
+        assertThat(chunks.stream().map(s -> s.metadata().getString("section")))
+                .containsExactly("A", "One", "B", "Two");
+        assertThat(chunks.get(3).metadata().getString("breadcrumb")).isEqualTo("B > Two");
+    }
+
+    @Test
+    void setextAndFormattedAtxHeadingsKeepTheirOriginalText() {
+        String md = "Manual\n======\nIntro\n\n  ## **Install** `app` ###\nDo this.\n\nNext\n----\nDone.";
+        List<TextSegment> chunks = splitter.split(Document.from(md));
+        assertThat(chunks.stream().map(s -> s.metadata().getString("section")))
+                .containsExactly("Manual", "Install app", "Next");
+        assertThat(chunks.get(1).text()).contains("## **Install** `app` ###");
+        assertThat(chunks.get(2).metadata().getString("breadcrumb")).isEqualTo("Manual > Next");
+    }
+
+    @Test
+    void unclosedFenceAndIndentedCodeRemainInTheirSection() {
+        String md = "## Example\n\n    ## indented code\n\n```\n## unclosed fence heading";
+        List<TextSegment> chunks = splitter.split(Document.from(md));
+        assertThat(chunks).hasSize(1);
+        assertThat(chunks.getFirst().text()).contains("    ## indented code", "## unclosed fence heading");
+    }
+
+    @Test
+    void initialCodeIndentationAndCrLfHeadingPositionsArePreserved() {
+        List<TextSegment> chunks = splitter.split(Document.from("\r\n    ## code\r\n    echo hi\r\n\r\n# Real\r\ntext  \r\n"));
+        assertThat(chunks).hasSize(2);
+        assertThat(chunks.getFirst().text()).startsWith("    ## code").contains("\r\n    echo hi");
+        assertThat(chunks.getLast().metadata().getString("section")).isEqualTo("Real");
+        assertThat(chunks.getLast().text()).endsWith("text  ");
+    }
+
+    @Test
+    void tinySectionsNeverMergeAcrossParentHeadings() {
+        DocumentSplitter merging = new MarkdownHeaderSplitter(600, DocumentSplitters.recursive(300, 50), null, 100);
+        List<TextSegment> chunks = merging.split(Document.from("# A\n## One\na\n# B\n## Two\nb"));
+        assertThat(chunks).hasSize(4);
+        assertThat(chunks.getLast().metadata().getString("breadcrumb")).isEqualTo("B > Two");
+    }
+
     private final DocumentSplitter splitter = new MarkdownHeaderSplitter(
             600, DocumentSplitters.recursive(300, 50));
 
@@ -78,8 +131,8 @@ class MarkdownHeaderSplitterTest {
         List<TextSegment> segs = splitter.split(Document.from(text));
         assertThat(segs).hasSize(1);
         assertThat(segs.get(0).text()).contains("short paragraph");
-        // 没 heading 所以 section meta 是整段第一行（strip 后即原文本，因为没 # 前缀）
-        // 这是 fallback 行为，不强求测什么
+        // 没有标题时不把正文第一行伪造成章节名称。
+        assertThat(segs.getFirst().metadata().getString("section")).isNull();
     }
 
     @Test
@@ -135,8 +188,8 @@ class MarkdownHeaderSplitterTest {
     }
 
     @Test
-    void h2Present_h1IsNotABoundary_unchanged() {
-        // 有 ## 时，# 仍不作边界（# Title 跟内容直到 ## A 之前是一段）—— 跟历史一致
+    void documentTitleAndFollowingSectionsRemainSeparate() {
+        // 文档标题与后续两个 H2 仍各占一段；后续新增 H1 则按新章节正确重置路径。
         String md = "# Title\n\n## A\na\n## B\nb\n";
         List<TextSegment> segs = splitter.split(Document.from(md));
         assertThat(segs).hasSize(3);
