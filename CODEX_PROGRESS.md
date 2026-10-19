@@ -1,6 +1,6 @@
 # Codex Progress
 
-- 当前任务：`knowledge-parsing-hardening`（2026-10-19），用户已要求按优先级连续实施；KDP-04 验证通过，下一步 P1 / KDP-06-A 格式基线。
+- 当前任务：`knowledge-parsing-hardening`（2026-10-19），用户已要求按优先级连续实施；KDP-04 已交付，KDP-06-A 基线通过，下一步 P1 / KDP-05-A 解析隔离。
 - 唯一状态与恢复入口：[PROGRESS_STATE](docs/delivery/knowledge-parsing-hardening/PROGRESS_STATE.md)。
 - 问题与验收：[知识库文档解析生产优化](docs/对话与检索/知识库文档解析生产优化.md)。
 - 当前格式范围：[知识库文档支持范围](docs/对话与检索/知识库文档支持范围.md)。

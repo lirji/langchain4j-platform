@@ -48,6 +48,12 @@
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-document-parser-apache-tika</artifactId>
         </dependency>
+        <!-- Tika 3.2.3 / Commons CSV 1.14.1 需要 2.20.0；旧传递依赖 2.16.1 会使真实 CSV 分支缺类。 -->
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+            <version>2.20.0</version>
+        </dependency>
         <!-- 按语法节点定位真实标题，避免正则把代码围栏或 HTML 注释切成章节。 -->
         <dependency>
             <groupId>org.commonmark</groupId>

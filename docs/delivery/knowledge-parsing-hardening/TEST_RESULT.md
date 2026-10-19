@@ -93,3 +93,7 @@ Markdown 另以已有文本提取和语法分块测试作为证据，不把 MIME
 新增验收映射：`ObjectStorageIngestionPreparedStoreTest` 覆盖精确类型、字节预算、hash/上下文/schema 校验；`PreparedIngestionRecoveryTest` 覆盖旧任务、绑定对象不可用、写对象后失租、CAS 响应丢失；`PreparedIngestionPersistenceTest` 以 H2/内存及真实 MySQL/S3 验证部分成功后的恢复；`IngestionPreparedConfigTest` 覆盖角色装配与配置绑定；VECTOR 测试确认不使用变更后的当前模型维度。
 
 源码证据清单为 `kdp04/validated-files.json`，33 个文件，SHA-256 `ee2b8b68fc0086dc14718c670f98a73ac33b466f637d98f96e4f94e9e7926382`。完整回归后仅补文档，没有修改可执行代码。外部 Redis/IAM 9 项仍跳过；没有以适配器重建冒充真实服务器断电恢复、没有真实 ES/向量写入与资源压力验证，后续依赖 KDP-05/06。
+
+## KDP-06-A 格式基线与 CSV 兼容修复
+
+17 个场景及度量口径详见 [KDP-06-A](KDP-06-A.md) 与 [固定报告](KDP-06-A-baseline.json)。100 行 CSV 首次复现 `NoClassDefFoundError: UnsynchronizedBufferedReader`；仅 knowledge-service 直接依赖 Commons IO 2.20.0 后通过。完整回归 630 项，0 失败/错误，9 跳过；621 项实际执行。日志 `corpus-dependency-failure.log` 和 `corpus-regression.log`。KDP-04 MySQL/S3 适配器协议未变，没有重复清空/迁移共享环境。
