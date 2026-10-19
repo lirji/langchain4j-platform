@@ -30,7 +30,8 @@ spring:
             allowedOrigins: "${GATEWAY_CORS_ORIGINS:http://localhost:8093,http://127.0.0.1:8093,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5273,http://127.0.0.1:5273,http://localhost:4173,http://127.0.0.1:4173}"
             allowedMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
             # If-Match：RBAC 管理写（PATCH/PUT）的乐观锁版本头，跨域预检必须放行。
-            allowedHeaders: [Content-Type, Authorization, X-Api-Key, Accept, X-Trace-Id, If-Match]
+            # Idempotency-Key：异步文档入库重发时复用提交身份，浏览器跨域必须携带。
+            allowedHeaders: [Content-Type, Authorization, X-Api-Key, Accept, X-Trace-Id, If-Match, Idempotency-Key]
             # X-Total-Count/ETag：管理端分页总数与资源版本，须暴露给浏览器读取。
             exposedHeaders: [X-Trace-Id, X-Total-Count, ETag, X-Agent-Backend]
             allowCredentials: true

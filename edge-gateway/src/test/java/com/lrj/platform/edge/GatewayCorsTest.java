@@ -10,6 +10,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 @SpringBootTest(
         webEnvironment = WebEnvironment.RANDOM_PORT,
         properties = {
@@ -21,6 +23,36 @@ class GatewayCorsTest {
 
     @Autowired
     private WebTestClient webTestClient;
+
+    /** 异步入库依赖稳定提交编号，跨域预检必须允许它且不影响两类凭证。 */
+    @ParameterizedTest
+    @ValueSource(strings = {"authorization", "x-api-key"})
+    void allowsIdempotentDocumentIngestionPreflight(String credentialHeader) {
+        webTestClient.options()
+                .uri("/rag/ingestions")
+                .header(HttpHeaders.ORIGIN, "http://localhost:8093")
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.POST.name())
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS,
+                        credentialHeader + ",content-type,idempotency-key")
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().valueEquals(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:8093")
+                .expectHeader().valueEquals(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true")
+                .expectHeader().value(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS,
+                        value -> assertThat(value).containsIgnoringCase("idempotency-key"));
+    }
+
+    /** 增加单一业务请求头不应扩大为任意请求头放行。 */
+    @Test
+    void stillRejectsUnknownIngestionHeader() {
+        webTestClient.options()
+                .uri("/rag/ingestions")
+                .header(HttpHeaders.ORIGIN, "http://localhost:8093")
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.POST.name())
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "x-untrusted-control")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
 
     @ParameterizedTest
     @ValueSource(strings = {
