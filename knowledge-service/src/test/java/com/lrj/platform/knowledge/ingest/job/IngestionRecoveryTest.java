@@ -1,6 +1,8 @@
 package com.lrj.platform.knowledge.ingest.job;
 
 import org.junit.jupiter.api.Test;
+import com.lrj.platform.knowledge.lifecycle.DocumentParsingError;
+import com.lrj.platform.knowledge.lifecycle.DocumentParsingException;
 
 import java.time.*;
 import java.util.Set;
@@ -12,6 +14,31 @@ import static org.assertj.core.api.Assertions.*;
 /** 可控时钟与屏障模拟长解析、崩溃恢复和退避，不依赖真实外部存储。 */
 class IngestionRecoveryTest {
     private static final Instant NOW = Instant.parse("2026-09-08T00:00:00Z");
+
+    @Test
+    void parsingInputErrorsStopButSourceReadFailureUsesDurableRetry() {
+        for (DocumentParsingError error : DocumentParsingError.values()) {
+            var store = new InMemoryIngestionJobStore();
+            store.createOrGet(job());
+            var time = new MutableClock();
+            try (var worker = new IngestionJobWorker(store,
+                    j -> { throw new DocumentParsingException(error, new java.io.IOException("private endpoint")); },
+                    (j, prepared, sink) -> fail("a failed parse must never write an index"), time)) {
+                assertThat(worker.process("acme", "job")).isTrue();
+                var failed = store.find("acme", "job").orElseThrow();
+                assertThat(failed.execution().errorCode()).isEqualTo(error.code());
+                assertThat(failed.execution().failedStage()).isEqualTo("PREPARATION");
+                assertThat(failed.error()).doesNotContain("private endpoint");
+                if (error.retryable()) {
+                    assertThat(failed.execution().nextRetryAt()).isEqualTo(NOW.plusSeconds(5));
+                    assertThat(failed.status()).isNotEqualTo(IngestionStatus.MANUAL_REVIEW);
+                } else {
+                    assertThat(failed.execution().nextRetryAt()).isNull();
+                    assertThat(failed.status()).isEqualTo(IngestionStatus.MANUAL_REVIEW);
+                }
+            }
+        }
+    }
 
     @Test
     void renewedLeasePreventsConcurrentPreparationAndReconciliation() throws Exception {

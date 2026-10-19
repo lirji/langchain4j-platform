@@ -53,6 +53,9 @@ app:
       role: ${RAG_RUNTIME_ROLE:combined}
       production: ${RAG_PRODUCTION:false}
       legacy-write-enabled: ${RAG_LEGACY_WRITE_ENABLED:true}
+    parsing:
+      # 超限拒绝整份解析结果；该正文预算不能代替进程/页数/OCR 资源隔离。
+      max-text-chars: ${RAG_PARSING_MAX_TEXT_CHARS:2000000}
     ingestion:
       version-gc:
         enabled: ${RAG_INGESTION_VERSION_GC_ENABLED:false}

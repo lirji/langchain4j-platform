@@ -55,6 +55,8 @@ JDBC 图谱**；**Docker/Helm 部署**覆盖为百炼 `text-embedding-v4`（1024
 - **文件（multipart）**：`Content-Type: multipart/form-data`，表单字段 `file`（必填），可带 `category`。非图片文件由 `DocumentTextExtractor` 抽取文本。
 - **图片多模态**：JSON 用 `imageBase64`，或 multipart 用同名 `file`（`image/*`）——走原生 CLIP 多模态 embedding，由 `RAG_MULTIMODAL_ENABLED` 控制（**默认关**；开启时必须配置可达端点，关闭时上传图片返回 400）。详见第 3 节。
 
+文件抽取正文默认限制为 2,000,000 字符（`RAG_PARSING_MAX_TEXT_CHARS`）；超限明确失败，不索引截断正文。同步入口的解析输入错误返回 400，临时原文读取故障返回 503，并通过 `X-Error-Code` 给出稳定分类。预算范围、错误码、切分规则升级及旧任务恢复约束见[可靠入库接入](可靠入库接入.md#文档解析预算与错误分类2026-10-19)。
+
 同一租户下 `title`（displayName）相同的文档会**覆盖并递增版本号**（`docId` 由 `tenantId:displayName` 哈希得到，删除旧向量后重建）。
 覆盖时具体删除和重建哪些索引、字段如何变化、原始文件是否保留及各存储的一致性边界，见
 [知识库文档更新与存储](知识库文档更新与存储.md)。

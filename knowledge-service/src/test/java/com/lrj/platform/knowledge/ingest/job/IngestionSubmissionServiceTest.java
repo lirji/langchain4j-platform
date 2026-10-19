@@ -16,6 +16,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class IngestionSubmissionServiceTest {
 
+    @Test
+    void contentSnapshotCannotBeChangedThroughCallerArrays() {
+        byte[] originalBytes = "original".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        var command = new IngestionSubmissionService.SubmitCommand("immutable", "tenant", "user", Set.of("ingest"),
+                null, "trace", "doc", "doc.txt", null, 1, "text/plain", originalBytes);
+        originalBytes[0] = 'X';
+        byte[] exported = command.content();
+        exported[1] = 'Y';
+        assertThat(command.content()).isEqualTo("original".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
     private static final Instant NOW = Instant.parse("2026-07-30T00:00:00Z");
     private final InMemoryDocumentSourceStore sources = new InMemoryDocumentSourceStore();
     private final InMemoryIngestionJobStore jobs = new InMemoryIngestionJobStore();

@@ -50,9 +50,11 @@ public class IngestionSubmissionService {
 
     public IngestionJob submit(SubmitCommand command) throws IOException {
         validate(command);
+        // 外层类可读取 record 私有快照；只计算一次指纹，避免每次 accessor 防御性拷贝整个文件。
+        String contentHash = "sha256:" + sha256(command.content);
         var existing = jobs.findByIdempotency(command.tenantId(), command.idempotencyKey());
         if (existing.isPresent()) {
-            validateReplay(command, existing.get());
+            validateReplay(command, existing.get(), contentHash);
             return existing.get();
         }
 
@@ -62,15 +64,14 @@ public class IngestionSubmissionService {
         boolean newDocument = registered == null;
         validateVersionAndAuthorization(command, registered);
 
-        String contentHash = "sha256:" + sha256(command.content());
         DocumentSourceRef source = sources.put(new DocumentSourceStore.PutSource(
                 command.tenantId(),
                 command.documentId(),
                 command.documentVersion(),
                 command.contentType(),
-                command.content().length,
+                command.content.length,
                 contentHash,
-                new ByteArrayInputStream(command.content())));
+                new ByteArrayInputStream(command.content)));
         Instant now = clock.instant();
         IngestionJob candidate = IngestionJob.received(
                 UUID.randomUUID().toString(),
@@ -90,19 +91,19 @@ public class IngestionSubmissionService {
                 now);
         // 对象键可能被并发获胜任务复用；数据库失败/响应丢失时不得删除可能已被引用的原文。
         IngestionJob result = jobs.createOrGet(candidate);
-        validateReplay(command, result);
+        validateReplay(command, result, contentHash);
         return result;
     }
 
     /** 重放也检查请求指纹与提交者；相同租户不能通过猜测幂等键读取他人任务。 */
-    private void validateReplay(SubmitCommand command, IngestionJob existing) {
+    private void validateReplay(SubmitCommand command, IngestionJob existing, String contentHash) {
         requireOwner(existing, command.userId());
         if (!existing.documentId().equals(command.documentId())
                 || existing.documentVersion() != command.documentVersion()
                 || !existing.displayName().equals(command.displayName())
                 || !Objects.equals(existing.category(), command.category())
                 || !existing.source().contentType().equals(command.contentType())
-                || !existing.source().contentHash().equals("sha256:" + sha256(command.content()))) {
+                || !existing.source().contentHash().equals(contentHash)) {
             throw new IngestionJobConflictException("idempotency key was already used with a different request");
         }
     }
@@ -146,7 +147,7 @@ public class IngestionSubmissionService {
     private static void validate(SubmitCommand command) {
         Objects.requireNonNull(command, "command");
         if (command.idempotencyKey() == null || command.idempotencyKey().isBlank()
-                || command.content() == null || command.content().length == 0) {
+                || command.content == null || command.content.length == 0) {
             throw new IllegalArgumentException("idempotencyKey and non-empty content are required");
         }
         if (command.tenantId() == null || command.userId() == null || command.documentId() == null

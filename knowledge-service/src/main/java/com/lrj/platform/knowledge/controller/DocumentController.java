@@ -3,6 +3,7 @@ package com.lrj.platform.knowledge.controller;
 import com.lrj.platform.knowledge.lifecycle.DocumentInfo;
 import com.lrj.platform.knowledge.lifecycle.DocumentService;
 import com.lrj.platform.knowledge.lifecycle.DocumentTextExtractor;
+import com.lrj.platform.knowledge.lifecycle.DocumentParsingException;
 import com.lrj.platform.knowledge.lifecycle.PagedDocuments;
 import com.lrj.platform.knowledge.lifecycle.MultimodalIngestionText;
 import com.lrj.platform.knowledge.multimodal.MultimodalRetrievalService;
@@ -68,10 +69,17 @@ public class DocumentController {
                 }
                 return ingestImage(displayName, contentType, file.getBytes());
             }
-            String text = extractor.extract(file.getInputStream(), displayName);
+            String text;
+            // MultipartFile 的流由入口持有；解析异常和入库异常都不应留下未关闭的上传资源。
+            try (var input = file.getInputStream()) {
+                text = extractor.extract(input, displayName);
+            }
             return ResponseEntity.ok(shared
                     ? documents.upload(displayName, contentType, text, category, file.getSize(), true)
                     : documents.upload(displayName, contentType, text, category, file.getSize()));
+        } catch (DocumentParsingException e) {
+            return ResponseEntity.status(e.error().retryable() ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.BAD_REQUEST)
+                    .header("X-Error", e.getMessage()).header("X-Error-Code", e.error().code()).build();
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().header("X-Error", e.getMessage()).build();
         }

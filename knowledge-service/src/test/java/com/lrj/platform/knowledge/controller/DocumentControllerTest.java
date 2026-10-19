@@ -3,12 +3,15 @@ package com.lrj.platform.knowledge.controller;
 import com.lrj.platform.knowledge.lifecycle.DocumentInfo;
 import com.lrj.platform.knowledge.lifecycle.DocumentService;
 import com.lrj.platform.knowledge.lifecycle.DocumentTextExtractor;
+import com.lrj.platform.knowledge.lifecycle.DocumentParsingError;
+import com.lrj.platform.knowledge.lifecycle.DocumentParsingException;
 import com.lrj.platform.knowledge.multimodal.MultimodalRetrievalService;
 import com.lrj.platform.security.TenantContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
 import java.util.Base64;
@@ -22,12 +25,44 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 
 /**
  * DocumentControllerTest：验证 {@code DocumentController} 的上传接口——缺 ingest scope 时 403、具备 scope 时委托
  * {@link DocumentService}，以及图片上传在多模态关闭时返回 400、开启时经 {@link MultimodalRetrievalService} 入库为图片向量。
  */
 class DocumentControllerTest {
+
+    @Test
+    void multipartStreamIsClosedOnSuccessAndParserFailure() throws Exception {
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("ingest")));
+        for (boolean failing : new boolean[]{false, true}) {
+            var input = mock(java.io.InputStream.class);
+            var file = mock(MultipartFile.class);
+            when(file.getOriginalFilename()).thenReturn("manual.txt");
+            when(file.getContentType()).thenReturn("text/plain");
+            when(file.getInputStream()).thenReturn(input);
+            when(file.getSize()).thenReturn(5L);
+            var extractor = mock(DocumentTextExtractor.class);
+            if (failing) {
+                when(extractor.extract(input, "manual.txt")).thenThrow(
+                        new DocumentParsingException(DocumentParsingError.SOURCE_READ,
+                                new java.io.IOException("private storage url")));
+            } else {
+                when(extractor.extract(input, "manual.txt")).thenReturn("hello");
+            }
+            var service = mock(DocumentService.class);
+            var response = new DocumentController(service, extractor, multimodalProvider(null))
+                    .uploadFile(file, null, null);
+            verify(input).close();
+            assertThat(response.getStatusCode().value()).isEqualTo(failing ? 503 : 200);
+            if (failing) {
+                assertThat(response.getHeaders().getFirst("X-Error-Code")).isEqualTo(DocumentParsingError.SOURCE_READ.code());
+                assertThat(response.getHeaders().getFirst("X-Error")).doesNotContain("private storage");
+                verify(service, never()).upload(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyLong());
+            }
+        }
+    }
 
     @AfterEach
     void clearTenant() {
