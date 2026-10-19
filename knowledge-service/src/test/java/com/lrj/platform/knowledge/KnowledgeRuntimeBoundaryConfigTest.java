@@ -85,6 +85,10 @@ class KnowledgeRuntimeBoundaryConfigTest {
         assertThatThrownBy(check::afterPropertiesSet).hasMessageContaining("fail-fast=true");
         env.withProperty("app.rag.es.fail-fast", "true");
         assertThatCode(check::afterPropertiesSet).doesNotThrowAnyException();
+        env.withProperty("app.rag.parsing.execution-mode", "in-process");
+        assertThatThrownBy(check::afterPropertiesSet).hasMessageContaining("execution-mode=forked");
+        env.withProperty("app.rag.parsing.execution-mode", "forked");
+        assertThatCode(check::afterPropertiesSet).doesNotThrowAnyException();
     }
 
     private InitializingBean validator(

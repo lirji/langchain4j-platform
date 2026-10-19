@@ -97,3 +97,15 @@ Markdown 另以已有文本提取和语法分块测试作为证据，不把 MIME
 ## KDP-06-A 格式基线与 CSV 兼容修复
 
 17 个场景及度量口径详见 [KDP-06-A](KDP-06-A.md) 与 [固定报告](KDP-06-A-baseline.json)。100 行 CSV 首次复现 `NoClassDefFoundError: UnsynchronizedBufferedReader`；仅 knowledge-service 直接依赖 Commons IO 2.20.0 后通过。完整回归 630 项，0 失败/错误，9 跳过；621 项实际执行。日志 `corpus-dependency-failure.log` 和 `corpus-regression.log`。KDP-04 MySQL/S3 适配器协议未变，没有重复清空/迁移共享环境。
+
+
+## KDP-05-A 独立解析进程（2026-10-19）
+
+- `mvn -B -o -pl knowledge-service -am -DskipTests package` 成功；随后 `mvn -B -o -pl knowledge-service -am -Dparsing.test.artifact=$PWD/knowledge-service/target/knowledge-service-0.1.0-SNAPSHOT.jar test` 成功：638 项，0 失败/错误，9 跳过，实际执行 629 项。知识库 458 项、5 跳过。日志 `kdp05a/package.log`、`kdp05a/full-regression.log`。
+- 17 场景真实 fork、崩溃/卡死/堆/输出/磁盘超限、单进程饱和、关闭后拒绝、流读取错误及临时目录清理通过。最初环境允许列表测试未考虑 macOS JVM 自动补充编码键，已只允许观察到的该平台键并重新验证；原始日志 `focused-env-failure.log` 保留。
+- Spring Boot fat jar 的嵌套类路径专项通过；默认未提供 artifact 属性时该测试会跳过，本次明确提供刚打包的 artifact，未跳过此项。
+- 使用 knowledge-service/Dockerfile 构建本地 `lc4j-parser-check:kdp05a` 后，独立 Linux 容器以 `--network none --read-only --user 10001:10001 --memory 3g --cpus 2 --pids-limit 256 --tmpfs /tmp:size=512m,mode=1777` 运行四类真实文件，结果通过、临时目录清空；日志 `kdp05a/docker-build.log`、`kdp05a/container-smoke.log`。容器已移除，本地镜像留作证据，未部署业务服务。
+- 单次四样本 cold fork 约 1.17～1.70 秒；整容器 cgroup `memory.peak=415653888`，上限 3221225472 字节、256 pids、2 CPU。未测试多租户吞吐或尾延迟，不作生产性能承诺。
+- 最后分离 HTTP 503 与任务自动重试属性后，执行 `mvn -B -o -pl knowledge-service -am -Dtest=DocumentControllerTest,IngestionRecoveryTest -Dsurefire.failIfNoSpecifiedTests=false test`，10 项通过。该修改未在之前容器镜像中，不影响已验证的子进程实现。测试 helper 在完整回归后单独 javac 编译并在容器执行。
+- Compose `config --quiet` 与 `git diff --check` 通过。当前 16 个源码/配置/测试文件指纹 `d829a2130bd96287cf8f6c0e09305dc1e1a968c4d77d24e21194b57652e7c73e`，清单 `kdp05a/validated-files.json`。原始日志均位于 `knowledge-service/target/knowledge-parsing-hardening/`。
+- 解析进程并非 RCE/网络安全沙箱；源流单次阻塞受源 SDK 超时约束；目录 SPI 及整条上传/embedding 预算继续处理。真实生产环境与 OCR 不在此项验收内。

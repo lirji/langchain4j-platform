@@ -54,6 +54,17 @@ app:
       production: ${RAG_PRODUCTION:false}
       legacy-write-enabled: ${RAG_LEGACY_WRITE_ENABLED:true}
     parsing:
+      execution-mode: ${RAG_PARSING_EXECUTION_MODE:forked}
+      max-input-bytes: ${RAG_PARSING_MAX_INPUT_BYTES:52428800}
+      max-result-bytes: ${RAG_PARSING_MAX_RESULT_BYTES:16777216}
+      max-temporary-bytes: ${RAG_PARSING_MAX_TEMPORARY_BYTES:134217728}
+      max-temporary-files: ${RAG_PARSING_MAX_TEMPORARY_FILES:1000}
+      max-pages: ${RAG_PARSING_MAX_PAGES:500}
+      max-processes: ${RAG_PARSING_MAX_PROCESSES:2}
+      heap-mib: ${RAG_PARSING_HEAP_MIB:256}
+      timeout: ${RAG_PARSING_TIMEOUT:120s}
+      input-timeout: ${RAG_PARSING_INPUT_TIMEOUT:60s}
+      termination-timeout: ${RAG_PARSING_TERMINATION_TIMEOUT:5s}
       # 超限拒绝整份解析结果；该正文预算不能代替进程/页数/OCR 资源隔离。
       max-text-chars: ${RAG_PARSING_MAX_TEXT_CHARS:2000000}
     ingestion:
@@ -93,6 +104,9 @@ app:
     # Knowledge 原文权威存储。dev/test 默认 memory；拆分 ingest worker 的生产环境必须使用 s3。
     source:
       store: ${RAG_SOURCE_STORE:memory} # memory | s3
+      connect-timeout: ${RAG_SOURCE_CONNECT_TIMEOUT:2s}
+      read-timeout: ${RAG_SOURCE_READ_TIMEOUT:30s}
+      call-timeout: ${RAG_SOURCE_CALL_TIMEOUT:2m}
       endpoint: ${RAG_SOURCE_S3_ENDPOINT:}
       region: ${RAG_SOURCE_S3_REGION:us-east-1}
       bucket: ${RAG_SOURCE_S3_BUCKET:knowledge-sources}

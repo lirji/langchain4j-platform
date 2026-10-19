@@ -124,9 +124,20 @@ services:
     extends:
       file: docker-compose.yml
       service: knowledge-service
+    # 进程内预算之外的容器硬边界；这些是保护性缺省，不是已验证的生产容量承诺。
+    mem_limit: ${KNOWLEDGE_WORKER_MEMORY_LIMIT:-3g}
+    cpus: ${KNOWLEDGE_WORKER_CPUS:-2.0}
+    pids_limit: 256
+    tmpfs:
+      - /tmp:size=512m,mode=1777
     environment:
       <<: *knowledge-ingest-environment
       RAG_RUNTIME_ROLE: ingest-worker
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=25.0"
+      RAG_PARSING_EXECUTION_MODE: forked
+      RAG_PARSING_MAX_PROCESSES: ${RAG_PARSING_MAX_PROCESSES:-2}
+      RAG_PARSING_TIMEOUT: ${RAG_PARSING_TIMEOUT:-120s}
+      RAG_PARSING_HEAP_MIB: ${RAG_PARSING_HEAP_MIB:-256}
       RAG_SOURCE_S3_ACCESS_KEY: ${KNOWLEDGE_WORKER_S3_ACCESS_KEY:-knowledge-worker}
       RAG_SOURCE_S3_SECRET_KEY: ${KNOWLEDGE_WORKER_S3_SECRET_KEY:-knowledge-worker-dev-secret}
       RAG_EMBEDDING_PROVIDER: ${KNOWLEDGE_SPLIT_EMBEDDING_PROVIDER:-hash}

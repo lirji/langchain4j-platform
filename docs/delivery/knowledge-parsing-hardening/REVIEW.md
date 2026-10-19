@@ -38,3 +38,15 @@
 ## KDP-06-A 自审
 
 原生格式由 PDFBox/POI 生成，文本/错误期望独立于 parser 输出；不把失败数据标为通过。100 行 CSV 回归证明真实分支缺类，版本对齐只作用于 knowledge-service，完整模块及上游测试覆盖该新类路径。表头、定位和资源数据只作为实测基线，不声称结构正确或生产 SLA。没有真实模型、OCR、生产语料或上线操作。
+
+
+## KDP-05-A 差异自审
+
+从 `f5c64e1` 核对实际差异及调用链，主 Agent 自审，非独立审查。未发现阻塞本项交付的新缺陷。
+
+- `ForkedDocumentParser` 固定 Java executable/main/参数列表，不经 shell；环境清空，不把 token、业务环境或 JAVA_TOOL_OPTIONS 传入解析子进程。目录每任务独有，结果无跟随符号链接读取且有大小/字符上限。
+- `ParsingProcessMain` 不启动 Spring，父进程失活时自行退出；进程崩溃、无输出、非法编码/错误码 fail closed。超时后强制终止且确认退出再回收；无法确认退出不释放额度。
+- `DocumentTextExtractor` 禁止隐式 OCR 与递归附件；生产 worker/combined 禁用 in-process 配置。已绑定准备结果仍直接读取，解析升级不导致重试重算。
+- 审查发现“不可自动重试”误等同于“HTTP 输入错误”，已将进程故障的 503 分类与重试策略分开，补测试通过。
+- 保留范围：目录 SPI 尚未接入统一提取器；fork 不构成文件/网络安全沙箱，容器资源配置须在目标部署真正启用；输入读取非硬可终止。临时文件监测有短暂超调，容器 tmpfs 提供硬边界。模型/批次预算和租户公平性由 05-B 承接。
+- 远程 `f5c64e1` AgentScope CI 通过，Java 供应链仍在 `Scan aggregate dependency SBOM` 失败；没有逐项比对漏洞归因，不将相同失败阶段当作同一原因，未绕过生产发布门禁。

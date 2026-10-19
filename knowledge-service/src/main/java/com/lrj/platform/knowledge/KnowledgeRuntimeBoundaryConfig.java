@@ -54,6 +54,9 @@ public class KnowledgeRuntimeBoundaryConfig {
                         || !environment.getProperty("app.rag.es.fail-fast", Boolean.class, false))) {
                     throw new IllegalStateException("production ingestion requires ES index-enabled=true and fail-fast=true");
                 }
+                if (!"forked".equals(environment.getProperty("app.rag.parsing.execution-mode", "forked"))) {
+                    throw new IllegalStateException("production ingestion requires parsing.execution-mode=forked");
+                }
             }
             String registryStore = environment.getProperty(
                     "app.rag.registry.store", "in-memory");

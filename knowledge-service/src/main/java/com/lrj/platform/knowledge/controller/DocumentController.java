@@ -78,7 +78,7 @@ public class DocumentController {
                     ? documents.upload(displayName, contentType, text, category, file.getSize(), true)
                     : documents.upload(displayName, contentType, text, category, file.getSize()));
         } catch (DocumentParsingException e) {
-            return ResponseEntity.status(e.error().retryable() ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.BAD_REQUEST)
+            return ResponseEntity.status(e.error().serviceFailure() ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.BAD_REQUEST)
                     .header("X-Error", e.getMessage()).header("X-Error-Code", e.error().code()).build();
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().header("X-Error", e.getMessage()).build();

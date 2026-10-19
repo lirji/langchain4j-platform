@@ -16,6 +16,9 @@ public class DocumentSourceProperties {
     private String accessKey = "";
     private String secretKey = "";
     private boolean pathStyle = true;
+    private java.time.Duration connectTimeout = java.time.Duration.ofSeconds(2);
+    private java.time.Duration readTimeout = java.time.Duration.ofSeconds(30);
+    private java.time.Duration callTimeout = java.time.Duration.ofMinutes(2);
 
     public String getStore() { return store; }
     public void setStore(String store) { this.store = store; }
@@ -33,4 +36,15 @@ public class DocumentSourceProperties {
     public void setSecretKey(String secretKey) { this.secretKey = secretKey; }
     public boolean isPathStyle() { return pathStyle; }
     public void setPathStyle(boolean pathStyle) { this.pathStyle = pathStyle; }
+    /** 原文/快照共用的连接、流读取和 SDK 调用预算，防止暂存前无限等待远端。 */
+    public java.time.Duration getConnectTimeout() { return connectTimeout; }
+    public void setConnectTimeout(java.time.Duration value) { connectTimeout = positive(value); }
+    public java.time.Duration getReadTimeout() { return readTimeout; }
+    public void setReadTimeout(java.time.Duration value) { readTimeout = positive(value); }
+    public java.time.Duration getCallTimeout() { return callTimeout; }
+    public void setCallTimeout(java.time.Duration value) { callTimeout = positive(value); }
+    private static java.time.Duration positive(java.time.Duration value) {
+        if (value == null || value.isNegative() || value.isZero()) throw new IllegalArgumentException("source timeouts must be positive");
+        return value;
+    }
 }

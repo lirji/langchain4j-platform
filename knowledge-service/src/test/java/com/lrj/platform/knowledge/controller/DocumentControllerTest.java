@@ -69,6 +69,19 @@ class DocumentControllerTest {
         TenantContext.clear();
     }
 
+    @Test
+    void fatalParserProcessFailureIsServiceUnavailableWithoutAutomaticJobRetry() throws Exception {
+        TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("ingest")));
+        var extractor = mock(DocumentTextExtractor.class);
+        when(extractor.extract(any(), any())).thenThrow(new DocumentParsingException(DocumentParsingError.PROCESS_FAILED, null));
+        var file = new org.springframework.mock.web.MockMultipartFile("file", "manual.txt", "text/plain", "text".getBytes());
+        var response = new DocumentController(mock(DocumentService.class), extractor, multimodalProvider(null))
+                .uploadFile(file, null, null);
+        assertThat(response.getStatusCode().value()).isEqualTo(503);
+        assertThat(response.getHeaders().getFirst("X-Error-Code")).isEqualTo("DOCUMENT_PARSER_PROCESS_FAILED");
+        assertThat(DocumentParsingError.PROCESS_FAILED.retryable()).isFalse();
+    }
+
     /** 构造一个返回给定多模态服务（可为 null，表示未开启）的 ObjectProvider。 */
     @SuppressWarnings("unchecked")
     private static ObjectProvider<MultimodalRetrievalService> multimodalProvider(MultimodalRetrievalService mm) {

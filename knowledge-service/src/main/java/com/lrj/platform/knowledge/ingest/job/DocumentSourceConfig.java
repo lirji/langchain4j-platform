@@ -30,7 +30,9 @@ public class DocumentSourceConfig {
     @ConditionalOnProperty(prefix = "app.rag.source", name = "store", havingValue = "s3")
     S3Client documentSourceS3Client(DocumentSourceProperties properties) {
         S3ClientBuilder builder = S3Client.builder()
-                .httpClientBuilder(UrlConnectionHttpClient.builder())
+                .httpClientBuilder(UrlConnectionHttpClient.builder()
+                        .connectionTimeout(properties.getConnectTimeout()).socketTimeout(properties.getReadTimeout()))
+                .overrideConfiguration(config -> config.apiCallTimeout(properties.getCallTimeout()))
                 .region(Region.of(properties.getRegion()))
                 .serviceConfiguration(S3Configuration.builder()
                         .pathStyleAccessEnabled(properties.isPathStyle())
