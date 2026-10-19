@@ -50,3 +50,28 @@ git diff --check
 - 最终回归指纹：`f0f3e2f5e30d625f2693b30133368895a3548b8fe3112f4e3d55e752e8851fcf`。
 - 交付指纹：`adf6c1105582a44a23316405f2433a80c41abf2005558ed02390aa9ab710aa4f`。
 - 唯一源文件差异是 `DocumentTextExtractor` 两行 Javadoc，准确说明文件名日志清洗及已验证的 400/503；反向替换后指纹与回归输入一致。没有可执行代码变化，无需重复同一回归。
+
+## 格式范围核对与规划文档补充
+
+2026-10-19，基于 `d135d6c`，本轮只更新格式能力及下一阶段计划，没有修改 Java、测试、依赖、配置或运行环境；沿用上面的源码回归证据。
+
+使用 `DocumentFormatExtractionTest` 的 Surefire XML 中 `java.class.path` 启动临时 Java 探针，调用 `new AutoDetectParser().getSupportedTypes(new ParseContext())`。以下 12 个 MIME 均返回已注册：
+
+```text
+application/pdf
+application/msword
+application/vnd.openxmlformats-officedocument.wordprocessingml.document
+application/vnd.ms-excel
+application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+application/vnd.ms-powerpoint
+application/vnd.openxmlformats-officedocument.presentationml.presentation
+text/plain
+text/csv
+text/html
+application/rtf
+application/vnd.oasis.opendocument.text
+```
+
+Markdown 另以已有文本提取和语法分块测试作为证据，不把 MIME 注册探针当作真实格式解析测试。按格式的能力和未验证项集中在[文档支持范围](../../对话与检索/知识库文档支持范围.md)。下一阶段的优先级和验收是规划，尚未执行这些专项。
+
+本次文档校验：7 个 Markdown 文件，102 个本地链接及锚点有效，`git diff --check` 通过；24 个源码/配置/测试文件的指纹仍与交付指纹一致，未重复运行 Maven。

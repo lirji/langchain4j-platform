@@ -23,6 +23,7 @@
 - [项目优势、不足与业务接入评估（2026-10-14）](平台工程/项目优势不足与业务接入评估-20261014.md)：当前优势、已复现的 SQL 护栏问题、现有业务接入缺口、六个候选业务与建设顺序；含源码证据和隔离复现命令。
 
 **对话与检索**
+- [知识库文档支持范围](对话与检索/知识库文档支持范围.md)：当前格式、样本验证程度、解析边界与证据来源。
 - [知识库文档解析生产优化](对话与检索/知识库文档解析生产优化.md)：分块正确性、解析资源边界、恢复一致性、格式优化与验收；[修复进度](delivery/knowledge-parsing-hardening/PROGRESS_STATE.md)。
 - [RAG 接入指南](对话与检索/rag-guide.md)：文档/图片上传、向量库 provider、collection-per-tenant 隔离、Docker/Helm 默认百炼 `text-embedding-v4` + `qwen3-rerank`、混合检索、GraphRAG、Obsidian 导入、语义缓存。
 - [RAG 检索质量评测闭环](对话与检索/retrieval-quality-loop.md)：反馈标注、固定评测集、基线、退化门禁与失败恢复。

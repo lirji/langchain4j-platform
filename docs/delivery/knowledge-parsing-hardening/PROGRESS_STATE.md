@@ -3,7 +3,8 @@
 ## 目标与授权
 
 - 任务 `knowledge-parsing-hardening`，2026-10-19；用户要求先记录，再开始按建议修复；主要资料 PDF、Word、Markdown、Excel、CSV、技术文档。
-- 权威问题清单：[生产优化方案](../../对话与检索/知识库文档解析生产优化.md)。本轮交付 KDP-01/02/03；后续专项不算本轮已完成，不执行部署、索引重建或数据清理。
+- 权威问题清单及下一阶段排期：[生产优化方案](../../对话与检索/知识库文档解析生产优化.md)。已交付 KDP-01/02/03；后续专项不算已完成，不执行部署、索引重建或数据清理。
+- 用户最新要求：把已支持的文档类型与进度写入文件，再规划下一步、列出优先级。本次只补充文档和计划，不把 KDP-04/05/06 标成已经实施。格式事实统一见[文档支持范围](../../对话与检索/知识库文档支持范围.md)。
 - 原目录 `/Users/liruijun/personal/LLM/langchain4j-platform`；任务分支 `fix/knowledge-parsing-hardening`；起始基线 `348c13e0012fc36e40c9ad87942fb519b27311e6`，工作树干净。用户持续授权本地分批提交、正常合并并推送 `origin/main`；不强推、不绕过保护。
 - 已采用：仓库 `platform-legacy-maintenance`、`platform-diff-review`；个人 `project-documentation`、`update-progress-docs`、`task-git-delivery`。已读 `~/.codex/architecture-standards.md` 的建模、持久化、接口、并发验证、容量演进、发布治理及个人技术栈并发章节。
 - 前任务检查点独立保存在 `docs/delivery/business-assessment-20261014/CODEX_PROGRESS.md`；其报告已在 main，不续做相邻 AgentScope 任务。
@@ -13,6 +14,8 @@
 | Slice | 状态 | 验收与边界 |
 | --- | --- | --- |
 | 问题文档 | DONE | KP-01～20、理由、格式差异、优先级与后续计划 |
+| 格式范围落盘 | DONE / 文档验证通过 | 六类主格式的样本验证与 DOC/XLS/PPT/HTML/RTF/ODT 的解析器注册证据分开；源码与验证范围核对通过 |
+| 下一阶段规划 | DONE / 规划已记录 | P0/P1/P2、先后依赖、理由、第一项落地顺序与验收已写入方案；不代表后续代码已实现 |
 | KDP-01 | DONE / 验证通过 | Markdown/父子/语义回退最终编号与 ES ID 唯一；保留租户、版本、父块关联 |
 | KDP-02 | DONE / 验证通过 | CommonMark 真实标题、围栏/缩进/Setext/层级；英文句号与缩写、网址、版本、引号边界 |
 | KDP-03 | DONE / 验证通过 | 正文预算、稳定错误分类、流关闭、减少内部复制、真实格式及配置绑定测试 |
@@ -27,6 +30,7 @@
 - 24 个源码/配置/测试文件最终 SHA-256：`adf6c1105582a44a23316405f2433a80c41abf2005558ed02390aa9ab710aa4f`；完整回归后仅修正两行 Javadoc，没有可执行代码变化。
 - 原始复现、聚焦与完整日志，以及 `validated-files.json` 均在 `knowledge-service/target/knowledge-parsing-hardening/`（本地忽略目录，保留恢复证据）。没有仍在运行的 Maven 任务。
 - 运行说明已同步到 `docs/对话与检索/可靠入库接入.md` 和 `rag-guide.md`；[文档地图](../../doc-map.md) 记录同步范围。
+- 格式与规划补充仅涉及 7 个 Markdown 文件；102 个本地链接及锚点校验通过，`git diff --check` 通过，24 个已验证源文件指纹未变，因此未重复运行 Java 测试。
 
 ## 关键决定与限制
 
@@ -34,13 +38,13 @@
 - 正文字符预算默认 2,000,000；超限整份失败，不静默截断。它不是整个解析进程的内存、解压或 CPU 上限。
 - Markdown 原文保留，非标题首行不再伪装为 section；英文切句为有限规则，未宣称任意自然语言识别。
 - 旧部分成功任务仍有跨规则重新准备但跳过成功 sink 的风险。发布切分规则前须排空/隔离这些任务；KDP-04 负责彻底解决。旧覆盖数据须按新版本重新入库，本轮不操作线上数据。
-- 本地基线的远程 Java 供应链运行 [38581428740](https://github.com/lirji/langchain4j-platform/actions/runs/38581428740) 已在 `Scan aggregate dependency SBOM` 失败；本轮不整改历史依赖，不据此声称远程 CI/发布门禁通过。
+- `d135d6c` 的远程结果已确认：[Coding Agent Kit](https://github.com/lirji/langchain4j-platform/actions/runs/39186991763)、[AgentScope Cutover](https://github.com/lirji/langchain4j-platform/actions/runs/39186991761) 成功；[Java 供应链](https://github.com/lirji/langchain4j-platform/actions/runs/39186991860) 在 `artifacts / Scan aggregate dependency SBOM` 失败，后续镜像扫描/发布/证明步骤跳过。这与[旧基线](https://github.com/lirji/langchain4j-platform/actions/runs/38581428740) 的失败阶段相同，未逐项比对漏洞，不能据此断言所有原因相同；生产供应链门禁未通过。本次文档任务不升级依赖或绕过扫描。
 
 ## Git 交付与恢复
 
 - 已完成本地逻辑提交：`fa6757a`（问题文档及证据）、`ff041b7`（KDP-01/02）、`0f90bf1`（KDP-03，包含配置、测试和运行说明）。代码对应上述验证指纹，源码交付范围已固定。
-- 当前阶段：实现、回归、自审、文档及本地提交已完成；尚待本检查点提交后的任务分支推送、正常合入并推送 main。不能仅凭本文件推断远程 Git 操作已经成功。
-- 下一步：fetch 最新 main → 检查待交付提交及远程运行状态 → 正常推送任务分支并集成 main → 核对远程包含关系及 CI。
-- Git 操作实际结果写入本地 `knowledge-service/target/knowledge-parsing-hardening/DELIVERY_RESULT.json`；恢复时以 `git status`、`git log`、远程包含关系及 CI 实际状态核对，不因结果文件不存在而盲目重做已完成操作。
+- 首批源码及检查点已通过任务分支正常合入并推送 `origin/main`，交付提交 `d135d6cc0631964ec1cb2764fde0a0b3439811c4`；本次 fetch 后确认本地 main、远程 main 和任务分支均包含它。之前“待推送”的检查点已被实际 Git 事实取代，无需重复交付首批修复。
+- 当前复用任务分支 `fix/knowledge-parsing-hardening`，基于 `d135d6c` 的格式清单、优先级方案、索引与进度已校验，尚待本记录对应的文档提交和推送。旧 main 工作流均已结束，不会被新提交取消；下一步正常交付文档并核对远程包含关系及新 CI 状态。
+- 首批 Git 结果在本地 `knowledge-service/target/knowledge-parsing-hardening/DELIVERY_RESULT.json`；本次文档结果单独写 `DOCUMENTATION_DELIVERY_RESULT.json`。恢复时以 Git、CI 和结果记录共同核对，不盲目重做已完成操作。
 - 不新增 worktree；保留现有其他任务工作树和忽略文件。没有清理授权，不删除它们或测试证据。
-- 本轮交付后，下一开发优先项为 KDP-04：先设计持久化派生清单及历史任务兼容，再补部分成功/重启/参数变化用例；不直接把内存缓存当恢复方案。
+- 下一条可开始的开发准备为 **P0 / KDP-04：故障复现与持久化契约设计**，再实现跨重试结果一致性；随后 **P1：格式基线、解析隔离、结构化切分、有界并发/分批和条件触发 OCR**；最后 **P2：语义/增强成本及其他格式验收**。详细依赖和验收只在生产优化方案维护。
