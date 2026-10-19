@@ -10,6 +10,7 @@ public enum IngestionResourceError {
     MODEL_RESPONSE("INGESTION_MODEL_RESPONSE_INVALID","embedding response is incomplete or invalid",503,false),
     VECTOR_LIMIT("INGESTION_VECTOR_LIMIT","document exceeds prepared vector budget",400,false),
     BATCH_LIMIT("INGESTION_BATCH_LIMIT","document segment exceeds sink batch budget",400,false),
+    ADMISSION_CONFIG("INGESTION_ADMISSION_CONFIG","ingestion admission policy is invalid or inconsistent",503,false),
     DEADLINE("INGESTION_STAGE_DEADLINE","ingestion stage exceeded its execution budget",503,false);
     private final String code,message; private final int status; private final boolean retryable;
     IngestionResourceError(String code,String message,int status,boolean retryable) {this.code=code;this.message=message;this.status=status;this.retryable=retryable;}

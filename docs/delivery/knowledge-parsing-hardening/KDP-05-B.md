@@ -1,6 +1,6 @@
 # KDP-05-B：输入、模型批次与公平执行
 
-接续 `1b5b3b7`，用户已要求按顺序持续实施。当前设计/实现中，不代表验收已完成。
+接续 `1b5b3b7`，用户已要求按顺序持续实施。B1 已交付 `88ea47c`，B2 已通过完整与最终专项验收，交付记录见 PROGRESS_STATE。
 
 ## B1：流式接入与批次预算
 
@@ -23,7 +23,7 @@
 
 ## B1 当前实现与边界
 
-已实现流式上传、SHA-256、可重开文件 S3 上传、实例/租户暂存准入；embedding 三重批次预算与输出校验；VECTOR/ES/GRAPH 分批、每批权威租约检查、可靠图谱同步确认。同步兼容接口也应用批次预算，先完成预算检查再删除旧版本，但仍不提供可靠任务的版本原子可见性。B2 尚未实现，不能将实例上传额度称为跨副本公平。
+已实现流式上传、SHA-256、可重开文件 S3 上传、实例/租户暂存准入；embedding 三重批次预算与输出校验；VECTOR/ES/GRAPH 分批、每批权威租约检查、可靠图谱同步确认。同步兼容接口也应用批次预算，先完成预算检查再删除旧版本，但仍不提供可靠任务的版本原子可见性。跨副本任务额度由 B2 实现；实例上传暂存额度仍不等于跨副本上传限流。
 
 默认保护值：输入 50 MiB、实例暂存 4/租户 1、读取预算 60s；模型批次 32 块/8192 估算 token/1 MiB，单块 2048 token，整文 500000 token/16 MiB，向量 32 MiB，准备阶段 10m。`RAG_INGESTION_*` 与 YAML 配置对应；tokenizer 默认 gpt-4o-mini，仅是本地估计，其他提供方应按实测调整。字节批次是文本/metadata/float 逻辑载荷，不是线协议大小。
 
@@ -42,3 +42,9 @@ Servlet multipart 落盘在应用暂存准入之前，应用额度不能替代�
 线程池用零等待队列与明确拒绝恢复，线程获取本地槽位后才领取数据库任务；饱和时任务留在数据库。业务上下文按用户规范使用 TTL 2.14.5 的显式 Runnable 包装，桥接已有 TenantContext/MDC，任务身份仍从 job 重建；不启用 Java agent、不传播数据库事务。版本/API/Java 21 修正依据 [官方 release](https://github.com/alibaba/transmittable-thread-local/releases/tag/v2.14.5) 与 [TtlRunnable 文档](https://alibaba.github.io/transmittable-thread-local/apidocs/2.14.5/com/alibaba/ttl/TtlRunnable.html)。
 
 租约是逻辑执行权边界；暂停/网络分区后已发出的请求不能撤销，旧请求可能与恢复任务短暂重叠，靠版本稳定 ID 与快照保证重放。全局额度不冒充任意网络分区下的物理请求绝对上限。停机停止领取、等待有界时间、再中断等待，尚未完成的持久任务通过租约恢复。
+
+B2 首轮证据：H2/执行池 8 项通过；`python3 deploy/test-ingestion-prepared.py --evidence-dir kdp05b2 --tests IngestionAdmissionTest,IngestionWorkerLoopTest,PreparedIngestionPersistenceTest,JdbcIngestionJobStoreTest` 的真实 MySQL/S3 14 项全通过。覆盖 4 个独立 store、12 个并发线程/24 次领取、全局 4/租户 1、100 条热点积压与冷租户、额度不一致拒绝、租约过期恢复、旧 revision 防写、慢/快混合、50ms 关闭等待以及 TTL/MDC/OTel 异常恢复。该场景不构成生产压力 SLA，也不是操作系统断电实验。
+
+边界补充：B1 的 token 上限作用于最终 embedding 输入，语义切分窗口和可选 Contextual/Graph 提示另有额外模型调用，成本整合由 KDP-06-D 处理；当前阶段不宣称所有模型共享一个计费总额。B2 整任务预算在批次检查点生效，不能强杀单次 HTTP 调用。新增共享额度依赖时钟同步和新 worker 全量切换；旧二进制回退不删 V10 表，但不再提供额度保证。
+
+B2 最终验证：完整模块及上游 692 项、0 失败/错误、10 条件跳过；补充 JDBC 超时与 0 禁用拒绝后，真实 MySQL/S3 与故障专项 22 项全通过。B1/B2 均已验收，当前代码指纹及命令见 TEST_RESULT；后续按顺序实施 OCR 与模型成本治理。

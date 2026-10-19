@@ -75,4 +75,13 @@ public interface IngestionJobStoreMapper {
     List<IngestionJobStoreRow> readInitialize1();
     /** 状态统计由数据库聚合，避免拉取任务明细。 */
     List<IngestionJobStoreRow> countsByStatus();
+    /** 领取全局锁仅保持一个短事务，保证多个副本的额度统计与 CAS 原子。 */
+    IngestionAdmissionRow lockAdmission();
+    int bindAdmissionPolicy(@Param("globalLimit") int globalLimit, @Param("tenantLimit") int tenantLimit);
+    long countActive(@Param("now") java.sql.Timestamp now);
+    List<IngestionJobStoreRow> nextFair(@Param("tenantId") String tenantId, @Param("jobId") String jobId,
+                                     @Param("now") java.sql.Timestamp now, @Param("tenantLimit") int tenantLimit);
+    int advanceAdmission(@Param("sequence") long sequence);
+    int updateTenantTurn(@Param("tenantId") String tenantId, @Param("sequence") long sequence);
+    int insertTenantTurn(@Param("tenantId") String tenantId, @Param("sequence") long sequence);
 }

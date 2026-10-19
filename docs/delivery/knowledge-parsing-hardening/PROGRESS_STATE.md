@@ -17,7 +17,7 @@
 | KDP-06-A | DONE / 已交付 | `f5c64e1`：17 场景格式基线及 CSV 依赖修复；630 项、0 失败错误、9 跳过 |
 | KDP-05-A | DONE / 已交付 `813c699` | 独立解析 JVM/资源预算/截止/S3 超时/容器配置；638 项回归及 HTTP 修正后 10 项通过，真实 Boot 和 Linux 四格式通过 |
 | KDP-06-B | DONE / 已交付 `1b5b3b7` | 结构解析/格式切分/来源传递；973 项完整回归、14 项 ES 权限补测及 34 项代码保真补测通过；真实 ES/Boot/Linux 四格式通过 |
-| KDP-05-B | IN_PROGRESS / B1 验证通过待交付，B2 待实施 | B1 流式/hash/批次/失租停止：684 项、0 失败错误、10 跳过；真实 MySQL/S3 6 项通过；B2 全局与租户公平并发继续 |
+| KDP-05-B | DONE / B1 已交付 `88ea47c`，B2 验证通过待交付 | 流式/hash/批次/失租停止；B2 692 项完整回归、0 失败错误、10 跳过，最终真实 MySQL/S3 与故障专项 22 项通过 |
 | KDP-06-C | TODO | 按普通企业中英合成扫描/混合/旋转样本实施选择性 OCR，无需再问同一业务取舍 |
 | KDP-06-D | TODO | 基于质量证据的语义/上下文/存储成本调优，不虚构模型费用或改变缺省策略 |
 | KDP-06-E | TODO | DOC/XLS/PPT/HTML/RTF/ODT 真实格式专项验收 |
@@ -32,7 +32,7 @@
 
 ## Git / CI / 恢复入口
 
-- KDP-05-A `813c699` 已合入 main；Compose 重复 /tmp 修复 `176d83b` 与 KDP-06-B `1b5b3b7` 均已正常推送任务分支及 main；本地 main 仍在 813c699，正常交付时快进。后续未提交属于 KDP-05-B。
+- KDP-05-A `813c699` 已合入 main；Compose 重复 /tmp 修复 `176d83b` 与 KDP-06-B `1b5b3b7` 均已正常推送任务分支及 main；本地 main 已快进到 88ea47c，B1 已推送 main 与任务分支。后续未提交属于 KDP-05-B。
 - 176d83b Tax AI 与 AgentScope CI 均成功；Java 供应链仍未通过，先前多版本在 SBOM 扫描失败，未逐项对比漏洞，不宣称原因完全相同。1b5b3b7 AgentScope CI 成功（39192220908），供应链仍在 SBOM 扫描失败（39192220920），发布作业跳过。
 - 不新建 worktree，不删除其他任务工作树、私有环境文件或忽略证据。前任务记录在 `docs/delivery/business-assessment-20261014/CODEX_PROGRESS.md`，不续做邻近 AgentScope 任务。
-- 下一操作：B1 逻辑提交/推送后继续 B2；B1 全回归已修正同步维度守卫并通过，证据 `kdp05b-full-regression.log`、`kdp05b/validated-files.json`。无运行中 Maven。KDP-05-B 不在 B1 结束后停止。
+- 下一操作：交付 B2 后继续 KDP-06-C 选择性 OCR（普通企业中英/扫描/混合/旋转样本）；B2 无运行中 Maven，最终指纹与证据见 TEST_RESULT。88ea47c TaxAI/AgentScope CI 成功，供应链仍失败，未宣称发布门禁通过。

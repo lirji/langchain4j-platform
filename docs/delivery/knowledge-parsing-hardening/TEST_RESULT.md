@@ -130,3 +130,10 @@ Markdown 另以已有文本提取和语法分块测试作为证据，不把 MIME
 - 四种 CI Compose 组合与 `bash deploy/test-runtime-hardening-config.sh` 通过（`kdp05b-compose.log`）；`mvn -B -o -pl knowledge-service -am -DskipTests package` 成功（`kdp05b-package.log`）。没有部署业务服务或调用真实计费模型。
 - 首轮完整回归发现同步入口维度守卫回归，保留 `kdp05b-dimension-regression-failure.log`；恢复守卫后重跑 `KDP_ES_TEST_URL=http://127.0.0.1:49200 mvn -B -o -pl knowledge-service -am -Dparsing.test.artifact=$PWD/knowledge-service/target/knowledge-service-0.1.0-SNAPSHOT.jar test` 通过：**684 项、0 失败/错误、10 跳过，674 实际执行**。knowledge-service 504 项/6 跳过；真实 S3 条件测试已在独立集成命令执行通过。日志 `kdp05b-full-regression.log`。Boot artifact 是本轮打包版本，之后仅恢复同步入口维度守卫；该守卫由本轮源码测试验证，未宣称旧 jar 为最终发布制品。
 - 最终源码/配置/测试指纹 `32c2c3b37035c86661bb42ab3f0eac1d5572de179316608dbef379ec8e9e52e0`，31 文件，清单 `kdp05b/validated-files.json`。B1 验收通过；B2 跨副本公平调度继续实施，整个 KDP-05-B 尚未完成。
+
+## KDP-05-B2 公平准入与有界执行
+
+- 首轮 H2/线程池 8 项通过（`kdp05b2-fair-tests.log`）；MySQL/S3 14 项通过（`kdp05b2/mysql-s3.log`），最后 V10 启动检查、资源释放和 TTL 空 scope 兼容后再次 MySQL/S3 14 项通过（`kdp05b2-final/mysql-s3.log`）。只使用脚本分配的随机 schema/account 与已知测试对象，退出已清理。
+- `mvn -B -o -pl knowledge-service -am -DskipTests package` 成功（`kdp05b2-package.log`）；`KDP_ES_TEST_URL=http://127.0.0.1:49200 mvn -B -o -pl knowledge-service -am -Dparsing.test.artifact=$PWD/knowledge-service/target/knowledge-service-0.1.0-SNAPSHOT.jar test` 通过：**692 项，0 失败/错误，10 跳过，682 实际执行**（`kdp05b2-full-regression.log`）。knowledge-service 512 项/6 跳过；Boot/真实 ES 已启用，真实 S3 条件项另外执行。没有将源码补测内容错误算入先前 jar。
+- 后补数据库池/握手/socket/SQL 超时，15 项聚焦测试通过（`kdp05b2-db-timeout-tests.log`），包括 TCP 已连接但无数据库握手的真实 socket 故障。增加 0 禁用超时的拒绝测试后，最终 MySQL/S3 与聚焦 22 项全部通过（`kdp05b2-db-final/mysql-s3.log`）；该次包含 SQL 超时和最终配置变更，之前 692 项总数没有加上后补用例。
+- 最终源码/配置/测试指纹 `99a2a6aab4703cd3b45d68c10cc2089a1fe7e638c07fd18196e42eb0899e6df8`，18 文件，清单 `kdp05b2/validated-files.json`。B1/B2 验收通过，KDP-05-B 完成；未执行生产迁移或部署。

@@ -14,6 +14,21 @@ public class IngestionJobProperties {
     private Duration maxRetryDelay = Duration.ofMinutes(5);
     private Duration heartbeatInterval = Duration.ofSeconds(30);
 
+    private int workerConcurrency = 2, globalConcurrency = 4, tenantConcurrency = 1;
+    private Duration workerShutdownTimeout = Duration.ofSeconds(30), executionTimeout = Duration.ofMinutes(30);
+
+    /** 实例线程数与数据库共享额度分开配置；租户上限不可高于全局上限。 */
+    public int getWorkerConcurrency() { return workerConcurrency; }
+    public void setWorkerConcurrency(int value) { workerConcurrency = value; }
+    public int getGlobalConcurrency() { return globalConcurrency; }
+    public void setGlobalConcurrency(int value) { globalConcurrency = value; }
+    public int getTenantConcurrency() { return tenantConcurrency; }
+    public void setTenantConcurrency(int value) { tenantConcurrency = value; }
+    public Duration getWorkerShutdownTimeout() { return workerShutdownTimeout; }
+    public void setWorkerShutdownTimeout(Duration value) { workerShutdownTimeout = value; }
+    public Duration getExecutionTimeout() { return executionTimeout; }
+    public void setExecutionTimeout(Duration value) { executionTimeout = value; }
+
     public int getMaxRetries() { return maxRetries; }
     public void setMaxRetries(int value) { maxRetries = value; }
     public Duration getRetryDelay() { return retryDelay; }
@@ -25,7 +40,12 @@ public class IngestionJobProperties {
 
     /** 非法恢复参数启动即失败，避免毫秒忙循环或租约先于心跳到期。 */
     public void validateRecovery() {
-        if (maxRetries < 0 || maxRetries > 30 || retryDelay.isNegative() || retryDelay.isZero()
+        if (workerConcurrency < 1 || workerConcurrency > 64 || globalConcurrency < 1 || tenantConcurrency < 1
+                || tenantConcurrency > globalConcurrency || workerShutdownTimeout.isNegative()
+                || workerShutdownTimeout.compareTo(Duration.ofMinutes(1)) > 0
+                || executionTimeout.isNegative() || executionTimeout.isZero()
+                || executionTimeout.compareTo(Duration.ofDays(1)) > 0 || workerBatchSize < 1
+                || maxRetries < 0 || maxRetries > 30 || retryDelay.isNegative() || retryDelay.isZero()
                 || maxRetryDelay.compareTo(retryDelay) < 0 || maxRetryDelay.compareTo(Duration.ofDays(1)) > 0
                 || heartbeatInterval.toMillis() < 1
                 || processingTimeout.compareTo(heartbeatInterval.multipliedBy(2)) <= 0) {
@@ -113,6 +133,23 @@ public class IngestionJobProperties {
         private String password = "knowledge-ingestion-app-dev";
         private String driverClassName = "com.mysql.cj.jdbc.Driver";
         private int maximumPoolSize = 8;
+        private Duration connectionTimeout = Duration.ofSeconds(3);
+        private Duration validationTimeout = Duration.ofSeconds(1);
+        private Duration connectTimeout = Duration.ofSeconds(2);
+        private Duration socketTimeout = Duration.ofSeconds(10);
+        private Duration queryTimeout = Duration.ofSeconds(5);
+
+        /** 连接池等待、连接握手与 socket 等待分别有界，避免失联数据库挂住心跳线程。 */
+        public Duration getConnectionTimeout() { return connectionTimeout; }
+        public void setConnectionTimeout(Duration value) { connectionTimeout = value; }
+        public Duration getValidationTimeout() { return validationTimeout; }
+        public void setValidationTimeout(Duration value) { validationTimeout = value; }
+        public Duration getConnectTimeout() { return connectTimeout; }
+        public void setConnectTimeout(Duration value) { connectTimeout = value; }
+        public Duration getSocketTimeout() { return socketTimeout; }
+        public void setSocketTimeout(Duration value) { socketTimeout = value; }
+        public Duration getQueryTimeout() { return queryTimeout; }
+        public void setQueryTimeout(Duration value) { queryTimeout = value; }
 
         public String getUrl() {
             return url;

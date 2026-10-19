@@ -67,6 +67,35 @@ public class InMemoryIngestionJobStore implements IngestionJobStore {
         return saved;
     }
 
+    private final Map<String,Long> tenantTurns = new LinkedHashMap<>();
+    private long grantSequence;
+    private Integer globalLimit, tenantLimit;
+
+    /** dev/test 的同一存储实例模拟事务；不提供跨进程保证。 */
+    @Override
+    public synchronized Optional<Claim> claim(ClaimRequest request) {
+        if (globalLimit == null) { globalLimit = request.globalLimit(); tenantLimit = request.tenantLimit(); }
+        if (globalLimit != request.globalLimit() || tenantLimit != request.tenantLimit())
+            throw new IngestionResourceException(IngestionResourceError.ADMISSION_CONFIG);
+        var active = jobs.values().stream().filter(job -> job.status() == IngestionStatus.PROCESSING
+                && job.execution().leaseOwner() != null && (job.execution().leaseUntil() == null
+                || job.execution().leaseUntil().isAfter(request.now()))).toList();
+        if (active.size() >= globalLimit) return Optional.empty();
+        var selected = jobs.values().stream().filter(job -> (job.status() == IngestionStatus.RECEIVED
+                    || job.status() == IngestionStatus.PROCESSING) && job.execution().leaseOwner() == null)
+                .filter(job -> request.jobId() == null || (job.tenantId().equals(request.tenantId()) && job.jobId().equals(request.jobId())))
+                .filter(job -> active.stream().filter(a -> a.tenantId().equals(job.tenantId())).count() < tenantLimit)
+                .min(Comparator.comparingLong((IngestionJob job) -> tenantTurns.getOrDefault(job.tenantId(),0L))
+                        .thenComparing(IngestionJob::createdAt).thenComparing(IngestionJob::tenantId).thenComparing(IngestionJob::jobId));
+        if (selected.isEmpty()) return Optional.empty();
+        var original = selected.get();
+        var started = original.status() == IngestionStatus.RECEIVED ? IngestionJobStateMachine.start(original,request.now()) : original;
+        var leased = save(started.withExecution(started.execution().lease(java.util.UUID.randomUUID().toString(),
+                request.now().plus(request.leaseDuration()))), original.revision());
+        tenantTurns.put(original.tenantId(), ++grantSequence);
+        return Optional.of(new Claim(original,leased));
+    }
+
     @Override
     public synchronized List<IngestionJob> findRunnable(int limit) {
         if (limit < 1) {

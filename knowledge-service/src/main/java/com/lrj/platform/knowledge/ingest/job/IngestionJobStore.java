@@ -23,6 +23,22 @@ public interface IngestionJobStore {
      */
     IngestionJob save(IngestionJob job, long expectedRevision);
 
+    /** 事务性公平领取；仅存储实现可以在同一边界检查跨副本额度并获得租约。 */
+    Optional<Claim> claim(ClaimRequest request);
+
+    /** tenant/job 同为空表示公平领取下一条；指定任务的编程式调用仍受同一额度保护。 */
+    record ClaimRequest(String tenantId, String jobId, Instant now, java.time.Duration leaseDuration,
+                        int globalLimit, int tenantLimit) {
+        public ClaimRequest {
+            if ((tenantId == null) != (jobId == null) || now == null || leaseDuration == null
+                    || leaseDuration.isNegative() || leaseDuration.isZero() || globalLimit < 1
+                    || tenantLimit < 1 || tenantLimit > globalLimit)
+                throw new IngestionResourceException(IngestionResourceError.ADMISSION_CONFIG);
+        }
+    }
+    /** 原状态用于区分可安全准备的新任务与未绑定快照的旧 PROCESSING 任务。 */
+    record Claim(IngestionJob original, IngestionJob leased) { }
+
     /** 找出已接收或已被恢复为 PROCESSING、可由 worker 抢占的任务。 */
     List<IngestionJob> findRunnable(int limit);
 

@@ -15,6 +15,12 @@
     <description>Knowledge 限界上下文：RAG 文档、分块、检索与知识库生命周期</description>
 
     <dependencies>
+        <!-- 显式任务包装传递业务上下文；只用于独立入库池，不启用全局 agent。 -->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>transmittable-thread-local</artifactId>
+            <version>2.14.5</version>
+        </dependency>
         <dependency><groupId>com.lrj.platform</groupId><artifactId>platform-persistence</artifactId></dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

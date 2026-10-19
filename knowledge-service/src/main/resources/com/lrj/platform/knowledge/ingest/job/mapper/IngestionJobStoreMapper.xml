@@ -53,4 +53,34 @@
     <select id="countsByStatus" resultType="com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreRow">
         SELECT STATUS, COUNT(*) AS TOTAL FROM KNOWLEDGE_INGESTION_JOB  WHERE DELETED=0 GROUP BY STATUS
     </select>
+    <select id="lockAdmission" resultType="com.lrj.platform.knowledge.ingest.job.mapper.IngestionAdmissionRow">
+        SELECT GRANT_SEQUENCE, GLOBAL_LIMIT, TENANT_LIMIT FROM KNOWLEDGE_INGESTION_ADMISSION WHERE GUARD_ID=1 FOR UPDATE
+    </select>
+    <update id="bindAdmissionPolicy">
+        UPDATE KNOWLEDGE_INGESTION_ADMISSION SET GLOBAL_LIMIT=#{globalLimit}, TENANT_LIMIT=#{tenantLimit} WHERE GUARD_ID=1
+    </update>
+    <select id="countActive" resultType="long">
+        SELECT COUNT(*) FROM KNOWLEDGE_INGESTION_JOB
+        WHERE DELETED=0 AND STATUS='PROCESSING' AND LEASE_OWNER IS NOT NULL
+          AND (LEASE_UNTIL IS NULL OR LEASE_UNTIL &gt; #{now})
+    </select>
+    <select id="nextFair" resultType="com.lrj.platform.knowledge.ingest.job.mapper.IngestionJobStoreRow">
+        SELECT j.* FROM KNOWLEDGE_INGESTION_JOB j
+        LEFT JOIN KNOWLEDGE_INGESTION_TENANT_TURN t ON t.TENANT_ID=j.TENANT_ID
+        WHERE j.DELETED=0 AND j.STATUS IN ('RECEIVED','PROCESSING') AND j.LEASE_OWNER IS NULL
+        <if test="tenantId != null">AND j.TENANT_ID=#{tenantId} AND j.JOB_ID=#{jobId}</if>
+          AND (SELECT COUNT(*) FROM KNOWLEDGE_INGESTION_JOB active
+               WHERE active.DELETED=0 AND active.STATUS='PROCESSING' AND active.LEASE_OWNER IS NOT NULL
+                 AND active.TENANT_ID=j.TENANT_ID AND (active.LEASE_UNTIL IS NULL OR active.LEASE_UNTIL &gt; #{now})) &lt; #{tenantLimit}
+        ORDER BY COALESCE(t.LAST_GRANTED,0), j.CREATED_AT, j.TENANT_ID, j.JOB_ID LIMIT 1
+    </select>
+    <update id="advanceAdmission">
+        UPDATE KNOWLEDGE_INGESTION_ADMISSION SET GRANT_SEQUENCE=#{sequence} WHERE GUARD_ID=1
+    </update>
+    <update id="updateTenantTurn">
+        UPDATE KNOWLEDGE_INGESTION_TENANT_TURN SET LAST_GRANTED=#{sequence} WHERE TENANT_ID=#{tenantId}
+    </update>
+    <insert id="insertTenantTurn">
+        INSERT INTO KNOWLEDGE_INGESTION_TENANT_TURN (TENANT_ID,LAST_GRANTED) VALUES (#{tenantId},#{sequence})
+    </insert>
 </mapper>

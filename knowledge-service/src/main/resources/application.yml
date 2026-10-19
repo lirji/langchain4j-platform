@@ -105,6 +105,11 @@ app:
       retry-delay: ${RAG_INGESTION_RETRY_DELAY:5s}
       max-retry-delay: ${RAG_INGESTION_MAX_RETRY_DELAY:5m}
       reconcile-batch-size: ${RAG_INGESTION_RECONCILE_BATCH_SIZE:100}
+      worker-concurrency: ${RAG_INGESTION_WORKER_CONCURRENCY:2}
+      global-concurrency: ${RAG_INGESTION_GLOBAL_CONCURRENCY:4}
+      tenant-concurrency: ${RAG_INGESTION_TENANT_CONCURRENCY:1}
+      worker-shutdown-timeout: ${RAG_INGESTION_WORKER_SHUTDOWN_TIMEOUT:30s}
+      execution-timeout: ${RAG_INGESTION_EXECUTION_TIMEOUT:30m}
       worker-batch-size: ${RAG_INGESTION_WORKER_BATCH_SIZE:10}
       worker-poll-delay: ${RAG_INGESTION_WORKER_POLL_DELAY:1000}
       worker-initial-delay: ${RAG_INGESTION_WORKER_INITIAL_DELAY:1000}
@@ -114,6 +119,11 @@ app:
         connect-timeout: ${RAG_INGESTION_ASYNC_TASK_CONNECT_TIMEOUT:1s}
         read-timeout: ${RAG_INGESTION_ASYNC_TASK_READ_TIMEOUT:2s}
       datasource:
+        connection-timeout: ${RAG_INGESTION_DB_CONNECTION_TIMEOUT:3s}
+        validation-timeout: ${RAG_INGESTION_DB_VALIDATION_TIMEOUT:1s}
+        connect-timeout: ${RAG_INGESTION_DB_CONNECT_TIMEOUT:2s}
+        socket-timeout: ${RAG_INGESTION_DB_SOCKET_TIMEOUT:10s}
+        query-timeout: ${RAG_INGESTION_DB_QUERY_TIMEOUT:5s}
         url: ${RAG_INGESTION_DB_URL:jdbc:mysql://localhost:3306/knowledge_ingestion?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
         username: ${RAG_INGESTION_DB_USER:knowledge_ingestion_app}
         password: ${RAG_INGESTION_DB_PASSWORD:knowledge-ingestion-app-dev}

@@ -34,6 +34,7 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
     private static final TypeReference<IngestionPreparation> PREPARATION = new TypeReference<>() { };
     private final IngestionJobStoreMapper db;
     private final ObjectMapper mapper;
+    private final org.springframework.transaction.support.TransactionTemplate admission;
     private final java.util.function.BiFunction<IngestionJobStoreRow, Integer, IngestionJob> rowMapper = (rs, rowNum) -> {
         Map<String, String> rawSinks = read(rs.sinksJson, STRING_MAP);
         EnumMap<IngestionSink, IngestionSinkState> sinks = new EnumMap<>(IngestionSink.class);
@@ -76,8 +77,20 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
     };
 
     public JdbcIngestionJobStore(DataSource dataSource, ObjectMapper mapper) {
-        this.db = PlusMapperFactory.create(dataSource, IngestionJobStoreMapper.class);
+        this(dataSource, mapper, 5);
+    }
+
+    /** 业务配置控制 SQL 与领取事务超时，不能使用0关闭执行上限。 */
+    public JdbcIngestionJobStore(DataSource dataSource, ObjectMapper mapper, int queryTimeoutSeconds) {
+        if (queryTimeoutSeconds < 1) throw new IngestionResourceException(IngestionResourceError.ADMISSION_CONFIG);
+        this.db = PlusMapperFactory.create(dataSource, IngestionJobStoreMapper.class, queryTimeoutSeconds);
         this.mapper = mapper;
+        this.admission = new org.springframework.transaction.support.TransactionTemplate(
+                new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource));
+        // 领取是短事务；每次统计读取最新已提交状态，外部模型与索引 I/O 不在锁内。
+        admission.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED);
+        admission.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        admission.setTimeout(queryTimeoutSeconds);
         initialize();
     }
 
@@ -161,6 +174,33 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
         return job.withRevision(nextRevision);
     }
 
+    /** 全局守卫序列化额度检查/租约写入；CAS 冲突使整个事务回滚，不消耗公平轮次。 */
+    @Override
+    public Optional<Claim> claim(ClaimRequest request) {
+        return admission.execute(status -> {
+            var guard = db.lockAdmission();
+            if (guard == null) throw new IngestionResourceException(IngestionResourceError.ADMISSION_CONFIG);
+            if (guard.globalLimit == null && guard.tenantLimit == null) {
+                db.bindAdmissionPolicy(request.globalLimit(),request.tenantLimit());
+            } else if (!java.util.Objects.equals(guard.globalLimit,request.globalLimit())
+                    || !java.util.Objects.equals(guard.tenantLimit,request.tenantLimit())) {
+                throw new IngestionResourceException(IngestionResourceError.ADMISSION_CONFIG);
+            }
+            if (db.countActive(Timestamp.from(request.now())) >= request.globalLimit()) return Optional.empty();
+            var candidates = db.nextFair(request.tenantId(),request.jobId(),Timestamp.from(request.now()),request.tenantLimit());
+            if (candidates.isEmpty()) return Optional.empty();
+            var original = rowMapper.apply(candidates.getFirst(),0);
+            var started = original.status() == IngestionStatus.RECEIVED
+                    ? IngestionJobStateMachine.start(original,request.now()) : original;
+            var leased = save(started.withExecution(started.execution().lease(java.util.UUID.randomUUID().toString(),
+                    request.now().plus(request.leaseDuration()))), original.revision());
+            long sequence = Math.incrementExact(guard.grantSequence);
+            if (db.advanceAdmission(sequence) != 1) throw new IngestionJobConflictException("admission guard missing");
+            if (db.updateTenantTurn(original.tenantId(),sequence) == 0) db.insertTenantTurn(original.tenantId(),sequence);
+            return Optional.of(new Claim(original,leased));
+        });
+    }
+
     @Override
     public List<IngestionJob> findRunnable(int limit) {
         if (limit < 1) {
@@ -211,6 +251,8 @@ public class JdbcIngestionJobStore implements IngestionJobStore {
 
     private void initialize() {
         db.readInitialize1();
+        // 启动时检测 V10 缺失，避免服务健康而领取轮询持续失败；自动提交查询立即释放锁。
+        if (db.lockAdmission() == null) throw new IngestionResourceException(IngestionResourceError.ADMISSION_CONFIG);
     }
 
     private String writeSinks(Map<IngestionSink, IngestionSinkState> sinks) {

@@ -26,6 +26,7 @@ public class IngestionJobWorker implements AutoCloseable {
     public void setMeters(io.micrometer.core.instrument.MeterRegistry meters) { this.meters = meters; }
     private final IngestionJobProperties properties;
     private final IngestionRetryPolicy retryPolicy;
+    private volatile boolean closed;
     private final java.util.concurrent.ScheduledExecutorService heartbeats =
             java.util.concurrent.Executors.newSingleThreadScheduledExecutor(
                     Thread.ofPlatform().daemon().name("ingestion-heartbeat").factory());
@@ -74,19 +75,29 @@ public class IngestionJobWorker implements AutoCloseable {
         this.clock = Objects.requireNonNull(clock);
     }
 
-    /** 在解析前抢占整条任务；每个副作用前重新验证租约，过期 worker 不得推进下一阶段。 */
+    /** 指定任务执行也经过共享额度准入，不能成为绕过公平轮询的无限并发入口。 */
     public boolean process(String tenantId, String jobId) {
-        IngestionJob job = store.find(tenantId, jobId).orElse(null);
-        if (job == null || job.execution().leaseOwner() != null
-                || (job.status() != IngestionStatus.RECEIVED && job.status() != IngestionStatus.PROCESSING)) {
-            return false;
-        }
+        return claimAndProcess(tenantId,jobId);
+    }
+
+    /** 线程实际开始运行后才从数据库公平领取，内存队列不提前占用租约。 */
+    public boolean processNext() { return claimAndProcess(null,null); }
+
+    private boolean claimAndProcess(String tenantId,String jobId) {
+        if (closed) return false;
         try {
-            IngestionJob started = job.status() == IngestionStatus.RECEIVED
-                    ? IngestionJobStateMachine.start(job, clock.instant()) : job;
-            started = store.save(started.withExecution(started.execution().lease(
-                    java.util.UUID.randomUUID().toString(), clock.instant().plus(properties.getProcessingTimeout()))),
-                    job.revision());
+            var claimed = store.claim(new IngestionJobStore.ClaimRequest(tenantId,jobId,clock.instant(),
+                    properties.getProcessingTimeout(),properties.getGlobalConcurrency(),properties.getTenantConcurrency()));
+            if (claimed.isEmpty()) return false;
+            return processClaim(claimed.get());
+        } catch (IngestionJobConflictException ignored) { return false; }
+    }
+
+    private boolean processClaim(IngestionJobStore.Claim claim) {
+        IngestionJob job = claim.original(), started = claim.leased();
+        if (meters != null) meters.timer("knowledge.ingestion.queue.wait").record(
+                java.time.Duration.ofMillis(Math.max(0,java.time.Duration.between(job.updatedAt(),clock.instant()).toMillis())));
+        try {
             try (Lease lease = new Lease(started)) {
                 PreparedIngestionDocument prepared;
                 long preparationStarted = System.nanoTime();
@@ -148,12 +159,13 @@ public class IngestionJobWorker implements AutoCloseable {
 
     /** 容器关闭时停止续租；未完成任务租约到期后由其他实例恢复。 */
     @Override
-    public void close() { heartbeats.shutdownNow(); }
+    public void close() { closed = true; heartbeats.shutdownNow(); }
 
     /** 心跳与阶段提交共用本地锁及最新 revision，避免自己的心跳造成提交冲突。 */
     private final class Lease implements AutoCloseable {
         private IngestionJob current;
         private boolean lost;
+        private final long deadline = System.nanoTime() + properties.getExecutionTimeout().toNanos();
         private final java.util.concurrent.ScheduledFuture<?> heartbeat;
 
         Lease(IngestionJob job) {
@@ -178,7 +190,7 @@ public class IngestionJobWorker implements AutoCloseable {
         /** 每批从权威存储核对 owner/revision，不能仅依赖尚未执行的本地心跳。 */
         synchronized void checkActive() {
             IngestionJob persisted = store.find(current.tenantId(), current.jobId()).orElse(null);
-            if (lost || Thread.currentThread().isInterrupted() || persisted == null
+            if (closed || lost || Thread.currentThread().isInterrupted() || persisted == null
                     || current.execution().leaseUntil() == null
                     || !current.execution().leaseUntil().isAfter(clock.instant())
                     || persisted.revision() != current.revision()
@@ -186,6 +198,7 @@ public class IngestionJobWorker implements AutoCloseable {
                 lost = true;
                 throw new IngestionJobConflictException("ingestion lease lost");
             }
+            if (System.nanoTime() > deadline) throw new IngestionResourceException(IngestionResourceError.DEADLINE);
         }
 
         synchronized IngestionJob change(java.util.function.UnaryOperator<IngestionJob> operation) {

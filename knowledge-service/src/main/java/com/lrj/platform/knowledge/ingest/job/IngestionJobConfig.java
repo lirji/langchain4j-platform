@@ -64,12 +64,24 @@ public class IngestionJobConfig {
     @ConditionalOnProperty(prefix = "app.rag.ingestion", name = "store", havingValue = "jdbc")
     DataSource ingestionJobDataSource(IngestionJobProperties properties) {
         IngestionJobProperties.Datasource source = properties.getDatasource();
+        if (source.getConnectionTimeout().toMillis() < 250 || source.getValidationTimeout().toMillis() < 250)
+            throw new IngestionResourceException(IngestionResourceError.ADMISSION_CONFIG);
         HikariConfig config = new HikariConfig();
         config.setJdbcUrl(source.getUrl());
         config.setUsername(source.getUsername());
         config.setPassword(source.getPassword());
         config.setDriverClassName(source.getDriverClassName());
         config.setMaximumPoolSize(source.getMaximumPoolSize());
+        config.setConnectionTimeout(source.getConnectionTimeout().toMillis());
+        config.setValidationTimeout(source.getValidationTimeout().toMillis());
+        if ("com.mysql.cj.jdbc.Driver".equals(source.getDriverClassName())) {
+            int connectMillis = Math.toIntExact(source.getConnectTimeout().toMillis());
+            int socketMillis = Math.toIntExact(source.getSocketTimeout().toMillis());
+            if (connectMillis < 1 || socketMillis < 1)
+                throw new IngestionResourceException(IngestionResourceError.ADMISSION_CONFIG);
+            config.addDataSourceProperty("connectTimeout", connectMillis);
+            config.addDataSourceProperty("socketTimeout", socketMillis);
+        }
         config.setPoolName("knowledge-ingestion-job");
         return new HikariDataSource(config);
     }
@@ -78,9 +90,11 @@ public class IngestionJobConfig {
     @ConditionalOnProperty(prefix = "app.rag.ingestion", name = "store", havingValue = "jdbc")
     IngestionJobStore jdbcIngestionJobStore(
             @Qualifier("ingestionJobDataSource") DataSource dataSource,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            IngestionJobProperties properties
     ) {
-        return new JdbcIngestionJobStore(dataSource, objectMapper);
+        return new JdbcIngestionJobStore(dataSource, objectMapper,
+                Math.toIntExact(properties.getDatasource().getQueryTimeout().toSeconds()));
     }
 
     @Bean
@@ -186,7 +200,7 @@ public class IngestionJobConfig {
             IngestionJobProperties properties
     ) {
         return new IngestionWorkerLoop(
-                store, worker, reconciler, properties.getWorkerBatchSize());
+                store, worker, reconciler, properties.getWorkerBatchSize(), properties);
     }
 
     @Bean
