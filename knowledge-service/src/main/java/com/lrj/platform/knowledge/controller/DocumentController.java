@@ -69,14 +69,12 @@ public class DocumentController {
                 }
                 return ingestImage(displayName, contentType, file.getBytes());
             }
-            String text;
+            com.lrj.platform.knowledge.lifecycle.ParsedDocument parsed;
             // MultipartFile 的流由入口持有；解析异常和入库异常都不应留下未关闭的上传资源。
             try (var input = file.getInputStream()) {
-                text = extractor.extract(input, displayName);
+                parsed = extractor.parse(input, displayName);
             }
-            return ResponseEntity.ok(shared
-                    ? documents.upload(displayName, contentType, text, category, file.getSize(), true)
-                    : documents.upload(displayName, contentType, text, category, file.getSize()));
+            return ResponseEntity.ok(documents.uploadParsed(displayName, contentType, parsed, category, file.getSize(), shared));
         } catch (DocumentParsingException e) {
             return ResponseEntity.status(e.error().serviceFailure() ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.BAD_REQUEST)
                     .header("X-Error", e.getMessage()).header("X-Error-Code", e.error().code()).build();

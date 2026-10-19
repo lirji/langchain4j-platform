@@ -1,0 +1,144 @@
+{
+  "corpus": "kdp-corpus-v1",
+  "baseline": "KDP-06-A-baseline.json",
+  "measurement": "synthetic structure/marker coverage; not retrieval recall",
+  "results": [
+    {
+      "chunks": 1,
+      "format": "text",
+      "locatedChunks": 1,
+      "warnings": [],
+      "id": "txt-bilingual",
+      "rows": 0,
+      "rowsWithHeaderSameChunk": 0
+    },
+    {
+      "chunks": 375,
+      "format": "text",
+      "locatedChunks": 375,
+      "warnings": [],
+      "id": "txt-long",
+      "rows": 0,
+      "rowsWithHeaderSameChunk": 0
+    },
+    {
+      "chunks": 6,
+      "format": "markdown",
+      "locatedChunks": 6,
+      "warnings": [],
+      "id": "md-technical",
+      "rows": 0,
+      "rowsWithHeaderSameChunk": 0
+    },
+    {
+      "chunks": 81,
+      "format": "markdown",
+      "locatedChunks": 81,
+      "warnings": [],
+      "id": "md-long-sections",
+      "rows": 0,
+      "rowsWithHeaderSameChunk": 0
+    },
+    {
+      "chunks": 1,
+      "format": "csv",
+      "locatedChunks": 1,
+      "warnings": [
+        "FIRST_NONEMPTY_ROW_USED_AS_HEADER"
+      ],
+      "id": "csv-quoted",
+      "rows": 2,
+      "rowsWithHeaderSameChunk": 2
+    },
+    {
+      "chunks": 7,
+      "format": "csv",
+      "locatedChunks": 7,
+      "warnings": [
+        "FIRST_NONEMPTY_ROW_USED_AS_HEADER"
+      ],
+      "id": "csv-long-rows",
+      "rows": 100,
+      "rowsWithHeaderSameChunk": 100
+    },
+    {
+      "chunks": 2,
+      "format": "xlsx",
+      "locatedChunks": 2,
+      "warnings": [
+        "FIRST_NONEMPTY_ROW_USED_AS_HEADER",
+        "FIRST_NONEMPTY_ROW_USED_AS_HEADER"
+      ],
+      "id": "xlsx-two-sheets",
+      "rows": 2,
+      "rowsWithHeaderSameChunk": 2
+    },
+    {
+      "chunks": 7,
+      "format": "xlsx",
+      "locatedChunks": 7,
+      "warnings": [
+        "FIRST_NONEMPTY_ROW_USED_AS_HEADER"
+      ],
+      "id": "xlsx-long-rows",
+      "rows": 100,
+      "rowsWithHeaderSameChunk": 100
+    },
+    {
+      "chunks": 4,
+      "format": "docx",
+      "locatedChunks": 4,
+      "warnings": [
+        "FIRST_NONEMPTY_ROW_USED_AS_HEADER"
+      ],
+      "id": "docx-headings-table",
+      "rows": 1,
+      "rowsWithHeaderSameChunk": 1
+    },
+    {
+      "chunks": 203,
+      "format": "docx",
+      "locatedChunks": 203,
+      "warnings": [
+        "FIRST_NONEMPTY_ROW_USED_AS_HEADER"
+      ],
+      "id": "docx-long",
+      "rows": 1,
+      "rowsWithHeaderSameChunk": 1
+    },
+    {
+      "chunks": 2,
+      "format": "pdf",
+      "locatedChunks": 2,
+      "warnings": [
+        "PDF_READING_ORDER_UNVERIFIED"
+      ],
+      "id": "pdf-two-pages",
+      "rows": 0,
+      "rowsWithHeaderSameChunk": 0
+    },
+    {
+      "chunks": 30,
+      "format": "pdf",
+      "locatedChunks": 30,
+      "warnings": [
+        "PDF_READING_ORDER_UNVERIFIED"
+      ],
+      "id": "pdf-long",
+      "rows": 0,
+      "rowsWithHeaderSameChunk": 0
+    },
+    {
+      "chunks": 1,
+      "format": "pdf",
+      "locatedChunks": 1,
+      "warnings": [
+        "PDF_READING_ORDER_UNVERIFIED",
+        "PDF_PAGE_WITHOUT_TEXT"
+      ],
+      "id": "pdf-mixed-image",
+      "rows": 0,
+      "rowsWithHeaderSameChunk": 0
+    }
+  ]
+}

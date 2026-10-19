@@ -50,11 +50,11 @@ public class DefaultIngestionDocumentPreparer implements IngestionDocumentPrepar
 
     @Override
     public PreparedIngestionDocument prepare(IngestionJob job) throws Exception {
-        String text;
+        com.lrj.platform.knowledge.lifecycle.ParsedDocument parsed;
         try (InputStream input = sources.open(job.tenantId(), job.source())) {
-            text = textExtractor.extract(input, job.displayName());
+            parsed = textExtractor.parse(input, job.displayName());
         }
-
+        String text = parsed.text();
         Document document = Document.from(text);
         document.metadata()
                 .put("tenantId", job.tenantId())
@@ -66,7 +66,7 @@ public class DefaultIngestionDocumentPreparer implements IngestionDocumentPrepar
             document.metadata().put("category", job.category());
         }
 
-        List<TextSegment> segments = ChunkIndexing.sequential(splitterFactory.create().split(document));
+        List<TextSegment> segments = splitterFactory.split(parsed, document.metadata());
         segments = contextualEnricher.enrich(text, segments);
         if (chunkMetrics != null) {
             chunkMetrics.record(splitterFactory.strategy(), 1, segments);

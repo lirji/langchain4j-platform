@@ -11,5 +11,10 @@ public record EsSearchHit(
         String index,
         String version,
         String text,
-        double score) {
+        double score, java.util.Map<String,String> sourceMetadata) {
+    public EsSearchHit { sourceMetadata = sourceMetadata == null ? java.util.Map.of() : java.util.Map.copyOf(sourceMetadata); }
+    /** 兼容没有结构字段的历史索引。 */
+    public EsSearchHit(String docId, String displayName, String category, String index, String version, String text, double score) {
+        this(docId,displayName,category,index,version,text,score,java.util.Map.of());
+    }
 }

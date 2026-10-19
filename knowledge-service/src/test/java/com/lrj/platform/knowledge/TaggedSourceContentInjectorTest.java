@@ -19,6 +19,16 @@ class TaggedSourceContentInjectorTest {
 
     private final TaggedSourceContentInjector injector = new TaggedSourceContentInjector();
 
+    @Test
+    void generatedContextIsNotPresentedAsSourceEvidence() {
+        Metadata metadata = Metadata.from("file_name", "manual.pdf");
+        metadata.put(com.lrj.platform.knowledge.lifecycle.ParsedDocument.SOURCE_TEXT, "original evidence");
+        var result = (UserMessage) injector.inject(List.of(Content.from(TextSegment.from("invented prefix original evidence", metadata))),
+                UserMessage.from("question"));
+        assertThat(result.singleText()).contains("original evidence").doesNotContain("invented prefix");
+        assertThat(RetrievedSourcesContext.get().getFirst().text()).isEqualTo("original evidence");
+    }
+
     @AfterEach
     void clearThreadLocal() {
         RetrievedSourcesContext.clear();

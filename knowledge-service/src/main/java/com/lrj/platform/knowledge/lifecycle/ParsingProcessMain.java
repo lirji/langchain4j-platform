@@ -27,9 +27,15 @@ public final class ParsingProcessMain {
         properties.setExecutionMode(DocumentParsingProperties.IN_PROCESS);
         properties.setMaxTextChars(Integer.parseInt(args[1]));
         properties.setMaxPages(Integer.parseInt(args[2]));
+        properties.setMaxStructureUnits(Integer.parseInt(args[6]));
         try (var input = Files.newInputStream(directory.resolve(INPUT))) {
-            String text = new DocumentTextExtractor(properties).extract(input, "isolated-document");
-            Files.writeString(directory.resolve(OUTPUT), text, StandardCharsets.UTF_8);
+            if (Boolean.parseBoolean(args[4])) {
+                var parsed = new StructuredDocumentParser(properties).parse(directory.resolve(INPUT), args[5]);
+                ParsedDocumentCodec.write(directory.resolve(OUTPUT), parsed);
+            } else {
+                String text = new DocumentTextExtractor(properties).extract(input, "isolated-document");
+                Files.writeString(directory.resolve(OUTPUT), text, StandardCharsets.UTF_8);
+            }
         } catch (DocumentParsingException failure) {
             Files.writeString(directory.resolve(ERROR), failure.error().code(), StandardCharsets.US_ASCII);
         }

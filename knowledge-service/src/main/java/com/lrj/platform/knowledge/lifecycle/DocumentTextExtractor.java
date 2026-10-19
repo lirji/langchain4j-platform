@@ -29,6 +29,7 @@ public class DocumentTextExtractor implements AutoCloseable {
 
     private final ApacheTikaDocumentParser parser;
     private final ForkedDocumentParser isolated;
+    private final DocumentParsingProperties properties;
 
     /** 离线基线使用进程内解析及同一正文预算；生产配置构造默认 forked。 */
     public DocumentTextExtractor() {
@@ -47,6 +48,7 @@ public class DocumentTextExtractor implements AutoCloseable {
     /** 每次解析独享有界 handler，避免不同请求共享收集缓冲区或静默截断。 */
     @Autowired
     public DocumentTextExtractor(DocumentParsingProperties properties) {
+        this.properties = properties;
         int limit = properties.getMaxTextChars();
         isolated = DocumentParsingProperties.FORKED.equals(properties.getExecutionMode())
                 ? new ForkedDocumentParser(properties) : null;
@@ -63,6 +65,29 @@ public class DocumentTextExtractor implements AutoCloseable {
                         super.startElement(uri, local, name, attributes);
                     }
                 }, null, DocumentTextExtractor::parseContext, false);
+    }
+
+    /** 文件入库使用结构结果；离线模式同样按字节预算暂存，调用方负责关闭原始流。 */
+    public ParsedDocument parse(InputStream in, String filename) {
+        if (isolated != null) return isolated.parse(in, filename);
+        java.nio.file.Path temporary = null;
+        try {
+            temporary = java.nio.file.Files.createTempFile("knowledge-structured-", ".input");
+            try (var output = java.nio.file.Files.newOutputStream(temporary)) {
+                byte[] buffer = new byte[8192]; long total = 0; int count;
+                while ((count = in.read(buffer)) >= 0) {
+                    total += count;
+                    if (total > properties.getMaxInputBytes()) throw new DocumentParsingException(DocumentParsingError.INPUT_LIMIT, null);
+                    output.write(buffer, 0, count);
+                }
+            }
+            return new StructuredDocumentParser(properties).parse(temporary, filename);
+        } catch (IOException failure) {
+            throw new DocumentParsingException(DocumentParsingError.SOURCE_READ, failure);
+        } finally {
+            if (temporary != null) try { java.nio.file.Files.deleteIfExists(temporary); }
+            catch (IOException failure) { log.warn("offline parser temporary file cleanup failed"); }
+        }
     }
 
     /**

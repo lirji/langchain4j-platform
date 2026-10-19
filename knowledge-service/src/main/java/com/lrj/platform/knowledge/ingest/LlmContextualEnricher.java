@@ -32,7 +32,10 @@ public class LlmContextualEnricher implements ContextualEnricher {
                 out.add(seg);
             } else {
                 String enriched = prefix.trim() + "\n\n" + seg.text();
-                out.add(TextSegment.from(enriched, seg.metadata()));
+                var metadata = seg.metadata().copy();
+                metadata.put(com.lrj.platform.knowledge.lifecycle.ParsedDocument.SOURCE_TEXT, seg.text());
+                metadata.put(com.lrj.platform.knowledge.lifecycle.ParsedDocument.CONTEXT_PREFIX, prefix.trim());
+                out.add(TextSegment.from(enriched, metadata));
             }
         }
         return out;

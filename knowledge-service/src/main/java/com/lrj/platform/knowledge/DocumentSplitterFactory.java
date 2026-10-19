@@ -35,6 +35,22 @@ public class DocumentSplitterFactory {
     private final int semanticMaxSize;
     private final int semanticMinSize;
     private final EmbeddingModel embeddingModel;
+    private int maxChunks = 20_000;
+
+    /** 超多碎块会放大模型与索引请求，按文档限制总数而非静默丢弃。 */
+    @Value("${app.rag.chunking.max-chunks:20000}")
+    public void setMaxChunks(int value) {
+        if (value <= 0) throw new IllegalArgumentException("chunking.max-chunks must be positive");
+        maxChunks = value;
+    }
+
+    /** 文件结构先限定表格/章节/页边界；旧 JSON 文本入口仍可使用 create()。 */
+    public java.util.List<dev.langchain4j.data.segment.TextSegment> split(
+            com.lrj.platform.knowledge.lifecycle.ParsedDocument document, dev.langchain4j.data.document.Metadata metadata) {
+        TokenCountEstimator estimator = "tokens".equals(unit) ? new OpenAiTokenCountEstimator(tokenizerModel) : null;
+        return new com.lrj.platform.knowledge.lifecycle.StructuredDocumentSplitter(
+                "semantic".equals(strategy) ? semanticMaxSize : maxSize, maxChunks, create(), estimator).split(document, metadata);
+    }
 
     public DocumentSplitterFactory(
             @Value("${app.rag.chunking.strategy:recursive}") String strategy,
@@ -118,6 +134,7 @@ public class DocumentSplitterFactory {
     /** 快照记录实际生成配置，便于复现；只包含切分参数，不导出环境或凭据。 */
     public java.util.Map<String, String> processingConfiguration() {
         return java.util.Map.ofEntries(
+                java.util.Map.entry("maxChunks", Integer.toString(maxChunks)),
                 java.util.Map.entry("strategy", strategy), java.util.Map.entry("unit", unit),
                 java.util.Map.entry("maxSize", Integer.toString(maxSize)),
                 java.util.Map.entry("overlap", Integer.toString(overlap)),

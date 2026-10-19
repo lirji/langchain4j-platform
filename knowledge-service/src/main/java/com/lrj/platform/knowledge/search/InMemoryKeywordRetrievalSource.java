@@ -64,9 +64,10 @@ public class InMemoryKeywordRetrievalSource implements RetrievalSource {
                         segment.metadata().getString("displayName"),
                         segment.metadata().getString("category"),
                         segment.metadata().getString("index"),
-                        segment.text(),
+                        segment.metadata().getString("version"),
+                        com.lrj.platform.knowledge.lifecycle.SourceProvenance.sourceText(segment),
                         "keyword",
-                        shared));
+                        shared, com.lrj.platform.knowledge.lifecycle.SourceProvenance.publicMetadata(segment.metadata().toMap())));
             }
         }
         return out;

@@ -84,7 +84,9 @@ public class TaggedSourceContentInjector implements ContentInjector {
      */
     private static String sourceBody(TextSegment seg) {
         String parentText = seg.metadata().getString(ParentChildSplitter.PARENT_TEXT);
-        return (parentText != null && !parentText.isBlank()) ? parentText : seg.text();
+        String sourceText = seg.metadata().getString(com.lrj.platform.knowledge.lifecycle.ParsedDocument.SOURCE_TEXT);
+        return (parentText != null && !parentText.isBlank()) ? parentText
+                : sourceText != null ? sourceText : seg.text();
     }
 
     private static String firstNonBlank(String... candidates) {

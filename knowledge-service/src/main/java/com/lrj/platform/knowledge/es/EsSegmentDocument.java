@@ -15,7 +15,16 @@ public record EsSegmentDocument(
         String index,
         String version,
         String text,
-        long createdAt) {
+        long createdAt,
+        java.util.Map<String,String> sourceMetadata) {
+
+    public EsSegmentDocument { sourceMetadata = sourceMetadata == null ? java.util.Map.of() : java.util.Map.copyOf(sourceMetadata); }
+
+    /** 兼容旧写入方，未提供来源扩展时保持空集合。 */
+    public EsSegmentDocument(String tenantId, String docId, String displayName, String category, String index,
+                             String version, String text, long createdAt) {
+        this(tenantId,docId,displayName,category,index,version,text,createdAt,java.util.Map.of());
+    }
 
     /** ES 文档主键：tenantId/docId/version/index，版本提交前不会覆盖当前可见版本。 */
     public String id() {

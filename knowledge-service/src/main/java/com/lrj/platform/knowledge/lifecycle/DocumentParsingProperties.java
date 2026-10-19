@@ -20,6 +20,7 @@ public class DocumentParsingProperties {
     private long maxTemporaryBytes = 128L * 1024 * 1024;
     private int maxTemporaryFiles = 1000;
     private int maxPages = 500;
+    private int maxStructureUnits = 100_000;
     private int maxProcesses = 2;
     private int heapMiB = 256;
     private Duration timeout = Duration.ofSeconds(120);
@@ -58,6 +59,9 @@ public class DocumentParsingProperties {
     public void setMaxTemporaryFiles(int value) { positive(value); maxTemporaryFiles = value; }
     public int getMaxPages() { return maxPages; }
     public void setMaxPages(int value) { positive(value); maxPages = value; }
+    /** 块、行和单元格共同计数，避免空白表格耗尽结构对象内存。 */
+    public int getMaxStructureUnits() { return maxStructureUnits; }
+    public void setMaxStructureUnits(int value) { positive(value); maxStructureUnits = value; }
     /** 容量占满时拒绝，不把文档隐式堆积在无界等待队列。 */
     public int getMaxProcesses() { return maxProcesses; }
     public void setMaxProcesses(int value) { positive(value); maxProcesses = value; }

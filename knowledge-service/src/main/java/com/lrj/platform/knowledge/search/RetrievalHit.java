@@ -29,7 +29,15 @@ public record RetrievalHit(
         String version,
         String text,
         String source,
-        boolean shared) {
+        boolean shared, java.util.Map<String,String> sourceMetadata) {
+
+    public RetrievalHit { sourceMetadata = sourceMetadata == null ? java.util.Map.of() : java.util.Map.copyOf(sourceMetadata); }
+
+    /** 兼容原始检索源，扩展字段不影响身份、可见版本与融合主键。 */
+    public RetrievalHit(String id, String mergeKey, double score, String docId, String displayName, String category,
+                        String index, String version, String text, String source, boolean shared) {
+        this(id,mergeKey,score,docId,displayName,category,index,version,text,source,shared,java.util.Map.of());
+    }
 
     public RetrievalHit(
             String id,

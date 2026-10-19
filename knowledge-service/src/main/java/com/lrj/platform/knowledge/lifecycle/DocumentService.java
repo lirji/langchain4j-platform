@@ -208,6 +208,17 @@ public class DocumentService {
      */
     public DocumentInfo upload(String displayName, String contentType, String text, String category,
                                long sourceSizeBytes, boolean shared) {
+        return uploadDocument(displayName, contentType, text, category, sourceSizeBytes, shared, null);
+    }
+
+    /** 文件结构与原文一起进入切分；权限、版本和四个 sink 继续复用同一写入链路。 */
+    public DocumentInfo uploadParsed(String displayName, String contentType, ParsedDocument parsed, String category,
+                                     long sourceSizeBytes, boolean shared) {
+        return uploadDocument(displayName, contentType, parsed.text(), category, sourceSizeBytes, shared, parsed);
+    }
+
+    private DocumentInfo uploadDocument(String displayName, String contentType, String text, String category,
+                                        long sourceSizeBytes, boolean shared, ParsedDocument parsed) {
         if (displayName == null || displayName.isBlank()) {
             throw new IllegalArgumentException("displayName is required");
         }
@@ -242,8 +253,9 @@ public class DocumentService {
             doc.metadata().put("category", category);
         }
 
-        DocumentSplitter splitter = splitterFactory.create();
-        List<TextSegment> segments = ChunkIndexing.sequential(splitter.split(doc));
+        List<TextSegment> segments = parsed == null
+                ? ChunkIndexing.sequential(splitterFactory.create().split(doc))
+                : splitterFactory.split(parsed, doc.metadata());
         // Contextual Retrieval：入库前给每 chunk 加文档级上下文前缀再嵌入（默认关时为 no-op，原样返回）。
         segments = contextualEnricher.enrich(text, segments);
         // 切分质量打点（F5.3）：记录最终入库形态的尺寸分布/碎块/超大块（默认注入，null 时跳过）。

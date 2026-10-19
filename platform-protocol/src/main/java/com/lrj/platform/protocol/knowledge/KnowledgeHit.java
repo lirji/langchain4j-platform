@@ -14,7 +14,14 @@ public record KnowledgeHit(String id,
                            String text,
                            String source,
                            String visibility,
-                           String version) {
+                           String version,
+                           java.util.Map<String,String> sourceMetadata) {
+    public KnowledgeHit { sourceMetadata = sourceMetadata == null ? java.util.Map.of() : java.util.Map.copyOf(sourceMetadata); }
+    /** 加法字段：只含来源定位/质量告警，历史响应未提供时为空；不参与身份与权限判断。 */
+    public KnowledgeHit(String id, Double score, String docId, String displayName, String category, String index,
+                        String text, String source, String visibility, String version) {
+        this(id,score,docId,displayName,category,index,text,source,visibility,version,java.util.Map.of());
+    }
     /** 旧调用方可继续构造命中；未知版本不能作为发布复查通过的证据。 */
     public KnowledgeHit(String id, Double score, String docId, String displayName, String category,
                         String index, String text, String source, String visibility) {

@@ -74,7 +74,7 @@ public class KnowledgeQueryController {
                                 hit.text(),
                                 hit.source(),
                                 visibilityOf(hit),
-                                hit.version()))
+                                hit.version(), hit.sourceMetadata()))
                         .toList());
     }
 

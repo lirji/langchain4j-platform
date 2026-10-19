@@ -57,7 +57,7 @@ public class ElasticsearchSegmentIndexer implements SegmentIndexer {
                     index,
                     segment.metadata().getString("version"),
                     segment.text(),
-                    now));
+                    now, com.lrj.platform.knowledge.lifecycle.SourceProvenance.stored(segment.metadata())));
         }
         if (docs.isEmpty()) {
             return;

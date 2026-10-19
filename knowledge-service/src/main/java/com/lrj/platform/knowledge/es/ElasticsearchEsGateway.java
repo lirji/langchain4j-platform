@@ -86,6 +86,7 @@ public class ElasticsearchEsGateway implements EsGateway, AutoCloseable {
         try {
             Response resp = client.performRequest(new Request("HEAD", "/" + index));
             if (resp.getStatusLine().getStatusCode() == 200) {
+                ensureProvenanceMapping();
                 return;
             }
         } catch (ResponseException e) {
@@ -101,6 +102,7 @@ public class ElasticsearchEsGateway implements EsGateway, AutoCloseable {
         }
         properties.set("createdAt", mapper.createObjectNode().put("type", "long"));
         properties.set("text", mapper.createObjectNode().put("type", "text").put("analyzer", analyzer));
+        properties.set("sourceMetadata", mapper.createObjectNode().put("type", "object").put("enabled", false));
         ObjectNode body = mapper.createObjectNode();
         body.set("mappings", mapper.createObjectNode().set("properties", properties));
         try {
@@ -118,6 +120,26 @@ public class ElasticsearchEsGateway implements EsGateway, AutoCloseable {
                     "ES index create failed (analyzer=" + analyzer + " 插件是否已装? mapping 是否合法?): " + errBody, e));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        }
+    }
+
+    /** 已由发布流程预建字段时只读检查，写入 worker 不必永久持有 mapping 管理权限。 */
+    private void ensureProvenanceMapping() throws IOException {
+        Response response = client.performRequest(new Request("GET", "/" + index + "/_mapping"));
+        JsonNode mappings = mapper.readTree(response.getEntity().getContent());
+        boolean missing = mappings.isEmpty();
+        for (JsonNode mapping : mappings) {
+            JsonNode field = mapping.path("mappings").path("properties").path("sourceMetadata");
+            if (field.isMissingNode()) missing = true;
+            else if (!"object".equals(field.path("type").asText()) || field.path("enabled").asBoolean(true)) {
+                throw new IOException("ES sourceMetadata mapping is incompatible; provision a compatible index before ingestion");
+            }
+        }
+        if (missing) {
+            // 加法扩展不回填或重建旧文档；不存在时要求管理权限，失败由既有 fail-fast 策略处理。
+            Request request = new Request("PUT", "/" + index + "/_mapping");
+            request.setJsonEntity("{\"properties\":{\"sourceMetadata\":{\"type\":\"object\",\"enabled\":false}}}");
+            client.performRequest(request);
         }
     }
 
@@ -149,6 +171,7 @@ public class ElasticsearchEsGateway implements EsGateway, AutoCloseable {
                 src.put("version", d.version());
                 src.put("text", d.text());
                 src.put("createdAt", d.createdAt());
+                src.set("sourceMetadata", mapper.valueToTree(d.sourceMetadata()));
                 ndjson.append(mapper.writeValueAsString(src)).append('\n');
             }
             Request req = new Request("POST", "/_bulk");
@@ -226,7 +249,7 @@ public class ElasticsearchEsGateway implements EsGateway, AutoCloseable {
                 double score = hit.path("_score").asDouble(0.0);
                 out.add(new EsSearchHit(
                         text(src, "docId"), text(src, "displayName"), text(src, "category"),
-                        text(src, "index"), text(src, "version"), text(src, "text"), score));
+                        text(src, "index"), text(src, "version"), text(src, "text"), score, sourceMetadata(src)));
             }
             return out;
         } catch (ResponseException e) {
@@ -237,6 +260,16 @@ public class ElasticsearchEsGateway implements EsGateway, AutoCloseable {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    /** 历史文档无该字段时为空，只接收字符串；未知类型不传播到业务 metadata。 */
+    private static java.util.Map<String,String> sourceMetadata(JsonNode source) {
+        var values = new java.util.LinkedHashMap<String,String>();
+        var node = source.path("sourceMetadata");
+        if (node.isObject()) node.fields().forEachRemaining(entry -> {
+            if (entry.getValue().isTextual()) values.put(entry.getKey(),entry.getValue().asText());
+        });
+        return values;
     }
 
     /**

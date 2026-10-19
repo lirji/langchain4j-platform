@@ -504,7 +504,15 @@ public class KnowledgeQueryService implements AutoCloseable {
      */
     public record Hit(String id, Double score, String docId, String displayName,
                       String category, String index, String version, String text,
-                      String source, boolean shared) {
+                      String source, boolean shared, java.util.Map<String,String> sourceMetadata) {
+
+        public Hit { sourceMetadata = sourceMetadata == null ? java.util.Map.of() : java.util.Map.copyOf(sourceMetadata); }
+
+        /** 兼容旧构造器，来源字段不改变可见性与权限判断。 */
+        public Hit(String id, Double score, String docId, String displayName, String category, String index,
+                   String version, String text, String source, boolean shared) {
+            this(id,score,docId,displayName,category,index,version,text,source,shared,java.util.Map.of());
+        }
 
         public Hit(String id, Double score, String docId, String displayName,
                    String category, String index, String text, String source,

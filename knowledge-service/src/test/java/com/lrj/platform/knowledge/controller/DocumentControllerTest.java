@@ -45,11 +45,11 @@ class DocumentControllerTest {
             when(file.getSize()).thenReturn(5L);
             var extractor = mock(DocumentTextExtractor.class);
             if (failing) {
-                when(extractor.extract(input, "manual.txt")).thenThrow(
+                when(extractor.parse(input, "manual.txt")).thenThrow(
                         new DocumentParsingException(DocumentParsingError.SOURCE_READ,
                                 new java.io.IOException("private storage url")));
             } else {
-                when(extractor.extract(input, "manual.txt")).thenReturn("hello");
+                when(extractor.parse(input, "manual.txt")).thenReturn(com.lrj.platform.knowledge.lifecycle.ParsedDocument.plain("hello"));
             }
             var service = mock(DocumentService.class);
             var response = new DocumentController(service, extractor, multimodalProvider(null))
@@ -73,7 +73,7 @@ class DocumentControllerTest {
     void fatalParserProcessFailureIsServiceUnavailableWithoutAutomaticJobRetry() throws Exception {
         TenantContext.set(new TenantContext.Tenant("acme", "alice", Set.of("ingest")));
         var extractor = mock(DocumentTextExtractor.class);
-        when(extractor.extract(any(), any())).thenThrow(new DocumentParsingException(DocumentParsingError.PROCESS_FAILED, null));
+        when(extractor.parse(any(), any())).thenThrow(new DocumentParsingException(DocumentParsingError.PROCESS_FAILED, null));
         var file = new org.springframework.mock.web.MockMultipartFile("file", "manual.txt", "text/plain", "text".getBytes());
         var response = new DocumentController(mock(DocumentService.class), extractor, multimodalProvider(null))
                 .uploadFile(file, null, null);

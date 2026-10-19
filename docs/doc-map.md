@@ -1,6 +1,6 @@
 # 文档同步地图
 
-本表从本次明确涉及的区域开始维护，不代表已审查全仓库文档。同步基线：`f5c64e1`；同步日期：2026-10-19，任务 `knowledge-parsing-hardening`（KDP-05-A 解析隔离）。
+本表从本次明确涉及的区域开始维护，不代表已审查全仓库文档。同步基线：`176d83b`；同步日期：2026-10-19，任务 `knowledge-parsing-hardening`（KDP-06-B 结构解析与来源）。
 
 | 代码区域 | 权威文档 | 本次同步 |
 | --- | --- | --- |
@@ -15,3 +15,4 @@
 | 异步入库结果快照、V9、对象权限和升级 | [KDP-04 契约](delivery/knowledge-parsing-hardening/KDP-04.md)、[可靠入库接入](对话与检索/可靠入库接入.md) | 先持久化/绑定后 sink；重试复用、旧任务处置、私有对象预算与发布顺序 |
 | 主格式合成基线与 CSV 依赖兼容 | [KDP-06-A](delivery/knowledge-parsing-hardening/KDP-06-A.md)、[支持范围](对话与检索/知识库文档支持范围.md) | 17 场景、内容/结构/定位和资源测量口径；已发现的 CSV 运行时缺类修复 |
 | 文件解析进程、预算和运行边界 | [KDP-05-A](delivery/knowledge-parsing-hardening/KDP-05-A.md)、[可靠入库接入](对话与检索/可靠入库接入.md) | 真实 fork、异常/截止、Boot artifact 和受限 Linux 容器验证；未部署业务服务 |
+| 结构解析、格式切分与检索来源 | [KDP-06-B](delivery/knowledge-parsing-hardening/KDP-06-B.md)、[结构报告](delivery/knowledge-parsing-hardening/KDP-06-B-structure.json) | 格式位置、表头同块率、告警、源文/增强分离、ES/API 加法字段及验证限制 |

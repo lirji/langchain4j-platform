@@ -92,8 +92,8 @@ public class VectorRetrievalSource implements RetrievalSource {
                 segment.metadata().getString("category"),
                 segment.metadata().getString("index"),
                 segment.metadata().getString("version"),
-                segment.text(),
+                com.lrj.platform.knowledge.lifecycle.SourceProvenance.sourceText(segment),
                 "vector",
-                shared);
+                shared, com.lrj.platform.knowledge.lifecycle.SourceProvenance.publicMetadata(segment.metadata().toMap()));
     }
 }

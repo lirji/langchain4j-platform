@@ -39,6 +39,22 @@ final class ForkedDocumentParser implements AutoCloseable {
     }
 
     String extract(InputStream input) {
+        byte[] bytes = execute(input, "", false);
+        try {
+            String text = StandardCharsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes)).toString();
+            if (text.length() > limits.getMaxTextChars()) throw failure(DocumentParsingError.TEXT_LIMIT);
+            if (text.isBlank()) throw failure(DocumentParsingError.EMPTY);
+            return text;
+        } catch (java.nio.charset.CharacterCodingException ex) {
+            throw new DocumentParsingException(DocumentParsingError.PROCESS_FAILED, ex);
+        }
+    }
+
+    ParsedDocument parse(InputStream input, String filename) {
+        return ParsedDocumentCodec.read(execute(input, filename, true), limits);
+    }
+
+    private byte[] execute(InputStream input, String filename, boolean structured) {
         if (!slots.tryAcquire()) throw failure(DocumentParsingError.BUSY);
         Path directory = null;
         Process process = null;
@@ -48,7 +64,7 @@ final class ForkedDocumentParser implements AutoCloseable {
             directory = Files.createTempDirectory(limits.getTempRoot(), "parse-",
                     PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
             copyInput(input, directory.resolve(ParsingProcessMain.INPUT));
-            ProcessBuilder builder = command(directory);
+            ProcessBuilder builder = command(directory, filename, structured);
             synchronized (active) {
                 if (closed) throw failure(DocumentParsingError.PROCESS_UNAVAILABLE);
                 process = starter.start(builder);
@@ -62,7 +78,11 @@ final class ForkedDocumentParser implements AutoCloseable {
             }
             stopped = true;
             checkDirectory(directory);
-            if (process.exitValue() != 0) throw failure(DocumentParsingError.PROCESS_FAILED);
+            if (process.exitValue() != 0) {
+                // 服务主动停机杀掉的健康解析属于可恢复中断，不能永久标记成坏输入/人工处置。
+                synchronized (active) { if (closed) throw failure(DocumentParsingError.PROCESS_UNAVAILABLE); }
+                throw failure(DocumentParsingError.PROCESS_FAILED);
+            }
             Path error = directory.resolve(ParsingProcessMain.ERROR);
             if (Files.exists(error, LinkOption.NOFOLLOW_LINKS)) {
                 if (!Files.isRegularFile(error, LinkOption.NOFOLLOW_LINKS) || Files.size(error) > 128) {
@@ -80,15 +100,10 @@ final class ForkedDocumentParser implements AutoCloseable {
                 bytes = result.readNBytes(limits.getMaxResultBytes() + 1);
             }
             if (bytes.length > limits.getMaxResultBytes()) throw failure(DocumentParsingError.RESOURCE_LIMIT);
-            String text = StandardCharsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes)).toString();
-            if (text.length() > limits.getMaxTextChars()) throw failure(DocumentParsingError.TEXT_LIMIT);
-            if (text.isBlank()) throw failure(DocumentParsingError.EMPTY);
-            return text;
+            return bytes;
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             throw new DocumentParsingException(DocumentParsingError.PROCESS_UNAVAILABLE, ex);
-        } catch (java.nio.charset.CharacterCodingException ex) {
-            throw new DocumentParsingException(DocumentParsingError.PROCESS_FAILED, ex);
         } catch (IOException ex) {
             throw new DocumentParsingException(DocumentParsingError.PROCESS_UNAVAILABLE, ex);
         } finally {
@@ -123,7 +138,7 @@ final class ForkedDocumentParser implements AutoCloseable {
         }
     }
 
-    private ProcessBuilder command(Path directory) throws IOException {
+    private ProcessBuilder command(Path directory, String filename, boolean structured) throws IOException {
         var args = new ArrayList<String>();
         args.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
         args.add("-Xmx" + limits.getHeapMiB() + "m");
@@ -139,6 +154,11 @@ final class ForkedDocumentParser implements AutoCloseable {
         args.add(directory.toString()); args.add(Integer.toString(limits.getMaxTextChars()));
         args.add(Integer.toString(limits.getMaxPages()));
         args.add(Long.toString(ProcessHandle.current().pid()));
+        args.add(Boolean.toString(structured));
+        // 只传用于文本格式消歧的已知后缀，不把外部文件名带入进程参数/路径。
+        String suffix = filename == null ? "" : filename.toLowerCase(java.util.Locale.ROOT);
+        args.add(suffix.endsWith(".csv") ? ".csv" : suffix.endsWith(".md") || suffix.endsWith(".markdown") ? ".md" : "");
+        args.add(Integer.toString(limits.getMaxStructureUnits()));
         var builder = new ProcessBuilder(args).directory(directory.toFile());
         builder.environment().clear();
         builder.environment().putAll(Map.of("LANG", "C.UTF-8", "TMPDIR", directory.toString()));

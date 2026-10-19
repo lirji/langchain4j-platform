@@ -109,3 +109,16 @@ Markdown 另以已有文本提取和语法分块测试作为证据，不把 MIME
 - 最后分离 HTTP 503 与任务自动重试属性后，执行 `mvn -B -o -pl knowledge-service -am -Dtest=DocumentControllerTest,IngestionRecoveryTest -Dsurefire.failIfNoSpecifiedTests=false test`，10 项通过。该修改未在之前容器镜像中，不影响已验证的子进程实现。测试 helper 在完整回归后单独 javac 编译并在容器执行。
 - Compose `config --quiet` 与 `git diff --check` 通过。当前 16 个源码/配置/测试文件指纹 `d829a2130bd96287cf8f6c0e09305dc1e1a968c4d77d24e21194b57652e7c73e`，清单 `kdp05a/validated-files.json`。原始日志均位于 `knowledge-service/target/knowledge-parsing-hardening/`。
 - 解析进程并非 RCE/网络安全沙箱；源流单次阻塞受源 SDK 超时约束；目录 SPI 及整条上传/embedding 预算继续处理。真实生产环境与 OCR 不在此项验收内。
+
+
+## KDP-06-B 结构化解析与检索来源
+
+- 初次专项发现无批注 DOCX 的 POI 返回 null，和宽行盲切打断字段标识；修复后 `kdp06b-focused.log` 30 项、`kdp06b-pipeline.log` 62 项通过。初始失败保留 `kdp06b-initial.log`。容器探针转换结构 API 时的编译失败保留 `kdp06b-es.log`，已修正，不能将其算成功测试。
+- `mvn -B -o -pl knowledge-service -am -DskipTests package` 成功（`kdp06b-package.log`）；随后 `KDP_ES_TEST_URL=http://127.0.0.1:49200 mvn -B -o -pl knowledge-service,conversation-service,agent-service -am -Dparsing.test.artifact=$PWD/knowledge-service/target/knowledge-service-0.1.0-SNAPSHOT.jar test` 通过：**973 项，0 失败/错误、16 跳过，957 实际执行**。knowledge-service 490 项/5 跳过，conversation 172/7 跳过，agent 131/0 跳过。真实 Boot artifact 与 ES 专项在此命令明确开启；日志 `kdp06b-full-regression.log`。
+- 全量后仅优化 ES 已预建来源字段时的权限要求；`KDP_ES_TEST_URL=http://127.0.0.1:49200 mvn -B -o -pl knowledge-service -am -Dtest=StructuredProvenanceEsTest,ElasticsearchEsGatewayTest,ElasticsearchSegmentIndexerTest -Dsurefire.failIfNoSpecifiedTests=false test` 14 项通过，`kdp06b-es-mapping-guard.log`。随机索引 `kdp06b-test-*` 只由测试创建/删除，退出后核查无残留。未操作业务索引。
+- `lc4j-parser-check:kdp06b` 的 Linux smoke：四类结构结果通过，禁网、非 root、只读、3g 内存、2 CPU、256 pids、512m tmpfs；单次约 1.16～1.39 秒，整容器峰值 340484096 字节。日志 `kdp06b/docker-build.log`、`kdp06b/container-smoke.log`。镜像早于仅 ES 权限检查的最后修改，解析实现一致，不宣称该镜像是可直接发布的最终制品。
+- 语料对比见 [结构报告](KDP-06-B-structure.json)：100 行 CSV/XLSX 均 100 行表头同块，原基线 16 行；13 个正常样本的所有块有来源 metadata。无在线检索 Recall、计费模型或 OCR 质量结论。
+- 当前 40 个源码/配置/测试文件 SHA-256 指纹 `03fab3ed9656ad370f91fb12fb04ab85a9164cd90d87ee89a10a3f8976b6695a`，清单 `kdp06b/validated-files.json`；文档变动不改变可执行验证对象。
+- Compose 组合重复 `/tmp` 已另作 `176d83b` 修复提交；四种 CI 组合静态检查与 runtime hardening gate 通过，远程 CI 待确认。源码专项与远程供应链门禁分别报告。
+
+- 最终自审发现超长代码若交给通用 recursive 兜底会规整原文空白，已专用分段并测试 chars/tokens 下逐字符还原。`kdp06b-final-focused.log` 34 项通过，含结构语料、同步/异步、真实 ES、引用原文；最终指纹已更新。973 项是之前全回归数，未把后补 34 项简单叠加为不重复用例数。

@@ -82,7 +82,8 @@ public class EsKeywordRetrievalSource implements RetrievalSource {
                     : h.docId() + "#v" + h.version() + "#" + h.index();
             String id = "es:" + mergeKey;
             out.add(new RetrievalHit(id, mergeKey, score, h.docId(), h.displayName(),
-                    h.category(), h.index(), h.version(), h.text(), "es", shared));
+                    h.category(), h.index(), h.version(), h.sourceMetadata().getOrDefault(com.lrj.platform.knowledge.lifecycle.ParsedDocument.SOURCE_TEXT, h.text()), "es", shared,
+                    com.lrj.platform.knowledge.lifecycle.SourceProvenance.publicMetadata(h.sourceMetadata())));
         }
     }
 }

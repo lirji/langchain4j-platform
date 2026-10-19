@@ -53,6 +53,8 @@ app:
       role: ${RAG_RUNTIME_ROLE:combined}
       production: ${RAG_PRODUCTION:false}
       legacy-write-enabled: ${RAG_LEGACY_WRITE_ENABLED:true}
+    chunking:
+      max-chunks: ${RAG_CHUNKING_MAX_CHUNKS:20000}
     parsing:
       execution-mode: ${RAG_PARSING_EXECUTION_MODE:forked}
       max-input-bytes: ${RAG_PARSING_MAX_INPUT_BYTES:52428800}
@@ -60,6 +62,7 @@ app:
       max-temporary-bytes: ${RAG_PARSING_MAX_TEMPORARY_BYTES:134217728}
       max-temporary-files: ${RAG_PARSING_MAX_TEMPORARY_FILES:1000}
       max-pages: ${RAG_PARSING_MAX_PAGES:500}
+      max-structure-units: ${RAG_PARSING_MAX_STRUCTURE_UNITS:100000}
       max-processes: ${RAG_PARSING_MAX_PROCESSES:2}
       heap-mib: ${RAG_PARSING_HEAP_MIB:256}
       timeout: ${RAG_PARSING_TIMEOUT:120s}
@@ -71,7 +74,7 @@ app:
       prepared:
         # 写索引前持久化最终文本与向量；改变生成行为时提升版本，历史快照仍继续复用。
         max-bytes: ${RAG_INGESTION_PREPARED_MAX_BYTES:67108864}
-        processing-version: ${RAG_INGESTION_PROCESSING_VERSION:knowledge-prepared-v1}
+        processing-version: ${RAG_INGESTION_PROCESSING_VERSION:knowledge-structured-v2}
       version-gc:
         enabled: ${RAG_INGESTION_VERSION_GC_ENABLED:false}
         retain-versions: ${RAG_INGESTION_VERSION_GC_RETAIN_VERSIONS:2}

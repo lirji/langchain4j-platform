@@ -92,7 +92,7 @@ class ForkedDocumentParserTest {
         var entered = new CountDownLatch(1); var process = new AtomicReference<Process>();
         try (var parser = probe(properties, "stall", process, entered);
              var callers = Executors.newVirtualThreadPerTaskExecutor()) {
-            var first = callers.submit(() -> assertError(() -> parser.extract(input()), DocumentParsingError.PROCESS_FAILED));
+            var first = callers.submit(() -> assertError(() -> parser.extract(input()), DocumentParsingError.PROCESS_UNAVAILABLE));
             assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
             assertError(() -> parser.extract(input()), DocumentParsingError.BUSY);
             parser.close();
@@ -151,7 +151,7 @@ class ForkedDocumentParserTest {
     public static class ProbeProcess {
         public static void main(String[] args) throws Exception {
             Path directory = Path.of(args[0]);
-            switch (args[4]) {
+            switch (args[args.length - 1]) {
                 case "stall" -> { while (true) { try { Thread.sleep(1000); } catch (InterruptedException ignored) { } } }
                 case "crash" -> System.exit(17);
                 case "heap" -> Files.write(directory.resolve("oversized"), new byte[1_000_000_000]);

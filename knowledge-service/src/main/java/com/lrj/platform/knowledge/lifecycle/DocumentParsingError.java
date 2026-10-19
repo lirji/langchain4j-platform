@@ -8,6 +8,7 @@ public enum DocumentParsingError {
     INVALID("DOCUMENT_PARSE_FAILED", "document could not be parsed", false),
     INPUT_LIMIT("DOCUMENT_INPUT_LIMIT", "document input exceeds the configured byte limit", false),
     PAGE_LIMIT("DOCUMENT_PAGE_LIMIT", "document exceeds the configured page limit", false),
+    STRUCTURE_LIMIT("DOCUMENT_STRUCTURE_LIMIT", "document structure exceeds the configured limit", false),
     RESOURCE_LIMIT("DOCUMENT_RESOURCE_LIMIT", "document parsing exceeded its resource budget", false),
     TIMEOUT("DOCUMENT_PARSE_TIMEOUT", "document parsing exceeded its execution deadline", false),
     PROCESS_FAILED("DOCUMENT_PARSER_PROCESS_FAILED", "isolated document parser failed", false),

@@ -20,7 +20,7 @@ public final class ParsingContainerProbe {
             for (var sample : cases.entrySet()) {
                 long start = System.nanoTime();
                 try (var input = Files.newInputStream(Path.of(args[0]).resolve(sample.getKey()))) {
-                    if (!extractor.extract(input, sample.getKey()).contains(sample.getValue())) {
+                    if (!extractor.parse(input, sample.getKey()).text().contains(sample.getValue())) {
                         throw new AssertionError("required fixture marker is missing");
                     }
                 }

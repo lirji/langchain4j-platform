@@ -26,7 +26,9 @@ class ParsingArtifactTest {
             System.setProperty("java.class.path", Path.of(artifact).toAbsolutePath().toString());
             for (String id : new String[]{"pdf-two-pages", "docx-headings-table", "xlsx-long-rows", "csv-long-rows"}) {
                 var sample = samples.stream().filter(value -> value.id().equals(id)).findFirst().orElseThrow();
-                String text = extractor.extract(new ByteArrayInputStream(sample.bytes()), sample.filename());
+                var parsed = extractor.parse(new ByteArrayInputStream(sample.bytes()), sample.filename());
+                String text = parsed.text();
+                assertThat(parsed.blocks()).allSatisfy(block -> assertThat(block.location().metadata()).isNotEmpty());
                 assertThat(sample.expected()).allMatch(text::contains);
             }
         } finally { System.setProperty("java.class.path", previous); }
