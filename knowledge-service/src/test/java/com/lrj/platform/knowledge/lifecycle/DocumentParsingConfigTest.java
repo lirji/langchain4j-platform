@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.context.ConfigurationPropertiesAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
@@ -31,5 +32,32 @@ class DocumentParsingConfigTest {
     @Test
     void invalidLimitFailsConfigurationBinding() {
         context.withPropertyValues("app.rag.parsing.max-text-chars=-1").run(app -> assertThat(app).hasFailed());
+    }
+
+    /** 使用真实 application.yml 验证默认开关，防止 Java 默认值与运行配置相互覆盖。 */
+    @Test
+    void applicationDefaultsEnableOcrAndPassItToParserProcess() {
+        context.withInitializer(new ConfigDataApplicationContextInitializer())
+                .withPropertyValues("spring.cloud.config.enabled=false")
+                .run(app -> {
+                    assertThat(app).hasNotFailed();
+                    var policy = app.getBean(DocumentParsingProperties.class).getOcr();
+                    assertThat(policy.isEnabled()).isTrue();
+                    assertThat(policy.snapshot().enabled()).isTrue();
+                    assertThat(policy.getLanguages()).isEqualTo("chi_sim+eng");
+                });
+    }
+
+    /** 部署仍可显式关闭 OCR，且子进程收到同一关闭策略。 */
+    @Test
+    void explicitFalseDisablesOcrInParentAndChildSettings() {
+        context.withInitializer(new ConfigDataApplicationContextInitializer())
+                .withPropertyValues("spring.cloud.config.enabled=false", "RAG_PARSING_OCR_ENABLED=false")
+                .run(app -> {
+                    assertThat(app).hasNotFailed();
+                    var policy = app.getBean(DocumentParsingProperties.class).getOcr();
+                    assertThat(policy.isEnabled()).isFalse();
+                    assertThat(policy.snapshot().enabled()).isFalse();
+                });
     }
 }

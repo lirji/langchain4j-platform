@@ -58,8 +58,11 @@ services:
     extends:
       file: docker-compose.yml
       service: knowledge-service
+    build:
+      target: slim
     environment:
       RAG_RUNTIME_ROLE: query
+      RAG_PARSING_OCR_ENABLED: "false"
       # 使用 split 专属变量，避免基础 deploy/.env 中不完整的 openai 配置污染可选拓扑。
       # 真实语义环境应成组覆盖 KNOWLEDGE_SPLIT_EMBEDDING_*。
       RAG_EMBEDDING_PROVIDER: ${KNOWLEDGE_SPLIT_EMBEDDING_PROVIDER:-hash}
@@ -90,8 +93,11 @@ services:
     extends:
       file: docker-compose.yml
       service: knowledge-service
+    build:
+      target: slim
     environment: &knowledge-ingest-environment
       RAG_RUNTIME_ROLE: ingest-api
+      RAG_PARSING_OCR_ENABLED: "false"
       KNOWLEDGE_OPERATIONS_QUERY_URL: http://knowledge-query:8084
       RAG_INGESTION_STORE: jdbc
       RAG_INGESTION_DB_URL: jdbc:mysql://mysql:3306/knowledge_ingestion?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
@@ -140,7 +146,7 @@ services:
       RAG_RUNTIME_ROLE: ingest-worker
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=25.0"
       RAG_PARSING_EXECUTION_MODE: forked
-      RAG_PARSING_OCR_ENABLED: ${RAG_PARSING_OCR_ENABLED:-false}
+      RAG_PARSING_OCR_ENABLED: ${RAG_PARSING_OCR_ENABLED:-true}
       # 可靠任务统一持有重试权，禁止上下文增强的 SDK 透明重试放大逻辑调用额度。
       GATEWAY_MAX_RETRIES: "0"
       RAG_PARSING_MAX_PROCESSES: ${RAG_PARSING_MAX_PROCESSES:-2}

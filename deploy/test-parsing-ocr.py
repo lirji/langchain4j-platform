@@ -9,15 +9,17 @@ import xml.etree.ElementTree as ET
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--skip-build", action="store_true")
+    parser.add_argument("--image", default="lc4j-parser-check:kdp06c", help="本次验证使用的本地镜像标签")
+    parser.add_argument("--evidence-dir", type=Path, help="独立证据目录，避免覆盖其他交付的验收结果")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     target = root / "knowledge-service/target"
-    evidence = target / "knowledge-parsing-hardening/kdp06c"
+    evidence = args.evidence_dir.resolve() if args.evidence_dir else target / "knowledge-parsing-hardening/kdp06c"
     evidence.mkdir(parents=True, exist_ok=True)
     report = ET.parse(target / "surefire-reports/TEST-com.lrj.platform.knowledge.lifecycle.TesseractOcrEngineTest.xml")
     classpath = report.find("./properties/property[@name='java.class.path']").get("value")
     fixtures = evidence / "fixtures"
-    image = "lc4j-parser-check:kdp06c"
+    image = args.image
 
     def run(command, log, timeout):
         with (evidence / log).open("w") as output:
@@ -26,7 +28,8 @@ def main():
 
     run(["java", "-cp", classpath, "com.lrj.platform.knowledge.lifecycle.OcrCorpusFixtures", str(fixtures)], "fixtures.log", 60)
     if not args.skip_build:
-        run(["docker", "build", "--target", "ocr", "-t", image, "knowledge-service"], "docker-build.log", 900)
+        # 不指定 target，验证标准默认镜像本身具备 OCR，而非只验证专用测试镜像。
+        run(["docker", "build", "-t", image, "knowledge-service"], "docker-build.log", 900)
     restrictions = ["docker", "run", "--rm", "--network", "none", "--read-only", "--user", "10001:10001",
                     "--memory", "3g", "--cpus", "2", "--pids-limit", "256", "--tmpfs", "/tmp:size=512m,mode=1777"]
     run(restrictions + ["--entrypoint", "/usr/bin/tesseract", image, "--version"], "engine-version.log", 30)

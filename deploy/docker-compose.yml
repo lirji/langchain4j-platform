@@ -406,14 +406,24 @@ services:
 
   knowledge-service:
     <<: *app-security
+    # 默认 OCR 沿用解析 worker 的容器预算；可按负载显式调整，不作为生产容量承诺。
+    mem_limit: ${KNOWLEDGE_MEMORY_LIMIT:-3g}
+    cpus: ${KNOWLEDGE_CPUS:-2.0}
+    pids_limit: 256
     # combined 同时容纳受限上传和解析私有目录；split 各角色可覆盖。
     tmpfs:
       - /tmp:size=768m,mode=1777
     build:
       context: ../knowledge-service
+      target: runtime
     extra_hosts:
       - "host.docker.internal:host-gateway"   # 仅切回可选 Ollama embedding provider 时使用
     environment:
+      # combined 默认带本地 OCR 引擎；只识别 PDF 候选页，可显式 false 回退。
+      RAG_PARSING_OCR_ENABLED: ${RAG_PARSING_OCR_ENABLED:-true}
+      RAG_PARSING_OCR_LANGUAGES: ${RAG_PARSING_OCR_LANGUAGES:-chi_sim+eng}
+      # 为子 JVM、PDF 渲染和本地引擎预留堆外空间。
+      JAVA_TOOL_OPTIONS: ${KNOWLEDGE_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=25.0}
       # 跨语言共用预留模式；所有 Java 实例必须一致的 Redis、前缀、日时区。
       APP_TOKEN_BUDGET_RESERVATIONS_ENABLED: ${TOKEN_BUDGET_RESERVATIONS_ENABLED:-false}
       APP_TOKEN_BUDGET_STORE: ${TOKEN_BUDGET_STORE:-redis}

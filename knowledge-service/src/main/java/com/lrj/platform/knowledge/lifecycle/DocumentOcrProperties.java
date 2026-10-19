@@ -3,9 +3,9 @@ package com.lrj.platform.knowledge.lifecycle;
 import java.nio.file.Path;
 import java.time.Duration;
 
-/** 可选本地 OCR 的独立成本/质量预算；仅在选中页面时执行引擎，不自动下载语言包。 */
+/** 默认启用的本地 OCR 独立成本/质量预算；仅处理候选页，不自动下载语言包，可显式关闭。 */
 public final class DocumentOcrProperties {
-    private boolean enabled;
+    private boolean enabled = true;
     private String executable = "/usr/bin/tesseract", languages = "chi_sim+eng";
     private int dpi = 200, maxPages = 50, minNativeChars = 40, maxOutputBytes = 2 * 1024 * 1024;
     private long maxPagePixels = 12_000_000, maxTotalPixels = 120_000_000;

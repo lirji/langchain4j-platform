@@ -8,7 +8,8 @@ import java.util.List;
 public final class ParsingOcrContainerProbe {
     private ParsingOcrContainerProbe() { }
     public static void main(String[] args) throws Exception {
-        var properties=new DocumentParsingProperties();properties.getOcr().setEnabled(true);
+        var properties=new DocumentParsingProperties();
+        require(properties.getOcr().isEnabled(),"OCR must be enabled by default","configuration");
         var reports=new java.util.ArrayList<java.util.Map<String,Object>>();
         try(var extractor=new DocumentTextExtractor(properties)) {
             for(String name:List.of("native-only.pdf","scan-en.pdf","scan-zh.pdf","mixed-native-scan.pdf","scan-rotated.pdf","mixed-one-page.pdf","native-blank.pdf")) {

@@ -36,7 +36,9 @@ class StructuredDocumentParsingTest {
                         ex -> assertThat(ex.error().code()).isEqualTo(sample.expectedError()));
                 return;
             }
-            var parsed = parse(sample.bytes(),sample.filename());
+            // 该混合页语料的预期是“关闭 OCR 后报告缺文”，真实 OCR 内容另由容器语料验证。
+            var parsed = sample.id().equals("pdf-mixed-image")
+                    ? parseWithoutOcr(sample.bytes(),sample.filename()) : parse(sample.bytes(),sample.filename());
             assertThat(sample.expected()).allSatisfy(marker -> assertThat(parsed.text()).contains(marker));
             var chunks = factory("chars").split(parsed,IDENTITY);
             assertThat(chunks).allSatisfy(chunk -> {
@@ -67,9 +69,9 @@ class StructuredDocumentParsingTest {
     }
 
     @Test
-    void mixedPdfHasExactPageAndVisibleMissingTextWarning() throws Exception {
+    void mixedPdfWithOcrDisabledHasExactPageAndVisibleMissingTextWarning() throws Exception {
         var sample=DocumentParsingCorpus.samples().stream().filter(s -> s.id().equals("pdf-mixed-image")).findFirst().orElseThrow();
-        var parsed=parse(sample.bytes(),sample.filename());
+        var parsed=parseWithoutOcr(sample.bytes(),sample.filename());
         assertThat(parsed.blocks()).extracting(block -> block.location().page()).containsExactly(1,2);
         assertThat(parsed.warnings()).anySatisfy(w -> {
             assertThat(w.code()).isEqualTo(ParsingWarnings.PDF_NO_TEXT); assertThat(w.location().page()).isEqualTo(2);
@@ -177,6 +179,15 @@ class StructuredDocumentParsingTest {
         }
     }
     private ParsedDocument parse(byte[] bytes,String filename) { return new DocumentTextExtractor().parse(new ByteArrayInputStream(bytes),filename); }
+    /** 显式关闭是受支持的部署回退；保留无 OCR 时缺文告警和来源传播的验收。 */
+    private ParsedDocument parseWithoutOcr(byte[] bytes,String filename) {
+        var properties = new DocumentParsingProperties();
+        properties.setExecutionMode(DocumentParsingProperties.IN_PROCESS);
+        properties.getOcr().setEnabled(false);
+        try (var extractor = new DocumentTextExtractor(properties)) {
+            return extractor.parse(new ByteArrayInputStream(bytes),filename);
+        }
+    }
     static DocumentSplitterFactory factory(String unit) {
         return new DocumentSplitterFactory("recursive",unit,300,50,0,"gpt-4o-mini","recursive",1200,0,1,95,1000,0,null);
     }

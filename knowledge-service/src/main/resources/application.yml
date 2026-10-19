@@ -60,7 +60,8 @@ app:
         interpolate-percentile: ${RAG_CHUNKING_SEMANTIC_INTERPOLATE_PERCENTILE:false}
     parsing:
       ocr:
-        enabled: ${RAG_PARSING_OCR_ENABLED:false}
+        # 标准镜像包含本地引擎与语言包；只对候选 PDF 页识别，显式 false 可关闭。
+        enabled: ${RAG_PARSING_OCR_ENABLED:true}
         executable: ${RAG_PARSING_OCR_EXECUTABLE:/usr/bin/tesseract}
         languages: ${RAG_PARSING_OCR_LANGUAGES:chi_sim+eng}
         dpi: ${RAG_PARSING_OCR_DPI:200}
