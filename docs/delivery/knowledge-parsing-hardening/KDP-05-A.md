@@ -31,3 +31,10 @@
 - 旧目录 SPI 加载路径仍需统一接入；本项不把该路径、上传/embedding 全链路内存预算或租户公平调度宣称完成，继续由 KDP-06-B/05-B 处理。
 
 原始证据在 `knowledge-service/target/knowledge-parsing-hardening/kdp05a/`，汇总见 [TEST_RESULT](TEST_RESULT.md)。
+
+
+## Compose 合并修正
+
+`813c699` 的远程 AgentScope CI 在 Validate Compose 失败：主 Compose 继承的 `/tmp` 与 worker 的 512m tmpfs 被合并成两个挂载。单独校验 split 文件未覆盖这个组合。将 worker 的 tmpfs 声明改为仓库已有的 `!override` 规则，明确替换继承项。
+
+修正后按 CI 的 base/base+readonly/base+shadow/base+split 四种组合 `config --quiet` 均通过；解析后的 worker 仅有 `/tmp:size=512m,mode=1777` 一个挂载，保留 3 GiB、2 CPU、256 pids。`bash deploy/test-runtime-hardening-config.sh` 通过。原始失败与组合验证记录在本地 `kdp05a/remote-ci-failed.log`、`kdp05a/compose-combinations.log`，未启动业务服务。

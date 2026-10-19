@@ -128,7 +128,7 @@ services:
     mem_limit: ${KNOWLEDGE_WORKER_MEMORY_LIMIT:-3g}
     cpus: ${KNOWLEDGE_WORKER_CPUS:-2.0}
     pids_limit: 256
-    tmpfs:
+    tmpfs: !override
       - /tmp:size=512m,mode=1777
     environment:
       <<: *knowledge-ingest-environment
