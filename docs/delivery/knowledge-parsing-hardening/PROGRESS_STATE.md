@@ -20,25 +20,24 @@
 | KDP-05-B | DONE / B1 已交付 `88ea47c`，B2 已交付 `54f8b1f` | 流式/hash/批次/失租停止；B2 692 项完整回归、0 失败错误、10 跳过，最终真实 MySQL/S3 与故障专项 22 项通过 |
 | KDP-06-C | DONE / 已交付 `19e026c` | 703 项回归、43 项聚焦及后续 11/9 项通过；真实 Linux 7 场景、资源与清理通过 |
 | KDP-06-D | DONE / 已交付 `7573dd0` | 715 项完整回归、46 项聚焦与 8 项补测通过；跨阶段预算/邻近上下文/载荷度量，候选策略缺省不变 |
-| KDP-06-D2 | DONE / 待 Git 交付 | 任务前缀/隐式维度探测预算追补；44 项聚焦与 14 项兼容通过，8 文件指纹见 TEST_RESULT |
-| KDP-06-E | IN_PROGRESS / 格式专项 | DOC/XLS/PPT/HTML/RTF/ODT 真实格式专项验收 |
+| KDP-06-D2 | DONE / 已交付 `6919c60` | 任务前缀/隐式维度探测预算追补；44 项聚焦与 14 项兼容通过，8 文件指纹见 TEST_RESULT |
+| KDP-06-E | DONE / 待 Git 交付 | 61 项聚焦、10 场景真实 Linux、最终 1045 项回归通过；0 失败/错误、17 条件跳过 |
 
 ## 当前验证与限制
 
 - [TEST_RESULT](TEST_RESULT.md)、[REVIEW](REVIEW.md) 保留每批通过/失败与证据边界；主 Agent 自审，不称独立评审。
 - B2 完整回归 692 项、0 失败/错误、10 跳过；后续 DB 超时专项与真实 MySQL/S3 最终 22 项通过。证据根目录 `knowledge-service/target/knowledge-parsing-hardening/`，不得删除早期失败日志。
 - fork 不是文件/网络安全沙箱，Xmx 不是 RSS，单次网络调用由 SDK 超时约束。准备结果绑定后重试不重算；V9/V10 需全新 worker 接管，禁止旧 worker 混跑宣称一致性/全局额度有效。
-- 当前格式/资源边界见支持矩阵；合成样本不代表真实业务检索准确率和生产 SLA。KDP-06-E 未验收；D 的真实模型检索质量和金额未测。
+- 当前格式/资源边界见支持矩阵；合成样本不代表真实业务检索准确率和生产 SLA。E 的 DOC/XLS/PPT/PPTX/HTML/RTF/ODT/UTF-16 已样本验收；D 的真实模型检索质量和金额未测。后续生产验收优先级见生产优化方案，不是当前代码交付的通过声明。
 
 ## Git / CI / 恢复入口
 
-- 原任务分支 `fix/knowledge-parsing-hardening`，HEAD `7573dd0`；D 已正常合入并推送 main/任务分支；当前新增为 E 与 D 的追补自审。
+- 原任务分支 `fix/knowledge-parsing-hardening`，HEAD `6919c60`；D/D2 已正常合入并推送 main/任务分支；当前新增为 E 格式专项。
 - `7573dd0` 的 Tax AI / AgentScope CI 已成功（39196553617、39196553598）；Java 供应链 39196553641 在 `artifacts / Scan aggregate dependency SBOM` 失败，发布作业跳过。该门禁历史多版本也失败，未逐项对比，不称完全相同漏洞或生产可发布。
 - 不新建 worktree，不删除其他任务工作树、私有环境文件或忽略证据；不续做相邻业务评估/AgentScope 任务。
 
 ## 下一执行检查点
 
-- E 首轮 23 项，2 失败/2 错误（`kdp06e-baseline.log`）：旧 XLS 缺结构/表头位置，RTF 自造极简夹具返回 EMPTY，需核查标准字体/段落结构后再判生产缺陷；其余正常内容与 Office 容器截断通过。无运行中 Maven。
-- D2 已实现并通过验证：Batcher 按平台实际任务前缀预算，发送前回调记账；维度探测保守计一次逻辑额度，覆盖旧版复用已验证 store。44 项聚焦和 14 项维度/租户/错误映射补测全部通过，无运行中 Maven。先单独提交/推送 D2，勿混入 E。
-- RTF 诊断确认极简夹具缺 `\\par` 导致 Tika 空正文，增加完整字体/段落结构后验收，不冒充修复生产解析器。证据 `kdp06e/rtf-probe.log`。
-- E 自有 DOC 已在 src/test/resources/parsing（TXT、DOC、README，metadata 固定测试值），其余生成夹具 AdditionalDocumentCorpus/ParsingTest 尚未提交。完成 D2 后继续 E 的 XLS 路由、RTF 夹具核实、格式标识、真实 Boot/Linux、多模块最终回归和支持矩阵。
+- E 最终验证已完成，无运行中 Maven/容器：61 项聚焦、10 场景 Linux、1045 项 knowledge/conversation/agent 回归；执行代码 10 文件指纹 `0c5eebb40bffdca1c320c0a767020097619555e48f227bcedf8cc5c5d4aa0269`，细节与早期失败保留见 TEST_RESULT。
+- D2 的 AgentScope CI 39197266933 已成功，供应链 39197266946 已完成并在 `artifacts / Scan aggregate dependency SBOM` 失败，发布作业跳过。当前工作流已结束，可以正常交付 E。
+- 下一步：核对文档链接、暂存范围与指纹，提交 E，快进合并/推送 main 和任务分支，检查远程 CI，落盘 DELIVERY_RESULT 和最终恢复入口。仅处理当前任务，不部署或删除忽略证据。

@@ -46,6 +46,8 @@ final class StructuredDocumentParser {
             if ("application/pdf".equals(type)) { format = "pdf"; pdf(input); }
             else if (type.contains("wordprocessingml")) { format = "docx"; word(input); }
             else if (type.contains("spreadsheetml")) { format = "xlsx"; spreadsheet(input); }
+            // WorkbookFactory 同时支持 OLE/OOXML；旧 XLS 也必须保留表头、格式化值与行列来源。
+            else if ("application/vnd.ms-excel".equals(type)) { format = "xls"; spreadsheet(input); }
             else if ("text/csv".equals(type) || (type.startsWith("text/") && suffix.endsWith(".csv"))) {
                 format = "csv"; csvFile(input);
             } else if (type.startsWith("text/") && (suffix.endsWith(".md") || suffix.endsWith(".markdown"))) {
@@ -54,7 +56,7 @@ final class StructuredDocumentParser {
                 format = "text"; String text = readText(input);
                 add(new Block(TEXT, text, new Location(null,null,null,null,null,null,null,1,lineCount(text)),List.of(),List.of()));
             } else {
-                format = "tika";
+                format = fallbackFormat(type);
                 try (var source = Files.newInputStream(input)) {
                     var properties = new DocumentParsingProperties();
                     properties.setExecutionMode(DocumentParsingProperties.IN_PROCESS);
@@ -70,6 +72,19 @@ final class StructuredDocumentParser {
         catch (org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException | org.apache.poi.EncryptedDocumentException failure) {
             throw new DocumentParsingException(DocumentParsingError.ENCRYPTED, failure);
         } catch (Exception failure) { throw new DocumentParsingException(DocumentParsingError.INVALID, failure); }
+    }
+
+    /** 类型来自文件内容探测，格式标识与结构是否可用分别表达，不能由上传后缀伪造。 */
+    private static String fallbackFormat(String type) {
+        return switch (type) {
+            case "application/msword" -> "doc";
+            case "application/vnd.ms-powerpoint" -> "ppt";
+            case "application/vnd.openxmlformats-officedocument.presentationml.presentation" -> "pptx";
+            case "text/html", "application/xhtml+xml" -> "html";
+            case "application/rtf", "text/rtf" -> "rtf";
+            case "application/vnd.oasis.opendocument.text" -> "odt";
+            default -> "tika";
+        };
     }
 
     private String readText(Path path) throws Exception {

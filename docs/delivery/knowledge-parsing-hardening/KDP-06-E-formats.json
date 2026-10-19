@@ -1,0 +1,133 @@
+{
+  "fixtureType": "synthetic enterprise documents; content assertions, not production quality or SLA",
+  "processingVersion": "knowledge-structured-v5",
+  "artifactSha256": "4a4c062185a7b74fce9f57d1eb866f1f11e1e637ef361c8f006450fd3999bb1d",
+  "environment": {
+    "os": "Linux container",
+    "network": "none",
+    "readOnly": true,
+    "uid": "10001:10001",
+    "tmpfsBytes": 536870912,
+    "cgroup": {
+      "memory.peak": "420552704",
+      "memory.max": "3221225472",
+      "pids.max": "256",
+      "cpu.max": "200000 100000"
+    }
+  },
+  "cases": [
+    {
+      "warnings": [
+        "FORMAT_STRUCTURE_NOT_AVAILABLE",
+        "EMBEDDED_ATTACHMENTS_NOT_PARSED"
+      ],
+      "markers": 3,
+      "chars": 81,
+      "format": "doc",
+      "elapsedMs": 3152,
+      "case": "doc-bilingual",
+      "bytes": 19456
+    },
+    {
+      "warnings": [
+        "FIRST_NONEMPTY_ROW_USED_AS_HEADER"
+      ],
+      "markers": 3,
+      "chars": 1505,
+      "format": "xls",
+      "elapsedMs": 1881,
+      "case": "xls-table",
+      "bytes": 10752
+    },
+    {
+      "warnings": [
+        "FORMAT_STRUCTURE_NOT_AVAILABLE",
+        "EMBEDDED_ATTACHMENTS_NOT_PARSED"
+      ],
+      "markers": 4,
+      "chars": 48,
+      "format": "ppt",
+      "elapsedMs": 1175,
+      "case": "ppt-slides",
+      "bytes": 11776
+    },
+    {
+      "warnings": [
+        "FORMAT_STRUCTURE_NOT_AVAILABLE",
+        "EMBEDDED_ATTACHMENTS_NOT_PARSED"
+      ],
+      "markers": 4,
+      "chars": 47,
+      "format": "pptx",
+      "elapsedMs": 2012,
+      "case": "pptx-slides",
+      "bytes": 26068
+    },
+    {
+      "warnings": [
+        "FORMAT_STRUCTURE_NOT_AVAILABLE",
+        "EMBEDDED_ATTACHMENTS_NOT_PARSED"
+      ],
+      "markers": 3,
+      "chars": 38,
+      "format": "html",
+      "elapsedMs": 1400,
+      "case": "html-utf8",
+      "bytes": 271
+    },
+    {
+      "warnings": [
+        "FORMAT_STRUCTURE_NOT_AVAILABLE",
+        "EMBEDDED_ATTACHMENTS_NOT_PARSED"
+      ],
+      "markers": 3,
+      "chars": 25,
+      "format": "html",
+      "elapsedMs": 1601,
+      "case": "html-cp1252",
+      "bytes": 93
+    },
+    {
+      "warnings": [
+        "FORMAT_STRUCTURE_NOT_AVAILABLE",
+        "EMBEDDED_ATTACHMENTS_NOT_PARSED"
+      ],
+      "markers": 3,
+      "chars": 25,
+      "format": "rtf",
+      "elapsedMs": 1965,
+      "case": "rtf-bilingual",
+      "bytes": 143
+    },
+    {
+      "warnings": [
+        "FORMAT_STRUCTURE_NOT_AVAILABLE",
+        "EMBEDDED_ATTACHMENTS_NOT_PARSED"
+      ],
+      "markers": 3,
+      "chars": 35,
+      "format": "odt",
+      "elapsedMs": 1289,
+      "case": "odt-bilingual",
+      "bytes": 813
+    },
+    {
+      "warnings": [],
+      "markers": 2,
+      "chars": 22,
+      "format": "text",
+      "elapsedMs": 1076,
+      "case": "txt-utf16le",
+      "bytes": 46
+    },
+    {
+      "warnings": [],
+      "markers": 2,
+      "chars": 22,
+      "format": "text",
+      "elapsedMs": 1172,
+      "case": "txt-utf16be",
+      "bytes": 46
+    }
+  ]
+}
