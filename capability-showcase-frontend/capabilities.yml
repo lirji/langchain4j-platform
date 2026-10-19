@@ -241,7 +241,7 @@ modules:
   # ─────────────────────────── P0：知识库 ───────────────────────────
   - id: rag
     title: 知识库 RAG Workspace
-    description: 文档入库与检索。knowledge-service。embedding / 向量库 / 混排开关随部署而定，检索台顶部实时显示当前形态（默认零依赖 HashEmbedding，可配 qdrant/nomic 真实语义）。
+    description: 管理企业资料，跟踪文档入库，核对检索来源与解析提示，并用评测集检查知识更新后的效果。
     order: 2
     priority: P0
     service: knowledge-service
@@ -277,28 +277,48 @@ modules:
       - id: rag.upload.file
         module: rag
         title: 上传文档(文件·当前租户)
-        description: "POST /rag/documents (multipart file)，写当前租户库，需 ingest scope。"
+        description: "异步入库当前租户文档，202 仅代表受理；任务 READY 后才可检索。相同提交复用原幂等键。"
         method: POST
-        path: /rag/documents
+        path: /rag/ingestions
         requestKind: multipart
         responseKind: json
         params:
-          - { name: file, in: form-data, type: file, required: true, label: 文件, accept: ".txt,.md,.pdf" }
+          - { name: file, in: form-data, type: file, required: true, label: 文件, accept: ".txt,.md,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.html,.htm,.rtf,.odt" }
+          - { name: documentId, in: form-data, type: string, required: true, label: 文档ID }
+          - { name: documentVersion, in: form-data, type: integer, required: true, label: 文档版本, min: 1, defaultValue: 1 }
+          - { name: displayName, in: form-data, type: string, required: false, label: 文档名称 }
+          - { name: category, in: form-data, type: string, required: false, label: 类目 }
+          - { name: Idempotency-Key, in: header, type: string, required: true, label: 提交编号（同次提交保持不变） }
         requiredScopes: [ingest]
         featureFlagDefault: true
         riskLevel: caution
         state: scope-required
         executableByDefault: true
+      - id: rag.ingestions.get
+        module: rag
+        title: 入库任务
+        description: "按任务号查询原提交账号的入库状态、失败原因和恢复信息。无全量任务列表。"
+        method: GET
+        path: /rag/ingestions/{jobId}
+        requestKind: none
+        responseKind: json
+        params:
+          - { name: jobId, in: path, type: string, required: true, label: 任务ID }
+        requiredScopes: []
+        featureFlagDefault: true
+        riskLevel: safe
+        state: ready
+        executableByDefault: true
       - id: rag.upload.file.shared
         module: rag
-        title: 上传文档(文件·共享库)
-        description: "POST /rag/documents?visibility=public，写共享库（全租户可检索），需 public-ingest scope。"
+        title: 上传文档(文件·共享库·同步)
+        description: "POST /rag/documents?visibility=public，写共享库（全租户可检索），需 public-ingest scope；沿用同步入口，无异步恢复。"
         method: POST
         path: /rag/documents?visibility=public
         requestKind: multipart
         responseKind: json
         params:
-          - { name: file, in: form-data, type: file, required: true, label: 文件, accept: ".txt,.md,.pdf" }
+          - { name: file, in: form-data, type: file, required: true, label: 文件, accept: ".txt,.md,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.html,.htm,.rtf,.odt" }
         requiredScopes: [public-ingest]
         featureFlagDefault: true
         riskLevel: caution
@@ -332,7 +352,7 @@ modules:
       - id: rag.upload.json.shared
         module: rag
         title: 上传文档(JSON·共享库)
-        description: "POST /rag/documents?visibility=public (JSON title/text/category)，写共享库（全租户可检索），需 public-ingest scope。"
+        description: "POST /rag/documents?visibility=public (JSON title/text/category)，写共享库（全租户可检索），需 public-ingest scope；沿用同步入口，无异步恢复。"
         method: POST
         path: /rag/documents?visibility=public
         requestKind: json

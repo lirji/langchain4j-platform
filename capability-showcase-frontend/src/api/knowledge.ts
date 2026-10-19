@@ -9,6 +9,7 @@ import type { RunContext } from '../types/api'
 import type {
   DocumentInfo,
   IngestionJobView,
+  IngestionSubmission,
   KnowledgeRuntimeView,
   PagedDocuments,
   Visibility,
@@ -79,3 +80,25 @@ export const deleteDocument = (docId: string, visibility: Visibility, ctx: RunCo
 /** 按 jobId 查询 durable ingestion 状态；无列表接口，只能点查。 */
 export const getIngestionJob = (jobId: string, ctx: RunContext): Promise<IngestionJobView> =>
   edgeJson<IngestionJobView>(`/rag/ingestions/${encodeURIComponent(jobId)}`, ctx)
+
+/** 同一提交意图始终复用调用方保存的幂等键；浏览器负责 multipart boundary。 */
+export async function submitIngestion(input: IngestionSubmission, ctx: RunContext): Promise<IngestionJobView> {
+  const body = new FormData()
+  body.append('file', input.file)
+  body.append('documentId', input.documentId)
+  body.append('documentVersion', String(input.documentVersion))
+  body.append('displayName', input.displayName)
+  if (input.category) body.append('category', input.category)
+  const result = await edgeJson<IngestionJobView>('/rag/ingestions', ctx, {
+    method: 'POST', headers: { 'Idempotency-Key': input.idempotencyKey }, body,
+  })
+  // 受理回执损坏也是未知结果，不能清空原提交信息后生成第二个任务。
+  if (!result?.jobId || !result.status || result.documentId !== input.documentId || result.documentVersion !== input.documentVersion) {
+    throw new ApiError(502, '入库回执不完整，请用原提交信息确认结果。')
+  }
+  return result
+}
+
+/** 人工重试恢复原任务，后端再次验证提交者、版本和编辑权限。 */
+export const retryIngestion = (jobId: string, ctx: RunContext): Promise<IngestionJobView> =>
+  edgeJson<IngestionJobView>(`/rag/ingestions/${encodeURIComponent(jobId)}/retry`, ctx, { method: 'POST' })

@@ -6,7 +6,7 @@ langchain4j-platform 各服务能力的展示与试用控制台。**前后端分
 
 ## 与后端的关系
 
-- 唯一运行期依赖：`edge-gateway`（业务 API）。跨域时网关需 CORS 放行本前端来源并允许 `X-Api-Key` 头（见网关 `GATEWAY_CORS_ORIGINS`）。
+- 唯一运行期依赖：`edge-gateway`（业务 API）。跨域时网关需 CORS 放行本前端来源与认证请求头（见网关 `GATEWAY_CORS_ORIGINS`）；异步文档上传还需允许 `Idempotency-Key`，因此升级此页面时需同步使用包含该白名单的网关配置。
 - 能力目录：默认静态内置；也可 `VITE_CATALOG_URL` 指向后端动态目录。
 - API Key 仅存在浏览器内存，绝不落 URL/localStorage/日志。
 
@@ -114,11 +114,29 @@ https://ai.example.com/login?redirect=%2F
 
 `capabilities.yml` 是目录的**唯一事实源**（能力的方法/路径/参数/scope/feature-flag/风险/五态）。`npm run gen:catalog`（dev/build 前自动执行）将其转为 `public/catalog.json`。新增/调整能力改这个文件即可。
 
-**覆盖范围**：9 个模块、82 条能力（以 `public/catalog.json` 生成结果为准），端点/入参对照真实 controller 与 protocol record 核验。
+**覆盖范围**：9 个模块、83 条能力（以 `public/catalog.json` 生成结果为准），端点/入参对照真实 controller 与 protocol record 核验。
 - P0：Chat（含 auto/cascade/mcp/memory 等高级）、RAG（含 graph/obsidian/image）、Agent（含 dag/chain/vote/reflexive/analyst/process）、Async、Analytics。
 - P1/P2：Workflow（审批串联）、Multimodal（图像/语音，含 `multipart-sse` 的 `/voice/chat/stream`）、Interop & Eval（MCP/A2A + 评测，gate 的 422 作为业务门禁结果展示）、Channel（出站默认锁定 + 回调 header 注入）。
 
 模块以 `GenericModuleView` 数据驱动为底；`workflow/multimodal/interop-eval/channel` 有领域专用工作台视图（`ModuleHost.SPECIALIZED`），复用共享 `CapabilityRunner`/执行闸门，不绕过安全裁决。复杂/嵌套请求体（eval cases、dag tasks、mcp arguments、a2a params）以 `type:json` 原样 JSON 字段承载。
+
+## 知识库文档入库与来源核对
+
+入口为「对话与检索 → 知识库」。上传、任务、文档和检索的侧栏深链使用对应业务页面。
+
+| 入口 | 操作与完成标志 |
+| --- | --- |
+| `/m/rag/rag.upload.file` | 当前租户文件走 `POST /rag/ingestions`；自动生成新文档 ID/提交编号。202 仅代表受理，任务 READY（已可检索）后刷新文档。支持格式与后端[支持范围](../docs/对话与检索/知识库文档支持范围.md)对齐。 |
+| `/m/rag/rag.ingestions.get` | 本会话最近 8 个跟踪任务，或粘贴任务号查询；展示状态、阶段、失败原因、重试次数与下次重试时间。没有全量任务列表或取消任务接口。 |
+| `/m/rag/rag.documents.list` | 分页查看已发布文档；「上传新版本」沿用原 ID，版本取已发布版本 + 1，最终冲突由服务端校验。 |
+| `/m/rag/rag.query` | 查看命中原文、文档版本和来源 metadata；包含页/章节/工作表/行、实际提取方式与文档级解析提示。历史字段缺失时如实提示。 |
+
+- 上传断网、停止等待或超时响应按未知结果处理：保留原文件与幂等键，点击「确认原提交结果」。页面刷新不保存文件；如已记录原提交编号，可展开恢复入口，重选完全相同文件并填写原文档身份/版本/名称/类目。不要用新键盲目补发。
+- FAILED/PARTIAL 有下次重试时继续观察；MANUAL_REVIEW 待人工处理。处理故障后可恢复原任务；手动重试响应未知时先查询状态。所有操作复用认证与 scope 闸门，提交者和文档编辑权限以服务端为准。
+- 自动跟踪有次数上限；达到上限或查询失败会暂停，允许手动刷新/继续跟踪。离开页面停止浏览器轮询，不取消服务端任务。同身份路由间保留内存状态；切换账号、租户、API Key 或网关时隔离旧请求/文件/回执。
+- 共享文件、JSON 和 Obsidian 保留同步入口，放在「其他接入方式」；不自动改投租户异步接口。共享库开放条件仍由现有配置控制。
+- 标准部署默认开启选择性 PDF OCR，管理员可用 `RAG_PARSING_OCR_ENABLED=false` 关闭；当前配置 API 不暴露运行开关，页面以实际命中元数据为准。评分是引擎置信分，不是实测准确率。解析提示为文档级，不能推断只发生在当前命中页；文档详情也不提供完整解析报告。
+- 使用「检索质量评测」前等待新版本可检索，再比较相同评测集与设置；代码升级不自动重建历史文档。本页时间点固定展示北京时间。
 
 ## 测试
 
@@ -128,5 +146,15 @@ npm test           # vitest：SSE 解析 / API Key 脱敏 / 动态表单校验 /
 npm run type-check # vue-tsc
 npm run build      # 生产构建（不设 VITE_DEMO_PASSWORD 时产物不含任何明文口令）
 ```
+
+可选浏览器回归 `scripts/verify-knowledge-ui.mjs` 使用已有 Playwright 与 Chrome；仅在隔离浏览器拦截测试 HTTP 契约，不访问模型或业务数据。先在本目录启动测试预览，再在另一个终端执行：
+
+```bash
+VITE_AUTH_MODE=apikey VITE_REQUIRE_LOGIN=false VITE_EDGE_BASE_URL='' VITE_LIVE_DISCOVERY=false npm run dev -- --host 127.0.0.1 --port 5178 --strictPort
+# 若 Playwright 不在当前 node_modules，指定已有安装的 index.mjs 路径；不需改产品依赖。
+PLAYWRIGHT_MODULE_URL=/path/to/playwright/index.mjs node scripts/verify-knowledge-ui.mjs
+```
+
+以上认证覆盖仅用于本机隔离测试，不能用作实际部署配置。截图/日志写入忽略目录 `target/knowledge-ingestion-ui/`；截图需人工查看后才能作为视觉证据。
 
 能力→前端模块拆分说明见仓库 `docs/平台工程/能力前端模块拆分建议.md`。

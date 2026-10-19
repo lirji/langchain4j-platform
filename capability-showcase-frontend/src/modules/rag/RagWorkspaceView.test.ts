@@ -8,6 +8,7 @@ import { fetchRagConfig } from '../../api/knowledge'
 import InfoNote from '../_shared/InfoNote.vue'
 import RagWorkspaceView from './RagWorkspaceView.vue'
 import CapabilityRunner from '../../components/capability/CapabilityRunner.vue'
+import KnowledgeIngestionPanel from './KnowledgeIngestionPanel.vue'
 
 // fetchRagConfig 走网关，测试里 mock 掉；其余 api/knowledge 导出保持真实。
 vi.mock('../../api/knowledge', async (importOriginal) => ({
@@ -86,14 +87,13 @@ describe('RagWorkspaceView', () => {
     expect(text).toContain('app.rag.graph.enabled')
   })
 
-  it('侧栏深链能力整页进入通用运行器，不再留在工作台', async () => {
+  it('上传深链接入异步工作区，其余能力保留通用运行器', async () => {
     const wrapper = mount(RagWorkspaceView, {
       props: { moduleId: 'rag', capId: 'rag.upload.file' },
       ...mountOpts,
     })
-    const runner = wrapper.findComponent(CapabilityRunner)
-    expect(runner.exists()).toBe(true)
-    expect((runner.props('cap') as { id: string }).id).toBe('rag.upload.file')
+    expect(wrapper.findComponent(KnowledgeIngestionPanel).exists()).toBe(true)
+    expect(wrapper.findComponent(CapabilityRunner).exists()).toBe(false)
     expect(wrapper.find('[data-rag-section="docs"]').exists()).toBe(false)
 
     await wrapper.setProps({ capId: 'rag.graph.query' })

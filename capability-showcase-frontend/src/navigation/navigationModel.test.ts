@@ -221,11 +221,11 @@ describe('buildNavigationModel · 搜索', () => {
   })
 })
 
-describe('buildNavigationModel · 真实 catalog（9 模块 / 82 能力）', () => {
+describe('buildNavigationModel · 真实 catalog（9 模块 / 83 能力）', () => {
   const catalog = loadCatalog()
   const modules = [...catalog.modules].sort((a, b) => a.order - b.order)
 
-  it('全部模块进入某个分组，能力总数守恒 = 82', () => {
+  it('全部模块进入某个分组，能力总数守恒 = 83', () => {
     const model = buildNavigationModel(baseInput({ modules }))
     const flatModules = model.groups.flatMap((g) => g.modules)
     expect(flatModules.length).toBe(modules.length) // 9
@@ -233,7 +233,7 @@ describe('buildNavigationModel · 真实 catalog（9 模块 / 82 能力）', () 
     const expected = modules.reduce((n, m) => n + (m.capabilities?.length ?? 0), 0)
     expect(totalCaps).toBe(expected)
     expect(modules.length).toBe(9)
-    expect(expected).toBe(82)
+    expect(expected).toBe(83)
   })
 
   it('每个真实模块都被归组（无遗漏、无未知落 Other 之外）', () => {

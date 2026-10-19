@@ -66,6 +66,23 @@ export interface KnowledgeHitView {
   text: string
   source: string
   visibility: Visibility
+  version?: string | null
+  sourceMetadata?: Record<string, string>
+}
+
+/** 与后端 IngestionStatus 的稳定值对齐；界面仍需容忍未来新增值。 */
+export enum IngestionStatus {
+  Received = 'RECEIVED', Processing = 'PROCESSING', Ready = 'READY', Partial = 'PARTIAL',
+  Failed = 'FAILED', ManualReview = 'MANUAL_REVIEW', Deleting = 'DELETING', Deleted = 'DELETED',
+}
+
+export interface IngestionSubmission {
+  documentId: string
+  documentVersion: number
+  displayName: string
+  category?: string
+  idempotencyKey: string
+  file: File
 }
 
 /** 后端 `IngestionJobView`（`GET /rag/ingestions/{jobId}`）。status/sinks 为枚举名字符串。 */
@@ -77,6 +94,11 @@ export interface IngestionJobView {
   sinks: Record<string, string>
   contentHash?: string
   traceId?: string
+  errorCode?: string | null
+  failedStage?: string | null
+  retryable?: boolean
+  retryCount?: number
+  nextRetryAt?: string | null
 }
 
 /** 共享库保留分区 tenantId（对齐后端 `PublicKb.TENANT_ID`）；仅作兜底/校验，不作为权威来源。 */

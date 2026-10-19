@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { knowledgeDate } from './knowledgePresentation'
 import { ref, watch, onUnmounted } from 'vue'
 import WorkbenchSection from '../_shared/WorkbenchSection.vue'
 import InfoNote from '../_shared/InfoNote.vue'
@@ -89,6 +90,7 @@ function reason(code: string) {
       <button class="btn btn--ghost" :disabled="busy || editing" @click="load()">查看评测集</button>
       <button class="btn btn--primary" :disabled="busy || editing" @click="edit(null)">新建评测集</button>
     </template>
+    <p class="governance-muted">验证解析优化时，请先等待新文档版本显示“已可检索”，再使用相同评测集和检索设置比较。升级代码不会自动重建历史文档；此处不评估 OCR 准确率。</p>
     <ol v-if="!loaded && !editing && !selected" class="quality-workflow" aria-label="评测流程">
       <li><span class="quality-step" aria-hidden="true">01</span><div><h3>整理评测问题</h3><p>从反馈选题，标注应该命中的文档。</p></div></li>
       <li><span class="quality-step" aria-hidden="true">02</span><div><h3>建立检索基线</h3><p>运行评测，确认结果后设为基线。</p></div></li>
@@ -145,7 +147,7 @@ function reason(code: string) {
       <form v-if="!editing" class="quality-execute" aria-label="执行检索评测" @submit.prevent="execute">
         <label>本次运行说明<input class="form-control" v-model="label" required maxlength="128" placeholder="例如：调整分块后的验证" :disabled="busy" /></label><button class="btn btn--primary" :disabled="busy">执行检索评测</button>
       </form>
-      <ul class="quality-history"><li v-for="run in runs" :key="run.id"><button class="btn btn--ghost" :disabled="busy || editing" @click="result = run">{{ run.label }} · {{ status(run) }}</button> · {{ new Date(run.startedAt).toLocaleString() }}</li></ul>
+      <ul class="quality-history"><li v-for="run in runs" :key="run.id"><button class="btn btn--ghost" :disabled="busy || editing" @click="result = run">{{ run.label }} · {{ status(run) }}</button> · {{ knowledgeDate(run.startedAt) }}（北京时间）</li></ul>
       <button class="btn btn--ghost" v-if="runs.length === 20" :disabled="busy || editing" @click="history(true)">下一页运行</button>
     </article>
     <article v-if="result && !editing" class="result governance-block" :data-verdict="result.gate?.verdict || result.status">

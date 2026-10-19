@@ -1,17 +1,17 @@
 <script setup lang="ts">
 /**
- * RAG Workspace —— 文档库 + 检索台 双区工作台（module=rag）。
+ * RAG Workspace：异步入库、任务恢复、文档与检索来源纵向工作台。
  *
- * 左「文档库」：rag.documents.list 列表（标题/类目/id + 详情/删除）；文档入库（file/json/obsidian，需 ingest scope）。
- * 右「检索台」：rag.query 输入 → 带分数排序的结果卡（score/docId/category/text，高亮命中）。
+ * 「文档库」：rag.documents.list 字段分列表格、详情与新版本上传；租户文件异步入库。
+ * 「检索台」：rag.query 输入 → 带分数排序的结果、来源定位与解析提示。
  *   顶部横幅按后端 /rag/config.rag 动态呈现：语义就绪时展示真实 provider/模型 + 混排开关；
  *   未探测到运行时（v1 后端 / 无凭证 / 探测失败）诚实回退到"默认 HashEmbedding 降级"提示。
  * GraphRAG 子分区（rag.graph.query / entities，flag-off）：诚实锁定。
  *
- * 侧栏子菜单 / 深链：有 capId 时整页进入通用 CapabilityRunner（与 Agent / 工作流一致）。
- * 执行统一经 executionGate + runCapability。
+ * 上传、任务、文档和检索深链使用领域视图；其他能力继续复用通用运行器。
+ * 目录能力复用 executionGate + runCapability；任务与文档 API 复用当前会话凭证。
  */
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useAbortable } from '../../composables/useAbortable'
 import { useCatalogStore } from '../../stores/catalog'
 import { useSessionStore } from '../../stores/session'
@@ -19,14 +19,13 @@ import { runCapability } from '../../api/client'
 import { executionGate } from '../../utils/gate'
 import { highlightSegments } from '../../utils/highlight'
 import { SHARED_KB_UI_ENABLED } from '../../config'
-import { deleteDocument, fetchRagConfig, getDocument, getIngestionJob, listDocumentsPaged } from '../../api/knowledge'
+import { deleteDocument, fetchRagConfig, getDocument, listDocumentsPaged } from '../../api/knowledge'
 import { humanizeError, isAbortError } from '../../api/errors'
 import type { DocumentInfo, IngestionJobView, KnowledgeRuntimeView, Visibility } from '../../types/knowledge'
 import type { Capability } from '../../types/catalog'
 import { validateParams, type FormValues } from '../../utils/validation'
 import CapabilityRunner from '../../components/capability/CapabilityRunner.vue'
 import ResponseViewer from '../../components/capability/ResponseViewer.vue'
-import JsonView from '../../components/capability/JsonView.vue'
 import EmptyState from '../../components/common/EmptyState.vue'
 import ModuleHeader from '../../components/layout/ModuleHeader.vue'
 import WorkbenchSection from '../_shared/WorkbenchSection.vue'
@@ -34,10 +33,34 @@ import InfoNote from '../_shared/InfoNote.vue'
 import KnowledgeOperationsPanel from './KnowledgeOperationsPanel.vue'
 import KnowledgeSyncPanel from './KnowledgeSyncPanel.vue'
 import RetrievalQualityPanel from './RetrievalQualityPanel.vue'
+import KnowledgeIngestionPanel from './KnowledgeIngestionPanel.vue'
+import KnowledgeSourceDetails from './KnowledgeSourceDetails.vue'
+import KnowledgeDocumentDetails from './KnowledgeDocumentDetails.vue'
+import { useKnowledgeScope } from './useKnowledgeScope'
+import { useIngestionState } from './ingestionState'
+import { knowledgeDate } from './knowledgePresentation'
 
 const props = defineProps<{ moduleId: string; capId?: string }>()
 const catalog = useCatalogStore()
 const session = useSessionStore()
+const identity = useKnowledgeScope()
+const ingestion = useIngestionState()
+const uploadRequested = ref(false)
+const uploadAnchor = ref<HTMLElement | null>(null)
+const detailAnchor = ref<HTMLElement | null>(null)
+const typedDocumentId = ref('')
+const SPECIALIZED_CAPS = new Set(['rag.upload.file', 'rag.ingestions.get', 'rag.query', 'rag.documents.list', 'rag.documents.get'])
+const specialized = computed(() => !!props.capId && SPECIALIZED_CAPS.has(props.capId))
+const PAGE_TITLES: Record<string, string> = { 'rag.upload.file': '上传文档', 'rag.ingestions.get': '入库任务', 'rag.query': '知识检索', 'rag.documents.list': '文档库', 'rag.documents.get': '文档详情' }
+const PAGE_HINTS: Record<string, string> = {
+  'rag.upload.file': '让企业资料成为可检索的知识。上传、查看处理结果，再核对文档内容。',
+  'rag.ingestions.get': '跟踪入库进度，查看失败原因，在处理问题后恢复原任务。',
+  'rag.query': '检索已发布的知识，核对命中原文、来源位置和解析提示。',
+  'rag.documents.list': '管理已发布的文档，查看详情并上传新的内容版本。',
+  'rag.documents.get': '通过文档 ID 查看当前已发布版本。',
+}
+const showDocs = computed(() => !props.capId || props.capId === 'rag.documents.list' || props.capId === 'rag.documents.get' || !!detailDocId.value)
+const showQuery = computed(() => !props.capId || props.capId === 'rag.query')
 
 const module = computed(() => catalog.moduleById(props.moduleId))
 const focusedCap = computed(() =>
@@ -58,7 +81,7 @@ const uploadFileSharedCap = computed(() => catalog.capabilityById('rag.upload.fi
 const uploadJsonSharedCap = computed(() => catalog.capabilityById('rag.upload.json.shared'))
 /** 租户库入库（file/json/obsidian，需 ingest）——始终可用。 */
 const tenantUploadRunners = computed<Capability[]>(() =>
-  [uploadFileCap.value, uploadJsonCap.value, obsidianCap.value].filter((c): c is Capability => !!c),
+  [uploadJsonCap.value, obsidianCap.value].filter((c): c is Capability => !!c),
 )
 /** 共享库入库（需 public-ingest）——仅在 SHARED_KB_UI 开 + 运行时 publicEnabled 时出现（sharedTabEnabled）。 */
 const sharedUploadRunners = computed<Capability[]>(() =>
@@ -142,8 +165,9 @@ async function probeRagConfig(): Promise<void> {
   if (!session.hasCredential) return
   const controller = configAbort.fresh()
   try {
-    ragConfig.value = await fetchRagConfig(session.runContext(controller.signal))
+    const result = await fetchRagConfig(session.runContext(controller.signal))
     if (controller.signal.aborted) return
+    ragConfig.value = result
     catalog.applyKnowledgeRuntime(ragConfig.value)
   } catch (e) {
     if (isAbortError(e) || controller.signal.aborted) return
@@ -165,7 +189,8 @@ const docsError = ref<string | null>(null)
 const docsNote = ref<string | null>(null)
 const pendingDelete = ref<string | null>(null)
 const detailDocId = ref<string | null>(null)
-const detailData = ref<unknown>(null)
+const detailData = ref<DocumentInfo | null>(null)
+const detailVisibility = ref<Visibility>('tenant')
 const detailBusy = ref(false)
 const detailError = ref<string | null>(null)
 const busyKey = ref<string | null>(null)
@@ -174,14 +199,13 @@ let docsSeq = 0
 let detailSeq = 0
 
 function fmtBytes(n: number): string {
-  if (!Number.isFinite(n)) return '—'
+  if (!Number.isFinite(n) || n < 0) return '未提供'
   if (n < 1024) return `${n} B`
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
   return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 function fmtDate(iso: string): string {
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString()
+  return knowledgeDate(iso)
 }
 
 async function loadDocs(): Promise<void> {
@@ -238,6 +262,9 @@ async function changePageSize(size: number): Promise<void> {
 /** 切换可见性 tab：清空当前列表/详情、页码归 1，并按新 tab 重新拉取。 */
 async function switchTab(v: Visibility): Promise<void> {
   if (v === visibility.value) return
+  detailSeq += 1
+  detailAbort.abort()
+  detailBusy.value = false
   visibility.value = v
   docs.value = []
   page.value = 1
@@ -253,6 +280,7 @@ async function switchTab(v: Visibility): Promise<void> {
 async function viewDetail(docId: string, vis?: Visibility): Promise<void> {
   const my = ++detailSeq
   const reqVis = vis ?? visibility.value
+  detailVisibility.value = reqVis
   detailDocId.value = docId
   detailData.value = null
   detailError.value = null
@@ -262,6 +290,8 @@ async function viewDetail(docId: string, vis?: Visibility): Promise<void> {
     const data = await getDocument(docId, reqVis, session.runContext(detailAbort.fresh().signal))
     if (my !== detailSeq) return // 已被更新的详情请求取代 → 丢弃，避免张冠李戴
     detailData.value = data
+    await nextTick()
+    detailAnchor.value?.scrollIntoView?.({ block: 'nearest' })
   } catch (e) {
     if (my !== detailSeq || isAbortError(e)) return
     detailError.value = humanizeError(e)
@@ -274,11 +304,15 @@ async function viewDetail(docId: string, vis?: Visibility): Promise<void> {
 }
 
 async function confirmDelete(docId: string): Promise<void> {
+  const controller = deleteAbort.fresh()
+  const requestIdentity = identity.value
+  const requestedVisibility = visibility.value
   busyKey.value = `del:${docId}`
   docsError.value = null
   try {
     // 删共享需 public-ingest（后端 403 兜底并翻译为人话）。
-    await deleteDocument(docId, visibility.value, session.runContext(deleteAbort.fresh().signal))
+    await deleteDocument(docId, requestedVisibility, session.runContext(controller.signal))
+    if (controller.signal.aborted || requestIdentity !== identity.value || requestedVisibility !== visibility.value) return
     if (detailDocId.value === docId) {
       detailDocId.value = null
       detailData.value = null
@@ -286,40 +320,41 @@ async function confirmDelete(docId: string): Promise<void> {
     docsNote.value = `文档 ${docId} 已删除。`
     await loadDocs()
   } catch (e) {
-    if (isAbortError(e)) return
+    if (isAbortError(e) || controller.signal.aborted || requestIdentity !== identity.value) return
     docsError.value = humanizeError(e)
   } finally {
-    busyKey.value = null
-    pendingDelete.value = null
+    if (!controller.signal.aborted && requestIdentity === identity.value) {
+      busyKey.value = null
+      pendingDelete.value = null
+    }
   }
 }
 
-function jobIdOf(data: unknown): string | undefined {
-  if (!data || typeof data !== 'object') return undefined
-  const o = data as Record<string, unknown>
-  return asStr(o.jobId) ?? asStr(o.ingestionJobId)
-}
-
-function onUploaded(payload?: { cap: Capability; data: unknown; status: number | null }): void {
+function onUploaded(): void {
   // 入库成功后刷新文档库（若已填凭证）；回到第 1 页——新文档按上传时间降序排在最前，便于立即看到。
   if (session.hasCredential) {
     page.value = 1
     void loadDocs()
   }
-  const jobId = jobIdOf(payload?.data)
-  if (jobId) void trackJob(jobId)
 }
+
+function onReady(): void {
+  if (visibility.value === 'tenant') onUploaded()
+}
+async function newVersion(document: DocumentInfo) {
+  if (!ingestion.newDocument(document)) {
+    docsError.value = '有尚未确认的上传，请先到文档入库确认原提交结果。'
+  }
+  uploadRequested.value = true
+  await nextTick()
+  uploadAnchor.value?.scrollIntoView?.({ block: 'start' })
+}
+function openIngestedDocument(job: IngestionJobView) { void viewDetail(job.documentId, 'tenant') }
 
 // 启动时探测 rag 配置；凭证到位后再探一次（登录/填 Key 后共享分区才能出现）。
 onMounted(() => {
   void probeRagConfig()
 })
-watch(
-  () => session.hasCredential,
-  (has) => {
-    if (has) void probeRagConfig()
-  },
-)
 
 // ── 检索台 ──
 interface Hit {
@@ -327,6 +362,11 @@ interface Hit {
   docId?: string
   category?: string
   text?: string
+  displayName?: string
+  version?: string
+  index?: string
+  source?: string
+  sourceMetadata?: unknown
   /** 服务端权威 visibility（KnowledgeHit.visibility）；前端不靠 docId/名称推断。 */
   visibility?: Visibility
   raw: unknown
@@ -383,6 +423,8 @@ function parseHits(data: unknown): Hit[] | null {
           docId: asStr(o.docId) ?? asStr(o.documentId) ?? asStr(o.id),
           category: asStr(o.category),
           text: asStr(o.text) ?? asStr(o.content) ?? asStr(o.snippet) ?? asStr(o.chunk),
+          displayName: asStr(o.displayName), version: asStr(o.version), index: asStr(o.index),
+          source: asStr(o.source), sourceMetadata: o.sourceMetadata,
           visibility: o.visibility === 'public' || o.visibility === 'tenant' ? o.visibility : undefined,
           raw: item,
         }
@@ -437,58 +479,26 @@ function openHit(h: Hit): void {
   void viewDetail(h.docId, h.visibility)
 }
 
-const TRACKED_JOB_LIMIT = 8
-const trackedJobs = ref<IngestionJobView[]>([])
-const jobIdInput = ref('')
-const jobTrackError = ref<string | null>(null)
-const jobBusy = ref(false)
-const jobAbort = useAbortable()
-const TERMINAL_JOB = new Set(['READY', 'PARTIAL', 'FAILED', 'DELETED'])
-
-function upsertJob(job: IngestionJobView): void {
-  const rest = trackedJobs.value.filter((j) => j.jobId !== job.jobId)
-  trackedJobs.value = [job, ...rest].slice(0, TRACKED_JOB_LIMIT)
-}
-
-async function refreshJob(jobId: string): Promise<IngestionJobView | null> {
-  const controller = jobAbort.fresh()
-  jobBusy.value = true
-  jobTrackError.value = null
-  try {
-    const job = await getIngestionJob(jobId, session.runContext(controller.signal))
-    if (controller.signal.aborted) return null
-    upsertJob(job)
-    return job
-  } catch (e) {
-    if (isAbortError(e) || controller.signal.aborted) return null
-    jobTrackError.value = humanizeError(e)
-    return null
-  } finally {
-    if (!controller.signal.aborted) jobBusy.value = false
-  }
-}
-
-async function trackJob(jobId: string): Promise<void> {
-  const first = await refreshJob(jobId)
-  if (!first || TERMINAL_JOB.has(first.status)) return
-  for (let i = 0; i < 12; i += 1) {
-    await new Promise((r) => setTimeout(r, 2000))
-    const next = await refreshJob(jobId)
-    if (!next || TERMINAL_JOB.has(next.status)) return
-  }
-}
-
-async function trackTypedJob(): Promise<void> {
-  const id = jobIdInput.value.trim()
-  if (!id) return
-  await trackJob(id)
-}
-
 const ingestScopeHint = computed(() => {
   const scopes = uploadFileCap.value?.requiredScopes ?? []
   return scopes.length ? scopes.join(' / ') : 'ingest'
 })
-// 入库可见性现由每个上传表单的「可见性」字段承载（随请求发送），不再用外部选择器，避免双重控件失真。
+watch(identity, () => {
+  configAbort.abort(); docsAbort.abort(); detailAbort.abort(); deleteAbort.abort(); searchAbort.abort()
+  docsSeq += 1; detailSeq += 1
+  ragConfig.value = null; docs.value = []; docsLoaded.value = false; docsBusy.value = false
+  docsError.value = null; docsNote.value = null; detailDocId.value = null; detailData.value = null
+  detailBusy.value = false; detailError.value = null; busyKey.value = null; pendingDelete.value = null
+  page.value = 1; total.value = 0; totalPages.value = 1; visibility.value = 'tenant'
+  query.value = ''; submittedQuery.value = ''; searchResult.value = null; searchError.value = null
+  searchBusy.value = false; searched.value = false; typedDocumentId.value = ''; uploadRequested.value = false
+  if (session.hasCredential) void probeRagConfig()
+}, { flush: 'sync' })
+watch(() => props.capId, () => {
+  detailSeq += 1; detailAbort.abort(); detailDocId.value = null; detailData.value = null
+  detailBusy.value = false; uploadRequested.value = false
+})
+// 异步文件入口固定当前租户；共享文件由独立兼容入口承载，不随文档列表 tab 改变。
 </script>
 
 <template>
@@ -499,7 +509,7 @@ const ingestScopeHint = computed(() => {
     :description="`未找到模块「${moduleId}」。`"
   />
 
-  <CapabilityRunner v-else-if="capId && focusedCap" :key="focusedCap.id" :cap="focusedCap" />
+  <CapabilityRunner v-else-if="capId && focusedCap && !specialized" :key="focusedCap.id" :cap="focusedCap" />
 
   <EmptyState
     v-else-if="capId && !focusedCap"
@@ -508,17 +518,28 @@ const ingestScopeHint = computed(() => {
     :description="`模块「${module.title}」下未找到能力「${capId}」。`"
   />
 
-  <!-- 工作台着陆：文档库（左） + 检索台（右） + 入库 + GraphRAG -->
+  <!-- 按上传、任务、文档和检索组织；深链只展示对应任务。 -->
   <div v-else class="rag">
-    <ModuleHeader :module-id="moduleId" />
+    <ModuleHeader v-if="!capId" :module-id="moduleId" />
+    <header v-else class="rag__page-heading"><h1>{{ PAGE_TITLES[capId] }}</h1><p>{{ PAGE_HINTS[capId] }}</p></header>
 
+    <nav class="rag__nav" aria-label="知识库功能">
+      <RouterLink to="/m/rag">知识库总览</RouterLink>
+      <RouterLink to="/m/rag/rag.upload.file">上传文档</RouterLink>
+      <RouterLink to="/m/rag/rag.ingestions.get">入库任务</RouterLink>
+      <RouterLink to="/m/rag/rag.documents.list">文档库</RouterLink>
+      <RouterLink to="/m/rag/rag.query">知识检索</RouterLink>
+    </nav>
+    <div v-if="!capId || capId === 'rag.upload.file' || capId === 'rag.ingestions.get' || uploadRequested" ref="uploadAnchor" data-rag-section="ingestion">
+      <KnowledgeIngestionPanel :show-upload="capId !== 'rag.ingestions.get' || uploadRequested" @ready="onReady" @open-document="openIngestedDocument" />
+    </div>
     <div class="rag__cols">
-      <!-- 左：文档库 -->
-      <div class="rag__col" data-rag-section="docs">
+      <!-- 文档库 -->
+      <div v-if="showDocs" class="rag__col" data-rag-section="docs">
         <WorkbenchSection
           v-if="listCap"
           title="文档库"
-          subtitle="列出、查看与删除当前租户文档。删除为 caution 操作，经安全闸门执行。"
+          subtitle="查看已发布的文档版本。上传的新版本完成处理后才出现在这里。"
         >
           <template #actions>
             <button
@@ -538,6 +559,10 @@ const ingestScopeHint = computed(() => {
             <InfoNote v-else-if="docsNote" tone="success">{{ docsNote }}</InfoNote>
           </template>
 
+          <form v-if="capId === 'rag.documents.get'" class="rag__lookup" @submit.prevent="viewDetail(typedDocumentId.trim())">
+            <label>文档 ID<input v-model="typedDocumentId" class="form-control" required aria-label="查询文档 ID" /></label>
+            <button class="btn btn--primary" :disabled="!session.hasCredential || !typedDocumentId.trim()">查看文档详情</button>
+          </form>
           <!-- 可见性分区 tabs：租户库 / 共享库（共享仅 sharedTabEnabled 时出现） -->
           <div class="rag__tabs" role="tablist" aria-label="文档库可见性">
             <button
@@ -566,24 +591,13 @@ const ingestScopeHint = computed(() => {
             共享知识库当前未开放（服务端 <code>publicEnabled=false</code>），仅显示当前租户文档。
           </InfoNote>
 
-          <ul v-if="docs.length" class="rag__doclist">
-            <li v-for="d in docs" :key="d.docId" class="rag__doc">
-              <div class="rag__doc-main">
-                <strong class="rag__doc-title">{{ d.displayName || '(无标题)' }}</strong>
-                <div class="rag__doc-meta">
-                  <span class="rag__vis" :data-vis="visibility">
-                    {{ visibility === 'public' ? '共享' : '租户' }}
-                  </span>
-                  <span v-if="d.category" class="rag__cat">{{ d.category }}</span>
-                  <code class="rag__id">{{ d.docId }}</code>
-                </div>
-                <div class="rag__doc-sub">
-                  <span title="片段数">🧩 {{ d.segmentCount }} 段</span>
-                  <span title="大小">· {{ fmtBytes(d.sizeBytes) }}</span>
-                  <span title="版本">· v{{ d.version }}</span>
-                  <span title="上传时间">· {{ fmtDate(d.uploadedAt) }}</span>
-                </div>
-              </div>
+          <div v-if="docs.length" class="rag__table-scroll" tabindex="0" aria-label="文档列表"><table class="rag__doctable"><thead><tr><th>文档名称</th><th>文档 ID</th><th>范围</th><th>类目</th><th>版本</th><th>片段数</th><th>文件大小</th><th>上传时间（北京时间）</th><th>操作</th></tr></thead><tbody>
+            <tr v-for="d in docs" :key="d.docId" class="rag__doc">
+              <td><strong class="rag__doc-title">{{ d.displayName || '(无标题)' }}</strong></td>
+              <td><code class="rag__id">{{ d.docId }}</code></td>
+              <td><span class="rag__vis" :data-vis="visibility">{{ visibility === 'public' ? '共享' : '租户' }}</span></td>
+              <td>{{ d.category || '未分类' }}</td><td>{{ d.version }}</td><td>{{ d.segmentCount }}</td>
+              <td>{{ fmtBytes(d.sizeBytes) }}</td><td>{{ fmtDate(d.uploadedAt) }}</td><td>
               <div class="rag__doc-actions">
                 <button
                   v-if="getCap"
@@ -594,6 +608,7 @@ const ingestScopeHint = computed(() => {
                 >
                   {{ busyKey === `get:${d.docId}` ? '…' : '详情' }}
                 </button>
+                <button v-if="visibility === 'tenant'" class="btn btn--ghost btn--sm" @click="newVersion(d)">上传新版本</button>
                 <template v-if="deleteCap">
                   <template v-if="pendingDelete === d.docId">
                     <button
@@ -619,15 +634,16 @@ const ingestScopeHint = computed(() => {
                   </button>
                 </template>
               </div>
-            </li>
-          </ul>
+              </td>
+            </tr>
+          </tbody></table></div>
 
           <EmptyState
             v-else-if="docsLoaded && !docsError"
             variant="empty"
             icon="∅"
             title="没有文档"
-            description="当前租户下暂无文档。用下方「文档入库」上传后再检索。"
+            :description="visibility === 'public' ? '共享知识库暂无文档。具备共享入库权限时，可使用共享文档上传入口。' : '当前租户下暂无文档。通过上方「上传文档」入口入库后再检索。'"
           />
           <EmptyState
             v-else-if="!docsLoaded"
@@ -674,22 +690,23 @@ const ingestScopeHint = computed(() => {
           </nav>
 
           <!-- 文档详情 -->
-          <div v-if="detailDocId" class="rag__detail" aria-live="polite">
+          <div v-if="detailDocId" ref="detailAnchor" class="rag__detail" aria-live="polite">
             <h3 class="rag__detail-title">
               文档详情 · <code>{{ detailDocId }}</code>
             </h3>
             <p v-if="detailBusy" class="rag__muted">加载中…</p>
             <InfoNote v-else-if="detailError" tone="danger" role="alert">{{ detailError }}</InfoNote>
-            <div v-else-if="detailData != null" class="rag__json">
-              <JsonView :data="detailData" />
+            <div v-else-if="detailData != null">
+              <KnowledgeDocumentDetails :document="detailData" />
+              <button v-if="detailVisibility === 'tenant'" class="btn btn--ghost" @click="newVersion(detailData)">上传新版本</button>
             </div>
             <p v-else class="rag__muted">无详情返回。</p>
           </div>
         </WorkbenchSection>
       </div>
 
-      <!-- 右：检索台 -->
-      <div class="rag__col" data-rag-section="query">
+      <!-- 检索台 -->
+      <div v-if="showQuery" class="rag__col" data-rag-section="query">
         <WorkbenchSection
           v-if="queryCap"
           title="检索台"
@@ -784,12 +801,14 @@ const ingestScopeHint = computed(() => {
                     {{ h.visibility === 'public' ? '共享' : '租户' }}
                   </span>
                 </div>
+                <dl class="rag__hit-facts"><dt>文档名称</dt><dd>{{ h.displayName || '未提供' }}</dd><dt>文档 ID</dt><dd>{{ h.docId || '未提供' }}</dd><dt>文档版本</dt><dd>{{ h.version || '未提供' }}</dd><dt>片段编号</dt><dd>{{ h.index ?? '未提供' }}</dd><dt>检索来源</dt><dd>{{ h.source || '未提供' }}</dd></dl>
                 <p v-if="h.text" class="rag__hit-text"><span
                     v-for="(s, si) in segmentsFor(h.text)"
                     :key="si"
                     :class="{ 'rag__mark': s.hit }"
                   >{{ s.text }}</span></p>
                 <p v-else class="rag__muted">（该命中项无文本字段）</p>
+                <KnowledgeSourceDetails :metadata="h.sourceMetadata" />
                 <button
                   v-if="h.docId && getCap"
                   type="button"
@@ -823,47 +842,15 @@ const ingestScopeHint = computed(() => {
       </div>
     </div>
 
-    <KnowledgeSyncPanel />
-    <KnowledgeOperationsPanel :query="query" />
-    <RetrievalQualityPanel />
-
-    <WorkbenchSection
-      v-if="session.hasCredential"
-      title="入库任务"
-      subtitle="对接 GET /rag/ingestions/{jobId}。上传响应若含 jobId 会自动跟踪；也可粘贴已有任务号。没有列表接口，不臆造任务清单。"
-      collapsible
-      :default-open="false"
-    >
-      <div class="rag__jobs">
-        <label class="rag__field rag__field--wide">
-          任务 ID
-          <input v-model="jobIdInput" class="form-control" type="text" placeholder="粘贴 jobId" aria-label="入库任务 ID" />
-        </label>
-        <button
-          type="button"
-          class="btn btn--sm"
-          :disabled="jobBusy || !jobIdInput.trim()"
-          @click="trackTypedJob"
-        >
-          {{ jobBusy ? '查询中…' : '跟踪任务' }}
-        </button>
-        <InfoNote v-if="jobTrackError" tone="danger" role="alert">{{ jobTrackError }}</InfoNote>
-        <ul v-if="trackedJobs.length" class="rag__joblist">
-          <li v-for="j in trackedJobs" :key="j.jobId" class="rag__job">
-            <code>{{ j.jobId }}</code>
-            <span class="rag__job-st" :data-st="j.status">{{ j.status }}</span>
-            <span class="rag__muted">文档 {{ j.documentId }} · v{{ j.documentVersion }}</span>
-          </li>
-        </ul>
-        <p v-else class="rag__muted">当前会话尚未跟踪任何入库任务。</p>
-      </div>
-    </WorkbenchSection>
+    <KnowledgeSyncPanel v-if="!capId" />
+    <KnowledgeOperationsPanel v-if="!capId" :query="query" />
+    <RetrievalQualityPanel v-if="!capId || capId === 'rag.query'" />
 
     <!-- 文档入库（租户库 file/json/obsidian 需 ingest；共享库另有专用入口需 public-ingest） -->
     <WorkbenchSection
-      v-if="tenantUploadRunners.length || sharedUploadRunners.length"
-      title="文档入库"
-      subtitle="上传文档到知识库以供检索。入库为 caution 操作。"
+      v-if="!capId && (tenantUploadRunners.length || sharedUploadRunners.length)"
+      title="其他接入方式"
+      subtitle="共享文件、JSON 和 Obsidian 使用原有同步入口；不提供异步任务恢复。"
       collapsible
       :default-open="false"
       data-rag-section="upload"
@@ -898,7 +885,7 @@ const ingestScopeHint = computed(() => {
 
     <!-- GraphRAG：文案按目录 state 动态呈现（ready 可执行；flag-off 诚实锁定） -->
     <WorkbenchSection
-      v-if="graphRunners.length"
+      v-if="!capId && graphRunners.length"
       title="GraphRAG（图谱增强）"
       :subtitle="graphOff ? '基于实体关系图的检索增强。需开启 feature flag 后方可执行。' : '基于实体关系图的检索增强。'"
       collapsible
@@ -928,7 +915,7 @@ const ingestScopeHint = computed(() => {
 }
 .rag__cols {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-5);
   align-items: start;
 }
@@ -986,23 +973,6 @@ const ingestScopeHint = computed(() => {
   color: var(--stream);
   background: var(--stream-soft);
   border: 1px solid var(--stream-border);
-}
-
-/* 文档库 */
-.rag__doclist {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.rag__doc-sub {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-top: 4px;
-  font-size: var(--fs-xs);
-  color: var(--text-subtle);
 }
 
 /* 分页控件 */
@@ -1096,45 +1066,15 @@ const ingestScopeHint = computed(() => {
   display: inline-block;
   margin-left: 4px;
 }
-.rag__doc {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-/* 手机档：文档行允许操作按钮换行到下一行，避免标题被挤没 */
-@media (max-width: 640px) {
-  .rag__doc {
-    flex-wrap: wrap;
-  }
-  .rag__doc-main {
-    flex: 1 1 100%;
-  }
-}
-.rag__doc-main {
-  min-width: 0;
-  flex: 1;
-}
 .rag__doc-title {
   display: block;
   font-size: var(--fs-sm);
   color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.rag__doc-meta {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-top: 4px;
-  flex-wrap: wrap;
+  overflow-wrap: anywhere;
 }
 .rag__doc-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
@@ -1249,10 +1189,11 @@ const ingestScopeHint = computed(() => {
   padding: 1px 8px;
 }
 .rag__hit-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   font-size: var(--fs-sm);
   color: var(--text);
   line-height: 1.55;
-  white-space: pre-wrap;
   word-break: break-word;
 }
 .rag__mark {
@@ -1291,4 +1232,19 @@ const ingestScopeHint = computed(() => {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+/* 任务卡片纵排；字段分列，窄屏仅表格自身横向滚动。 */
+.rag__page-heading h1 { font-size:var(--fs-xl); margin:0 0 var(--space-2); }
+.rag__page-heading p { color:var(--text-muted); font-size:var(--fs-sm); line-height:1.6; }
+.rag__nav,.rag__lookup { display:flex; flex-wrap:wrap; gap:var(--space-3); align-items:center; }
+.rag__nav a { font-size:var(--fs-sm); padding:var(--space-2) var(--space-3); border:1px solid var(--border); border-radius:var(--radius); }
+.rag__lookup { margin-bottom:var(--space-4); align-items:flex-end; }.rag__lookup label { display:grid; gap:var(--space-2); }
+.rag__table-scroll { overflow:auto; width:100%; margin-top:var(--space-4); }
+.rag__doctable { width:100%; border-collapse:collapse; font-size:var(--fs-sm); }
+.rag__doctable .rag__doc { display:table-row; border:0; padding:0; }
+.rag__doctable .rag__id { max-width:none; white-space:normal; overflow:visible; }
+.rag__doctable th,.rag__doctable td { padding:var(--space-3); border-bottom:1px solid var(--border); text-align:left; vertical-align:top; min-width:90px; max-width:240px; overflow-wrap:anywhere; }
+.rag__doctable th { white-space:nowrap; color:var(--text-muted); background:var(--surface-2); }
+.rag__doctable th:last-child,.rag__doctable td:last-child { position:sticky; right:0; background:var(--surface); min-width:150px; }
+.rag__hit-facts { display:grid; grid-template-columns:auto 1fr; gap:var(--space-2) var(--space-3); font-size:var(--fs-sm); }
+.rag__hit-facts dt { color:var(--text-muted); }.rag__hit-facts dd { margin:0; overflow-wrap:anywhere; }
 </style>

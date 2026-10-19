@@ -9,7 +9,7 @@ import { cleanup, jsonResponse, setupCatalog, sseResponse } from '../../test/int
 import { stubMatchMedia, type ViewportStub } from '../../test/viewport'
 
 /**
- * 57 项能力的传输合同测试：合同表独立硬编码（不从生产 assembleRequest 自证），
+ * 58 项能力的传输合同测试：合同表独立硬编码（不从生产 assembleRequest 自证），
  * 每项从用户点击出发核对真实 fetch 的 method/URL/凭证头/请求体；flag-off 与危险能力核对 0 fetch。
  */
 
@@ -26,7 +26,8 @@ const EXPECTED: Record<string, Contract> = {
   'memory.profile.clear': ['DELETE', '/memory/profile', 'none', 'ready'],
   'chat.cache.clear': ['DELETE', '/chat/cache', 'none', 'ready'],
   'rag.query': ['POST', '/rag/query', 'json', 'ready'],
-  'rag.upload.file': ['POST', '/rag/documents', 'multipart', 'scope-required'],
+  'rag.upload.file': ['POST', '/rag/ingestions', 'multipart', 'scope-required'],
+  'rag.ingestions.get': ['GET', '/rag/ingestions/{jobId}', 'none', 'ready'],
   'rag.upload.file.shared': ['POST', '/rag/documents?visibility=public', 'multipart', 'scope-required'],
   'rag.upload.json': ['POST', '/rag/documents', 'json', 'scope-required'],
   'rag.upload.json.shared': ['POST', '/rag/documents?visibility=public', 'json', 'scope-required'],
@@ -121,7 +122,7 @@ function executeButton(wrapper: ReturnType<typeof mount>) {
   return button
 }
 
-describe('CapabilityRunner 57 项合同', () => {
+describe('CapabilityRunner 58 项合同', () => {
   beforeEach(() => setupCatalog())
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -129,13 +130,13 @@ describe('CapabilityRunner 57 项合同', () => {
     cleanup()
   })
 
-  it('真实 catalog 的六模块恰好 57 项且 method/path/kind/state 无漂移', () => {
+  it('真实 catalog 的六模块恰好 58 项且 method/path/kind/state 无漂移', () => {
     const ids = ['chat', 'rag', 'agent', 'tasks', 'workflow', 'analytics']
     const caps = useCatalogStore()
       .catalog!.modules.filter((m) => ids.includes(m.id))
       .flatMap((m) => m.capabilities)
-    expect(caps).toHaveLength(57)
-    expect(Object.keys(EXPECTED)).toHaveLength(57)
+    expect(caps).toHaveLength(58)
+    expect(Object.keys(EXPECTED)).toHaveLength(58)
     expect(Object.fromEntries(caps.map((c) => [c.id, [c.method, c.path, c.requestKind, c.state]])))
       .toEqual(EXPECTED)
   })
