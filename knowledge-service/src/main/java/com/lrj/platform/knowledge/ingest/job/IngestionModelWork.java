@@ -79,6 +79,8 @@ public final class IngestionModelWork {
         charge(Stage.CONTEXTUAL,promptTokens(prompt));contextualCalls++;
     }
     public void checkpoint() { checkpoint.run(); }
+    /** 失败保护仅用于当前文档的可选增强，不影响最终向量生成和其他租户。 */
+    public int contextualFailureLimit() { return limits.getMaxContextualConsecutiveFailures(); }
     /** 可选前缀不允许扩大最终输入；超长结果弃用前缀，原文完整保留。 */
     public boolean acceptsPrefix(String value) {
         return value!=null && tokenizer.estimateTokenCountInText(value)<=limits.getMaxContextPrefixTokens();

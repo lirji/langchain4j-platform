@@ -5,6 +5,7 @@ import { IngestionStatus, type IngestionJobView } from '../../types/knowledge'
 export const DOCUMENT_ACCEPT = '.txt,.md,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.html,.htm,.rtf,.odt'
 export const DOCUMENT_FORMAT_HINT = '支持 PDF、Word、Markdown、Excel、CSV、TXT、PowerPoint、HTML、RTF 和 ODT。复杂版面、合并表头及修订内容请结合解析提示核对。'
 export const OCR_HINT = '标准部署默认启用扫描及混合 PDF 的选择性 OCR，管理员可显式关闭。本页无法读取或修改运行开关，请以检索结果的实际提取方式与解析提示为准。'
+export const INGESTION_PREPARATION_HINT = '入库先进行文档解析、可选上下文增强和向量生成，再执行下方写入步骤。准备期间，下方步骤显示“等待处理”；准备阶段暂不显示细分进度。'
 export const TRACKED_JOB_LIMIT = 8
 export const POLL_INTERVAL_MS = 2500
 export const POLL_MAX_ROUNDS = 120

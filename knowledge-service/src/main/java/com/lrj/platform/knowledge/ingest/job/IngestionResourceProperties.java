@@ -20,6 +20,7 @@ public class IngestionResourceProperties {
     private Duration preparationTimeout = Duration.ofMinutes(10);
     private long maxModelInputTokens = 1_000_000, maxMetadataBytes = 16L * 1024 * 1024;
     private int maxModelCalls = 512, maxContextualCalls = 128, maxContextPromptTokens = 8192, maxContextPrefixTokens = 256;
+    private int maxContextualConsecutiveFailures = 3;
 
     /** 输入限制与 servlet 上传限制需同时配置；实际字节数始终重新计量。 */
     public long getMaxInputBytes() { return maxInputBytes; }
@@ -59,6 +60,10 @@ public class IngestionResourceProperties {
     public void setMaxModelCalls(int value) { positive(value); maxModelCalls=value; }
     public int getMaxContextualCalls() { return maxContextualCalls; }
     public void setMaxContextualCalls(int value) { positive(value); maxContextualCalls=value; }
+    /** 同一文档的可选增强连续异常后停止后续调用，避免不可用模型放大整文等待。 */
+    public int getMaxContextualConsecutiveFailures() { return maxContextualConsecutiveFailures; }
+    /** 拒绝零或负数，避免配置意外关闭所有尝试或使失败保护失效。 */
+    public void setMaxContextualConsecutiveFailures(int value) { positive(value); maxContextualConsecutiveFailures=value; }
     public int getMaxContextPromptTokens() { return maxContextPromptTokens; }
     public void setMaxContextPromptTokens(int value) { positive(value); maxContextPromptTokens=value; }
     public int getMaxContextPrefixTokens() { return maxContextPrefixTokens; }

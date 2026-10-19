@@ -11,7 +11,7 @@ import WorkbenchSection from '../_shared/WorkbenchSection.vue'
 import InfoNote from '../_shared/InfoNote.vue'
 import { useKnowledgeScope } from './useKnowledgeScope'
 import { useIngestionState } from './ingestionState'
-import { DOCUMENT_ACCEPT, DOCUMENT_FORMAT_HINT, OCR_HINT, POLL_INTERVAL_MS, POLL_MAX_ROUNDS,
+import { DOCUMENT_ACCEPT, DOCUMENT_FORMAT_HINT, OCR_HINT, INGESTION_PREPARATION_HINT, POLL_INTERVAL_MS, POLL_MAX_ROUNDS,
   ingestionErrorHint, ingestionRequestError, isRejectedSubmission, jobLabel, jobTone, knowledgeDate, mayRetry,
   shouldPoll, sinkLabel, stageLabel, TRACKED_JOB_LIMIT } from './knowledgePresentation'
 
@@ -213,7 +213,8 @@ onBeforeUnmount(() => {
       <InfoNote v-if="selected.errorCode" tone="warning"><p>{{ ingestionErrorHint(selected.errorCode) }}</p><p>错误码：{{ selected.errorCode }}</p></InfoNote>
       <p v-if="selected.status === IngestionStatus.Ready" class="ki-hint">该版本已发布，可以查询文档并测试检索。</p>
       <p v-else class="ki-hint">此任务尚未确认可检索。更新期间，之前已发布的版本继续可查。</p>
-      <div v-if="Object.keys(selected.sinks || {}).length" class="ki-table"><table><caption>处理阶段（未返回的阶段不作推测）</caption><thead><tr><th>阶段</th><th>状态</th></tr></thead><tbody><tr v-for="(value, key) in selected.sinks" :key="key"><td>{{ stageLabel(key) }}</td><td>{{ sinkLabel(value) }}</td></tr></tbody></table></div>
+      <p v-if="selected.status === IngestionStatus.Processing" class="ki-hint">{{ INGESTION_PREPARATION_HINT }}</p>
+      <div v-if="Object.keys(selected.sinks || {}).length" class="ki-table"><table><caption>索引与文档写入进度</caption><thead><tr><th>步骤</th><th>状态</th></tr></thead><tbody><tr v-for="(value, key) in selected.sinks" :key="key"><td>{{ stageLabel(key) }}</td><td>{{ sinkLabel(value) }}</td></tr></tbody></table></div>
       <template v-if="mayRetry(selected)"><p class="ki-hint">请先处理上述原因。重试会沿用原文件与已完成结果；需要更换原文件时，请联系管理员核对该文档版本，不能用重试替换文件。</p><InfoNote v-if="state.uncertainRetries.includes(selected.jobId)" tone="warning">重试结果尚未确认，请先刷新任务状态。</InfoNote><button class="btn btn--primary" :disabled="!gate.allowed || busyIds.includes(selected.jobId) || state.uncertainRetries.includes(selected.jobId)" @click="retry(selected)">已处理原因，重试原任务</button><p v-if="!gate.allowed" class="ki-hint">{{ gate.reason }}</p></template>
       <button v-if="selected.status === IngestionStatus.Ready" class="btn btn--primary" @click="emit('openDocument', selected)">查看已入库文档</button>
       <details v-if="selected.traceId || selected.contentHash" class="ki-receipt"><summary>排障信息</summary><dl class="ki-facts"><dt v-if="selected.traceId">追踪号</dt><dd v-if="selected.traceId">{{ selected.traceId }}</dd><dt v-if="selected.contentHash">内容摘要</dt><dd v-if="selected.contentHash">{{ selected.contentHash }}</dd></dl></details>

@@ -16,6 +16,18 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ChunkMetricsTest {
 
+    @Test
+    void contextualSkippedAndFailedResultsRemainDistinctAndUnknownLabelsAreBounded() {
+        var registry = new SimpleMeterRegistry();
+        var inputs = List.of("fallback", "skipped-unavailable", "untrusted-high-cardinality-value").stream()
+                .map(outcome -> TextSegment.from("original", dev.langchain4j.data.document.Metadata.from("contextual_status", outcome))).toList();
+        new ChunkMetrics(registry, 50, 2000).record("recursive", 1, inputs);
+        for (String outcome : List.of("fallback", "skipped-unavailable", "unknown")) {
+            assertThat(registry.get("rag.contextual.result").tag("outcome", outcome).counter().count()).isEqualTo(1.0);
+        }
+        assertThat(registry.find("rag.contextual.result").tag("outcome", "untrusted-high-cardinality-value").counter()).isNull();
+    }
+
     private static TextSegment seg(int len) {
         return TextSegment.from("x".repeat(len));
     }

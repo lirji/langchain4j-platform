@@ -8,7 +8,7 @@ const source = computed<Record<string, string>>(() => props.metadata && typeof p
 const EXTRACTION: Record<string, string> = { native: '原生文字', 'tesseract-auto-osd': 'OCR 识别', 'native+tesseract-auto-osd': '原生文字与 OCR 合并', blank: '空白页' }
 const KIND: Record<string, string> = { text: '正文', code: '代码', table: '表格', page: '页面' }
 const STRATEGY: Record<string, string> = { structure: '按文档结构', recursive: '递归分块', semantic: '语义分块', 'markdown-header': 'Markdown 标题', 'parent-child': '父子分块' }
-const CONTEXT: Record<string, string> = { applied: '已添加检索上下文', fallback: '增强失败，保留原文', 'prefix-limit': '增强前缀超限，保留原文' }
+const CONTEXT: Record<string, string> = { applied: '已添加检索上下文', fallback: '增强失败，保留原文', 'prefix-limit': '增强前缀超限，保留原文', 'skipped-unavailable': '增强服务连续失败，已跳过后续增强并保留原文' }
 const WARNINGS: Record<string, string> = {
   FIRST_NONEMPTY_ROW_USED_AS_HEADER: '首个非空行按表头处理，请核对表头含义。',
   FORMULA_CACHED_VALUE_NOT_RECALCULATED: '公式使用文件中保存的缓存值，未重新计算。',

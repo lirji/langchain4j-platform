@@ -25,6 +25,10 @@ import java.util.List;
  */
 @Component
 public class ChunkMetrics {
+    private static final java.util.Set<String> CONTEXTUAL_OUTCOMES = java.util.Arrays.stream(
+                    com.lrj.platform.knowledge.ingest.LlmContextualEnricher.Outcome.values())
+            .map(com.lrj.platform.knowledge.ingest.LlmContextualEnricher.Outcome::code)
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
 
     private final MeterRegistry registry;
     private final int tinyChars;
@@ -58,7 +62,7 @@ public class ChunkMetrics {
             if(actual!=null) registry.counter("rag.chunk.actual", "strategy",safeStrategy(actual)).increment();
             String contextual=seg.metadata().getString(com.lrj.platform.knowledge.ingest.LlmContextualEnricher.STATUS);
             if(contextual!=null) registry.counter("rag.contextual.result","outcome",
-                    java.util.Set.of("applied","fallback","prefix-limit").contains(contextual)?contextual:"unknown").increment();
+                    CONTEXTUAL_OUTCOMES.contains(contextual)?contextual:"unknown").increment();
             int len = seg.text() == null ? 0 : seg.text().length();
             registry.summary("rag.chunk.size", tags).record(len);
             if (len < tinyChars) {

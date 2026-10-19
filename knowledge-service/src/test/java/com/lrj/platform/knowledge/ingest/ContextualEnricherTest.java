@@ -13,6 +13,77 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ContextualEnricherTest {
 
+    @Test void unavailableEnhancementStopsAfterThreeFailuresWithoutDroppingChunksOrChargingSkippedCalls() {
+        var calls = new java.util.concurrent.atomic.AtomicInteger();
+        var input = java.util.stream.IntStream.range(0, 61).mapToObj(i -> seg("original " + i, "d1")).toList();
+        var work = new com.lrj.platform.knowledge.ingest.job.IngestionModelWork(
+                new com.lrj.platform.knowledge.ingest.job.IngestionResourceProperties(), () -> { });
+        var enricher = new LlmContextualEnricher((d, c) -> {
+            calls.incrementAndGet();
+            throw new dev.langchain4j.exception.InvalidRequestException("provider unavailable");
+        }, 8000);
+
+        var result = enricher.enrich("doc", input, work);
+
+        assertThat(calls).hasValue(3);
+        assertThat(result).extracting(TextSegment::text).containsExactlyElementsOf(input.stream().map(TextSegment::text).toList());
+        assertThat(result.subList(0, 3)).allSatisfy(s -> assertThat(s.metadata().getString(LlmContextualEnricher.STATUS)).isEqualTo("fallback"));
+        assertThat(result.subList(3, 61)).allSatisfy(s -> assertThat(s.metadata().getString(LlmContextualEnricher.STATUS)).isEqualTo("skipped-unavailable"));
+        assertThat(input).allSatisfy(s -> assertThat(s.metadata().getString(LlmContextualEnricher.STATUS)).isNull());
+        assertThat(result).allSatisfy(s -> assertThat(s.metadata().getString("docId")).isEqualTo("d1"));
+        assertThat(work.snapshot().usage().stream().filter(u -> u.stage().equals("contextual")).findFirst().orElseThrow().logicalCalls()).isEqualTo(3);
+    }
+
+    @Test void failuresAreScopedToOneDocumentAndSuccessfulEmptyResultsResetConsecutiveFailures() {
+        var calls = new java.util.concurrent.atomic.AtomicInteger();
+        var unavailable = new java.util.concurrent.atomic.AtomicBoolean(true);
+        var input = java.util.stream.IntStream.range(0, 6).mapToObj(i -> seg("chunk " + i, "d1")).toList();
+        var enricher = new LlmContextualEnricher((d, c) -> {
+            int call = calls.incrementAndGet();
+            if (unavailable.get() || call % 3 != 0) throw new IllegalStateException("temporary failure");
+            return "";
+        }, 8000);
+        enricher.enrich("first document", input);
+        assertThat(calls).hasValue(3);
+        unavailable.set(false);
+        var recovered = enricher.enrich("next document", input);
+        assertThat(calls).hasValue(9);
+        assertThat(recovered).allSatisfy(s -> assertThat(s.metadata().getString(LlmContextualEnricher.STATUS)).isEqualTo("fallback"));
+    }
+
+    @Test void leaseAndResourceFailuresAreNeverConvertedToOptionalEnhancementFallback() {
+        for (RuntimeException failure : List.of(
+                new com.lrj.platform.knowledge.ingest.job.IngestionJobConflictException("lease lost"),
+                new com.lrj.platform.knowledge.ingest.job.IngestionResourceException(
+                        com.lrj.platform.knowledge.ingest.job.IngestionResourceError.DEADLINE))) {
+            var calls = new java.util.concurrent.atomic.AtomicInteger();
+            var enricher = new LlmContextualEnricher((d, c) -> { calls.incrementAndGet(); throw failure; }, 8000);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> enricher.enrich("doc", List.of(seg("one", "d"), seg("two", "d"))))
+                    .isSameAs(failure);
+            assertThat(calls).hasValue(1);
+        }
+    }
+
+    @Test void configuredFailureLimitAppliesAndSkippedChunksStillCheckTheLease() {
+        var limits = new com.lrj.platform.knowledge.ingest.job.IngestionResourceProperties();
+        limits.setMaxContextualConsecutiveFailures(1);
+        var calls = new java.util.concurrent.atomic.AtomicInteger();
+        var checksAfterFailure = new java.util.concurrent.atomic.AtomicInteger();
+        var work = new com.lrj.platform.knowledge.ingest.job.IngestionModelWork(limits, () -> {
+            if (calls.get() > 0 && checksAfterFailure.incrementAndGet() == 2)
+                throw new com.lrj.platform.knowledge.ingest.job.IngestionJobConflictException("lease lost while preserving chunks");
+        });
+        var enricher = new LlmContextualEnricher((d, c) -> { calls.incrementAndGet(); throw new IllegalStateException("unavailable"); }, 8000);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> enricher.enrich("doc", List.of(seg("one", "d"), seg("two", "d")), work))
+                .isInstanceOf(com.lrj.platform.knowledge.ingest.job.IngestionJobConflictException.class);
+        assertThat(calls).hasValue(1);
+
+        var freshWork = new com.lrj.platform.knowledge.ingest.job.IngestionModelWork(limits, () -> { });
+        var result = enricher.enrich("another document", List.of(seg("one", "d2"), seg("two", "d2")), freshWork);
+        assertThat(calls).hasValue(2);
+        assertThat(result.get(1).metadata().getString(LlmContextualEnricher.STATUS)).isEqualTo("skipped-unavailable");
+    }
+
     @Test void tailSectionUsesNearbyOriginalTextInsteadOfDocumentBeginning() {
         for(String headingKey:List.of("breadcrumb","section")) {
         var windows=new java.util.ArrayList<String>();

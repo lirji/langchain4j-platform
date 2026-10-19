@@ -4,6 +4,11 @@ import KnowledgeSourceDetails from './KnowledgeSourceDetails.vue'
 import { knowledgeDate } from './knowledgePresentation'
 
 describe('知识来源与解析信息', () => {
+  it('区分已尝试失败与因服务不可用而跳过的增强', () => {
+    const wrapper = mount(KnowledgeSourceDetails, { props: { metadata: { contextual_status: 'skipped-unavailable' } } })
+    expect(wrapper.text()).toContain('已跳过后续增强并保留原文')
+    expect(wrapper.text()).not.toContain('已添加检索上下文')
+  })
   it('展示真实页表行与 OCR 信息，文档级告警不冒充当前页', () => {
     const wrapper = mount(KnowledgeSourceDetails, { props: { metadata: {
       source_page: '3', source_sheet: '库存表', source_row_start: '10', source_row_end: '20',

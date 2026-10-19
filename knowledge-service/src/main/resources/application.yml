@@ -102,6 +102,7 @@ app:
         max-model-input-tokens: ${RAG_INGESTION_MAX_MODEL_INPUT_TOKENS:1000000}
         max-model-calls: ${RAG_INGESTION_MAX_MODEL_CALLS:512}
         max-contextual-calls: ${RAG_INGESTION_MAX_CONTEXTUAL_CALLS:128}
+        max-contextual-consecutive-failures: ${RAG_INGESTION_MAX_CONTEXTUAL_CONSECUTIVE_FAILURES:3}
         max-context-prompt-tokens: ${RAG_INGESTION_MAX_CONTEXT_PROMPT_TOKENS:8192}
         max-context-prefix-tokens: ${RAG_INGESTION_MAX_CONTEXT_PREFIX_TOKENS:256}
         max-metadata-bytes: ${RAG_INGESTION_MAX_METADATA_BYTES:16777216}
@@ -113,7 +114,7 @@ app:
       prepared:
         # 写索引前持久化最终文本与向量；改变生成行为时提升版本，历史快照仍继续复用。
         max-bytes: ${RAG_INGESTION_PREPARED_MAX_BYTES:67108864}
-        processing-version: ${RAG_INGESTION_PROCESSING_VERSION:knowledge-structured-v5}
+        processing-version: ${RAG_INGESTION_PROCESSING_VERSION:knowledge-structured-v6}
       version-gc:
         enabled: ${RAG_INGESTION_VERSION_GC_ENABLED:false}
         retain-versions: ${RAG_INGESTION_VERSION_GC_RETAIN_VERSIONS:2}
