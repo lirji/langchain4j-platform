@@ -1,0 +1,169 @@
+{
+  "sourceRevision": "c1eedd131930d4cc5d9c75c65b50f7ebe89832b7",
+  "probeUsesDefaultOcrPolicy": true,
+  "defaultDockerBuild": true,
+  "engineVersion": "tesseract 5.5.0",
+  "languages": [
+    "chi_sim",
+    "eng",
+    "osd"
+  ],
+  "samples": [
+    {
+      "fixture": "native-only.pdf",
+      "elapsedMs": 4106,
+      "pages": [
+        {
+          "source_page": "1",
+          "source_rotation": "0",
+          "source_extraction_method": "native",
+          "source_native_chars": "62",
+          "source_ocr_chars": "0",
+          "source_location": "page=1;rotation=0;extraction_method=native;native_chars=62;ocr_chars=0"
+        }
+      ],
+      "warnings": [
+        "PDF_READING_ORDER_UNVERIFIED"
+      ]
+    },
+    {
+      "fixture": "scan-en.pdf",
+      "elapsedMs": 4604,
+      "pages": [
+        {
+          "source_page": "1",
+          "source_rotation": "0",
+          "source_extraction_method": "tesseract-auto-osd",
+          "source_native_chars": "0",
+          "source_ocr_chars": "249",
+          "source_ocr_confidence": "95.78",
+          "source_location": "page=1;rotation=0;extraction_method=tesseract-auto-osd;native_chars=0;ocr_chars=249;ocr_confidence=95.78"
+        }
+      ],
+      "warnings": [
+        "PDF_READING_ORDER_UNVERIFIED",
+        "PDF_OCR_APPLIED"
+      ]
+    },
+    {
+      "fixture": "scan-zh.pdf",
+      "elapsedMs": 5452,
+      "pages": [
+        {
+          "source_page": "1",
+          "source_rotation": "0",
+          "source_extraction_method": "tesseract-auto-osd",
+          "source_native_chars": "0",
+          "source_ocr_chars": "86",
+          "source_ocr_confidence": "87.79",
+          "source_location": "page=1;rotation=0;extraction_method=tesseract-auto-osd;native_chars=0;ocr_chars=86;ocr_confidence=87.79"
+        }
+      ],
+      "warnings": [
+        "PDF_READING_ORDER_UNVERIFIED",
+        "PDF_OCR_APPLIED"
+      ]
+    },
+    {
+      "fixture": "mixed-native-scan.pdf",
+      "elapsedMs": 3358,
+      "pages": [
+        {
+          "source_page": "1",
+          "source_rotation": "0",
+          "source_extraction_method": "native",
+          "source_native_chars": "62",
+          "source_ocr_chars": "0",
+          "source_location": "page=1;rotation=0;extraction_method=native;native_chars=62;ocr_chars=0"
+        },
+        {
+          "source_page": "2",
+          "source_rotation": "0",
+          "source_extraction_method": "tesseract-auto-osd",
+          "source_native_chars": "0",
+          "source_ocr_chars": "86",
+          "source_ocr_confidence": "87.79",
+          "source_location": "page=2;rotation=0;extraction_method=tesseract-auto-osd;native_chars=0;ocr_chars=86;ocr_confidence=87.79"
+        }
+      ],
+      "warnings": [
+        "PDF_READING_ORDER_UNVERIFIED",
+        "PDF_OCR_APPLIED"
+      ]
+    },
+    {
+      "fixture": "scan-rotated.pdf",
+      "elapsedMs": 3447,
+      "pages": [
+        {
+          "source_page": "1",
+          "source_rotation": "90",
+          "source_extraction_method": "tesseract-auto-osd",
+          "source_native_chars": "0",
+          "source_ocr_chars": "249",
+          "source_ocr_confidence": "95.71",
+          "source_location": "page=1;rotation=90;extraction_method=tesseract-auto-osd;native_chars=0;ocr_chars=249;ocr_confidence=95.71"
+        }
+      ],
+      "warnings": [
+        "PDF_READING_ORDER_UNVERIFIED",
+        "PDF_ROTATED_PAGE",
+        "PDF_OCR_APPLIED"
+      ]
+    },
+    {
+      "fixture": "mixed-one-page.pdf",
+      "elapsedMs": 4413,
+      "pages": [
+        {
+          "source_page": "1",
+          "source_rotation": "0",
+          "source_extraction_method": "native+tesseract-auto-osd",
+          "source_native_chars": "22",
+          "source_ocr_chars": "271",
+          "source_ocr_confidence": "95.84",
+          "source_location": "page=1;rotation=0;extraction_method=native+tesseract-auto-osd;native_chars=22;ocr_chars=271;ocr_confidence=95.84"
+        }
+      ],
+      "warnings": [
+        "PDF_READING_ORDER_UNVERIFIED",
+        "PDF_OCR_APPLIED",
+        "PDF_NATIVE_OCR_MERGED_READING_ORDER_UNVERIFIED"
+      ]
+    },
+    {
+      "fixture": "native-blank.pdf",
+      "elapsedMs": 2759,
+      "pages": [
+        {
+          "source_page": "1",
+          "source_rotation": "0",
+          "source_extraction_method": "native",
+          "source_native_chars": "62",
+          "source_ocr_chars": "0",
+          "source_location": "page=1;rotation=0;extraction_method=native;native_chars=62;ocr_chars=0"
+        },
+        {
+          "source_page": "2",
+          "source_rotation": "0",
+          "source_extraction_method": "blank",
+          "source_native_chars": "0",
+          "source_ocr_chars": "0",
+          "source_location": "page=2;rotation=0;extraction_method=blank;native_chars=0;ocr_chars=0"
+        }
+      ],
+      "warnings": [
+        "PDF_READING_ORDER_UNVERIFIED",
+        "PDF_PAGE_WITHOUT_TEXT",
+        "PDF_BLANK_PAGE"
+      ]
+    }
+  ],
+  "containerPeakMemoryBytes": 508985344,
+  "imageEquivalence": {
+    "sameRuntimeLayersAsOcrTestImage": true,
+    "testedImage": "sha256:6d23edb9581c1fbf5cae414b454d83603f36c71744711168600033c8260acf39",
+    "deployedImage": "sha256:af991092ff95d35c3c5e57c9715c8977acf8dd8d19e4ac64f1e0920cc4cef2d7"
+  },
+  "scope": "synthetic PDF corpus in network-disabled, non-root, read-only Linux container; not production accuracy or capacity measurement"
+}

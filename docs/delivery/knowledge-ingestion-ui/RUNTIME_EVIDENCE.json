@@ -1,0 +1,177 @@
+{
+  "timeUtc": "2026-10-19T06:29:56Z",
+  "pass": true,
+  "javaReadiness": {
+    "edge-gateway": {
+      "http": 200,
+      "status": "UP"
+    },
+    "conversation-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "workflow-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "analytics-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "knowledge-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "async-task-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "channel-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "interop-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "vision-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "voice-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "auth-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "order-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "tax-service": {
+      "http": 200,
+      "status": "UP"
+    },
+    "config-server": {
+      "http": 200,
+      "status": "UP"
+    }
+  },
+  "frontend": {
+    "http": 200
+  },
+  "frontendAssets": {
+    "/assets/index-gDC8Ar0h.js": {
+      "http": 200
+    },
+    "/assets/index-mkcWICeU.css": {
+      "http": 200
+    }
+  },
+  "frontendParsingFeaturesPresent": true,
+  "casdoor": {
+    "http": 200,
+    "status": null,
+    "count": 0
+  },
+  "agentReadiness": {
+    "http": 200,
+    "status": "UP",
+    "count": 0
+  },
+  "anonymousSync": {
+    "http": 401
+  },
+  "authorizedSync": {
+    "http": 200,
+    "count": 0
+  },
+  "authorizedQuality": {
+    "http": 200,
+    "count": 0
+  },
+  "imageVerification": true,
+  "ocrEnabled": true,
+  "ocrLanguages": [
+    "chi_sim",
+    "eng",
+    "osd"
+  ],
+  "ocrResources": {
+    "Memory": 3221225472,
+    "NanoCpus": 2000000000,
+    "PidsLimit": 256
+  },
+  "ingestionCors": {
+    "authorization": {
+      "http": 200,
+      "allowsIdempotencyKey": true,
+      "origin": "http://localhost:8093"
+    },
+    "x-api-key": {
+      "http": 200,
+      "allowsIdempotencyKey": true,
+      "origin": "http://localhost:8093"
+    }
+  },
+  "untouchedContainersPreserved": true,
+  "workerErrorsSinceRestart": 0,
+  "workerStartedAt": "2026-10-19T06:29:38.946392709Z",
+  "target": "Docker Desktop desktop-linux / langchain4j-platform",
+  "applicationRevision": "c1eedd131930d4cc5d9c75c65b50f7ebe89832b7",
+  "migrationRevision": "1c751037e277dfeb3fe5b8cc2ea44ab2b79c29d7",
+  "targetContainers": [
+    {
+      "name": "/langchain4j-platform-migrate-knowledge-ingestion-1",
+      "image": "langchain4j-platform-migrate-knowledge-ingestion:1c751037e277",
+      "imageId": "sha256:c1984156630ebdd848c3ef1121c3229c9d3154c4014d62b9bbc5764dcf2edd0f",
+      "revision": "1c751037e277dfeb3fe5b8cc2ea44ab2b79c29d7",
+      "status": "exited",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-edge-gateway-1",
+      "image": "langchain4j-platform-edge-gateway:c1eedd131930",
+      "imageId": "sha256:b937fd516bb8e84ac917d5c8e489316092cf0f812252e81b7da815295120bc65",
+      "revision": "c1eedd131930d4cc5d9c75c65b50f7ebe89832b7",
+      "status": "running",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-knowledge-service-1",
+      "image": "langchain4j-platform-knowledge-service:c1eedd131930",
+      "imageId": "sha256:af991092ff95d35c3c5e57c9715c8977acf8dd8d19e4ac64f1e0920cc4cef2d7",
+      "revision": "c1eedd131930d4cc5d9c75c65b50f7ebe89832b7",
+      "status": "running",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    },
+    {
+      "name": "/langchain4j-platform-capability-showcase-frontend-1",
+      "image": "langchain4j-platform-capability-showcase-frontend:c1eedd131930",
+      "imageId": "sha256:34a100a8afc366ccaa5c8bbd5dec8d013a01c5e84fa5d4c37dc12d0e7bf4f959",
+      "revision": "c1eedd131930d4cc5d9c75c65b50f7ebe89832b7",
+      "status": "running",
+      "exitCode": 0,
+      "health": null,
+      "restarts": 0
+    }
+  ],
+  "migration": {
+    "from": "10",
+    "to": "11",
+    "executed": 1,
+    "exitCode": 0,
+    "jobRowsAfter": 34,
+    "jobStatusAfter": "READY",
+    "tenantCollation": "utf8mb4_0900_ai_ci"
+  },
+  "productionReleaseGate": "HOLD; existing supply-chain issue not changed"
+}
