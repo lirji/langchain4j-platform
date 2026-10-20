@@ -59,6 +59,7 @@
 - [钉钉知识库客服接入指南](互操作渠道/dingtalk-guide.md)：钉钉群 @机器人 → 查知识库 → 机器人回复；镜像飞书事件桥、机器人发消息 API 回复、无命中转人工兜底。
 
 **平台工程（横切）**
+- [AI 框架选型与 LangChain4j 评估（2026-10-20）](平台工程/AI框架选型与LangChain4j评估-20261020.md)：LangChain4j 版本与适用性、默认 AgentScope 编排现状、十组框架对比及后续评估建议。
 - [Coding Agent 工程工作手册](平台工程/coding-agent-playbook.md)：6 个仓库级 Skill、4 个只读研发 Agent、需求到 PR 的交接合同、风险审批、GoldenCase 回放与评分、团队指标和 Case 扩展方法。
 - [Coding Agent 评测沙箱](平台工程/coding-agent-sandbox.md)：Codex worktree 与 Docker 评分的双层边界、断网/只读/非 root/资源限制、镜像准备与故障分类。
 - [Java Code Graph](平台工程/java-codegraph.md)：JDK 21 离线源码图谱、符号/文件影响查询、证据强度与已知限制。
