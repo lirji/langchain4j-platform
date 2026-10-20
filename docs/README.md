@@ -2,7 +2,7 @@
 
 这组文档面向新接手项目的工程师、架构评审者和集成方，用来快速了解平台能力、服务边界、部署方式和接口入口。
 
-> **最新变更**：2026-07 一批方案级变更（Casdoor SSO 整栈默认开且 `only` 严格模式、继承式 RBAC、ES 全文混排 + RRF、order-service、前端移动端/响应式适配、LiteLLM spend 记账/failover、增强开关默认全开）汇总见 [变更记录](变更记录.md)。
+> **作品与当前能力入口（2026-10-20）**：[项目 README](../README.md) 汇总 Java 平台与 [AgentScope 编排项目](https://github.com/lirji/platform-agentscope)的协作架构、可靠文档入库、内容去重、可治理记忆，以及 DAG 恢复与诊断。各项默认开关和验证边界见对应专题；较早的演进记录见 [变更记录](变更记录.md)。
 
 ## 推荐阅读顺序
 
